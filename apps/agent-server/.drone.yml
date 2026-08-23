@@ -1,0 +1,108 @@
+kind: pipeline
+type: docker
+name: nova-agent-server
+
+trigger:
+  branch:
+    - master
+
+volumes:
+  - name: pnpm-cache
+    host:
+      path: /var/lib/drone-cache/pnpm/nova-agent-server
+
+steps:
+  - name: restore-pnpm-cache
+    image: drillster/drone-volume-cache
+    volumes:
+      - name: pnpm-cache
+        path: /cache
+    settings:
+      restore: true
+      mount:
+        - /cache/pnpm-store
+
+  - name: build and package
+    image: node:22-alpine
+    volumes:
+      - name: pnpm-cache
+        path: /cache
+    commands:
+      - APP_NAME=agent-server
+      - APP_DIR=apps/$APP_NAME
+      - APP_DEPLOY_DIR=/drone/src/$APP_NAME-deploy
+      - corepack enable
+      - corepack prepare pnpm@9 --activate
+      - pnpm config set store-dir /cache/pnpm-store
+      - pnpm config set registry https://registry.npmjs.org/
+      - pnpm -w install --no-frozen-lockfile --filter "$APP_NAME..."
+      - pnpm --filter "$APP_NAME" run typecheck
+      - pnpm deploy --filter "$APP_NAME" --node-linker=hoisted "$APP_DEPLOY_DIR" --legacy --prod=false
+      - tar -czf /drone/src/$APP_NAME.tar.gz -C $APP_DEPLOY_DIR .
+
+  - name: rebuild-pnpm-cache
+    image: drillster/drone-volume-cache
+    volumes:
+      - name: pnpm-cache
+        path: /cache
+    settings:
+      rebuild: true
+      mount:
+        - /cache/pnpm-store
+
+  - name: scp
+    image: appleboy/drone-scp
+    settings:
+      debug: false
+      source:
+        - agent-server.tar.gz
+      host:
+        from_secret: CURRENT_HOST
+      username: root
+      port: 22
+      password:
+        from_secret: SSH_PWD
+      target: /temp/app/
+
+  - name: deploy
+    image: appleboy/drone-ssh
+    environment:
+      HOST: 0.0.0.0
+      PORT: 9203
+      RUNNER_HOST: 0.0.0.0
+      RUNNER_PORT: 9204
+      RUNNER_PUBLIC_URL: http://nova-grpc.8and1.cn
+      DATABASE_URL:
+        from_secret: DATABASE_URL
+      MODEL_CONFIG_ENCRYPTION_KEY:
+        from_secret: MODEL_CONFIG_ENCRYPTION_KEY
+    settings:
+      envs:
+        - HOST
+        - PORT
+        - RUNNER_HOST
+        - RUNNER_PORT
+        - RUNNER_PUBLIC_URL
+        - DATABASE_URL
+        - MODEL_CONFIG_ENCRYPTION_KEY
+      host:
+        from_secret: CURRENT_HOST
+      username: root
+      password:
+        from_secret: SSH_PWD
+      port: 22
+      command_timeout: 2m
+      script:
+        - APP_NAME=agent-server
+        - APP_DIR=/data/app/$APP_NAME
+        - PID_FILE=$APP_DIR/app.pid
+        - if [ -f $PID_FILE ]; then kill $(cat $PID_FILE) || true; fi
+        - sleep 2
+        - rm -rf $APP_DIR
+        - mkdir -p $APP_DIR
+        - tar xzf /temp/app/$APP_NAME.tar.gz -C $APP_DIR
+        - rm -f /temp/app/$APP_NAME.tar.gz
+        - cd $APP_DIR
+        - nohup ./node_modules/.bin/tsx src/server.ts > server.log 2>&1 & echo $! > $PID_FILE
+        - sleep 2
+        - cat server.log

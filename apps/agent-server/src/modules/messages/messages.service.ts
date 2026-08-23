@@ -1,0 +1,47 @@
+import { randomUUID } from "node:crypto";
+import type { ChatMessage, SendMessage } from "@nova/protocol";
+import type { AgentStore, MessageRow } from "../../store.js";
+import type { ConversationRuntimes } from "../runtime/runtime-registry.js";
+import type { ModelConfigStore } from "../model-config/model-config.store.js";
+import { resolveCatalogModel } from "../model-config/model-config.store.js";
+import type { CredentialCipher } from "../model-config/credential.js";
+
+export function createMessagesService(store: AgentStore, runtimes: ConversationRuntimes, models: ModelConfigStore, cipher: CredentialCipher) {
+  const view = (message: MessageRow): ChatMessage => ({
+    id: message.id,
+    conversationId: message.conversationId,
+    role: message.role,
+    blocks: message.blocks,
+    status: message.status,
+    createdAt: message.createdAt.getTime(),
+  });
+
+  return {
+    async list(userId: string, conversationId: string, query: { before?: string; limit: number }) {
+      const result = await store.listMessages({ userId, conversationId, ...query });
+      return { items: result.items.map(view), nextCursor: result.nextCursor };
+    },
+    async send(userId: string, conversationId: string, input: SendMessage) {
+      let route = await store.routeConversation(userId, conversationId);
+      if (input.modelConfig || input.modelId) {
+        const modelConfig = input.modelConfig ?? await resolveCatalogModel(models, cipher, userId, input.modelId!);
+        await store.updateConversationModel({ userId, id: conversationId, modelConfig });
+        runtimes.invalidate(conversationId);
+        route = await store.routeConversation(userId, conversationId);
+      }
+      await store.appendMessage({
+        id: randomUUID(),
+        conversationId,
+        role: "user",
+        blocks: [{ type: "text", text: input.text }],
+        status: "done",
+        createdAt: new Date(),
+      });
+      await runtimes.send(route, input.text, input.queue);
+    },
+    async abort(userId: string, conversationId: string) {
+      await store.routeConversation(userId, conversationId);
+      await runtimes.abort(conversationId);
+    },
+  };
+}

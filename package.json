@@ -1,0 +1,34 @@
+{
+  "name": "nova",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22.19.0",
+    "pnpm": ">=9.15.9"
+  },
+  "scripts": {
+    "typecheck": "pnpm --recursive --if-present run typecheck",
+    "lint": "pnpm --recursive --if-present run lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm --recursive --if-present run test && cargo test --workspace",
+    "test:integration": "pnpm --filter @nova/coding-agent test:integration",
+    "test:live-model": "pnpm --filter @nova/harness test:live-model",
+    "proto:lint": "buf lint",
+    "proto:generate": "buf generate"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.50.0",
+    "@bufbuild/protoc-gen-es": "^2.2.3",
+    "@types/node": "^22.0.0",
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.7.4",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "vitest": "^2.1.3"
+  }
+}

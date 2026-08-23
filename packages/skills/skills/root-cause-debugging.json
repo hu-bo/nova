@@ -1,0 +1,16 @@
+{
+  "format": "nova.skill/v1",
+  "id": "root-cause-debugging",
+  "version": "1.0.0",
+  "name": "root-cause-debugging",
+  "description": "诊断并修复 Bug、失败测试、异常状态和性能退化，先定位首个错误分歧再修改。用户提到错误、崩溃、失败、不符合预期或回归时使用。",
+  "activation": { "mode": "auto", "keywords": ["bug", "错误", "失败", "崩溃", "回归", "debug", "fix"] },
+  "instructions": {
+    "markdown": "## 根因诊断\n\n不要从症状直接跳到补丁。\n1. 明确可复现输入、预期行为和实际行为；能运行时先复现。\n2. 沿数据和控制流寻找第一个偏离契约的位置，而不是最后抛错的位置。\n3. 用日志、测试、类型、协议或最小实验验证假设；每次实验只区分一个假设。\n4. 在真正拥有错误状态或决策的模块修复，避免在调用方增加兜底、重复校验或吞错。\n5. 添加能在修复前失败、修复后通过的行为测试，并覆盖最相关的边界。\n\n如果无法复现或证据不足，清楚说明已确认事实与剩余假设。禁止通过无限重试、空 catch、默认成功或扩大 timeout 掩盖根因。"
+  },
+  "connections": [],
+  "resources": [],
+  "actions": [],
+  "metadata": { "category": "debugging", "builtin": "true" },
+  "source": { "kind": "native", "uri": "packages/skills/skills/root-cause-debugging.json" }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@nova/coding-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:integration": "vitest run test/",
+    "test:live-model": "cross-env NOVA_TEST_LIVE=1 vitest run test/live-model.integration.test.ts"
+  },
+  "dependencies": {
+    "@nova/harness": "workspace:*",
+    "@nova/tools": "workspace:*"
+  },
+  "devDependencies": {
+    "@nova/agent-core": "workspace:*",
+    "@nova/model-adapters": "workspace:*",
+    "@nova/runner-sdk": "workspace:*",
+    "cross-env": "^10.1.0",
+    "vitest": "^2.1.3"
+  }
+}

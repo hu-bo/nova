@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+output
+target
+coverage
+.claude
+.github
+.playwright-cli
+docs
+*.generated.*
+**/src/api/generated/**
+**/src/gen/**
+**/drizzle/meta/**

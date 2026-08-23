@@ -1,0 +1,16 @@
+{
+  "format": "nova.skill/v1",
+  "id": "codebase-reconnaissance",
+  "version": "1.0.0",
+  "name": "codebase-reconnaissance",
+  "description": "在实现功能、修改行为或重构前，用证据定位入口、调用链、状态 owner、已有能力、测试和生成源。用户要求改代码但实现位置尚未确认时使用。",
+  "activation": { "mode": "auto", "keywords": ["实现", "修改", "新增功能", "重构", "implement", "refactor"] },
+  "instructions": {
+    "markdown": "## 代码库侦察\n\n编码前建立最小变更地图：\n1. 读取作用域内的项目指令和模块契约，不把说明文档中的示例当作现状。\n2. 从真实入口搜索到行为 owner，沿调用链读取关键类型、状态变化、错误路径和持久化边界。\n3. 搜索同名概念、相似能力、配置字段和既有测试，确认应修改还是复用。\n4. 标记 codegen 输出，找到生成源或配置；永远不直接编辑生成代码。\n5. 检查目标文件周边的未提交改动并保留用户工作。\n\n开始实现前必须能回答：行为由谁拥有、输入输出契约是什么、失败如何表达、哪条测试最接近真实行为、最小文件集合是什么。证据不足时继续读取，不凭目录名和命名猜测。"
+  },
+  "connections": [],
+  "resources": [],
+  "actions": [],
+  "metadata": { "category": "coding-workflow", "builtin": "true" },
+  "source": { "kind": "native", "uri": "packages/skills/skills/codebase-reconnaissance.json" }
+}

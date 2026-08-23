@@ -1,0 +1,67 @@
+name: runner-release
+
+on:
+  push:
+    tags:
+      - "runner-v*"
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x64, os: ubuntu-latest, binary: target/release/nova-runner }
+          - { target: darwin-x64, os: macos-13, binary: target/release/nova-runner }
+          - { target: darwin-arm64, os: macos-14, binary: target/release/nova-runner }
+          - { target: win32-x64, os: windows-latest, binary: target/release/nova-runner.exe }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build -p nova-runner --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nova-runner-${{ matrix.target }}
+          path: ${{ matrix.binary }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nova-runner-*
+          path: artifacts
+          merge-multiple: false
+      - name: Stage platform binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for target in linux-x64 darwin-x64 darwin-arm64; do
+            NOVA_RUNNER_BINARY="$PWD/artifacts/nova-runner-$target/nova-runner" \
+              NOVA_RUNNER_TARGET="$target" \
+              pnpm --dir packages/runner stage
+          done
+          NOVA_RUNNER_BINARY="$PWD/artifacts/nova-runner-win32-x64/nova-runner.exe" \
+            NOVA_RUNNER_TARGET="win32-x64" \
+            pnpm --dir packages/runner stage
+      - name: Set release version
+        shell: bash
+        run: npm pkg set "version=${GITHUB_REF_NAME#runner-v}" --prefix packages/runner
+      - run: npm publish
+        working-directory: packages/runner
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

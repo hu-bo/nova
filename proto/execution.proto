@@ -1,0 +1,205 @@
+// 本文件只定义 Execution 与 Filesystem 消息（docs/proto.md §4）。
+// 它们由 runner.proto 的 RunnerConnection.Connect 双向流承载；
+// Execution 和 Filesystem 不对 Runner 开放入站 RPC。
+syntax = "proto3";
+
+package nova.execution.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+import "common.proto";
+
+// —— 执行面 ——
+
+message ExecuteRequest {
+  string execution_id = 1; // 客户端生成，幂等键
+  string command = 2;
+  repeated string args = 3;
+  string cwd = 4; // 相对 workspace root，空 = root
+  map<string, string> env = 5;
+  uint32 timeout_ms = 6; // 0 = 用 Runner 默认值
+  bytes stdin = 7;
+
+  ResourceLimits resources = 8; // §7：未实现则报 UNSUPPORTED
+  Sandbox sandbox = 9; // 同上
+}
+
+message ResourceLimits {
+  uint32 cpu_millis = 1;
+  uint64 memory_bytes = 2;
+}
+
+message Sandbox {
+  bool network = 1;
+  bool readonly_fs = 2;
+}
+
+message ExecutionEvent {
+  string execution_id = 1;
+  uint64 sequence = 2; // 从 1 递增，同一 execution 内连续
+  google.protobuf.Timestamp ts = 3;
+
+  oneof event {
+    Started started = 10;
+    Output output = 11;
+    Finished finished = 12;
+  }
+}
+
+message Started {
+  int32 pid = 1;
+}
+
+message Output {
+  OutputStream stream = 1;
+  bytes data = 2;
+}
+
+message Finished {
+  ExecutionStatus status = 1;
+  int32 exit_code = 2; // 仅 COMPLETED 有意义
+  nova.common.v1.Error error = 3; // 仅非 COMPLETED 有意义
+  uint64 duration_ms = 4;
+}
+
+enum OutputStream {
+  OUTPUT_STREAM_UNSPECIFIED = 0;
+  OUTPUT_STREAM_STDOUT = 1;
+  OUTPUT_STREAM_STDERR = 2;
+}
+
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_COMPLETED = 1; // 进程正常退出（exit_code 可能非 0）
+  EXECUTION_STATUS_FAILED = 2; // 无法启动 / 被信号杀死 / IO 错误
+  EXECUTION_STATUS_CANCELLED = 3;
+  EXECUTION_STATUS_TIMED_OUT = 4;
+}
+
+message CancelRequest {
+  string execution_id = 1;
+}
+
+message CancelResponse {
+  bool found = 1;
+}
+
+// —— 文件面 ——
+// 文件元数据操作共用 FileOp 的 oneof；读写使用独立分块消息，
+// 但都复用 RunnerConnection.Connect 流。
+
+message ReadFileRequest {
+  string path = 1;
+  uint64 offset = 2; // 字节偏移
+  uint64 limit = 3; // 0 = 到文件尾
+}
+
+message FileChunk {
+  bytes data = 1;
+  bool eof = 2;
+  uint64 total_size = 3;
+}
+
+message WriteFileRequest {
+  string path = 1; // 仅首个 chunk 有效
+  bytes data = 2;
+  bool append = 3; // 仅首个 chunk 有效
+  bool eof = 4; // 终止标记：最后一个 chunk。双向流没有流结束信号，靠它收尾
+}
+
+message WriteFileResponse {
+  uint64 bytes_written = 1;
+  bool created = 2;
+}
+
+message FileOpRequest {
+  oneof op {
+    StatOp stat = 1;
+    ListOp list = 2;
+    RemoveOp remove = 3;
+    RenameOp rename = 4;
+    MkdirOp mkdir = 5;
+    TempDirOp temp_dir = 6;
+    GrepOp grep = 7;
+  }
+}
+
+message StatOp {
+  string path = 1;
+}
+
+message ListOp {
+  string path = 1;
+  uint32 depth = 2;
+}
+
+message RemoveOp {
+  string path = 1;
+  bool recursive = 2;
+}
+
+message RenameOp {
+  string from = 1;
+  string to = 2;
+}
+
+message MkdirOp {
+  string path = 1;
+}
+
+message TempDirOp {
+  string prefix = 1;
+}
+
+message GrepOp {
+  string pattern = 1;
+  string path = 2;
+  string glob = 3;
+  uint32 max_results = 4;
+}
+
+message FileOpResponse {
+  oneof result {
+    FileInfo info = 1;
+    ListResult list = 2;
+    google.protobuf.Empty ok = 3; // remove / rename / mkdir
+    string path = 4; // temp_dir
+    GrepResult grep = 5;
+  }
+}
+
+message FileInfo {
+  string path = 1;
+  FileKind kind = 2;
+  uint64 size = 3;
+  int64 mtime = 4;
+}
+
+message ListResult {
+  repeated DirEntry entries = 1;
+}
+
+message DirEntry {
+  string name = 1;
+  FileKind kind = 2;
+}
+
+message GrepResult {
+  repeated GrepMatch matches = 1;
+  uint32 total = 2;
+  bool truncated = 3;
+}
+
+message GrepMatch {
+  string file = 1;
+  uint32 line = 2;
+  string text = 3;
+}
+
+enum FileKind {
+  FILE_KIND_UNSPECIFIED = 0;
+  FILE_KIND_FILE = 1;
+  FILE_KIND_DIR = 2;
+  FILE_KIND_SYMLINK = 3;
+}

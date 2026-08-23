@@ -1,0 +1,25 @@
+{
+  "name": "@nova/runner",
+  "version": "0.0.0",
+  "description": "Cross-platform nova-runner binary distribution",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "nova-runner": "bin/nova-runner.mjs"
+  },
+  "files": [
+    "bin",
+    "vendor"
+  ],
+  "scripts": {
+    "stage": "node scripts/stage.mjs",
+    "prepack": "node scripts/check-package.mjs",
+    "typecheck": "node --check bin/nova-runner.mjs && node --check scripts/stage.mjs && node --check scripts/check-package.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

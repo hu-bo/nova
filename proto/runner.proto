@@ -1,0 +1,85 @@
+// Runner 主动建立的持久双向 gRPC 流（docs/proto.md §5）。
+// 控制消息与 Execution 消息复用同一连接，用户机器不开放入站执行端口。
+syntax = "proto3";
+
+package nova.runner.v1;
+
+import "common.proto";
+import "execution.proto";
+
+service RunnerConnection {
+  rpc Connect(stream RunnerEnvelope) returns (stream ServerEnvelope);
+}
+
+// Runner → server 方向。
+// request_id 关联文件操作等请求/响应；execution_id（在 ExecutionEvent 内）关联事件。
+// error 分支承载流内请求级错误（docs/proto.md §4.2）：文件操作失败时 Runner 不发
+// 对应 Response，而是发 Error（同一 request_id）。
+message RunnerEnvelope {
+  string request_id = 1;
+
+  oneof payload {
+    Register register = 2;
+    Heartbeat heartbeat = 3;
+    nova.execution.v1.ExecutionEvent execution_event = 4;
+    nova.execution.v1.FileOpResponse file_op_response = 5;
+    nova.execution.v1.FileChunk file_chunk = 6;
+    nova.execution.v1.WriteFileResponse write_file_response = 7;
+    nova.execution.v1.CancelResponse cancel_response = 8;
+    nova.common.v1.Error error = 9;
+  }
+}
+
+// server → Runner 方向。
+message ServerEnvelope {
+  string request_id = 1;
+
+  oneof payload {
+    Accepted accepted = 2;
+    nova.execution.v1.ExecuteRequest execute = 3;
+    nova.execution.v1.CancelRequest cancel = 4;
+    nova.execution.v1.FileOpRequest file_op = 5;
+    Drain drain = 6;
+    Shutdown shutdown = 7;
+    nova.execution.v1.ReadFileRequest read_file = 8;
+    nova.execution.v1.WriteFileRequest write_file = 9;
+  }
+}
+
+message Register {
+  string runner_id = 1;
+  string version = 2;
+  string platform = 3; // "linux-x64" / "darwin-arm64" / "windows-x64"
+  repeated string capabilities = 4; // "git" "node" "docker" ...
+  uint32 cpu_count = 5;
+  uint64 memory_bytes = 6;
+  uint32 max_concurrency = 7;
+  map<string, string> labels = 8;
+  string workspace = 9;
+}
+
+message Accepted {
+  uint32 heartbeat_interval_ms = 1;
+  string generation = 2;
+}
+
+message Heartbeat {
+  string runner_id = 1;
+  RunnerState state = 2;
+  uint32 running = 3;
+}
+
+message Drain {
+  string reason = 1;
+}
+
+message Shutdown {
+  string reason = 1;
+}
+
+enum RunnerState {
+  RUNNER_STATE_UNSPECIFIED = 0;
+  RUNNER_STATE_READY = 1;
+  RUNNER_STATE_BUSY = 2;
+  RUNNER_STATE_DRAINING = 3;
+}

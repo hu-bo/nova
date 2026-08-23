@@ -1,0 +1,22 @@
+syntax = "proto3";
+package nova.common.v1;
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_NOT_FOUND = 1;
+  ERROR_CODE_PERMISSION = 2;
+  ERROR_CODE_INVALID = 3;
+  ERROR_CODE_OUT_OF_WORKSPACE = 4;
+  ERROR_CODE_TOO_LARGE = 5;
+  ERROR_CODE_TIMEOUT = 6;
+  ERROR_CODE_CANCELLED = 7;
+  ERROR_CODE_UNSUPPORTED = 8;
+  ERROR_CODE_BUSY = 9;
+  ERROR_CODE_IO = 10;
+  ERROR_CODE_IS_DIR = 11;
+  ERROR_CODE_NOT_DIR = 12;
+  ERROR_CODE_EXISTS = 13;
+  ERROR_CODE_SPAWN_FAILED = 14;
+}
+
+message Error { ErrorCode code = 1; string message = 2; }

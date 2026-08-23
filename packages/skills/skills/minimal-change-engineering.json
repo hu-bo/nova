@@ -1,0 +1,16 @@
+{
+  "format": "nova.skill/v1",
+  "id": "minimal-change-engineering",
+  "version": "1.0.0",
+  "name": "minimal-change-engineering",
+  "description": "用最小、直接、可验证的代码完成修改，抑制重复实现、无职责抽象、兼容补丁层和无关重构。所有编码任务都使用。",
+  "activation": { "mode": "always" },
+  "instructions": {
+    "markdown": "## 最小变更工程\n\n先用一句话明确用户可观察到的目标行为，再选择拥有该行为的现有模块修改。\n\n实施约束：\n- 修改现有实现优先于新增文件、类、接口或第二套路径。\n- 只有存在多个真实实现、独立生命周期或稳定边界时才引入抽象；禁止只转发参数和结果的 Wrapper、Manager、Service、Adapter。\n- 不创建 V2、New、Legacy 等平行实现；新实现替代旧实现时同步删除旧路径、旧导出、无用依赖和测试夹具。\n- 状态、并发和重试必须各有唯一 owner；控制流从代码结构中直接可读。\n- 保持修改局部，不做与目标无关的格式化、重命名和架构迁移。\n\n结束前检查 diff：每个新增结构是否承担必要职责；是否能用更少代码表达；是否遗留 dead code、重复判断、pass-through 层或以后可能用到的占位设计。发现后在交付前删除。"
+  },
+  "connections": [],
+  "resources": [],
+  "actions": [],
+  "metadata": { "category": "coding-quality", "builtin": "true" },
+  "source": { "kind": "native", "uri": "packages/skills/skills/minimal-change-engineering.json" }
+}

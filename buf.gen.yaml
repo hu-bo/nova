@@ -1,0 +1,10 @@
+version: v2
+plugins:
+  # protobuf-es v2 同时生成消息与 ServiceType 描述符，
+  # @connectrpc/connect v2 直接消费该描述符，无需独立 connect 插件。
+  - local: protoc-gen-es
+    out: packages/runner-sdk/src/gen
+    opt:
+      - target=ts
+      # 生成 .js 后缀的相对导入，兼容 NodeNext moduleResolution
+      - import_extension=js

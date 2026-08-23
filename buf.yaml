@@ -1,0 +1,18 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  except:
+    # docs/repo-layout.md §4.14：proto/ 固定为三个平铺文件，不按 package 嵌套目录
+    - DIRECTORY_SAME_PACKAGE
+    - PACKAGE_DIRECTORY_MATCH
+    # docs/proto.md §5：双向流服务刻意命名 RunnerConnection + envelope 消息，
+    # 不套 ConnectRequest/ConnectResponse 模板名
+    - SERVICE_SUFFIX
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+breaking:
+  use:
+    - FILE

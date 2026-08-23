@@ -1,0 +1,35 @@
+name: agent-web-ui
+
+on:
+  pull_request:
+    paths:
+      - "apps/agent-server/**"
+      - "apps/agent-web-ui/**"
+      - "packages/chat-ui/**"
+      - "packages/protocol/**"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/agent-server/**"
+      - "apps/agent-web-ui/**"
+      - "packages/chat-ui/**"
+      - "packages/protocol/**"
+      - "pnpm-lock.yaml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @nova/agent-web-ui api:check
+      - run: pnpm --filter @nova/agent-web-ui test
+      - run: pnpm --filter @nova/agent-web-ui build

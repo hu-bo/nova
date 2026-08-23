@@ -1,0 +1,16 @@
+{
+  "format": "nova.skill/v1",
+  "id": "change-cleanup-review",
+  "version": "1.0.0",
+  "name": "change-cleanup-review",
+  "description": "交付前审查本次 diff，删除重复、废弃、不可达和无职责代码，确认边界清晰且没有代码膨胀。实现完成准备交付时使用。",
+  "activation": { "mode": "auto", "keywords": ["审查", "清理", "交付", "review", "cleanup", "final"] },
+  "instructions": {
+    "markdown": "## 变更收尾审查\n\n只审查本次目标相关 diff，不借机改造整个仓库。逐项确认：\n- 是否保留了被替代的旧实现、旧导出、兼容分支、无用类型、依赖或测试数据。\n- 是否新增了只转发调用的层、单实现 interface、过早的 factory/plugin 或模糊 utils/helpers。\n- 同一规则是否在多个模块重复判断；状态和并发是否仍有唯一 owner。\n- 错误是否保持 typed、可观察且没有泄漏密钥、内部 Prompt 或原始远端响应。\n- 命名是否表达真实领域概念，注释是否解释必要原因而非复述代码。\n- 用户已有改动是否完整保留，生成代码是否未被手改。\n\n能安全删除的膨胀在交付前直接删除并重新验证。不要为了让 diff 看起来整洁而做无关格式化。"
+  },
+  "connections": [],
+  "resources": [],
+  "actions": [],
+  "metadata": { "category": "code-review", "builtin": "true" },
+  "source": { "kind": "native", "uri": "packages/skills/skills/change-cleanup-review.json" }
+}

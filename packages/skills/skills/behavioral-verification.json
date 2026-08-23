@@ -1,0 +1,16 @@
+{
+  "format": "nova.skill/v1",
+  "id": "behavioral-verification",
+  "version": "1.0.0",
+  "name": "behavioral-verification",
+  "description": "为代码变更选择与风险相称的测试、类型检查和构建，验证真实行为、边界、失败与取消。完成实现、修复或重构后使用。",
+  "activation": { "mode": "auto", "keywords": ["测试", "验证", "完成", "test", "verify", "build"] },
+  "instructions": {
+    "markdown": "## 行为验证\n\n验证用户关心的行为，不测试内部 wrapper 或为了覆盖率复制实现细节。\n- 先运行最窄且能证明目标行为的测试，再按影响范围扩大到类型检查、相关包测试和构建。\n- 新增或修改状态机、并发、队列、超时、取消、重试、恢复时，至少验证一个成功路径和关键失败路径。\n- API 变更验证输入拒绝、权限/所有权、错误映射和响应契约；持久化变更验证迁移和读写一致性。\n- 工具启动、命令无输出或进程仍在运行都不等于成功；读取最终 exit code 和测试摘要。\n- 测试失败时判断是产品缺陷、测试预期错误还是环境问题，不为通过测试削弱真实契约。\n\n无法执行某项验证时，交付中明确未验证内容、原因和具体风险，不用模糊的“应该可以”。"
+  },
+  "connections": [],
+  "resources": [],
+  "actions": [],
+  "metadata": { "category": "verification", "builtin": "true" },
+  "source": { "kind": "native", "uri": "packages/skills/skills/behavioral-verification.json" }
+}

@@ -1,0 +1,2 @@
+# Protobuf codegen 产物不入库（docs/proto.md §6）：由 pnpm proto:generate 生成
+src/gen/

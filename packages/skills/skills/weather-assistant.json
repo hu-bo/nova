@@ -1,0 +1,83 @@
+{
+  "format": "nova.skill/v1",
+  "id": "weather-assistant",
+  "version": "1.0.0",
+  "name": "weather-assistant",
+  "description": "查询天气并生成出行建议。用户询问天气、温度、降雨或出行安排时使用。",
+  "activation": {
+    "mode": "auto",
+    "keywords": ["天气", "温度", "降雨", "出行"]
+  },
+  "instructions": {
+    "markdown": "## 工作方式\n先确认地点和日期，再调用天气查询能力。不要臆测实时天气。"
+  },
+  "connections": [
+    {
+      "id": "weather-api",
+      "kind": "http",
+      "baseUrl": "https://api.weather.example.com",
+      "allowedMethods": ["GET"],
+      "allowedPathPrefixes": ["/v1/weather"],
+      "auth": {
+        "kind": "server-connection",
+        "ref": "weather-api"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "id": "weather-codes",
+      "path": "references/weather-codes.json",
+      "kind": "reference",
+      "mediaType": "application/json",
+      "content": {
+        "kind": "inline",
+        "encoding": "utf8",
+        "data": "{\"100\":\"晴\",\"101\":\"多云\"}"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "query-weather",
+      "name": "query_weather",
+      "description": "查询指定地点和日期的天气",
+      "risk": "read",
+      "executionMode": "parallel",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "location": { "type": "string" },
+          "date": { "type": "string", "format": "date" }
+        },
+        "required": ["location", "date"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["summary"],
+        "properties": {
+          "summary": { "type": "string" }
+        }
+      },
+      "runtime": {
+        "kind": "vm-js",
+        "timeoutMs": 5000,
+        "capabilities": {
+          "http": ["weather-api"],
+          "resources": ["weather-codes"]
+        },
+        "source": "async ({ input, sdk }) => { const response = await sdk.http.request('weather-api', { method: 'GET', path: '/v1/weather', query: { location: input.location, date: input.date } }); return { content: `天气：${response.data.summary}`, details: response.data }; }"
+      }
+    }
+  ],
+  "metadata": {
+    "author": "nova",
+    "license": "MIT",
+    "tags": "weather,travel"
+  },
+  "source": {
+    "kind": "native",
+    "uri": "packages/skills/skills/weather-assistant.json"
+  }
+}

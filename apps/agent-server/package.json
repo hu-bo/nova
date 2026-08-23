@@ -1,0 +1,47 @@
+{
+  "name": "@nova/agent-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "db:push": "drizzle-kit push --config=drizzle.config.ts",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts",
+    "db:check": "drizzle-kit check --config=drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config=drizzle.config.ts",
+    "openapi:export": "tsx src/openapi-export.ts",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.12",
+    "vitest": "^2.1.3"
+  },
+  "dependencies": {
+    "@fastify/env": "^7.0.0",
+    "@fastify/multipart": "^10.1.1",
+    "@fastify/swagger": "^9.8.1",
+    "@nova/agent-core": "workspace:^",
+    "@nova/logger": "workspace:^",
+    "@nova/coding-agent": "workspace:^",
+    "@nova/harness": "workspace:^",
+    "@nova/model-adapters": "workspace:^",
+    "@nova/protocol": "workspace:^",
+    "@nova/runner-sdk": "workspace:^",
+    "@nova/tools": "workspace:^",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.12.1",
+    "fastify-type-provider-zod": "^5.1.0",
+    "minio": "^8.0.7",
+    "pino": "^10.3.1",
+    "postgres": "^3.4.9",
+    "zod": "4.0.0"
+  }
+}
