@@ -170,7 +170,7 @@ export const conversations = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: varchar("user_id", { length: 128 }).notNull(),
     projectId: uuid("project_id"),
-    runnerId: text("runner_id").notNull(),
+    runnerId: text("runner_id"),
     title: text("title").notNull(),
     modelConfig: jsonb("model_config").$type<ModelConfig>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

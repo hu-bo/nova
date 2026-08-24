@@ -71,6 +71,9 @@
 
 <Composer
   disabled?={boolean}
+  isRunning?={boolean}
+  isAborting?={boolean}
+  onAbort?={() => void | Promise<void>}
   models?={ComposerOption[]}
   model?={string}
   onModelChange?={(model: string) => void}
@@ -90,6 +93,7 @@ type BlockRenderers = Record<string, BlockRenderer>
 `Composer` 的文件按钮使用浏览器原生文件选择器，并支持在输入框粘贴系统截图快捷键
 产生的剪贴板图片。组件只保留待发送的 `File[]` 并通过 `onSubmit` 上抛，文件上传、
 进度、失败重试与持久化仍由宿主负责。只有附件而没有文本时也允许提交。
+宿主传入 `isRunning` 与 `onAbort` 时，发送按钮会替换为中断按钮；中断请求及其状态仍由宿主负责。
 
 模型与推理强度是受控选择：选项和当前值由宿主传入，变更通过回调上抛；没有选项时
 不渲染对应控件。这样模型能力、默认值和持久化仍只有宿主一个 owner。

@@ -74,11 +74,11 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
     deleteRunner,
     listConversations: (projectId?: string) => listConversations({ limit: 100, ...(projectId ? { projectId } : {}) }),
     createConversation: (input: CreateConversation) => {
-      const { title, projectId, modelConfig, modelId, ...required } = input;
+      const { title, projectId, runnerId, modelConfig, modelId } = input;
       return createConversation({
-        ...required,
         ...(title === undefined ? {} : { title }),
         ...(projectId === undefined ? {} : { projectId }),
+        ...(runnerId === undefined ? {} : { runnerId }),
         ...(modelConfig === undefined ? {} : { modelConfig: modelConfigBody(modelConfig) }),
         ...(modelId === undefined ? {} : { modelId }),
       });

@@ -1,0 +1,1 @@
+ALTER TABLE "conversations" ALTER COLUMN "runner_id" DROP NOT NULL;

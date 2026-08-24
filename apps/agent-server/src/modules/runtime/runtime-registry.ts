@@ -146,7 +146,7 @@ function failureContext(route: EntryRoute) {
 function runtimeSignature(route: EntryRoute): string {
   return JSON.stringify({
     modelConfig: route.conversation.modelConfig,
-    runnerId: route.conversation.runnerId,
+    runnerId: route.conversation.runnerId ?? route.project?.runnerId ?? null,
     workspace: route.project?.workspace ?? null,
   });
 }

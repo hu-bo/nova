@@ -1,25 +1,30 @@
-import { LayoutDashboard, LogOut, Menu, MessageCircle, Plus, Settings, Sparkles, X } from "lucide-react";
+import { FolderKanban, LayoutDashboard, LogOut, Menu, MessageCircle, Plus, Settings, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/provider.js";
 import { useConversations, useProjects } from "../project/use-projects.js";
 import { RunnerLiveUpdates } from "../runner/live-updates.js";
-import { NewConversationDialog } from "../project/new-conversation.js";
+import { useQuickConversationCreate } from "../project/new-conversation.js";
 import { NewProjectDrawer } from "../project/new-project.js";
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [creator, setCreator] = useState<"chat" | "project" | null>(null);
+  const [projectCreatorOpen, setProjectCreatorOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileDialogRef = useRef<HTMLDialogElement>(null);
   const auth = useAuth();
   const projects = useProjects();
   const conversations = useConversations();
   const location = useLocation();
+  const createChat = useQuickConversationCreate();
 
   function openCreator(kind: "chat" | "project") {
     setMobileOpen(false);
-    setCreator(kind);
+    if (kind === "chat") {
+      createChat.mutate(undefined);
+      return;
+    }
+    setProjectCreatorOpen(true);
   }
 
   useEffect(() => {
@@ -64,6 +69,7 @@ export function AppShell() {
           conversations={conversations.data?.items ?? []}
           onNewProject={() => openCreator("project")}
           onNewChat={() => openCreator("chat")}
+          onNewProjectChat={(project) => createChat.mutate(project)}
           onLogout={auth.logout}
         />
       </aside>
@@ -93,6 +99,10 @@ export function AppShell() {
             conversations={conversations.data?.items ?? []}
             onNewProject={() => openCreator("project")}
             onNewChat={() => openCreator("chat")}
+            onNewProjectChat={(project) => {
+              setMobileOpen(false);
+              createChat.mutate(project);
+            }}
             onNavigate={() => setMobileOpen(false)}
             onLogout={auth.logout}
           />
@@ -102,8 +112,7 @@ export function AppShell() {
       <main className="min-h-screen pt-14 lg:pl-64">
         <Outlet />
       </main>
-      <NewConversationDialog open={creator === "chat"} initialMode="chat" onClose={() => setCreator(null)} />
-      <NewProjectDrawer open={creator === "project"} onClose={() => setCreator(null)} />
+      <NewProjectDrawer open={projectCreatorOpen} onClose={() => setProjectCreatorOpen(false)} />
     </div>
   );
 }
@@ -113,13 +122,15 @@ function SidebarContent({
   conversations,
   onNewProject,
   onNewChat,
+  onNewProjectChat,
   onNavigate,
   onLogout,
 }: {
-  projects: { id: string; name: string; runnerState: string }[];
+  projects: { id: string; name: string; runnerId: string | null; runnerState: string }[];
   conversations: { id: string; title: string; projectId: string | null }[];
   onNewProject: () => void;
   onNewChat: () => void;
+  onNewProjectChat: (project: { id: string; runnerId: string | null }) => void;
   onNavigate?: () => void;
   onLogout: () => void;
 }) {
@@ -149,13 +160,13 @@ function SidebarContent({
             onClick={onNavigate}
           />
         </div>
-        <div>
+        <div className="group">
           <div className="mb-2 flex items-center justify-between px-3">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">项目</span>
             <button
               type="button"
               onClick={onNewProject}
-              className="grid size-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
+              className="grid size-7 place-items-center rounded-lg text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-800 group-hover:opacity-100 group-focus-within:opacity-100"
               aria-label="新建项目"
               title="新建项目"
             >
@@ -164,31 +175,41 @@ function SidebarContent({
           </div>
           <div className="space-y-1">
             {projects.slice(0, 12).map((project) => (
-              <NavItem
-                key={project.id}
-                to={`/p/${project.id}`}
-                icon={
-                  <span
-                    className={`size-2 rounded-full ${runnerDot(project.runnerState)}`}
-                    aria-label={`Runner ${project.runnerState}`}
-                  />
-                }
-                label={project.name}
-                onClick={onNavigate}
-              />
+              <div key={project.id} className="group relative">
+                <NavItem
+                  to={`/p/${project.id}`}
+                  icon={
+                    <span
+                      className={`size-2 rounded-full ${runnerDot(project.runnerState)}`}
+                      aria-label={`Runner ${project.runnerState}`}
+                    />
+                  }
+                  label={project.name}
+                  onClick={onNavigate}
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-slate-400 opacity-0 transition hover:bg-white hover:text-indigo-600 group-hover:opacity-100 group-focus-within:opacity-100"
+                  aria-label={`在 ${project.name} 中新建会话`}
+                  title="新建项目会话"
+                  onClick={() => onNewProjectChat(project)}
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                </button>
+              </div>
             ))}
             {!projects.length && (
               <p className="px-3 py-2 text-xs leading-5 text-slate-400">创建 Project 后会显示在这里。</p>
             )}
           </div>
         </div>
-        <div>
+        <div className="group">
           <div className="mb-2 flex items-center justify-between px-3">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">最近</span>
             <button
               type="button"
               onClick={onNewChat}
-              className="grid size-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
+              className="grid size-7 place-items-center rounded-lg text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-800 group-hover:opacity-100 group-focus-within:opacity-100"
               aria-label="新建普通会话"
               title="新建普通会话"
             >
@@ -196,17 +217,25 @@ function SidebarContent({
             </button>
           </div>
           <div className="space-y-1">
-            {conversations.slice(0, 20).map((conversation) => (
-              <NavItem
-                key={conversation.id}
-                to={
-                  conversation.projectId ? `/p/${conversation.projectId}/c/${conversation.id}` : `/c/${conversation.id}`
-                }
-                icon={<MessageCircle className="size-4" aria-hidden="true" />}
-                label={conversation.title || "未命名会话"}
-                onClick={onNavigate}
-              />
-            ))}
+            {conversations.slice(0, 20).map((conversation) => {
+              const project = projects.find((item) => item.id === conversation.projectId);
+              const projectConversation = Boolean(project);
+              return (
+                <NavItem
+                  key={conversation.id}
+                  to={conversation.projectId ? `/p/${conversation.projectId}/c/${conversation.id}` : `/c/${conversation.id}`}
+                  icon={
+                    projectConversation ? (
+                      <FolderKanban className="size-4" aria-hidden="true" />
+                    ) : (
+                      <MessageCircle className="size-4" aria-hidden="true" />
+                    )
+                  }
+                  label={`${project?.name ?? "独立 Chat"} · ${conversation.title || "未命名会话"}`}
+                  onClick={onNavigate}
+                />
+              );
+            })}
             {!conversations.length && (
               <p className="px-3 py-2 text-xs leading-5 text-slate-400">最近会话会显示在这里。</p>
             )}

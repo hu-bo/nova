@@ -36,9 +36,11 @@ export function createAgentRuntime(route: EntryRoute, dependencies: AgentRuntime
     "creating agent runtime",
   );
   const model = createModel(ref);
+  const workspace = project ? requireWorkspace(project.workspace) : undefined;
+  const runnerId = conversation.runnerId ?? project?.runnerId;
   const ctx = project
-    ? toToolContext(dependencies.runners.pick(userId, conversation.runnerId, requireWorkspace(project.workspace)), {
-        cwd: requireWorkspace(project.workspace),
+    ? toToolContext(dependencies.runners.pick(userId, requireRunner(runnerId), workspace!), {
+        cwd: workspace!,
       })
     : undefined;
   const harness = project ? codingHarness : chatHarness;
@@ -73,4 +75,9 @@ function resolveModelRef(config: EntryRoute["conversation"]["modelConfig"]): Mod
 function requireWorkspace(workspace: string | null): string {
   if (!workspace) throw runnerUnavailable("Project workspace is not bound");
   return workspace;
+}
+
+function requireRunner(runnerId: string | null | undefined): string {
+  if (!runnerId) throw runnerUnavailable("Project runner is not bound");
+  return runnerId;
 }

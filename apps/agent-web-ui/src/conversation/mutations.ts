@@ -61,6 +61,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
         throw error;
       }
     },
+    onSuccess: refreshLists,
   });
 
   const abortMutation = useMutation({

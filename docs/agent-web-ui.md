@@ -159,12 +159,13 @@ interface ConversationState {
 
 `messages` 是唯一真相，`chat-ui` 是它的纯函数投影。
 
-### 3.1 Chat Runner 绑定
+### 3.1 会话 Runner 绑定
 
-Runner 选择属于 `apps/agent-web-ui` 的 Chat 页面，不属于 `packages/chat-ui`。
-每个 Chat 都有一个当前 `runnerId`；打开 Chat 时加载其 Runner 状态，用户可以在 Chat
-页面随时切换到自己拥有的其他在线 Runner。切换通过 server mutation 完成，当前运行中的
-run 不迁移，下一次发送才使用新 Runner。
+Runner 选择属于 `apps/agent-web-ui` 的会话页面，不属于 `packages/chat-ui`。新建普通
+Chat 或 Project 会话直接进入会话页面，不为 Runner 弹窗。独立 Chat 不需要 Runner；
+Project 尚未绑定 Runner/workspace 时，用户首次发送才提示完成绑定。用户也可在会话页面
+随时切换到自己拥有的其他 Runner；切换通过 server mutation 完成，当前运行中的 run 不迁移，
+下一次发送才使用新 Runner。
 
 ```text
 Chat 页面
@@ -175,7 +176,7 @@ Chat 页面
 
 切换控件由 Chat 页面组合，`chat-ui` 只接收展示数据和回调，不知道 Runner、设备、权限
 或 API 路径。Project Chat 还必须校验新 Runner 能访问 Project 已绑定的 workspace；独立
-Chat 虽然不执行文件工具，也保留 Runner 绑定，保证每个 Chat 的资源归属一致。
+Chat 不执行文件工具，因此不保存 Runner 绑定。
 
 ### 3.2 产品首页
 
@@ -287,7 +288,7 @@ onSubmit(text) {
 
 ### 中断
 
-对话页有常驻的中断按钮（`isRunning` 时可用）→ `POST /abort`。
+对话输入区在 `isRunning` 时将发送按钮替换为中断按钮 → `POST /abort`。
 **中断必须随时可点**，这是长任务体验的底线。
 
 ### Decision

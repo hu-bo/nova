@@ -56,7 +56,7 @@ export interface ConversationRow {
   id: string;
   userId: string;
   projectId: string | null;
-  runnerId: string;
+  runnerId: string | null;
   title: string;
   modelConfig: ModelConfig;
   createdAt: Date;
@@ -106,7 +106,7 @@ export interface AgentStore {
   createConversation(input: {
     userId: string;
     projectId: string | null;
-    runnerId: string;
+    runnerId: string | null;
     title: string;
     modelConfig: ModelConfig;
   }): Promise<ConversationRow>;
@@ -118,6 +118,7 @@ export interface AgentStore {
   }): Promise<Page<ConversationRow>>;
   routeConversation(userId: string, id: string): Promise<EntryRoute>;
   updateConversationRunner(input: { userId: string; id: string; runnerId: string }): Promise<ConversationRow>;
+  setConversationTitleIfUntitled(input: { userId: string; id: string; title: string }): Promise<void>;
   updateConversationModel(input: { userId: string; id: string; modelConfig: ModelConfig }): Promise<ConversationRow>;
   appendMessage(input: Omit<MessageRow, "seq">): Promise<MessageRow>;
   listMessages(input: {
@@ -336,6 +337,12 @@ export function createMemoryStore(): AgentStore {
       const updated = { ...conversation, runnerId: input.runnerId, updatedAt: new Date() };
       state.conversations.set(conversation.id, updated);
       return updated;
+    },
+    async setConversationTitleIfUntitled(input) {
+      const conversation = ownedConversation(input.userId, input.id);
+      if (conversation.title === "New conversation") {
+        state.conversations.set(conversation.id, { ...conversation, title: input.title, updatedAt: new Date() });
+      }
     },
     async updateConversationModel(input) {
       const conversation = ownedConversation(input.userId, input.id);

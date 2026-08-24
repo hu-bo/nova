@@ -42,6 +42,9 @@ export function createMessagesService(
         status: "done",
         createdAt: new Date(),
       });
+      if (route.conversation.title === "New conversation") {
+        await store.setConversationTitleIfUntitled({ userId, id: conversationId, title: titleFromMessage(input.text) });
+      }
       await runtimes.send(route, input.text, input.queue);
     },
     async abort(userId: string, conversationId: string) {
@@ -49,4 +52,9 @@ export function createMessagesService(
       await runtimes.abort(conversationId);
     },
   };
+}
+
+function titleFromMessage(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return normalized.length > 24 ? `${normalized.slice(0, 24)}…` : normalized || "New conversation";
 }

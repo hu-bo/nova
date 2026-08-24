@@ -43,6 +43,7 @@ export function RunnerManagerDialog({ open, onClose, selectedRunnerId, onSelect 
       await refresh();
     },
   });
+
   const removeRunner = useMutation({
     mutationFn: (id: string) => api!.deleteRunner(id),
     onSuccess: async () => {
@@ -371,7 +372,7 @@ function CopyButton({ value, label, compact = false }: { value: string | null; l
 
 function runnerCommand(endpoint: string, token: string, runnerId?: string, workspace = "<workspace>") {
   const executable = import.meta.env.DEV ? "cargo run -p nova-runner --" : "nova-runner";
-  return `${executable} --server "${endpoint}" --token "${token}"${runnerId ? ` --runner-id "${runnerId}"` : ""} --workspace "${workspace}"`;
+  return `${executable} --server "${endpoint}" --token "${token}"${runnerId ? ` --runner-id "${runnerId}"` : ""} `;
 }
 
 function displayWorkspacePath(path: string) {

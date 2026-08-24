@@ -279,6 +279,18 @@ export function createPgStore(databaseUrl: string): PgStore {
       if (!conversation) throw notFound("Conversation");
       return conversation;
     },
+    async setConversationTitleIfUntitled(input) {
+      await db
+        .update(conversations)
+        .set({ title: input.title })
+        .where(
+          and(
+            eq(conversations.id, input.id),
+            eq(conversations.userId, input.userId),
+            eq(conversations.title, "New conversation"),
+          ),
+        );
+    },
     async updateConversationModel(input) {
       const [conversation] = await db
         .update(conversations)

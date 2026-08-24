@@ -1,15 +1,14 @@
 import { Activity, ArrowRight, FolderKanban, MessageCircle, Plus, Server, WifiOff } from "lucide-react";
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
-import { NewConversationDialog } from "../project/new-conversation.js";
+import { useQuickConversationCreate } from "../project/new-conversation.js";
 import { useConversations, useProjects } from "../project/use-projects.js";
 
 export function HomeRoute() {
-  const [newOpen, setNewOpen] = useState(false);
+  const createConversation = useQuickConversationCreate();
   const projects = useProjects();
   const conversations = useConversations();
 
@@ -53,7 +52,7 @@ export function HomeRoute() {
         <Button
           variant="primary"
           icon={<Plus className="size-4" aria-hidden="true" />}
-          onClick={() => setNewOpen(true)}
+          onClick={() => createConversation.mutate(undefined)}
         >
           新建会话
         </Button>
@@ -116,7 +115,7 @@ export function HomeRoute() {
               title="还没有 Project"
               description="创建第一个 Project，并把它绑定到设备上的 workspace。"
               action={
-                <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setNewOpen(true)}>
+                <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => createConversation.mutate(undefined)}>
                   新建并开始
                 </Button>
               }
@@ -170,7 +169,6 @@ export function HomeRoute() {
           )}
         </section>
       </div>
-      <NewConversationDialog open={newOpen} onClose={() => setNewOpen(false)} />
     </div>
   );
 }

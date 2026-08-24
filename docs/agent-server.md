@@ -81,7 +81,7 @@ Composition Root。用户消息进入 Agent 后，是否自行处理、调用 To
 ```text
 Project                        独立 Chat
   workspace  已绑定目录          workspace  无
-  Runner     选择设备上的目录    Runner     绑定设备，不注入 coding ToolContext
+  Runner     创建后可延后绑定      Runner     不需要绑定，也不注入 coding ToolContext
   │                              │
   ├── Conversation A             └── Conversation（projectId = null）
   ├── Conversation B
@@ -93,7 +93,7 @@ Project                        独立 Chat
 |---|---|---|
 | `conversations.project_id` | `null` | project 的 id |
 | workspace | 无 | `projects.workspace` |
-| Runner | 使用 conversation 的 `runner_id` | 使用 conversation 的 `runner_id`，并校验 Project workspace（§8） |
+| Runner | 不要求绑定 | 优先使用 conversation 的 `runner_id`，否则使用 Project 的绑定，并校验 workspace（§8） |
 | 注入的 `ctx` | `undefined` | `toToolContext(runner, ...)` |
 | 工具集 | `risk === "none"` | 全部 |
 | TODO | 有，属于该 conversation | 有，属于该 conversation（**不跨会话共享**） |
@@ -110,11 +110,11 @@ Project                        独立 Chat
 Chat 转成 Project，意味着历史里所有"我没有执行环境"的回答突然变成谎话。
 要换模式就在 project 下开新会话。
 
-每个 conversation 都必须绑定一个属于当前用户的设备 Runner。创建 Chat 时由 UI 选择默认
-Runner；已有 Chat 可通过 `PATCH /api/conversations/:id/runner` 切换 Runner。切换只影响
-后续 run，正在运行的 run 继续使用原 Runner，不能中途迁移。Project Chat 切换时还要校验
-新 Runner 的 root 包含 Project.workspace；独立 Chat 不需要 workspace 校验，但仍保存
-`runner_id`。
+创建 conversation 不要求 Runner：独立 Chat 不使用 Runner，Project Chat 可以先创建并
+进入会话。Project 首次执行前必须解析出 Project workspace 和 Runner；缺失时返回可解释的
+错误，且绝不降级为独立 Chat。已有会话可通过 `PATCH /api/conversations/:id/runner` 选择
+Runner；切换只影响后续 run，正在运行的 run 继续使用原 Runner。Project Chat 切换时还要
+校验新 Runner 的 root 包含 Project.workspace。
 
 ### 1.3 OpenAPI 与 API 生成
 
@@ -665,9 +665,9 @@ workspace 必须位于指定 Runner 的 root 内；Project 的 workspace 是设�
 Runner 断连时，其上运行的 execution 全部失败为 `RUNNER_UNAVAILABLE`
 （`runner-sdk.md` §4），由 taskflow 或 agent-core 决定后续。
 
-**project 的 Runner 未就绪时**：`create-conversation` 允许创建，
-但首次发消息时若 `pick` 失败，返回明确错误（"该 project 的 Runner 未连接"）
-并在 UI 上给出启动命令（`agent-web-ui.md` §7.3）。不要静默降级成 Chat 模式 ——
+**project 尚未绑定或 Runner 未就绪时**：`create-conversation` 允许创建。首次发消息时，
+UI 先提示用户绑定 Runner 与 workspace；若绑定后连接仍不可用，`pick` 返回明确错误。
+不要静默降级成 Chat 模式 ——
 用户以为 agent 能改代码，实际它只会空谈。
 
 ---

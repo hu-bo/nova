@@ -9,7 +9,7 @@ import { Card } from "../components/ui/card.js";
 import { Dialog } from "../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { FieldLabel, Input } from "../components/ui/form.js";
-import { NewConversationDialog } from "../project/new-conversation.js";
+import { useQuickConversationCreate } from "../project/new-conversation.js";
 import {
   bindWorkspaceSchema,
   renameProjectSchema,
@@ -29,7 +29,6 @@ export function ProjectRoute() {
   const projectQuery = useProject(projectId);
   const conversations = useConversations(projectId);
   const mutations = useProjectMutations();
-  const [newOpen, setNewOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [bindOpen, setBindOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -45,6 +44,7 @@ export function ProjectRoute() {
     defaultValues: { runnerId: "", workspace: "" },
   });
   const project = projectQuery.project;
+  const createConversation = useQuickConversationCreate();
 
   useEffect(() => {
     if (project && renameOpen) renameForm.reset({ name: project.name });
@@ -124,7 +124,7 @@ export function ProjectRoute() {
           </Button>
           <Button
             variant="primary"
-            onClick={() => setNewOpen(true)}
+            onClick={() => createConversation.mutate({ id: project.id, runnerId: project.runnerId })}
             icon={<Plus className="size-4" aria-hidden="true" />}
           >
             新建会话
@@ -237,8 +237,7 @@ export function ProjectRoute() {
             action={
               <Button
                 variant="primary"
-                disabled={!project.workspace || !project.runnerId}
-                onClick={() => setNewOpen(true)}
+                onClick={() => createConversation.mutate({ id: project.id, runnerId: project.runnerId })}
                 icon={<Plus className="size-4" />}
               >
                 新建会话
@@ -262,7 +261,6 @@ export function ProjectRoute() {
         </Button>
       </section>
 
-      <NewConversationDialog open={newOpen} onClose={() => setNewOpen(false)} initialProjectId={project.id} />
       <Dialog open={renameOpen} onClose={() => setRenameOpen(false)} title="重命名 Project">
         <form onSubmit={renameForm.handleSubmit((values) => void rename(values))} className="space-y-5">
           <FieldLabel label="项目名称" error={renameForm.formState.errors.name?.message}>

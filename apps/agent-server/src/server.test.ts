@@ -330,6 +330,29 @@ it("runs the authenticated project and conversation flow with ownership isolatio
     { role: "assistant", blocks: [{ type: "text", text: "received: Build the server" }], status: "done" },
   ]);
 
+  const untitledConversation = await app.inject({
+    method: "POST",
+    url: "/api/conversations",
+    headers: { authorization: "Bearer alice-token" },
+    payload: { modelConfig },
+  });
+  expect(untitledConversation.statusCode).toBe(201);
+  const untitledConversationId = untitledConversation.json().id as string;
+  await app.inject({
+    method: "POST",
+    url: `/api/conversations/${untitledConversationId}/messages`,
+    headers: { authorization: "Bearer alice-token" },
+    payload: { text: "  Build\n a concise conversation title  " },
+  });
+  const conversations = await app.inject({
+    method: "GET",
+    url: "/api/conversations?limit=100",
+    headers: { authorization: "Bearer alice-token" },
+  });
+  expect(conversations.json().items).toContainEqual(
+    expect.objectContaining({ id: untitledConversationId, title: "Build a concise conversa…" }),
+  );
+
   const openapi = await app.inject({
     method: "GET",
     url: "/api/openapi.json",

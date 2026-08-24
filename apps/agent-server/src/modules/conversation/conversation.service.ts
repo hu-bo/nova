@@ -28,7 +28,7 @@ export function createConversationService(
       const conversation = await store.createConversation({
         userId,
         projectId: input.projectId ?? null,
-        runnerId: input.runnerId,
+        runnerId: input.runnerId ?? null,
         title: input.title ?? "New conversation",
         modelConfig,
       });

@@ -1,5 +1,5 @@
 import { Composer, DecisionPrompt, MessageList, TodoPanel, type ComposerSubmission } from "@nova/chat-ui";
-import { AlertTriangle, ArrowLeft, CircleStop, FolderKanban, MessageCircle, Server, Wifi, WifiOff } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle, Server, Wifi, WifiOff } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
@@ -55,8 +55,8 @@ function ConversationView({
   conversation,
   project,
 }: {
-  conversation: { id: string; title: string; runnerId: string; projectId: string | null };
-  project?: { id: string; name: string; workspace: string | null; runnerState: string } | undefined;
+  conversation: { id: string; title: string; runnerId: string | null; projectId: string | null };
+  project?: { id: string; name: string; workspace: string | null; runnerId: string | null; runnerState: string } | undefined;
 }) {
   const models = useModelSettings();
   const [modelProfileId, setModelProfileId] = useState(models.defaultProfileId || models.profiles[0]?.id || "");
@@ -91,18 +91,12 @@ function ConversationView({
     );
 
   function submit(submission: ComposerSubmission) {
-    if (project?.runnerState === "disconnected") {
+    if (project && (!project.workspace || !project.runnerId)) {
       setRunnerWarning(submission);
       return false;
     }
     const selectedQueue = store.state.isRunning ? queue : undefined;
     return mutations.send(submission, selectedQueue);
-  }
-
-  async function confirmDisconnectedSend() {
-    if (!runnerWarning) return;
-    await mutations.send(runnerWarning, store.state.isRunning ? queue : undefined);
-    setRunnerWarning(null);
   }
 
   return (
@@ -138,27 +132,17 @@ function ConversationView({
               切换 Runner
             </Button>
           </span>
-          <Button
-            aria-label={mutations.abortMutation.isPending ? "正在中断" : "中断当前运行"}
-            className="px-3 sm:px-4"
-            variant="danger"
-            disabled={!store.state.isRunning || mutations.abortMutation.isPending}
-            icon={<CircleStop className="size-4" aria-hidden="true" />}
-            onClick={() => void mutations.abort()}
-          >
-            <span className="hidden sm:inline">{mutations.abortMutation.isPending ? "中断中…" : "中断"}</span>
-          </Button>
         </header>
 
-        {project?.runnerState === "disconnected" && (
+        {project && (!project.workspace || !project.runnerId) && (
           <div className="flex items-start gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <p className="min-w-0 flex-1 leading-5">
-              Runner 未连接。发送前会再次确认，且服务端会明确拒绝无法执行的 coding 请求；不会降级成普通 Chat。
+              此 Project 尚未绑定 Runner 或 workspace。可以先开始记录需求，首次发送 coding 任务时再完成绑定。
             </p>
-            <Button size="sm" variant="outline" onClick={() => setRunnerOpen(true)}>
-              查看启动命令
-            </Button>
+            <Link to={`/p/${project.id}`} className="shrink-0 text-sm font-semibold text-amber-900 underline">
+              去绑定
+            </Link>
           </div>
         )}
 
@@ -263,6 +247,9 @@ function ConversationView({
               )}
               <Composer
                 disabled={mutations.sendMutation.isPending}
+                isRunning={store.state.isRunning}
+                isAborting={mutations.abortMutation.isPending}
+                onAbort={() => mutations.abort()}
                 allowFiles
                 placeholder={project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行"}
                 models={modelOptions}
@@ -295,33 +282,26 @@ function ConversationView({
       <RunnerManagerDialog
         open={runnerOpen}
         onClose={() => setRunnerOpen(false)}
-        selectedRunnerId={conversation.runnerId}
+        selectedRunnerId={conversation.runnerId ?? undefined}
         onSelect={(runnerId) => mutations.changeRunner(runnerId)}
       />
 
       <Dialog
         open={Boolean(runnerWarning)}
         onClose={() => setRunnerWarning(null)}
-        title="Runner 当前未连接"
-        description="继续发送不会切换成 Chat 模式，服务端可能返回明确的 Runner 错误。"
+        title="先绑定 Runner 与 workspace"
+        description="Project 需要明确的执行环境后才能处理这条消息。"
         size="md"
       >
         <div className="space-y-5">
           <p className="text-sm leading-6 text-slate-600">
-            建议先打开 Runner 管理器复制启动命令，并等待状态转绿。如果仍要发送，原消息会保留并按 Project 模式提交。
+            这条消息尚未发送。完成 Project 绑定后，请回到此会话重新发送；不会降级成普通 Chat。
           </p>
           <div className="flex flex-wrap justify-end gap-3">
             <Button onClick={() => setRunnerWarning(null)}>先不发送</Button>
-            <Button variant="outline" onClick={() => setRunnerOpen(true)}>
-              管理 Runner
-            </Button>
-            <Button
-              variant="primary"
-              disabled={mutations.sendMutation.isPending}
-              onClick={() => void confirmDisconnectedSend()}
-            >
-              {mutations.sendMutation.isPending ? "发送中…" : "仍然发送"}
-            </Button>
+            <Link to={`/p/${project?.id}`}>
+              <Button variant="primary">去绑定</Button>
+            </Link>
           </div>
         </div>
       </Dialog>
