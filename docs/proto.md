@@ -314,8 +314,9 @@ Execute 的拒绝（`BUSY` / 幂等键冲突等）不走 Error 分支：Runner �
 | TypeScript | `@bufbuild/protobuf` + `@connectrpc/connect` | `packages/runner-sdk/src/gen/` |
 | Rust | `tonic-build`（`build.rs`） | `OUT_DIR`，`include_proto!` 引入 |
 
-**生成产物不入库**（`.gitignore`），由构建步骤产出。理由：入库会出现"改了 proto 忘了重新生成"
-的双源问题，正是本文件要禁止的。
+TypeScript 生成产物随协议源一起入库。协议变化后运行 `pnpm proto:generate` 并提交
+`packages/runner-sdk/src/gen/` 的更新；禁止手工编辑该目录。这样依赖 `runner-sdk` 源码的
+应用可在干净检出中直接完成类型检查。
 
 `buf lint` + `buf breaking` 进 CI，防止意外破坏兼容性。
 
