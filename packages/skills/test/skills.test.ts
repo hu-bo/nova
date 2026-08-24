@@ -25,44 +25,51 @@ function document(overrides: Partial<SkillDocumentInput> = {}): SkillDocumentInp
     description: "Queries weather when users ask about forecasts.",
     activation: { mode: "auto", keywords: ["weather"] },
     instructions: { markdown: "Call the weather action before answering." },
-    connections: [{
-      id: "weather-api",
-      kind: "http",
-      baseUrl: "https://weather.example.com",
-      allowedMethods: ["GET"],
-      allowedPathPrefixes: ["/v1/weather"],
-    }],
-    resources: [{
-      id: "codes",
-      path: "references/codes.json",
-      kind: "reference",
-      mediaType: "application/json",
-      content: { kind: "inline", encoding: "utf8", data: "{}" },
-    }],
-    actions: [{
-      id: "query-weather",
-      name: "query_weather",
-      description: "Query weather",
-      risk: "read",
-      executionMode: "parallel",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        properties: { location: { type: "string" } },
-        required: ["location"],
+    connections: [
+      {
+        id: "weather-api",
+        kind: "http",
+        baseUrl: "https://weather.example.com",
+        allowedMethods: ["GET"],
+        allowedPathPrefixes: ["/v1/weather"],
       },
-      outputSchema: {
-        type: "object",
-        properties: { summary: { type: "string" } },
-        required: ["summary"],
+    ],
+    resources: [
+      {
+        id: "codes",
+        path: "references/codes.json",
+        kind: "reference",
+        mediaType: "application/json",
+        content: { kind: "inline", encoding: "utf8", data: "{}" },
       },
-      runtime: {
-        kind: "vm-js",
-        timeoutMs: 1000,
-        capabilities: { http: ["weather-api"], resources: ["codes"] },
-        source: "async ({ input, sdk }) => { const response = await sdk.http.request('weather-api', { method: 'GET', path: '/v1/weather', query: { location: input.location } }); return { content: response.data.summary, details: response.data }; }",
+    ],
+    actions: [
+      {
+        id: "query-weather",
+        name: "query_weather",
+        description: "Query weather",
+        risk: "read",
+        executionMode: "parallel",
+        inputSchema: {
+          type: "object",
+          additionalProperties: false,
+          properties: { location: { type: "string" } },
+          required: ["location"],
+        },
+        outputSchema: {
+          type: "object",
+          properties: { summary: { type: "string" } },
+          required: ["summary"],
+        },
+        runtime: {
+          kind: "vm-js",
+          timeoutMs: 1000,
+          capabilities: { http: ["weather-api"], resources: ["codes"] },
+          source:
+            "async ({ input, sdk }) => { const response = await sdk.http.request('weather-api', { method: 'GET', path: '/v1/weather', query: { location: input.location } }); return { content: response.data.summary, details: response.data }; }",
+        },
       },
-    }],
+    ],
     metadata: {},
     source: { kind: "native" },
     ...overrides,
@@ -82,18 +89,21 @@ describe("skill schema and compiler", () => {
     const builtins = loadBuiltinSkills();
     const compiled = compileSkills(builtins);
     expect(builtins).toHaveLength(6);
-    expect(new Set(builtins.map(skill => skill.id)).size).toBe(6);
-    expect(builtins.filter(skill => skill.activation.mode === "always").map(skill => skill.id))
-      .toEqual(["minimal-change-engineering"]);
+    expect(new Set(builtins.map((skill) => skill.id)).size).toBe(6);
+    expect(builtins.filter((skill) => skill.activation.mode === "always").map((skill) => skill.id)).toEqual([
+      "minimal-change-engineering",
+    ]);
     expect([...compiled.actions]).toEqual([]);
   });
 
   it("rejects unknown capabilities and cross-skill tool collisions", () => {
     const invalid = document({
-      actions: [{
-        ...document().actions![0]!,
-        runtime: { ...document().actions![0]!.runtime, capabilities: { http: ["missing"], resources: [] } },
-      }],
+      actions: [
+        {
+          ...document().actions![0]!,
+          runtime: { ...document().actions![0]!.runtime, capabilities: { http: ["missing"], resources: [] } },
+        },
+      ],
     });
     expect(() => compileSkill(invalid)).toThrow(SkillCompileError);
     expect(() => compileSkills([document(), { ...document(), version: "2.0.0" }])).toThrow(/duplicate skill id/);
@@ -102,50 +112,68 @@ describe("skill schema and compiler", () => {
 
 describe("skill VM runtime", () => {
   const host: SkillHost = {
-    requestHttp: vi.fn(async ({ request }) => ({ status: 200, data: { summary: `Sunny in ${request.query?.location}` } })),
+    requestHttp: vi.fn(async ({ request }) => ({
+      status: 200,
+      data: { summary: `Sunny in ${request.query?.location}` },
+    })),
     readResource: vi.fn(async () => ({ mediaType: "text/plain", data: "remote", encoding: "utf8" as const })),
   };
 
   it("executes a verified action through the capability host", async () => {
     const skill = compileSkill(document());
-    const result = await executeSkillAction(skill, "query-weather", { location: "Shanghai" }, host, { trust: "verified" });
+    const result = await executeSkillAction(skill, "query-weather", { location: "Shanghai" }, host, {
+      trust: "verified",
+    });
     expect(result).toEqual({ status: "ok", content: "Sunny in Shanghai", details: { summary: "Sunny in Shanghai" } });
     expect(host.requestHttp).toHaveBeenCalledOnce();
   });
 
   it("rejects untrusted execution, invalid input and undeclared paths", async () => {
     const skill = compileSkill(document());
-    await expect(executeSkillAction(skill, "query-weather", { location: "Shanghai" }, host, { trust: "untrusted" }))
-      .rejects.toMatchObject({ code: "UNTRUSTED_SKILL" });
-    await expect(executeSkillAction(skill, "query-weather", {}, host, { trust: "verified" }))
-      .rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(
+      executeSkillAction(skill, "query-weather", { location: "Shanghai" }, host, { trust: "untrusted" }),
+    ).rejects.toMatchObject({ code: "UNTRUSTED_SKILL" });
+    await expect(executeSkillAction(skill, "query-weather", {}, host, { trust: "verified" })).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
 
-    const denied = compileSkill(document({
-      actions: [{
-        ...document().actions![0]!,
-        runtime: {
-          ...document().actions![0]!.runtime,
-          source: "async ({ sdk }) => { await sdk.http.request('weather-api', { method: 'GET', path: '/admin' }); return { content: 'bad', details: { summary: 'bad' } }; }",
-        },
-      }],
-    }));
-    await expect(executeSkillAction(denied, "query-weather", { location: "Shanghai" }, host, { trust: "verified" }))
-      .rejects.toBeInstanceOf(SkillRuntimeError);
+    const denied = compileSkill(
+      document({
+        actions: [
+          {
+            ...document().actions![0]!,
+            runtime: {
+              ...document().actions![0]!.runtime,
+              source:
+                "async ({ sdk }) => { await sdk.http.request('weather-api', { method: 'GET', path: '/admin' }); return { content: 'bad', details: { summary: 'bad' } }; }",
+            },
+          },
+        ],
+      }),
+    );
+    await expect(
+      executeSkillAction(denied, "query-weather", { location: "Shanghai" }, host, { trust: "verified" }),
+    ).rejects.toBeInstanceOf(SkillRuntimeError);
   });
 
   it("terminates a worker that exceeds its action timeout", async () => {
-    const slow = compileSkill(document({
-      actions: [{
-        ...document().actions![0]!,
-        runtime: {
-          ...document().actions![0]!.runtime,
-          timeoutMs: 30,
-          source: "() => { while (true) {} }",
-        },
-      }],
-    }));
-    await expect(executeSkillAction(slow, "query-weather", { location: "Shanghai" }, host, { trust: "verified" }))
-      .rejects.toMatchObject({ code: "TIMEOUT" });
+    const slow = compileSkill(
+      document({
+        actions: [
+          {
+            ...document().actions![0]!,
+            runtime: {
+              ...document().actions![0]!.runtime,
+              timeoutMs: 30,
+              source: "() => { while (true) {} }",
+            },
+          },
+        ],
+      }),
+    );
+    await expect(
+      executeSkillAction(slow, "query-weather", { location: "Shanghai" }, host, { trust: "verified" }),
+    ).rejects.toMatchObject({ code: "TIMEOUT" });
   });
 });
 
@@ -172,7 +200,7 @@ Read references/guide.md when more detail is needed.
   it("maps standard metadata and resources without making scripts executable actions", () => {
     const skill = importAgentSkillFiles(files, { sourceUri: "market://sample.zip" });
     expect(skill.version).toBe("1.2.3");
-    expect(skill.resources.map(resource => resource.kind)).toEqual(["reference", "script"]);
+    expect(skill.resources.map((resource) => resource.kind)).toEqual(["reference", "script"]);
     expect(skill.actions).toEqual([]);
     expect(skill.source.allowedTools).toBe("Read Bash(jq:*)");
   });
@@ -180,8 +208,9 @@ Read references/guide.md when more detail is needed.
   it("reads a stored ZIP and rejects traversal paths", () => {
     const zip = storedZip(files);
     expect(importAgentSkillZip(zip).name).toBe("sample-skill");
-    expect(() => importAgentSkillZip(storedZip([{ path: "../SKILL.md", data: new TextEncoder().encode(manifest) }])))
-      .toThrow(SkillArchiveError);
+    expect(() =>
+      importAgentSkillZip(storedZip([{ path: "../SKILL.md", data: new TextEncoder().encode(manifest) }])),
+    ).toThrow(SkillArchiveError);
   });
 });
 

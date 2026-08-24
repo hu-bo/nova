@@ -14,7 +14,11 @@ export function toolParameters(schema: ZodType): JSONSchema {
 
 function objectBranches(schema: JSONSchema): boolean {
   const branches = schema.anyOf ?? schema.oneOf;
-  return Array.isArray(branches)
-    && branches.length > 0
-    && branches.every(branch => typeof branch === "object" && branch !== null && (branch as JSONSchema).type === "object");
+  return (
+    Array.isArray(branches) &&
+    branches.length > 0 &&
+    branches.every(
+      (branch) => typeof branch === "object" && branch !== null && (branch as JSONSchema).type === "object",
+    )
+  );
 }

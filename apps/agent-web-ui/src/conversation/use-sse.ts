@@ -17,7 +17,15 @@ interface UseSseOptions {
   onUnauthorized: () => void;
 }
 
-export function useSse({ conversationId, accessToken, enabled, dispatch, loadSnapshot, onTerminal, onUnauthorized }: UseSseOptions) {
+export function useSse({
+  conversationId,
+  accessToken,
+  enabled,
+  dispatch,
+  loadSnapshot,
+  onTerminal,
+  onUnauthorized,
+}: UseSseOptions) {
   useEffect(() => {
     if (!enabled) return;
     let disposed = false;
@@ -36,16 +44,17 @@ export function useSse({ conversationId, accessToken, enabled, dispatch, loadSna
       wake = null;
     };
 
-    const wait = (milliseconds: number) => new Promise<void>(resolve => {
-      const timer = setTimeout(() => {
-        wake = null;
-        resolve();
-      }, milliseconds);
-      wake = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-    });
+    const wait = (milliseconds: number) =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          wake = null;
+          resolve();
+        }, milliseconds);
+        wake = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
 
     const remember = (id: string) => {
       if (seen.has(id)) return false;
@@ -103,11 +112,15 @@ export function useSse({ conversationId, accessToken, enabled, dispatch, loadSna
           }
         } catch (error) {
           if (!controller.signal.aborted && !disposed) {
-            dispatch({ type: "event", conversationId, event: {
-              type: "error",
-              code: "SSE_DISCONNECTED",
-              message: error instanceof Error ? error.message : "实时连接已断开",
-            } });
+            dispatch({
+              type: "event",
+              conversationId,
+              event: {
+                type: "error",
+                code: "SSE_DISCONNECTED",
+                message: error instanceof Error ? error.message : "实时连接已断开",
+              },
+            });
           }
         } finally {
           controller = null;

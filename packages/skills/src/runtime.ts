@@ -63,7 +63,10 @@ export type SkillRuntimeErrorCode =
   | "CANCELLED";
 
 export class SkillRuntimeError extends Error {
-  constructor(readonly code: SkillRuntimeErrorCode, message: string) {
+  constructor(
+    readonly code: SkillRuntimeErrorCode,
+    message: string,
+  ) {
     super(message);
     this.name = "SkillRuntimeError";
   }
@@ -76,10 +79,12 @@ export async function executeSkillAction(
   host: SkillHost,
   options: ExecuteSkillActionOptions,
 ): Promise<SkillActionResult> {
-  if (options.trust === "untrusted") throw new SkillRuntimeError("UNTRUSTED_SKILL", "untrusted skills cannot execute VM actions");
+  if (options.trust === "untrusted")
+    throw new SkillRuntimeError("UNTRUSTED_SKILL", "untrusted skills cannot execute VM actions");
   const action = skill.actions.get(actionId);
   if (!action) throw new SkillRuntimeError("UNKNOWN_ACTION", `unknown skill action: ${actionId}`);
-  if (!action.validateInput(input)) throw new SkillRuntimeError("INVALID_INPUT", validationMessage(action.validateInput));
+  if (!action.validateInput(input))
+    throw new SkillRuntimeError("INVALID_INPUT", validationMessage(action.validateInput));
   if (options.signal?.aborted) throw new SkillRuntimeError("CANCELLED", "skill action was cancelled");
 
   const result = await runWorker(skill, action, structuredClone(input), host, options);
@@ -152,19 +157,22 @@ function runWorker(
       }
       if (message.type === "call" && typeof message.callId === "number") {
         void handleHostCall(skill, action, host, controller.signal, message)
-          .then(value => post(worker, { type: "call-result", callId: message.callId, ok: true, value }))
-          .catch(error => post(worker, {
-            type: "call-result",
-            callId: message.callId,
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-            code: error instanceof SkillRuntimeError ? error.code : undefined,
-          }));
+          .then((value) => post(worker, { type: "call-result", callId: message.callId, ok: true, value }))
+          .catch((error) =>
+            post(worker, {
+              type: "call-result",
+              callId: message.callId,
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+              code: error instanceof SkillRuntimeError ? error.code : undefined,
+            }),
+          );
       }
     });
-    worker.on("error", error => finish(new SkillRuntimeError("VM_ERROR", error.message)));
-    worker.on("exit", code => {
-      if (!settled) finish(new SkillRuntimeError("VM_ERROR", `skill worker exited before returning a result (${code})`));
+    worker.on("error", (error) => finish(new SkillRuntimeError("VM_ERROR", error.message)));
+    worker.on("exit", (code) => {
+      if (!settled)
+        finish(new SkillRuntimeError("VM_ERROR", `skill worker exited before returning a result (${code})`));
     });
   });
 }
@@ -180,7 +188,8 @@ async function handleHostCall(
   if (message.callType === "http") {
     const payload = recordValue(message.payload, "invalid HTTP request");
     const connectionId = stringValue(payload.connectionId, "");
-    if (!action.action.runtime.capabilities.http.includes(connectionId)) throw denied(`HTTP connection is not allowed: ${connectionId}`);
+    if (!action.action.runtime.capabilities.http.includes(connectionId))
+      throw denied(`HTTP connection is not allowed: ${connectionId}`);
     const connection = skill.connections.get(connectionId);
     if (!connection) throw denied(`unknown HTTP connection: ${connectionId}`);
     const request = normalizeHttpRequest(payload.request);
@@ -190,11 +199,16 @@ async function handleHostCall(
   if (message.callType === "resource") {
     const payload = recordValue(message.payload, "invalid resource request");
     const resourceId = stringValue(payload.resourceId, "");
-    if (!action.action.runtime.capabilities.resources.includes(resourceId)) throw denied(`resource is not allowed: ${resourceId}`);
+    if (!action.action.runtime.capabilities.resources.includes(resourceId))
+      throw denied(`resource is not allowed: ${resourceId}`);
     const resource = skill.resources.get(resourceId);
     if (!resource) throw denied(`unknown resource: ${resourceId}`);
     if (resource.content.kind === "inline") {
-      return { mediaType: resource.mediaType, data: resource.content.data, encoding: resource.content.encoding } satisfies ResolvedSkillResource;
+      return {
+        mediaType: resource.mediaType,
+        data: resource.content.data,
+        encoding: resource.content.encoding,
+      } satisfies ResolvedSkillResource;
     }
     return host.readResource({ skillId: skill.document.id, resource, signal });
   }
@@ -221,8 +235,8 @@ function assertHttpAllowed(connection: SkillConnection, request: SkillHttpReques
   const base = new URL(connection.baseUrl);
   const target = new URL(request.path, base);
   if (target.origin !== base.origin) throw denied("HTTP request cannot change the configured origin");
-  const allowed = connection.allowedPathPrefixes.some(prefix =>
-    target.pathname === prefix || target.pathname.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`),
+  const allowed = connection.allowedPathPrefixes.some(
+    (prefix) => target.pathname === prefix || target.pathname.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`),
   );
   if (!allowed) throw denied(`HTTP path is not allowed: ${target.pathname}`);
   for (const name of Object.keys(request.headers ?? {})) {
@@ -235,14 +249,25 @@ function assertHttpAllowed(connection: SkillConnection, request: SkillHttpReques
 function normalizeResult(value: unknown): SkillActionResult {
   const result = recordValue(value, "skill action must return an object");
   const status = result.status ?? "ok";
-  if (status !== "ok" && status !== "error") throw new SkillRuntimeError("INVALID_OUTPUT", "status must be ok or error");
+  if (status !== "ok" && status !== "error")
+    throw new SkillRuntimeError("INVALID_OUTPUT", "status must be ok or error");
   if (typeof result.content !== "string") throw new SkillRuntimeError("INVALID_OUTPUT", "content must be a string");
   return { status, content: result.content, details: result.details ?? null };
 }
 
 function runtimeErrorCode(value: unknown): SkillRuntimeErrorCode | undefined {
-  return ["UNTRUSTED_SKILL", "UNKNOWN_ACTION", "INVALID_INPUT", "INVALID_OUTPUT", "CAPABILITY_DENIED", "VM_ERROR", "TIMEOUT", "CANCELLED"]
-    .includes(String(value)) ? value as SkillRuntimeErrorCode : undefined;
+  return [
+    "UNTRUSTED_SKILL",
+    "UNKNOWN_ACTION",
+    "INVALID_INPUT",
+    "INVALID_OUTPUT",
+    "CAPABILITY_DENIED",
+    "VM_ERROR",
+    "TIMEOUT",
+    "CANCELLED",
+  ].includes(String(value))
+    ? (value as SkillRuntimeErrorCode)
+    : undefined;
 }
 
 function stringRecord(value: unknown, field: string): Record<string, string> {
@@ -273,7 +298,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function post(worker: Worker, message: unknown): void {
-  try { worker.postMessage(message); } catch { /* worker already terminated */ }
+  try {
+    worker.postMessage(message);
+  } catch {
+    /* worker already terminated */
+  }
 }
 
 const VM_WORKER_SOURCE = String.raw`

@@ -8,7 +8,9 @@ export function ThinkingBlock({ text }: { text: string }) {
         <Brain className="size-3.5" aria-hidden="true" />
         <span>思考过程</span>
       </summary>
-      <div className="mt-1.5 border-t border-slate-200/70 pt-1.5 text-xs leading-5 whitespace-pre-wrap dark:border-slate-800">{text}</div>
+      <div className="mt-1.5 border-t border-slate-200/70 pt-1.5 text-xs leading-5 whitespace-pre-wrap dark:border-slate-800">
+        {text}
+      </div>
     </details>
   );
 }

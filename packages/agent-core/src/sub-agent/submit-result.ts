@@ -21,7 +21,8 @@ const schema = z.discriminatedUnion("ok", [success, failure]);
 
 export const submitResultTool: AgentTool<AgentTaskResult, AgentTaskResult> = {
   name: "submit_result",
-  description: "Submit the structured result of an assigned task. Call this once, by itself, when the task is complete or cannot be completed.",
+  description:
+    "Submit the structured result of an assigned task. Call this once, by itself, when the task is complete or cannot be completed.",
   schema,
   executionMode: "sequential",
   risk: "none",

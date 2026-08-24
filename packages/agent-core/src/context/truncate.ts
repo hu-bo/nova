@@ -16,7 +16,10 @@ export function truncateContent(content: ContentPart[], limit: number = DEFAULT_
   let headEnd = { index: 0, offset: 0 };
   for (let i = 0; i < content.length; i += 1) {
     const part = content[i]!;
-    if (part.type !== "text") { head.push(part); continue; }
+    if (part.type !== "text") {
+      head.push(part);
+      continue;
+    }
     if (headChars + part.text.length <= half) {
       head.push(part);
       headChars += part.text.length;
@@ -35,7 +38,10 @@ export function truncateContent(content: ContentPart[], limit: number = DEFAULT_
   let tailStart = { index: content.length - 1, offset: 0 };
   for (let i = content.length - 1; i >= 0; i -= 1) {
     const part = content[i]!;
-    if (part.type !== "text") { tail.unshift(part); continue; }
+    if (part.type !== "text") {
+      tail.unshift(part);
+      continue;
+    }
     if (tailChars + part.text.length <= half) {
       tail.unshift(part);
       tailChars += part.text.length;
@@ -55,7 +61,8 @@ export function truncateContent(content: ContentPart[], limit: number = DEFAULT_
     if (part.type !== "text") continue;
     let text = part.text;
     if (i === headEnd.index) text = text.slice(headEnd.offset);
-    if (i === tailStart.index) text = i === headEnd.index ? text.slice(0, tailStart.offset - headEnd.offset) : text.slice(0, tailStart.offset);
+    if (i === tailStart.index)
+      text = i === headEnd.index ? text.slice(0, tailStart.offset - headEnd.offset) : text.slice(0, tailStart.offset);
     for (const char of text) if (char === "\n") omittedLines += 1;
   }
 

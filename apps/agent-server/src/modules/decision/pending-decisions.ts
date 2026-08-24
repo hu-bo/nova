@@ -20,23 +20,24 @@ export function createPendingDecisions(events: EventHub): PendingDecisions {
 
   return {
     createDecide(conversationId, userId) {
-      return (request, signal) => new Promise((resolve, reject) => {
-        const onAbort = () => {
-          pending.delete(request.decisionId);
-          reject(signal.reason);
-        };
-        pending.set(request.decisionId, {
-          conversationId,
-          userId,
-          resolve: response => {
-            signal.removeEventListener("abort", onAbort);
-            resolve(response);
-          },
-          reject,
+      return (request, signal) =>
+        new Promise((resolve, reject) => {
+          const onAbort = () => {
+            pending.delete(request.decisionId);
+            reject(signal.reason);
+          };
+          pending.set(request.decisionId, {
+            conversationId,
+            userId,
+            resolve: (response) => {
+              signal.removeEventListener("abort", onAbort);
+              resolve(response);
+            },
+            reject,
+          });
+          events.publish(conversationId, { type: "decision.requested", request: toUiRequest(request) });
+          signal.addEventListener("abort", onAbort, { once: true });
         });
-        events.publish(conversationId, { type: "decision.requested", request: toUiRequest(request) });
-        signal.addEventListener("abort", onAbort, { once: true });
-      });
     },
     resolve(decisionId, userId, response) {
       const item = pending.get(decisionId);

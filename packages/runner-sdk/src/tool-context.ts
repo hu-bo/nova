@@ -148,8 +148,7 @@ function mapFs(session: RunnerSession): FileSystem {
           truncated: end < lines.length,
         };
       }),
-    readBytes: (path) =>
-      wrap(path, async () => (await session.fs.readFile(path)).data),
+    readBytes: (path) => wrap(path, async () => (await session.fs.readFile(path)).data),
     write: (path, content, opts) =>
       wrap(path, async () => {
         await session.fs.writeFile(path, new TextEncoder().encode(content), { append: opts?.append ?? false });
@@ -180,8 +179,11 @@ function mapFs(session: RunnerSession): FileSystem {
 
 function kindToString(kind: FileKind): "file" | "dir" | "symlink" {
   switch (kind) {
-    case FileKind.DIR: return "dir";
-    case FileKind.SYMLINK: return "symlink";
-    default: return "file";
+    case FileKind.DIR:
+      return "dir";
+    case FileKind.SYMLINK:
+      return "symlink";
+    default:
+      return "file";
   }
 }

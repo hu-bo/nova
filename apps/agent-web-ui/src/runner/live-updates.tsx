@@ -31,7 +31,7 @@ export function RunnerLiveUpdates() {
           while (boundary >= 0) {
             const frame = buffer.slice(0, boundary);
             buffer = buffer.slice(boundary + 2);
-            if (frame.split("\n").some(line => line.startsWith("data:"))) {
+            if (frame.split("\n").some((line) => line.startsWith("data:"))) {
               await Promise.all([
                 queryClient.invalidateQueries({ queryKey: queryKeys.runners }),
                 queryClient.invalidateQueries({ queryKey: queryKeys.runnerTokens }),

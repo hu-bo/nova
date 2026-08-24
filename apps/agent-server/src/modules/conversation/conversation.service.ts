@@ -6,7 +6,13 @@ import type { ModelConfigStore } from "../model-config/model-config.store.js";
 import { resolveCatalogModel } from "../model-config/model-config.store.js";
 import type { CredentialCipher } from "../model-config/credential.js";
 
-export function createConversationService(store: AgentStore, runners: RunnerRegistry, runtimes: ConversationRuntimes, models: ModelConfigStore, cipher: CredentialCipher) {
+export function createConversationService(
+  store: AgentStore,
+  runners: RunnerRegistry,
+  runtimes: ConversationRuntimes,
+  models: ModelConfigStore,
+  cipher: CredentialCipher,
+) {
   const view = (conversation: ConversationRow): Conversation => ({
     id: conversation.id,
     projectId: conversation.projectId,
@@ -18,7 +24,7 @@ export function createConversationService(store: AgentStore, runners: RunnerRegi
 
   return {
     async create(userId: string, input: CreateConversation) {
-      const modelConfig = input.modelConfig ?? await resolveCatalogModel(models, cipher, userId, input.modelId!);
+      const modelConfig = input.modelConfig ?? (await resolveCatalogModel(models, cipher, userId, input.modelId!));
       const conversation = await store.createConversation({
         userId,
         projectId: input.projectId ?? null,

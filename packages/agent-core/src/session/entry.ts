@@ -4,15 +4,20 @@ import type { ThinkingLevel } from "@nova/model-adapters";
 
 export type EntryId = string;
 
-export interface EntryBase { id: EntryId; parentId: EntryId | null; ts: number }
+export interface EntryBase {
+  id: EntryId;
+  parentId: EntryId | null;
+  ts: number;
+}
 
-export type Entry = EntryBase & (
-  | { kind: "message"; message: Message }
-  | { kind: "model"; model: string }
-  | { kind: "thinking-level"; level: ThinkingLevel }
-  | { kind: "active-tools"; tools: string[] }
-  | { kind: "compaction"; summary: string; replacedFrom: EntryId; replacedTo: EntryId }
-);
+export type Entry = EntryBase &
+  (
+    | { kind: "message"; message: Message }
+    | { kind: "model"; model: string }
+    | { kind: "thinking-level"; level: ThinkingLevel }
+    | { kind: "active-tools"; tools: string[] }
+    | { kind: "compaction"; summary: string; replacedFrom: EntryId; replacedTo: EntryId }
+  );
 
 let counter = 0;
 export function newEntryId(): EntryId {

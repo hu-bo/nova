@@ -34,7 +34,8 @@ describe("runner directory browsing", () => {
         { name: "src", path: "E:\\work\\src" },
       ],
     });
-    await expect(registry.listDirectories("alice", "runner-1", "E:\\outside"))
-      .rejects.toMatchObject({ code: "RUNNER_UNAVAILABLE" });
+    await expect(registry.listDirectories("alice", "runner-1", "E:\\outside")).rejects.toMatchObject({
+      code: "RUNNER_UNAVAILABLE",
+    });
   });
 });

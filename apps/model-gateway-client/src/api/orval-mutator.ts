@@ -39,8 +39,17 @@ export async function apiMutator<T>(url: string, options: RequestOptions): Promi
   if (!response.ok) {
     const fallback = response.status === 403 ? "当前账号没有管理员权限" : `请求失败（${response.status}）`;
     try {
-      const payload = await response.json() as { code?: string; message?: string; fieldErrors?: Record<string, string> };
-      throw new ApiClientError(response.status, payload.code ?? "REQUEST_FAILED", payload.message ?? fallback, payload.fieldErrors);
+      const payload = (await response.json()) as {
+        code?: string;
+        message?: string;
+        fieldErrors?: Record<string, string>;
+      };
+      throw new ApiClientError(
+        response.status,
+        payload.code ?? "REQUEST_FAILED",
+        payload.message ?? fallback,
+        payload.fieldErrors,
+      );
     } catch (error) {
       if (error instanceof ApiClientError) throw error;
       throw new ApiClientError(response.status, "REQUEST_FAILED", fallback);

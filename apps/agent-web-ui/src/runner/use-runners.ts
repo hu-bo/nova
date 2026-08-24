@@ -9,13 +9,13 @@ export function useRunnerCatalog(enabled = true) {
     queryKey: queryKeys.runners,
     queryFn: ({ pageParam }) => api!.listRunners({ limit: 12, ...(pageParam ? { cursor: pageParam } : {}) }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: page => page.nextCursor ?? undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
     enabled: enabled && Boolean(api),
     staleTime: 5_000,
   });
   return {
     ...query,
-    runners: (query.data?.pages.flatMap(page => page.items) ?? []) as Runner[],
+    runners: (query.data?.pages.flatMap((page) => page.items) ?? []) as Runner[],
   };
 }
 

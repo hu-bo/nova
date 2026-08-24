@@ -16,34 +16,48 @@ export class SkillImportError extends Error {
   }
 }
 
-const frontmatterSchema = z.object({
-  name: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(64),
-  description: z.string().min(1).max(1024),
-  license: z.string().min(1).optional(),
-  compatibility: z.string().min(1).max(500).optional(),
-  metadata: z.record(z.string(), z.string()).optional(),
-  "allowed-tools": z.string().optional(),
-}).passthrough();
+const frontmatterSchema = z
+  .object({
+    name: z
+      .string()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .max(64),
+    description: z.string().min(1).max(1024),
+    license: z.string().min(1).optional(),
+    compatibility: z.string().min(1).max(500).optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
+    "allowed-tools": z.string().optional(),
+  })
+  .passthrough();
 
 export function importAgentSkillZip(input: Uint8Array, options: ImportAgentSkillOptions = {}): SkillDocument {
   return importAgentSkillFiles(readSkillZip(input, options.archiveLimits), options);
 }
 
-export function importAgentSkillFiles(files: readonly ArchiveFile[], options: ImportAgentSkillOptions = {}): SkillDocument {
-  const manifests = files.filter(file => file.path === "SKILL.md" || file.path.endsWith("/SKILL.md"));
-  if (manifests.length !== 1) throw new SkillImportError(`archive must contain exactly one SKILL.md; found ${manifests.length}`);
+export function importAgentSkillFiles(
+  files: readonly ArchiveFile[],
+  options: ImportAgentSkillOptions = {},
+): SkillDocument {
+  const manifests = files.filter((file) => file.path === "SKILL.md" || file.path.endsWith("/SKILL.md"));
+  if (manifests.length !== 1)
+    throw new SkillImportError(`archive must contain exactly one SKILL.md; found ${manifests.length}`);
   const manifest = manifests[0]!;
   const root = manifest.path === "SKILL.md" ? "" : manifest.path.slice(0, -"SKILL.md".length);
   const text = decodeUtf8(manifest.data, manifest.path);
   const { frontmatter, markdown } = splitSkillMarkdown(text);
   const yaml = parseDocument(frontmatter, { uniqueKeys: true });
-  if (yaml.errors.length > 0) throw new SkillImportError(`invalid SKILL.md frontmatter: ${yaml.errors.map(error => error.message).join("; ")}`);
+  if (yaml.errors.length > 0)
+    throw new SkillImportError(`invalid SKILL.md frontmatter: ${yaml.errors.map((error) => error.message).join("; ")}`);
   const parsed = frontmatterSchema.safeParse(yaml.toJSON());
-  if (!parsed.success) throw new SkillImportError(`invalid SKILL.md frontmatter: ${parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join("; ")}`);
+  if (!parsed.success)
+    throw new SkillImportError(
+      `invalid SKILL.md frontmatter: ${parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}`,
+    );
   const metadata = parsed.data;
   if (root) {
     const directoryName = root.slice(0, -1).split("/").at(-1);
-    if (directoryName !== metadata.name) throw new SkillImportError(`SKILL.md name must match its parent directory: ${directoryName}`);
+    if (directoryName !== metadata.name)
+      throw new SkillImportError(`SKILL.md name must match its parent directory: ${directoryName}`);
   }
 
   const resources: SkillResource[] = [];
@@ -109,7 +123,12 @@ function splitSkillMarkdown(source: string): { frontmatter: string; markdown: st
 }
 
 function uniqueResourceId(path: string, seen: Set<string>): string {
-  const base = path.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "resource";
+  const base =
+    path
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || "resource";
   let id = base;
   let suffix = 1;
   while (seen.has(id)) id = `${base.slice(0, 56)}-${suffix++}`;
@@ -142,21 +161,25 @@ function resourceKind(path: string): SkillResource["kind"] {
 
 function mediaType(path: string): string {
   const extension = path.toLowerCase().split(".").at(-1);
-  return ({
-    md: "text/markdown",
-    txt: "text/plain",
-    json: "application/json",
-    yaml: "application/yaml",
-    yml: "application/yaml",
-    js: "text/javascript",
-    mjs: "text/javascript",
-    ts: "text/typescript",
-    py: "text/x-python",
-    sh: "text/x-shellscript",
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    svg: "image/svg+xml",
-    pdf: "application/pdf",
-  } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
+  return (
+    (
+      {
+        md: "text/markdown",
+        txt: "text/plain",
+        json: "application/json",
+        yaml: "application/yaml",
+        yml: "application/yaml",
+        js: "text/javascript",
+        mjs: "text/javascript",
+        ts: "text/typescript",
+        py: "text/x-python",
+        sh: "text/x-shellscript",
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        svg: "image/svg+xml",
+        pdf: "application/pdf",
+      } as Record<string, string>
+    )[extension ?? ""] ?? "application/octet-stream"
+  );
 }

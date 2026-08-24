@@ -1,8 +1,6 @@
 import type { SseEnvelope, UiEvent } from "@nova/protocol";
 
-export type EventReplay =
-  | { kind: "events"; events: SseEnvelope[] }
-  | { kind: "resync" };
+export type EventReplay = { kind: "events"; events: SseEnvelope[] } | { kind: "resync" };
 
 export interface EventHub {
   publish(conversationId: string, event: UiEvent): SseEnvelope;
@@ -46,7 +44,7 @@ export function createEventHub(capacity = 500): EventHub {
       const earliest = Number(value.buffer[0]?.id ?? value.nextId);
       const latest = value.nextId - 1;
       if (requested > latest || requested < earliest - 1) return { kind: "resync" };
-      return { kind: "events", events: value.buffer.filter(item => Number(item.id) > requested) };
+      return { kind: "events", events: value.buffer.filter((item) => Number(item.id) > requested) };
     },
     subscribe(conversationId, listener) {
       const value = channel(conversationId);

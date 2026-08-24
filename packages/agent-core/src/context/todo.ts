@@ -2,12 +2,12 @@
 // TodoState 不是 Entry：压缩完全不动它。唯一写入点是 todo_write 成功结果（loop 里接线）。
 import type { Todo, TodoState } from "../types.js";
 
-export const TODO_SUGGEST = 2;   // 未完成项 ≥ 2：建议维护
-export const TODO_ENFORCE = 3;   // 未完成项 ≥ 3：强制注入上下文
+export const TODO_SUGGEST = 2; // 未完成项 ≥ 2：建议维护
+export const TODO_ENFORCE = 3; // 未完成项 ≥ 3：强制注入上下文
 
 export function unfinishedCount(state: TodoState | null): number {
   if (!state) return 0;
-  return state.items.filter(item => item.status !== "completed").length;
+  return state.items.filter((item) => item.status !== "completed").length;
 }
 
 // 注入位置：紧邻最后一条 user message 之前（assemble 里落位）。
@@ -19,10 +19,10 @@ export function renderTodoInjection(state: TodoState | null): string | null {
   if (unfinished < TODO_ENFORCE) {
     return `提醒：当前有 ${unfinished} 项未完成 TODO，推进时请用 todo_write 及时勾选或更新状态。`;
   }
-  const completed = state.items.filter(item => item.status === "completed").length;
+  const completed = state.items.filter((item) => item.status === "completed").length;
   const lines = state.items
-    .filter(item => item.status !== "completed")
-    .map(item => {
+    .filter((item) => item.status !== "completed")
+    .map((item) => {
       const mark = item.status === "in_progress" ? "~" : item.status === "blocked" ? "!" : " ";
       const note = item.status === "blocked" && item.note ? ` —— 阻塞：${item.note}` : "";
       return `- [${mark}] ${item.text}${note}`;
@@ -31,5 +31,5 @@ export function renderTodoInjection(state: TodoState | null): string | null {
 }
 
 export function toTodoState(items: Todo[]): TodoState {
-  return { items: items.map(item => ({ ...item })), updatedAt: Date.now() };
+  return { items: items.map((item) => ({ ...item })), updatedAt: Date.now() };
 }

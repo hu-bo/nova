@@ -8,15 +8,14 @@ import { Button } from "../components/ui/button.js";
 import { Dialog } from "../components/ui/dialog.js";
 import { FieldLabel, Input, Select } from "../components/ui/form.js";
 
-const providerSchema = z
-  .object({
-    protocol: z.enum(["openai", "anthropic"]),
-    name: z.string().trim().min(1, "请输入 Provider 名称").max(80, "最多 80 个字符"),
-    baseUrl: z.url("请输入有效 URL").refine((value) => value.startsWith("https://"), "只允许 HTTPS 地址"),
-    credential: z.string(),
-    enabled: z.boolean(),
-    isPublic: z.boolean(),
-  });
+const providerSchema = z.object({
+  protocol: z.enum(["openai", "anthropic"]),
+  name: z.string().trim().min(1, "请输入 Provider 名称").max(80, "最多 80 个字符"),
+  baseUrl: z.url("请输入有效 URL").refine((value) => value.startsWith("https://"), "只允许 HTTPS 地址"),
+  credential: z.string(),
+  enabled: z.boolean(),
+  isPublic: z.boolean(),
+});
 
 type ProviderFormValues = z.infer<typeof providerSchema>;
 

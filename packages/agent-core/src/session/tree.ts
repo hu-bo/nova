@@ -10,11 +10,17 @@ export function branchView(branch: Entry[]): Entry[] {
   let i = 0;
   while (i < view.length) {
     const entry = view[i]!;
-    if (entry.kind !== "compaction") { i += 1; continue; }
+    if (entry.kind !== "compaction") {
+      i += 1;
+      continue;
+    }
     const rest = view.filter((_, index) => index !== i);
-    const from = rest.findIndex(candidate => candidate.id === entry.replacedFrom);
-    const to = rest.findIndex(candidate => candidate.id === entry.replacedTo);
-    if (from === -1 || to === -1 || to < from) { i += 1; continue; }
+    const from = rest.findIndex((candidate) => candidate.id === entry.replacedFrom);
+    const to = rest.findIndex((candidate) => candidate.id === entry.replacedTo);
+    if (from === -1 || to === -1 || to < from) {
+      i += 1;
+      continue;
+    }
     view = [...rest.slice(0, from), entry, ...rest.slice(to + 1)];
     i = from + 1; // 标记落在 from，从它之后继续
   }
@@ -28,7 +34,12 @@ export function toMessages(entries: Entry[]): Message[] {
   for (const entry of entries) {
     if (entry.kind === "message") messages.push(entry.message);
     else if (entry.kind === "compaction") {
-      messages.push({ id: entry.id, role: "user", createdAt: entry.ts, blocks: [{ type: "text", text: `[以下是早前对话的摘要]\n${entry.summary}` }] });
+      messages.push({
+        id: entry.id,
+        role: "user",
+        createdAt: entry.ts,
+        blocks: [{ type: "text", text: `[以下是早前对话的摘要]\n${entry.summary}` }],
+      });
     }
   }
   return messages;

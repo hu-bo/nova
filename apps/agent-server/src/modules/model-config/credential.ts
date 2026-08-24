@@ -16,7 +16,12 @@ export function createCredentialCipher(encodedKey: string): CredentialCipher {
       const cipher = createCipheriv("aes-256-gcm", key, nonce);
       const ciphertext = Buffer.concat([cipher.update(credential, "utf8"), cipher.final()]);
       const tag = cipher.getAuthTag();
-      return [maskCredential(credential), nonce.toString("base64url"), tag.toString("base64url"), ciphertext.toString("base64url")].join(".");
+      return [
+        maskCredential(credential),
+        nonce.toString("base64url"),
+        tag.toString("base64url"),
+        ciphertext.toString("base64url"),
+      ].join(".");
     },
     decrypt(encrypted) {
       const [, nonce, tag, ciphertext] = encrypted.split(".");

@@ -1,7 +1,21 @@
 // §4.1 主流程：组装上下文 → 调模型 → 执行 tool batch → 观察 → 判定续跑。
 // 状态 owner 在 agent.ts；loop 只经 LoopHost 读写，不持有任何自己的生命周期状态。
 import type { ModelRef, ModelRequest, StreamFn, ThinkingLevel, Usage } from "@nova/model-adapters";
-import type { AgentEvent, AgentTaskResult, AgentTool, Block, ContentPart, Message, Risk, RunResult, StopReason, Todo, TodoState, ToolCall, ToolContext } from "../types.js";
+import type {
+  AgentEvent,
+  AgentTaskResult,
+  AgentTool,
+  Block,
+  ContentPart,
+  Message,
+  Risk,
+  RunResult,
+  StopReason,
+  Todo,
+  TodoState,
+  ToolCall,
+  ToolContext,
+} from "../types.js";
 import type { Entry, EntryParts } from "../session/entry.js";
 import type { RecordParts } from "../session/record.js";
 import type { SessionStorage } from "../session/storage.js";
@@ -9,7 +23,12 @@ import { toMessages } from "../session/tree.js";
 import type { Queues } from "../queue/queues.js";
 import { renderTodoInjection } from "../context/todo.js";
 import { shouldCompact } from "../context/budget.js";
-import { planCompaction, type CompactionPlan, type CompactionResult, type CompactionTrigger } from "../context/compaction.js";
+import {
+  planCompaction,
+  type CompactionPlan,
+  type CompactionResult,
+  type CompactionTrigger,
+} from "../context/compaction.js";
 import { runToolBatch, type ToolOutcome } from "./tool-batch.js";
 import type { AgentHooks } from "./hooks.js";
 import type { ApprovalOutcome } from "../decision/decision.js";
@@ -46,7 +65,12 @@ export interface LoopHost {
   runUsage(): Usage;
   emit(event: AgentEvent): void;
   rec(parts: RecordParts): Promise<void>;
-  streaming(patch: { isStreaming?: boolean; streamingMessage?: Message | null; pendingToolCalls?: ToolCall[]; errorMessage?: string | null }): void;
+  streaming(patch: {
+    isStreaming?: boolean;
+    streamingMessage?: Message | null;
+    pendingToolCalls?: ToolCall[];
+    errorMessage?: string | null;
+  }): void;
   approveCall(call: ToolCall & { risk: Risk }, signal: AbortSignal): Promise<ApprovalOutcome | "aborted">;
 }
 
@@ -61,7 +85,10 @@ export function newMessage(role: "user" | "assistant", blocks: Block[]): Message
 }
 
 export async function runTurnLoop(host: LoopHost, input: string | ContentPart[]): Promise<RunResult> {
-  await host.append({ kind: "message", message: newMessage("user", typeof input === "string" ? [{ type: "text", text: input }] : input) });
+  await host.append({
+    kind: "message",
+    message: newMessage("user", typeof input === "string" ? [{ type: "text", text: input }] : input),
+  });
 
   let lastAssistant: Message | null = null;
   for (let turn = 0; turn < host.maxTurns; turn += 1) {
@@ -100,12 +127,16 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
 
     const toolCalls: ToolCall[] = streamed.message.blocks
       .filter((block): block is Extract<Block, { type: "tool_call" }> => block.type === "tool_call")
-      .map(block => ({ callId: block.callId, name: block.name, args: block.args }));
+      .map((block) => ({ callId: block.callId, name: block.name, args: block.args }));
 
     if (toolCalls.length === 0) {
       if (streamed.finish === "aborted") return finish(host, "aborted", lastAssistant);
-      if (host.queues.nonEmpty("followUp")) {           // §7 排空点 B：阻止 run 结束，续跑
-        await host.append({ kind: "message", message: newMessage("user", [{ type: "text", text: host.queues.drain("followUp").join("\n\n") }]) });
+      if (host.queues.nonEmpty("followUp")) {
+        // §7 排空点 B：阻止 run 结束，续跑
+        await host.append({
+          kind: "message",
+          message: newMessage("user", [{ type: "text", text: host.queues.drain("followUp").join("\n\n") }]),
+        });
         continue;
       }
       return finish(host, streamed.finish === "max_tokens" ? "max_tokens" : "done", lastAssistant);
@@ -115,7 +146,15 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
     const outcomes = await runBatch(host, toolCalls);
     await host.append({
       kind: "message",
-      message: newMessage("user", outcomes.map((outcome): Block => ({ type: "tool_result", callId: outcome.callId, status: outcome.status, content: outcome.content }))),
+      message: newMessage(
+        "user",
+        outcomes.map((outcome): Block => ({
+          type: "tool_result",
+          callId: outcome.callId,
+          status: outcome.status,
+          content: outcome.content,
+        })),
+      ),
     });
     host.streaming({ pendingToolCalls: [] });
 
@@ -123,22 +162,30 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
     for (const outcome of outcomes) if (outcome.usage) host.addUsage(outcome.usage);
 
     // §9.4 todo_write 是 TodoState 唯一写入点
-    const todoOutcome = [...outcomes].reverse().find(outcome => outcome.name === "todo_write" && outcome.status === "ok");
+    const todoOutcome = [...outcomes]
+      .reverse()
+      .find((outcome) => outcome.name === "todo_write" && outcome.status === "ok");
     const todoItems = todoOutcome ? parseTodos(todoOutcome.details) : null;
     if (todoItems) await host.updateTodos(todoItems);
 
     if (host.signal().aborted || streamed.finish === "aborted") return finish(host, "aborted", lastAssistant);
 
-    const submitted = [...outcomes].reverse().find(outcome => outcome.name === "submit_result" && outcome.status === "ok");
+    const submitted = [...outcomes]
+      .reverse()
+      .find((outcome) => outcome.name === "submit_result" && outcome.status === "ok");
     const output = submitted ? parseSubmittedResult(submitted.details) : null;
     if (output) return finish(host, "terminate", lastAssistant, undefined, output);
 
-    if (host.queues.nonEmpty("steering")) {             // §7 排空点 A：tool batch 完成后注入当前 run
-      await host.append({ kind: "message", message: newMessage("user", [{ type: "text", text: host.queues.drain("steering").join("\n\n") }]) });
+    if (host.queues.nonEmpty("steering")) {
+      // §7 排空点 A：tool batch 完成后注入当前 run
+      await host.append({
+        kind: "message",
+        message: newMessage("user", [{ type: "text", text: host.queues.drain("steering").join("\n\n") }]),
+      });
     }
 
     // §4.2：只有 batch 内每个结果都置 terminate 才提前结束
-    if (outcomes.every(outcome => outcome.terminate)) return finish(host, "terminate", lastAssistant);
+    if (outcomes.every((outcome) => outcome.terminate)) return finish(host, "terminate", lastAssistant);
     if (host.hooks?.shouldStopAfterTurn?.()) return finish(host, "done", lastAssistant);
 
     const change = host.hooks?.prepareNextTurn?.();
@@ -148,7 +195,13 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
   return finish(host, "max_turns", lastAssistant);
 }
 
-async function finish(host: LoopHost, stopReason: StopReason, message: Message | null, errorMessage?: string, output?: AgentTaskResult): Promise<RunResult> {
+async function finish(
+  host: LoopHost,
+  stopReason: StopReason,
+  message: Message | null,
+  errorMessage?: string,
+  output?: AgentTaskResult,
+): Promise<RunResult> {
   await host.rec({ kind: "run-finished", stopReason });
   host.streaming({ isStreaming: false, streamingMessage: null, pendingToolCalls: [] });
   const usage = host.runUsage();
@@ -172,15 +225,19 @@ function assemble(host: LoopHost): ModelRequest {
     const note = newMessage("user", [{ type: "text", text: injection }]);
     let lastUser = -1;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (messages[i]!.role === "user") { lastUser = i; break; }
+      if (messages[i]!.role === "user") {
+        lastUser = i;
+        break;
+      }
     }
-    if (lastUser === -1 || messages[lastUser]!.blocks.some(block => block.type === "tool_result")) messages.push(note);
+    if (lastUser === -1 || messages[lastUser]!.blocks.some((block) => block.type === "tool_result"))
+      messages.push(note);
     else messages.splice(lastUser, 0, note);
   }
   const active = new Set(host.activeTools());
   const tools = [...host.tools.values()]
-    .filter(tool => active.has(tool.name))
-    .map(tool => ({ name: tool.name, description: tool.description, parameters: toolParameters(tool.schema) }));
+    .filter((tool) => active.has(tool.name))
+    .map((tool) => ({ name: tool.name, description: tool.description, parameters: toolParameters(tool.schema) }));
   return { system: host.systemPrompt, messages, tools, thinking: host.thinkingLevel() };
 }
 
@@ -207,8 +264,10 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
 
   try {
     for await (const event of host.stream(request, host.signal())) {
-      if (event.type === "block.start") host.emit({ type: "block.start", messageId, index: event.index, blockType: event.blockType });
-      else if (event.type === "block.delta") host.emit({ type: "block.delta", messageId, index: event.index, delta: event.delta });
+      if (event.type === "block.start")
+        host.emit({ type: "block.start", messageId, index: event.index, blockType: event.blockType });
+      else if (event.type === "block.delta")
+        host.emit({ type: "block.delta", messageId, index: event.index, delta: event.delta });
       else if (event.type === "block.end") {
         blocks[event.index] = event.block;
         message.blocks = blocks.filter(Boolean);
@@ -227,9 +286,26 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
   }
 
   message.blocks = blocks.filter(Boolean);
-  host.emit({ type: "message.end", messageId, stopReason: finishReason === "error" ? "error" : finishReason === "aborted" ? "aborted" : finishReason === "max_tokens" ? "max_tokens" : "done" });
+  host.emit({
+    type: "message.end",
+    messageId,
+    stopReason:
+      finishReason === "error"
+        ? "error"
+        : finishReason === "aborted"
+          ? "aborted"
+          : finishReason === "max_tokens"
+            ? "max_tokens"
+            : "done",
+  });
   host.streaming({ isStreaming: false, streamingMessage: null });
-  return { message, usage, finish: finishReason, ...(errorMessage !== undefined ? { errorMessage } : {}), ...(errorCode !== undefined ? { errorCode } : {}) };
+  return {
+    message,
+    usage,
+    finish: finishReason,
+    ...(errorMessage !== undefined ? { errorMessage } : {}),
+    ...(errorCode !== undefined ? { errorCode } : {}),
+  };
 }
 
 async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutcome[]> {
@@ -241,7 +317,7 @@ async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutc
     ctx: host.toolCtx,
     concurrency: host.toolConcurrency,
     signal,
-    approve: call => host.approveCall(call, signal),
+    approve: (call) => host.approveCall(call, signal),
     async onToolStart(call) {
       startedAt.set(call.callId, Date.now());
       await host.rec({ kind: "tool-started", callId: call.callId, name: call.name, args: call.args });
@@ -249,15 +325,32 @@ async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutc
     },
     async onToolEnd(call, outcome) {
       const started = startedAt.get(call.callId);
-      await host.rec({ kind: "tool-finished", callId: call.callId, status: outcome.status, durationMs: started !== undefined ? Date.now() - started : 0 });
+      await host.rec({
+        kind: "tool-finished",
+        callId: call.callId,
+        status: outcome.status,
+        durationMs: started !== undefined ? Date.now() - started : 0,
+      });
       host.emit({ type: "tool.end", callId: call.callId, status: outcome.status, details: outcome.details });
-      if (outcome.executed) await host.hooks?.afterToolCall?.(call, { status: outcome.status, content: outcome.content, details: outcome.details, terminate: outcome.terminate, ...(outcome.usage ? { usage: outcome.usage } : {}) });
+      if (outcome.executed)
+        await host.hooks?.afterToolCall?.(call, {
+          status: outcome.status,
+          content: outcome.content,
+          details: outcome.details,
+          terminate: outcome.terminate,
+          ...(outcome.usage ? { usage: outcome.usage } : {}),
+        });
     },
   });
 }
 
 // §8 压缩：选 cut point → 摘要 → 写 compaction Entry。overflow 触发点留给 provider 错误分类接入。
-export async function compactNow(host: LoopHost, trigger: CompactionTrigger, signal: AbortSignal, instruction?: string): Promise<CompactionResult> {
+export async function compactNow(
+  host: LoopHost,
+  trigger: CompactionTrigger,
+  signal: AbortSignal,
+  instruction?: string,
+): Promise<CompactionResult> {
   const plan = await planCompaction(host.view(), { stream: host.stream, signal }, instruction);
   if (!plan) return { trigger, summarized: false, replacedFrom: null, replacedTo: null };
   await host.applyCompaction(plan);
@@ -268,7 +361,7 @@ export async function compactNow(host: LoopHost, trigger: CompactionTrigger, sig
 function parseTodos(details: unknown): Todo[] | null {
   if (!details || typeof details !== "object") return null;
   const items = (details as { items?: unknown }).items;
-  return Array.isArray(items) ? items as Todo[] : null;
+  return Array.isArray(items) ? (items as Todo[]) : null;
 }
 
 function parseSubmittedResult(details: unknown): AgentTaskResult | null {

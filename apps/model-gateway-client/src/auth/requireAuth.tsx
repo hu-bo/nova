@@ -15,7 +15,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     if (auth.isLoading || auth.isAuthenticated || requested.current) return;
     requested.current = true;
     sessionStorage.setItem("nova_return_to", `${location.pathname}${location.search}`);
-    void auth.login().catch(error => {
+    void auth.login().catch((error) => {
       requested.current = false;
       setLoginError(error instanceof Error ? error : new Error("无法发起登录"));
     });
@@ -30,7 +30,21 @@ export function RequireAuth({ children }: { children: ReactNode }) {
           <AlertTriangle className="mx-auto size-9 text-rose-600" aria-hidden="true" />
           <h1 className="mt-4 text-xl font-semibold text-slate-900">登录失败</h1>
           <p className="mt-2 text-sm leading-6 text-slate-500">{error.message}</p>
-          <Button variant="primary" className="mt-6" onClick={() => { setLoginError(null); requested.current = false; void auth.login().catch(loginFailure => setLoginError(loginFailure instanceof Error ? loginFailure : new Error("无法发起登录"))); }}>重新登录</Button>
+          <Button
+            variant="primary"
+            className="mt-6"
+            onClick={() => {
+              setLoginError(null);
+              requested.current = false;
+              void auth
+                .login()
+                .catch((loginFailure) =>
+                  setLoginError(loginFailure instanceof Error ? loginFailure : new Error("无法发起登录")),
+                );
+            }}
+          >
+            重新登录
+          </Button>
         </section>
       </main>
     );

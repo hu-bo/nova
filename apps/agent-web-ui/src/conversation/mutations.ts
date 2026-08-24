@@ -19,11 +19,21 @@ export function useConversationMutations(conversationId: string, modelProfileId:
   }, [queryClient]);
 
   const sendMutation = useMutation({
-    mutationFn: async ({ submission, queue, retryId }: { submission: ComposerSubmission; queue?: "steering" | "nextRun"; retryId?: string }) => {
+    mutationFn: async ({
+      submission,
+      queue,
+      retryId,
+    }: {
+      submission: ComposerSubmission;
+      queue?: "steering" | "nextRun";
+      retryId?: string;
+    }) => {
       const model = models.modelSelection(modelProfileId);
       if (!model) throw new Error("当前模型不可用，请选择其他模型或补充 API Key");
-      const uploads = await Promise.all(submission.files.map(file => api!.uploadFile(file)));
-      const attachmentText = uploads.map(file => `[附件：${file.name.replaceAll("[", "\\[").replaceAll("]", "\\]")}](${file.url})`).join("\n");
+      const uploads = await Promise.all(submission.files.map((file) => api!.uploadFile(file)));
+      const attachmentText = uploads
+        .map((file) => `[附件：${file.name.replaceAll("[", "\\[").replaceAll("]", "\\]")}](${file.url})`)
+        .join("\n");
       const text = [submission.text, attachmentText].filter(Boolean).join("\n\n");
       const wasRunning = state.isRunning;
       const messageId = retryId ?? crypto.randomUUID();
@@ -59,7 +69,8 @@ export function useConversationMutations(conversationId: string, modelProfileId:
   });
 
   const decisionMutation = useMutation({
-    mutationFn: ({ decisionId, response }: { decisionId: string; response: DecisionResponse }) => api!.resolveDecision(decisionId, response),
+    mutationFn: ({ decisionId, response }: { decisionId: string; response: DecisionResponse }) =>
+      api!.resolveDecision(decisionId, response),
     onSuccess: refreshLists,
   });
 
@@ -72,14 +83,19 @@ export function useConversationMutations(conversationId: string, modelProfileId:
   });
 
   return {
-    send: (submission: ComposerSubmission, queue?: "steering" | "nextRun") => sendMutation.mutateAsync({ submission, ...(queue ? { queue } : {}) }),
+    send: (submission: ComposerSubmission, queue?: "steering" | "nextRun") =>
+      sendMutation.mutateAsync({ submission, ...(queue ? { queue } : {}) }),
     retry: (messageId: string) => {
-      const index = state.messages.findIndex(item => item.id === messageId);
+      const index = state.messages.findIndex((item) => item.id === messageId);
       const message = state.messages[index];
-      const source = message?.role === "user"
-        ? message
-        : state.messages.slice(0, index).reverse().find(item => item.role === "user");
-      const text = source?.blocks.find(block => block.type === "text")?.text;
+      const source =
+        message?.role === "user"
+          ? message
+          : state.messages
+              .slice(0, index)
+              .reverse()
+              .find((item) => item.role === "user");
+      const text = source?.blocks.find((block) => block.type === "text")?.text;
       if (!text) return Promise.reject(new Error("找不到可重试的消息内容"));
       return sendMutation.mutateAsync({
         submission: { text, files: [] },

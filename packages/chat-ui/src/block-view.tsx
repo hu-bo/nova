@@ -20,14 +20,29 @@ export function BlockView({ block, renderers, onOpenPath }: BlockViewProps) {
   if (CustomRenderer) return <CustomRenderer block={block} {...(onOpenPath ? { onOpenPath } : {})} />;
 
   switch (block.type) {
-    case "text": return <TextBlock text={block.text} />;
-    case "thinking": return <ThinkingBlock text={block.text} />;
-    case "code": return <CodeBlock {...block} {...(onOpenPath ? { onOpenPath } : {})} />;
-    case "diff": return <DiffBlock {...block} {...(onOpenPath ? { onOpenPath } : {})} />;
-    case "file": return <FileBlock {...block} {...(onOpenPath ? { onOpenPath } : {})} />;
-    case "todo": return <TodoList items={block.items} />;
-    case "error": return <ErrorBlock code={block.code} message={block.message} />;
-    case "tool_call": return block.name === "todo_write" ? null : <ToolBlock call={block} />;
-    case "tool_result": return <div data-tool-result={block.callId}>{block.blocks.map((child, index) => <BlockView block={child} renderers={renderers} {...(onOpenPath ? { onOpenPath } : {})} key={index} />)}</div>;
+    case "text":
+      return <TextBlock text={block.text} />;
+    case "thinking":
+      return <ThinkingBlock text={block.text} />;
+    case "code":
+      return <CodeBlock {...block} {...(onOpenPath ? { onOpenPath } : {})} />;
+    case "diff":
+      return <DiffBlock {...block} {...(onOpenPath ? { onOpenPath } : {})} />;
+    case "file":
+      return <FileBlock {...block} {...(onOpenPath ? { onOpenPath } : {})} />;
+    case "todo":
+      return <TodoList items={block.items} />;
+    case "error":
+      return <ErrorBlock code={block.code} message={block.message} />;
+    case "tool_call":
+      return block.name === "todo_write" ? null : <ToolBlock call={block} />;
+    case "tool_result":
+      return (
+        <div data-tool-result={block.callId}>
+          {block.blocks.map((child, index) => (
+            <BlockView block={child} renderers={renderers} {...(onOpenPath ? { onOpenPath } : {})} key={index} />
+          ))}
+        </div>
+      );
   }
 }

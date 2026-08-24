@@ -17,7 +17,7 @@ export function useProject(projectId: string | undefined) {
   const projects = useProjects();
   return {
     ...projects,
-    project: projects.data?.find(project => project.id === projectId),
+    project: projects.data?.find((project) => project.id === projectId),
   };
 }
 
@@ -37,8 +37,15 @@ export function useProjectMutations() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.projects });
   return {
     create: useMutation({ mutationFn: (name: string) => api!.createProject({ name }), onSuccess: refresh }),
-    rename: useMutation({ mutationFn: ({ id, name }: { id: string; name: string }) => api!.renameProject(id, { name }), onSuccess: refresh }),
-    bind: useMutation({ mutationFn: ({ id, runnerId, path }: { id: string; runnerId: string; path: string }) => api!.bindProject(id, { runnerId, path }), onSuccess: refresh }),
+    rename: useMutation({
+      mutationFn: ({ id, name }: { id: string; name: string }) => api!.renameProject(id, { name }),
+      onSuccess: refresh,
+    }),
+    bind: useMutation({
+      mutationFn: ({ id, runnerId, path }: { id: string; runnerId: string; path: string }) =>
+        api!.bindProject(id, { runnerId, path }),
+      onSuccess: refresh,
+    }),
     remove: useMutation({
       mutationFn: (id: string) => api!.deleteProject(id),
       onSuccess: async () => {

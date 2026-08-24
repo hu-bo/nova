@@ -11,4 +11,12 @@ export type { AgentHooks } from "./loop/hooks.js";
 export type { CompactionResult, CompactionTrigger } from "./context/compaction.js";
 export { z } from "./tool-schema.js";
 export type { ZodType } from "./tool-schema.js";
-export type { ModelEvent, ModelRef, ModelRequest, StreamFn, ThinkingLevel, ToolSchema, Usage as ModelUsage } from "@nova/model-adapters";
+export type {
+  ModelEvent,
+  ModelRef,
+  ModelRequest,
+  StreamFn,
+  ThinkingLevel,
+  ToolSchema,
+  Usage as ModelUsage,
+} from "@nova/model-adapters";

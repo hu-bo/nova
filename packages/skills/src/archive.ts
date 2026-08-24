@@ -49,8 +49,10 @@ export function readSkillZip(input: Uint8Array, limits: ArchiveLimits = {}): Arc
   const entryCount = u16(bytes, eocd + 10);
   const centralSize = u32(bytes, eocd + 12);
   const centralOffset = u32(bytes, eocd + 16);
-  if (disk !== 0 || centralDisk !== 0 || entriesOnDisk !== entryCount) throw archiveError("multi-disk ZIP archives are not supported");
-  if (entryCount === 0xffff || centralSize === 0xffffffff || centralOffset === 0xffffffff) throw archiveError("ZIP64 archives are not supported");
+  if (disk !== 0 || centralDisk !== 0 || entriesOnDisk !== entryCount)
+    throw archiveError("multi-disk ZIP archives are not supported");
+  if (entryCount === 0xffff || centralSize === 0xffffffff || centralOffset === 0xffffffff)
+    throw archiveError("ZIP64 archives are not supported");
   if (entryCount > resolved.maxEntries) throw archiveError(`archive contains more than ${resolved.maxEntries} entries`);
   assertRange(bytes, centralOffset, centralSize, "central directory");
 
@@ -89,7 +91,10 @@ export function readSkillZip(input: Uint8Array, limits: ArchiveLimits = {}): Arc
       if (uncompressedSize > resolved.maxFileBytes) throw archiveError(`archive entry exceeds size limit: ${path}`);
       totalBytes += uncompressedSize;
       if (totalBytes > resolved.maxTotalBytes) throw archiveError("archive exceeds total uncompressed size limit");
-      if (uncompressedSize > 0 && (compressedSize === 0 || uncompressedSize / compressedSize > resolved.maxCompressionRatio)) {
+      if (
+        uncompressedSize > 0 &&
+        (compressedSize === 0 || uncompressedSize / compressedSize > resolved.maxCompressionRatio)
+      ) {
         throw archiveError(`archive entry exceeds compression ratio limit: ${path}`);
       }
     }
@@ -98,7 +103,7 @@ export function readSkillZip(input: Uint8Array, limits: ArchiveLimits = {}): Arc
   }
   if (offset !== centralOffset + centralSize) throw archiveError("central directory size does not match its entries");
 
-  return entries.filter(entry => !entry.directory).map(entry => extract(bytes, entry));
+  return entries.filter((entry) => !entry.directory).map((entry) => extract(bytes, entry));
 }
 
 function extract(bytes: Buffer, entry: ZipEntry): ArchiveFile {
@@ -109,14 +114,16 @@ function extract(bytes: Buffer, entry: ZipEntry): ArchiveFile {
   const nameStart = entry.localOffset + 30;
   assertRange(bytes, nameStart, nameLength + extraLength + entry.compressedSize, `entry data for ${entry.path}`);
   const localName = bytes.subarray(nameStart, nameStart + nameLength);
-  if (!localName.equals(Buffer.from(entry.rawName))) throw archiveError(`local and central names differ: ${entry.path}`);
+  if (!localName.equals(Buffer.from(entry.rawName)))
+    throw archiveError(`local and central names differ: ${entry.path}`);
   const start = nameStart + nameLength + extraLength;
   const compressed = bytes.subarray(start, start + entry.compressedSize);
   let data: Buffer;
   try {
-    data = entry.method === 0
-      ? Buffer.from(compressed)
-      : inflateRawSync(compressed, { maxOutputLength: Math.max(1, entry.uncompressedSize + 1) });
+    data =
+      entry.method === 0
+        ? Buffer.from(compressed)
+        : inflateRawSync(compressed, { maxOutputLength: Math.max(1, entry.uncompressedSize + 1) });
   } catch (error) {
     throw archiveError(`unable to decompress ${entry.path}: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -138,7 +145,13 @@ function findEndOfCentralDirectory(bytes: Buffer): number {
 }
 
 function assertRange(bytes: Buffer, offset: number, length: number, label: string): void {
-  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > bytes.length) {
+  if (
+    !Number.isSafeInteger(offset) ||
+    !Number.isSafeInteger(length) ||
+    offset < 0 ||
+    length < 0 ||
+    offset + length > bytes.length
+  ) {
     throw archiveError(`invalid ${label} range`);
   }
 }

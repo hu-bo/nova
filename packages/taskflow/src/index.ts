@@ -81,12 +81,12 @@ export function createFlow(options: FlowOptions = {}): Flow {
   if (concurrency < 1) throw new Error(`concurrency must be >= 1, got ${concurrency}`);
 
   const nodes = new Map<TaskId, TaskNode>();
-  const readyQueue: TaskNode[] = [];       // FIFO，无优先级（§6）
+  const readyQueue: TaskNode[] = []; // FIFO，无优先级（§6）
   const buffer: TaskEvent[] = [];
   let runningCount = 0;
   let counter = 0;
-  let started = false;                     // run() 的迭代开始后才派发
-  let done = false;                        // flow.finished 已发出
+  let started = false; // run() 的迭代开始后才派发
+  let done = false; // flow.finished 已发出
   let iterableCreated = false;
   let notify: (() => void) | undefined;
 
@@ -127,9 +127,9 @@ export function createFlow(options: FlowOptions = {}): Flow {
     for (const dep of deps) nodes.get(dep)!.dependents.push(node);
 
     // §5：依赖已全部 succeeded → 立即 ready；含非 succeeded 终态依赖 → 立即 skipped
-    if (deps.every(dep => nodes.get(dep)!.state === "succeeded")) {
+    if (deps.every((dep) => nodes.get(dep)!.state === "succeeded")) {
       enqueueReady(node);
-    } else if (deps.some(dep => isTerminal(nodes.get(dep)!.state) && nodes.get(dep)!.state !== "succeeded")) {
+    } else if (deps.some((dep) => isTerminal(nodes.get(dep)!.state) && nodes.get(dep)!.state !== "succeeded")) {
       finishAs(node, "skipped");
     }
     pump();
@@ -199,8 +199,8 @@ export function createFlow(options: FlowOptions = {}): Flow {
     Promise.resolve()
       .then(() => node.run({ taskId: node.id, attempt, signal: controller.signal, addTask, results }))
       .then(
-        value => settle(node, startedAt, timedOut, { ok: true, value }),
-        error => settle(node, startedAt, timedOut, { ok: false, error }),
+        (value) => settle(node, startedAt, timedOut, { ok: true, value }),
+        (error) => settle(node, startedAt, timedOut, { ok: false, error }),
       );
   }
 
@@ -248,11 +248,18 @@ export function createFlow(options: FlowOptions = {}): Flow {
   function finishAs(node: TaskNode, status: TerminalStatus, startedAt?: number, error?: unknown): void {
     node.state = status;
     if (status === "succeeded") {
-      emit({ type: "task.succeeded", taskId: node.id, result: node.result, durationMs: Date.now() - (startedAt ?? Date.now()) });
+      emit({
+        type: "task.succeeded",
+        taskId: node.id,
+        result: node.result,
+        durationMs: Date.now() - (startedAt ?? Date.now()),
+      });
     }
-    emit(error === undefined
-      ? { type: "task.finished", taskId: node.id, status }
-      : { type: "task.finished", taskId: node.id, status, error });
+    emit(
+      error === undefined
+        ? { type: "task.finished", taskId: node.id, status }
+        : { type: "task.finished", taskId: node.id, status, error },
+    );
     propagate(node, status);
     pump();
   }
@@ -262,7 +269,7 @@ export function createFlow(options: FlowOptions = {}): Flow {
     for (const dependent of node.dependents) {
       if (dependent.state !== "pending") continue;
       if (status === "succeeded") {
-        if (dependent.deps.every(dep => nodes.get(dep)!.state === "succeeded")) enqueueReady(dependent);
+        if (dependent.deps.every((dep) => nodes.get(dep)!.state === "succeeded")) enqueueReady(dependent);
       } else {
         finishAs(dependent, "skipped");
       }
@@ -318,7 +325,7 @@ export function createFlow(options: FlowOptions = {}): Flow {
     while (true) {
       while (buffer.length > 0) yield buffer.shift()!;
       if (done) return;
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve) => {
         notify = resolve;
       });
     }

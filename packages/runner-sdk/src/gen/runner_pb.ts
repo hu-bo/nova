@@ -9,15 +9,30 @@ import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobu
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Error } from "./common_pb.js";
 import { file_common } from "./common_pb.js";
-import type { CancelRequest, CancelResponse, ExecuteRequest, ExecutionEvent, FileChunk, FileOpRequest, FileOpResponse, ReadFileRequest, WriteFileRequest, WriteFileResponse } from "./execution_pb.js";
+import type {
+  CancelRequest,
+  CancelResponse,
+  ExecuteRequest,
+  ExecutionEvent,
+  FileChunk,
+  FileOpRequest,
+  FileOpResponse,
+  ReadFileRequest,
+  WriteFileRequest,
+  WriteFileResponse,
+} from "./execution_pb.js";
 import { file_execution } from "./execution_pb.js";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file runner.proto.
  */
-export const file_runner: GenFile = /*@__PURE__*/
-  fileDesc("CgxydW5uZXIucHJvdG8SDm5vdmEucnVubmVyLnYxIukDCg5SdW5uZXJFbnZlbG9wZRISCgpyZXF1ZXN0X2lkGAEgASgJEiwKCHJlZ2lzdGVyGAIgASgLMhgubm92YS5ydW5uZXIudjEuUmVnaXN0ZXJIABIuCgloZWFydGJlYXQYAyABKAsyGS5ub3ZhLnJ1bm5lci52MS5IZWFydGJlYXRIABI8Cg9leGVjdXRpb25fZXZlbnQYBCABKAsyIS5ub3ZhLmV4ZWN1dGlvbi52MS5FeGVjdXRpb25FdmVudEgAEj0KEGZpbGVfb3BfcmVzcG9uc2UYBSABKAsyIS5ub3ZhLmV4ZWN1dGlvbi52MS5GaWxlT3BSZXNwb25zZUgAEjIKCmZpbGVfY2h1bmsYBiABKAsyHC5ub3ZhLmV4ZWN1dGlvbi52MS5GaWxlQ2h1bmtIABJDChN3cml0ZV9maWxlX3Jlc3BvbnNlGAcgASgLMiQubm92YS5leGVjdXRpb24udjEuV3JpdGVGaWxlUmVzcG9uc2VIABI8Cg9jYW5jZWxfcmVzcG9uc2UYCCABKAsyIS5ub3ZhLmV4ZWN1dGlvbi52MS5DYW5jZWxSZXNwb25zZUgAEiYKBWVycm9yGAkgASgLMhUubm92YS5jb21tb24udjEuRXJyb3JIAEIJCgdwYXlsb2FkIsYDCg5TZXJ2ZXJFbnZlbG9wZRISCgpyZXF1ZXN0X2lkGAEgASgJEiwKCGFjY2VwdGVkGAIgASgLMhgubm92YS5ydW5uZXIudjEuQWNjZXB0ZWRIABI0CgdleGVjdXRlGAMgASgLMiEubm92YS5leGVjdXRpb24udjEuRXhlY3V0ZVJlcXVlc3RIABIyCgZjYW5jZWwYBCABKAsyIC5ub3ZhLmV4ZWN1dGlvbi52MS5DYW5jZWxSZXF1ZXN0SAASMwoHZmlsZV9vcBgFIAEoCzIgLm5vdmEuZXhlY3V0aW9uLnYxLkZpbGVPcFJlcXVlc3RIABImCgVkcmFpbhgGIAEoCzIVLm5vdmEucnVubmVyLnYxLkRyYWluSAASLAoIc2h1dGRvd24YByABKAsyGC5ub3ZhLnJ1bm5lci52MS5TaHV0ZG93bkgAEjcKCXJlYWRfZmlsZRgIIAEoCzIiLm5vdmEuZXhlY3V0aW9uLnYxLlJlYWRGaWxlUmVxdWVzdEgAEjkKCndyaXRlX2ZpbGUYCSABKAsyIy5ub3ZhLmV4ZWN1dGlvbi52MS5Xcml0ZUZpbGVSZXF1ZXN0SABCCQoHcGF5bG9hZCKQAgoIUmVnaXN0ZXISEQoJcnVubmVyX2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAkSEAoIcGxhdGZvcm0YAyABKAkSFAoMY2FwYWJpbGl0aWVzGAQgAygJEhEKCWNwdV9jb3VudBgFIAEoDRIUCgxtZW1vcnlfYnl0ZXMYBiABKAQSFwoPbWF4X2NvbmN1cnJlbmN5GAcgASgNEjQKBmxhYmVscxgIIAMoCzIkLm5vdmEucnVubmVyLnYxLlJlZ2lzdGVyLkxhYmVsc0VudHJ5EhEKCXdvcmtzcGFjZRgJIAEoCRotCgtMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIj0KCEFjY2VwdGVkEh0KFWhlYXJ0YmVhdF9pbnRlcnZhbF9tcxgBIAEoDRISCgpnZW5lcmF0aW9uGAIgASgJIlsKCUhlYXJ0YmVhdBIRCglydW5uZXJfaWQYASABKAkSKgoFc3RhdGUYAiABKA4yGy5ub3ZhLnJ1bm5lci52MS5SdW5uZXJTdGF0ZRIPCgdydW5uaW5nGAMgASgNIhcKBURyYWluEg4KBnJlYXNvbhgBIAEoCSIaCghTaHV0ZG93bhIOCgZyZWFzb24YASABKAkqdQoLUnVubmVyU3RhdGUSHAoYUlVOTkVSX1NUQVRFX1VOU1BFQ0lGSUVEEAASFgoSUlVOTkVSX1NUQVRFX1JFQURZEAESFQoRUlVOTkVSX1NUQVRFX0JVU1kQAhIZChVSVU5ORVJfU1RBVEVfRFJBSU5JTkcQAzJhChBSdW5uZXJDb25uZWN0aW9uEk0KB0Nvbm5lY3QSHi5ub3ZhLnJ1bm5lci52MS5SdW5uZXJFbnZlbG9wZRoeLm5vdmEucnVubmVyLnYxLlNlcnZlckVudmVsb3BlKAEwAWIGcHJvdG8z", [file_common, file_execution]);
+export const file_runner: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    "CgxydW5uZXIucHJvdG8SDm5vdmEucnVubmVyLnYxIukDCg5SdW5uZXJFbnZlbG9wZRISCgpyZXF1ZXN0X2lkGAEgASgJEiwKCHJlZ2lzdGVyGAIgASgLMhgubm92YS5ydW5uZXIudjEuUmVnaXN0ZXJIABIuCgloZWFydGJlYXQYAyABKAsyGS5ub3ZhLnJ1bm5lci52MS5IZWFydGJlYXRIABI8Cg9leGVjdXRpb25fZXZlbnQYBCABKAsyIS5ub3ZhLmV4ZWN1dGlvbi52MS5FeGVjdXRpb25FdmVudEgAEj0KEGZpbGVfb3BfcmVzcG9uc2UYBSABKAsyIS5ub3ZhLmV4ZWN1dGlvbi52MS5GaWxlT3BSZXNwb25zZUgAEjIKCmZpbGVfY2h1bmsYBiABKAsyHC5ub3ZhLmV4ZWN1dGlvbi52MS5GaWxlQ2h1bmtIABJDChN3cml0ZV9maWxlX3Jlc3BvbnNlGAcgASgLMiQubm92YS5leGVjdXRpb24udjEuV3JpdGVGaWxlUmVzcG9uc2VIABI8Cg9jYW5jZWxfcmVzcG9uc2UYCCABKAsyIS5ub3ZhLmV4ZWN1dGlvbi52MS5DYW5jZWxSZXNwb25zZUgAEiYKBWVycm9yGAkgASgLMhUubm92YS5jb21tb24udjEuRXJyb3JIAEIJCgdwYXlsb2FkIsYDCg5TZXJ2ZXJFbnZlbG9wZRISCgpyZXF1ZXN0X2lkGAEgASgJEiwKCGFjY2VwdGVkGAIgASgLMhgubm92YS5ydW5uZXIudjEuQWNjZXB0ZWRIABI0CgdleGVjdXRlGAMgASgLMiEubm92YS5leGVjdXRpb24udjEuRXhlY3V0ZVJlcXVlc3RIABIyCgZjYW5jZWwYBCABKAsyIC5ub3ZhLmV4ZWN1dGlvbi52MS5DYW5jZWxSZXF1ZXN0SAASMwoHZmlsZV9vcBgFIAEoCzIgLm5vdmEuZXhlY3V0aW9uLnYxLkZpbGVPcFJlcXVlc3RIABImCgVkcmFpbhgGIAEoCzIVLm5vdmEucnVubmVyLnYxLkRyYWluSAASLAoIc2h1dGRvd24YByABKAsyGC5ub3ZhLnJ1bm5lci52MS5TaHV0ZG93bkgAEjcKCXJlYWRfZmlsZRgIIAEoCzIiLm5vdmEuZXhlY3V0aW9uLnYxLlJlYWRGaWxlUmVxdWVzdEgAEjkKCndyaXRlX2ZpbGUYCSABKAsyIy5ub3ZhLmV4ZWN1dGlvbi52MS5Xcml0ZUZpbGVSZXF1ZXN0SABCCQoHcGF5bG9hZCKQAgoIUmVnaXN0ZXISEQoJcnVubmVyX2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAkSEAoIcGxhdGZvcm0YAyABKAkSFAoMY2FwYWJpbGl0aWVzGAQgAygJEhEKCWNwdV9jb3VudBgFIAEoDRIUCgxtZW1vcnlfYnl0ZXMYBiABKAQSFwoPbWF4X2NvbmN1cnJlbmN5GAcgASgNEjQKBmxhYmVscxgIIAMoCzIkLm5vdmEucnVubmVyLnYxLlJlZ2lzdGVyLkxhYmVsc0VudHJ5EhEKCXdvcmtzcGFjZRgJIAEoCRotCgtMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIj0KCEFjY2VwdGVkEh0KFWhlYXJ0YmVhdF9pbnRlcnZhbF9tcxgBIAEoDRISCgpnZW5lcmF0aW9uGAIgASgJIlsKCUhlYXJ0YmVhdBIRCglydW5uZXJfaWQYASABKAkSKgoFc3RhdGUYAiABKA4yGy5ub3ZhLnJ1bm5lci52MS5SdW5uZXJTdGF0ZRIPCgdydW5uaW5nGAMgASgNIhcKBURyYWluEg4KBnJlYXNvbhgBIAEoCSIaCghTaHV0ZG93bhIOCgZyZWFzb24YASABKAkqdQoLUnVubmVyU3RhdGUSHAoYUlVOTkVSX1NUQVRFX1VOU1BFQ0lGSUVEEAASFgoSUlVOTkVSX1NUQVRFX1JFQURZEAESFQoRUlVOTkVSX1NUQVRFX0JVU1kQAhIZChVSVU5ORVJfU1RBVEVfRFJBSU5JTkcQAzJhChBSdW5uZXJDb25uZWN0aW9uEk0KB0Nvbm5lY3QSHi5ub3ZhLnJ1bm5lci52MS5SdW5uZXJFbnZlbG9wZRoeLm5vdmEucnVubmVyLnYxLlNlcnZlckVudmVsb3BlKAEwAWIGcHJvdG8z",
+    [file_common, file_execution],
+  );
 
 /**
  * Runner → server 方向。
@@ -36,63 +51,71 @@ export type RunnerEnvelope = Message<"nova.runner.v1.RunnerEnvelope"> & {
   /**
    * @generated from oneof nova.runner.v1.RunnerEnvelope.payload
    */
-  payload: {
-    /**
-     * @generated from field: nova.runner.v1.Register register = 2;
-     */
-    value: Register;
-    case: "register";
-  } | {
-    /**
-     * @generated from field: nova.runner.v1.Heartbeat heartbeat = 3;
-     */
-    value: Heartbeat;
-    case: "heartbeat";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.ExecutionEvent execution_event = 4;
-     */
-    value: ExecutionEvent;
-    case: "executionEvent";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.FileOpResponse file_op_response = 5;
-     */
-    value: FileOpResponse;
-    case: "fileOpResponse";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.FileChunk file_chunk = 6;
-     */
-    value: FileChunk;
-    case: "fileChunk";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.WriteFileResponse write_file_response = 7;
-     */
-    value: WriteFileResponse;
-    case: "writeFileResponse";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.CancelResponse cancel_response = 8;
-     */
-    value: CancelResponse;
-    case: "cancelResponse";
-  } | {
-    /**
-     * @generated from field: nova.common.v1.Error error = 9;
-     */
-    value: Error;
-    case: "error";
-  } | { case: undefined; value?: undefined };
+  payload:
+    | {
+        /**
+         * @generated from field: nova.runner.v1.Register register = 2;
+         */
+        value: Register;
+        case: "register";
+      }
+    | {
+        /**
+         * @generated from field: nova.runner.v1.Heartbeat heartbeat = 3;
+         */
+        value: Heartbeat;
+        case: "heartbeat";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.ExecutionEvent execution_event = 4;
+         */
+        value: ExecutionEvent;
+        case: "executionEvent";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.FileOpResponse file_op_response = 5;
+         */
+        value: FileOpResponse;
+        case: "fileOpResponse";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.FileChunk file_chunk = 6;
+         */
+        value: FileChunk;
+        case: "fileChunk";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.WriteFileResponse write_file_response = 7;
+         */
+        value: WriteFileResponse;
+        case: "writeFileResponse";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.CancelResponse cancel_response = 8;
+         */
+        value: CancelResponse;
+        case: "cancelResponse";
+      }
+    | {
+        /**
+         * @generated from field: nova.common.v1.Error error = 9;
+         */
+        value: Error;
+        case: "error";
+      }
+    | { case: undefined; value?: undefined };
 };
 
 /**
  * Describes the message nova.runner.v1.RunnerEnvelope.
  * Use `create(RunnerEnvelopeSchema)` to create a new message.
  */
-export const RunnerEnvelopeSchema: GenMessage<RunnerEnvelope> = /*@__PURE__*/
-  messageDesc(file_runner, 0);
+export const RunnerEnvelopeSchema: GenMessage<RunnerEnvelope> = /*@__PURE__*/ messageDesc(file_runner, 0);
 
 /**
  * server → Runner 方向。
@@ -108,63 +131,71 @@ export type ServerEnvelope = Message<"nova.runner.v1.ServerEnvelope"> & {
   /**
    * @generated from oneof nova.runner.v1.ServerEnvelope.payload
    */
-  payload: {
-    /**
-     * @generated from field: nova.runner.v1.Accepted accepted = 2;
-     */
-    value: Accepted;
-    case: "accepted";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.ExecuteRequest execute = 3;
-     */
-    value: ExecuteRequest;
-    case: "execute";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.CancelRequest cancel = 4;
-     */
-    value: CancelRequest;
-    case: "cancel";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.FileOpRequest file_op = 5;
-     */
-    value: FileOpRequest;
-    case: "fileOp";
-  } | {
-    /**
-     * @generated from field: nova.runner.v1.Drain drain = 6;
-     */
-    value: Drain;
-    case: "drain";
-  } | {
-    /**
-     * @generated from field: nova.runner.v1.Shutdown shutdown = 7;
-     */
-    value: Shutdown;
-    case: "shutdown";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.ReadFileRequest read_file = 8;
-     */
-    value: ReadFileRequest;
-    case: "readFile";
-  } | {
-    /**
-     * @generated from field: nova.execution.v1.WriteFileRequest write_file = 9;
-     */
-    value: WriteFileRequest;
-    case: "writeFile";
-  } | { case: undefined; value?: undefined };
+  payload:
+    | {
+        /**
+         * @generated from field: nova.runner.v1.Accepted accepted = 2;
+         */
+        value: Accepted;
+        case: "accepted";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.ExecuteRequest execute = 3;
+         */
+        value: ExecuteRequest;
+        case: "execute";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.CancelRequest cancel = 4;
+         */
+        value: CancelRequest;
+        case: "cancel";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.FileOpRequest file_op = 5;
+         */
+        value: FileOpRequest;
+        case: "fileOp";
+      }
+    | {
+        /**
+         * @generated from field: nova.runner.v1.Drain drain = 6;
+         */
+        value: Drain;
+        case: "drain";
+      }
+    | {
+        /**
+         * @generated from field: nova.runner.v1.Shutdown shutdown = 7;
+         */
+        value: Shutdown;
+        case: "shutdown";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.ReadFileRequest read_file = 8;
+         */
+        value: ReadFileRequest;
+        case: "readFile";
+      }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.WriteFileRequest write_file = 9;
+         */
+        value: WriteFileRequest;
+        case: "writeFile";
+      }
+    | { case: undefined; value?: undefined };
 };
 
 /**
  * Describes the message nova.runner.v1.ServerEnvelope.
  * Use `create(ServerEnvelopeSchema)` to create a new message.
  */
-export const ServerEnvelopeSchema: GenMessage<ServerEnvelope> = /*@__PURE__*/
-  messageDesc(file_runner, 1);
+export const ServerEnvelopeSchema: GenMessage<ServerEnvelope> = /*@__PURE__*/ messageDesc(file_runner, 1);
 
 /**
  * @generated from message nova.runner.v1.Register
@@ -224,8 +255,7 @@ export type Register = Message<"nova.runner.v1.Register"> & {
  * Describes the message nova.runner.v1.Register.
  * Use `create(RegisterSchema)` to create a new message.
  */
-export const RegisterSchema: GenMessage<Register> = /*@__PURE__*/
-  messageDesc(file_runner, 2);
+export const RegisterSchema: GenMessage<Register> = /*@__PURE__*/ messageDesc(file_runner, 2);
 
 /**
  * @generated from message nova.runner.v1.Accepted
@@ -246,8 +276,7 @@ export type Accepted = Message<"nova.runner.v1.Accepted"> & {
  * Describes the message nova.runner.v1.Accepted.
  * Use `create(AcceptedSchema)` to create a new message.
  */
-export const AcceptedSchema: GenMessage<Accepted> = /*@__PURE__*/
-  messageDesc(file_runner, 3);
+export const AcceptedSchema: GenMessage<Accepted> = /*@__PURE__*/ messageDesc(file_runner, 3);
 
 /**
  * @generated from message nova.runner.v1.Heartbeat
@@ -273,8 +302,7 @@ export type Heartbeat = Message<"nova.runner.v1.Heartbeat"> & {
  * Describes the message nova.runner.v1.Heartbeat.
  * Use `create(HeartbeatSchema)` to create a new message.
  */
-export const HeartbeatSchema: GenMessage<Heartbeat> = /*@__PURE__*/
-  messageDesc(file_runner, 4);
+export const HeartbeatSchema: GenMessage<Heartbeat> = /*@__PURE__*/ messageDesc(file_runner, 4);
 
 /**
  * @generated from message nova.runner.v1.Drain
@@ -290,8 +318,7 @@ export type Drain = Message<"nova.runner.v1.Drain"> & {
  * Describes the message nova.runner.v1.Drain.
  * Use `create(DrainSchema)` to create a new message.
  */
-export const DrainSchema: GenMessage<Drain> = /*@__PURE__*/
-  messageDesc(file_runner, 5);
+export const DrainSchema: GenMessage<Drain> = /*@__PURE__*/ messageDesc(file_runner, 5);
 
 /**
  * @generated from message nova.runner.v1.Shutdown
@@ -307,8 +334,7 @@ export type Shutdown = Message<"nova.runner.v1.Shutdown"> & {
  * Describes the message nova.runner.v1.Shutdown.
  * Use `create(ShutdownSchema)` to create a new message.
  */
-export const ShutdownSchema: GenMessage<Shutdown> = /*@__PURE__*/
-  messageDesc(file_runner, 6);
+export const ShutdownSchema: GenMessage<Shutdown> = /*@__PURE__*/ messageDesc(file_runner, 6);
 
 /**
  * @generated from enum nova.runner.v1.RunnerState
@@ -338,8 +364,7 @@ export enum RunnerState {
 /**
  * Describes the enum nova.runner.v1.RunnerState.
  */
-export const RunnerStateSchema: GenEnum<RunnerState> = /*@__PURE__*/
-  enumDesc(file_runner, 0);
+export const RunnerStateSchema: GenEnum<RunnerState> = /*@__PURE__*/ enumDesc(file_runner, 0);
 
 /**
  * @generated from service nova.runner.v1.RunnerConnection
@@ -352,7 +377,5 @@ export const RunnerConnection: GenService<{
     methodKind: "bidi_streaming";
     input: typeof RunnerEnvelopeSchema;
     output: typeof ServerEnvelopeSchema;
-  },
-}> = /*@__PURE__*/
-  serviceDesc(file_runner, 0);
-
+  };
+}> = /*@__PURE__*/ serviceDesc(file_runner, 0);

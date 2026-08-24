@@ -25,7 +25,10 @@ export type RunnerErrorCode =
   | "RUNNER_UNAVAILABLE";
 
 export class RunnerError extends Error {
-  constructor(readonly code: RunnerErrorCode, message: string) {
+  constructor(
+    readonly code: RunnerErrorCode,
+    message: string,
+  ) {
     super(message);
     this.name = "RunnerError";
   }
@@ -43,20 +46,34 @@ export function fromWireError(err: WireError): RunnerError {
 
 function wireToCode(code: ErrorCode): RunnerErrorCode {
   switch (code) {
-    case ErrorCode.NOT_FOUND: return "NOT_FOUND";
-    case ErrorCode.PERMISSION: return "PERMISSION";
-    case ErrorCode.INVALID: return "INVALID";
-    case ErrorCode.OUT_OF_WORKSPACE: return "OUT_OF_WORKSPACE";
-    case ErrorCode.TOO_LARGE: return "TOO_LARGE";
-    case ErrorCode.TIMEOUT: return "TIMEOUT";
-    case ErrorCode.CANCELLED: return "CANCELLED";
-    case ErrorCode.UNSUPPORTED: return "UNSUPPORTED";
-    case ErrorCode.BUSY: return "BUSY";
-    case ErrorCode.IS_DIR: return "IS_DIR";
-    case ErrorCode.NOT_DIR: return "NOT_DIR";
-    case ErrorCode.EXISTS: return "EXISTS";
-    case ErrorCode.SPAWN_FAILED: return "SPAWN_FAILED";
-    default: return "IO";
+    case ErrorCode.NOT_FOUND:
+      return "NOT_FOUND";
+    case ErrorCode.PERMISSION:
+      return "PERMISSION";
+    case ErrorCode.INVALID:
+      return "INVALID";
+    case ErrorCode.OUT_OF_WORKSPACE:
+      return "OUT_OF_WORKSPACE";
+    case ErrorCode.TOO_LARGE:
+      return "TOO_LARGE";
+    case ErrorCode.TIMEOUT:
+      return "TIMEOUT";
+    case ErrorCode.CANCELLED:
+      return "CANCELLED";
+    case ErrorCode.UNSUPPORTED:
+      return "UNSUPPORTED";
+    case ErrorCode.BUSY:
+      return "BUSY";
+    case ErrorCode.IS_DIR:
+      return "IS_DIR";
+    case ErrorCode.NOT_DIR:
+      return "NOT_DIR";
+    case ErrorCode.EXISTS:
+      return "EXISTS";
+    case ErrorCode.SPAWN_FAILED:
+      return "SPAWN_FAILED";
+    default:
+      return "IO";
   }
 }
 
@@ -65,8 +82,12 @@ function wireToCode(code: ErrorCode): RunnerErrorCode {
 // FsError 只有 8 个 code；执行面/传输面的 code 落回 IO，message 保留原信息
 export function toFsError(err: RunnerError, path?: string): FsError {
   const code =
-    err.code === "NOT_FOUND" || err.code === "PERMISSION" || err.code === "IS_DIR" ||
-    err.code === "NOT_DIR" || err.code === "EXISTS" || err.code === "OUT_OF_WORKSPACE" ||
+    err.code === "NOT_FOUND" ||
+    err.code === "PERMISSION" ||
+    err.code === "IS_DIR" ||
+    err.code === "NOT_DIR" ||
+    err.code === "EXISTS" ||
+    err.code === "OUT_OF_WORKSPACE" ||
     err.code === "TOO_LARGE"
       ? err.code
       : "IO";
@@ -77,10 +98,14 @@ export function toFsError(err: RunnerError, path?: string): FsError {
 // （ExecErrorCode 没有 BUSY；排队拒绝意味着该 Runner 此刻无法承接工作）
 export function toExecError(err: RunnerError, exitCode?: number): ExecError {
   const code =
-    err.code === "TIMEOUT" ? "TIMEOUT"
-    : err.code === "CANCELLED" ? "CANCELLED"
-    : err.code === "SPAWN_FAILED" ? "SPAWN_FAILED"
-    : err.code === "RUNNER_UNAVAILABLE" || err.code === "BUSY" ? "RUNNER_UNAVAILABLE"
-    : "IO";
+    err.code === "TIMEOUT"
+      ? "TIMEOUT"
+      : err.code === "CANCELLED"
+        ? "CANCELLED"
+        : err.code === "SPAWN_FAILED"
+          ? "SPAWN_FAILED"
+          : err.code === "RUNNER_UNAVAILABLE" || err.code === "BUSY"
+            ? "RUNNER_UNAVAILABLE"
+            : "IO";
   return exitCode === undefined ? { code, message: err.message } : { code, message: err.message, exitCode };
 }

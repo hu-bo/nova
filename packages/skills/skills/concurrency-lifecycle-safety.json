@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "name": "concurrency-lifecycle-safety",
   "description": "设计或修改并发、队列、流、超时、取消、重试、缓存和长生命周期状态时，确保 owner、资源上限、backpressure 与恢复语义明确。",
-  "activation": { "mode": "auto", "keywords": ["并发", "队列", "超时", "取消", "重试", "流", "缓存", "concurrency", "queue", "timeout"] },
+  "activation": {
+    "mode": "auto",
+    "keywords": ["并发", "队列", "超时", "取消", "重试", "流", "缓存", "concurrency", "queue", "timeout"]
+  },
   "instructions": {
     "markdown": "## 并发与生命周期安全\n\n先确定唯一 owner，再写并发代码。\n- 用明确状态或状态机表达生命周期，避免多个 boolean 和多个模块共同写状态。\n- 并发必须有上限和 backpressure；禁止无界 Promise、队列、订阅者和输出缓冲。\n- `AbortSignal` 从入口传播到正在运行的 IO；取消后不启动新工作，已启动工作要可收敛。\n- timeout owner 只能有一个，并区分排队超时、执行超时和外部等待超时。\n- retry 仅用于可重试错误；写操作需要幂等键，退避要有上限并尊重取消。\n- 清理 timer、listener、stream、worker 和连接，避免完成后继续持有资源。\n- 恢复逻辑依据持久化事实判断未知结果，不能把中断工作假定为成功或失败。\n\n测试至少覆盖：并发上限、取消、超时、部分失败、重复请求和资源释放。"
   },

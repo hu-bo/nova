@@ -2,7 +2,11 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 export function Table({ className, ...props }: ComponentProps<"table">) {
-  return <div data-slot="table-container" className="overflow-x-auto rounded-xl bg-card ring-1 ring-slate-200 shadow-soft"><table className={cn("w-full text-left", className)} {...props} /></div>;
+  return (
+    <div data-slot="table-container" className="overflow-x-auto rounded-xl bg-card ring-1 ring-slate-200 shadow-soft">
+      <table className={cn("w-full text-left", className)} {...props} />
+    </div>
+  );
 }
 export function TableHeader(props: ComponentProps<"thead">) {
   return <thead className="bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500" {...props} />;

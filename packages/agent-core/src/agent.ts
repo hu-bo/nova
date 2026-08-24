@@ -1,6 +1,20 @@
 // §2 createAgent —— 唯一公开面。状态唯一 owner：本闭包；loop 经 LoopHost 读写。
 import type { ModelRef, ThinkingLevel, Usage } from "@nova/model-adapters";
-import type { Agent, AgentConfig, AgentEvent, AgentState, AgentTool, Block, ContentPart, Message, Risk, RunResult, Todo, TodoState, ToolCall } from "./types.js";
+import type {
+  Agent,
+  AgentConfig,
+  AgentEvent,
+  AgentState,
+  AgentTool,
+  Block,
+  ContentPart,
+  Message,
+  Risk,
+  RunResult,
+  Todo,
+  TodoState,
+  ToolCall,
+} from "./types.js";
 import { entry, type Entry, type EntryId, type EntryParts } from "./session/entry.js";
 import { record, type Record, type RecordParts } from "./session/record.js";
 import { branchView } from "./session/tree.js";
@@ -12,7 +26,14 @@ import { compactNow, newMessage, runTurnLoop, type LoopHost } from "./loop/loop.
 import { createSubAgentGate, spawnAgentTool, type SpawnedRun, type SubAgentGate } from "./sub-agent/spawn-agent.js";
 import { submitResultTool } from "./sub-agent/submit-result.js";
 import { askUserTool } from "./decision/ask-user.js";
-import { approvalMode, askQuestion, requestApproval, requestDecision, type ApprovalOutcome, type DecisionDeps } from "./decision/decision.js";
+import {
+  approvalMode,
+  askQuestion,
+  requestApproval,
+  requestDecision,
+  type ApprovalOutcome,
+  type DecisionDeps,
+} from "./decision/decision.js";
 
 type RecordOf<K extends Record["kind"]> = Extract<Record, { kind: K }>;
 
@@ -69,7 +90,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   let runController = new AbortController();
   let busy = false;
   let activeRun: Promise<RunResult> | null = null;
-  const allowlist = new Set<string>();   // §6 allow_always：session 级，第一版不跨 session 持久化
+  const allowlist = new Set<string>(); // §6 allow_always：session 级，第一版不跨 session 持久化
   const listeners = new Set<(event: AgentEvent) => void>();
   const queues = createQueues(sessionId, config.storage, () => runId);
 
@@ -98,17 +119,32 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   }
 
   async function applyCompaction(plan: CompactionPlan): Promise<void> {
-    const marker = entry({ kind: "compaction", summary: plan.summary, replacedFrom: plan.replacedFrom, replacedTo: plan.replacedTo, parentId: leaf });
+    const marker = entry({
+      kind: "compaction",
+      summary: plan.summary,
+      replacedFrom: plan.replacedFrom,
+      replacedTo: plan.replacedTo,
+      parentId: leaf,
+    });
     await config.storage.appendEntry(sessionId, marker);
     // 内存视图按 cut point 直接折叠；branchView 负责从存储重载时的折叠
     view = [marker, ...view.slice(plan.cutIndex)];
     leaf = marker.id;
   }
 
-  const decisionDeps: DecisionDeps = { decide: config.decide, sessionId, storage: config.storage, runId: () => runId, emit };
+  const decisionDeps: DecisionDeps = {
+    decide: config.decide,
+    sessionId,
+    storage: config.storage,
+    runId: () => runId,
+    emit,
+  };
 
   // §4.3 hooks.beforeToolCall 只能单调收紧基础策略；异常与 abort 均 fail-closed。
-  async function approveCall(call: ToolCall & { risk: Risk }, signal: AbortSignal): Promise<ApprovalOutcome | "aborted"> {
+  async function approveCall(
+    call: ToolCall & { risk: Risk },
+    signal: AbortSignal,
+  ): Promise<ApprovalOutcome | "aborted"> {
     let mode = approvalMode(config.approvalPolicy, call.name, call.risk, allowlist);
     if (signal.aborted) return "aborted";
     try {
@@ -129,7 +165,11 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     emit({ type: "todo.updated", items: todos.items });
   }
 
-  async function applyTurnConfig(change: { model?: string; thinkingLevel?: ThinkingLevel; activeTools?: string[] }): Promise<void> {
+  async function applyTurnConfig(change: {
+    model?: string;
+    thinkingLevel?: ThinkingLevel;
+    activeTools?: string[];
+  }): Promise<void> {
     // §4.3：每次变更都要落 Entry，否则 fork 与 resume 会拿到错误的模型配置
     if (change.model !== undefined && change.model !== modelRef.model) {
       modelRef = { ...modelRef, model: change.model };
@@ -141,7 +181,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
       await append({ kind: "thinking-level", level: change.thinkingLevel });
     }
     if (change.activeTools !== undefined) {
-      state.activeTools = change.activeTools.filter(name => tools.has(name));
+      state.activeTools = change.activeTools.filter((name) => tools.has(name));
       await append({ kind: "active-tools", tools: [...state.activeTools] });
     }
   }
@@ -150,8 +190,12 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     return {
       input: target.input + delta.input,
       output: target.output + delta.output,
-      ...(target.cacheRead !== undefined || delta.cacheRead !== undefined ? { cacheRead: (target.cacheRead ?? 0) + (delta.cacheRead ?? 0) } : {}),
-      ...(target.cacheWrite !== undefined || delta.cacheWrite !== undefined ? { cacheWrite: (target.cacheWrite ?? 0) + (delta.cacheWrite ?? 0) } : {}),
+      ...(target.cacheRead !== undefined || delta.cacheRead !== undefined
+        ? { cacheRead: (target.cacheRead ?? 0) + (delta.cacheRead ?? 0) }
+        : {}),
+      ...(target.cacheWrite !== undefined || delta.cacheWrite !== undefined
+        ? { cacheWrite: (target.cacheWrite ?? 0) + (delta.cacheWrite ?? 0) }
+        : {}),
     };
   }
 
@@ -179,12 +223,18 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     todos: () => todos,
     updateTodos,
     lastUsage: () => lastUsage,
-    setLastUsage: usage => { lastUsage = usage; },
-    addUsage: usage => { runUsage = mergeUsage(runUsage, usage); },
+    setLastUsage: (usage) => {
+      lastUsage = usage;
+    },
+    addUsage: (usage) => {
+      runUsage = mergeUsage(runUsage, usage);
+    },
     runUsage: () => runUsage,
     emit,
     rec,
-    streaming: patch => { Object.assign(state, patch); },
+    streaming: (patch) => {
+      Object.assign(state, patch);
+    },
     approveCall,
   };
 
@@ -205,7 +255,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
         modelRef = { ...modelRef, model: item.model };
         state.model = item.model;
       } else if (item.kind === "thinking-level") state.thinkingLevel = item.level;
-      else if (item.kind === "active-tools") state.activeTools = item.tools.filter(name => tools.has(name));
+      else if (item.kind === "active-tools") state.activeTools = item.tools.filter((name) => tools.has(name));
     }
   }
 
@@ -227,7 +277,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     // §7 nextRun：当前 run 结束后触发一个新的独立 run
     const queued = queues.drain("nextRun");
     if (queued.length > 0) {
-      void prompt(queued.join("\n\n")).catch(error => {
+      void prompt(queued.join("\n\n")).catch((error) => {
         emit({ type: "error", code: "run_failed", message: error instanceof Error ? error.message : String(error) });
       });
     }
@@ -251,7 +301,8 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
 
   async function fork(entryId: EntryId): Promise<Agent> {
     const branch = await config.storage.loadEntries(sessionId, entryId);
-    if (branch.length === 0 || branch[branch.length - 1]!.id !== entryId) throw new Error(`entry not found: ${entryId}`);
+    if (branch.length === 0 || branch[branch.length - 1]!.id !== entryId)
+      throw new Error(`entry not found: ${entryId}`);
     // §5.1 同 session 同树：新分支从 entryId 长出，不复制历史
     return createAgent(config, { sessionId, leafId: entryId, depth, gate });
   }
@@ -261,7 +312,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     if (busy) throw new Error("agent is running");
     await ensureLoaded();
     const records = await config.storage.loadRecords(sessionId);
-    const finishedRuns = new Set(records.filter(item => item.kind === "run-finished").map(item => item.runId));
+    const finishedRuns = new Set(records.filter((item) => item.kind === "run-finished").map((item) => item.runId));
     let interruptedRun: string | null = null;
     for (let i = records.length - 1; i >= 0; i -= 1) {
       const item = records[i]!;
@@ -273,23 +324,52 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     if (interruptedRun === null) return;
 
     // 未完成的 tool-started → 结果不可知，作为 error 结果喂回模型
-    const finishedCalls = new Set(records.filter((item): item is RecordOf<"tool-finished"> => item.kind === "tool-finished" && item.runId === interruptedRun).map(item => item.callId));
-    const pendingCalls = records.filter((item): item is RecordOf<"tool-started"> => item.kind === "tool-started" && item.runId === interruptedRun && !finishedCalls.has(item.callId));
+    const finishedCalls = new Set(
+      records
+        .filter(
+          (item): item is RecordOf<"tool-finished"> => item.kind === "tool-finished" && item.runId === interruptedRun,
+        )
+        .map((item) => item.callId),
+    );
+    const pendingCalls = records.filter(
+      (item): item is RecordOf<"tool-started"> =>
+        item.kind === "tool-started" && item.runId === interruptedRun && !finishedCalls.has(item.callId),
+    );
     if (pendingCalls.length > 0) {
-      const pendingIds = new Set(pendingCalls.map(item => item.callId));
-      const lastMessageEntry = [...view].reverse().find(item => item.kind === "message");
+      const pendingIds = new Set(pendingCalls.map((item) => item.callId));
+      const lastMessageEntry = [...view].reverse().find((item) => item.kind === "message");
       if (lastMessageEntry && lastMessageEntry.kind === "message" && lastMessageEntry.message.role === "assistant") {
         const results: Block[] = lastMessageEntry.message.blocks
-          .filter((block): block is Extract<Block, { type: "tool_call" }> => block.type === "tool_call" && pendingIds.has(block.callId))
-          .map(block => ({ type: "tool_result", callId: block.callId, status: "error", content: [{ type: "text", text: "上次运行在此中断，该工具调用的结果未知。请先核实实际状态，再决定是否重新执行。" }] }));
+          .filter(
+            (block): block is Extract<Block, { type: "tool_call" }> =>
+              block.type === "tool_call" && pendingIds.has(block.callId),
+          )
+          .map((block) => ({
+            type: "tool_result",
+            callId: block.callId,
+            status: "error",
+            content: [
+              { type: "text", text: "上次运行在此中断，该工具调用的结果未知。请先核实实际状态，再决定是否重新执行。" },
+            ],
+          }));
         if (results.length > 0) await append({ kind: "message", message: newMessage("user", results) });
       }
     }
 
     // 未 resolved 的 decision → 重新发出请求，等人类
     const resumeDeps: DecisionDeps = { ...decisionDeps, runId: () => interruptedRun as string };
-    const resolvedDecisions = new Set(records.filter((item): item is RecordOf<"decision-resolved"> => item.kind === "decision-resolved" && item.runId === interruptedRun).map(item => item.decisionId));
-    const pendingDecisions = records.filter((item): item is RecordOf<"decision-requested"> => item.kind === "decision-requested" && item.runId === interruptedRun && !resolvedDecisions.has(item.decisionId));
+    const resolvedDecisions = new Set(
+      records
+        .filter(
+          (item): item is RecordOf<"decision-resolved"> =>
+            item.kind === "decision-resolved" && item.runId === interruptedRun,
+        )
+        .map((item) => item.decisionId),
+    );
+    const pendingDecisions = records.filter(
+      (item): item is RecordOf<"decision-requested"> =>
+        item.kind === "decision-requested" && item.runId === interruptedRun && !resolvedDecisions.has(item.decisionId),
+    );
     if (pendingDecisions.length > 0) {
       const signal = new AbortController().signal;
       for (const item of pendingDecisions) await requestDecision(item.request, resumeDeps, signal);
@@ -302,44 +382,71 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   // spawn_agent 由深度控制（maxDepth 缺省 1 = 子 agent 不能再派生），ask_user 只留在父 agent
   const runChild: SpawnedRun = async (args, signal) => {
     const childSessionId = newSessionId();
-    const childTools = config.tools.filter(tool => args.tools === undefined || args.tools.includes(tool.name));
-    const child = createAgent({ ...config, tools: childTools, hooks: undefined }, { sessionId: childSessionId, depth: depth + 1, gate });
-    const onAbort = () => { void child.abort(); };
+    const childTools = config.tools.filter((tool) => args.tools === undefined || args.tools.includes(tool.name));
+    const child = createAgent(
+      { ...config, tools: childTools, hooks: undefined },
+      { sessionId: childSessionId, depth: depth + 1, gate },
+    );
+    const onAbort = () => {
+      void child.abort();
+    };
     signal.addEventListener("abort", onAbort, { once: true });
     try {
       const result = await child.prompt(args.task);
       const branch = await config.storage.loadEntries(childSessionId);
       const transcript: Message[] = branch
         .filter((item): item is Extract<Entry, { kind: "message" }> => item.kind === "message")
-        .map(item => item.message);
-      const text = result.message?.blocks
-        .filter((block): block is Extract<Block, { type: "text" }> => block.type === "text")
-        .map(block => block.text)
-        .join("\n") ?? "";
-      return { text, transcript, usage: result.usage, ...(result.output !== undefined ? { output: result.output } : {}) };
+        .map((item) => item.message);
+      const text =
+        result.message?.blocks
+          .filter((block): block is Extract<Block, { type: "text" }> => block.type === "text")
+          .map((block) => block.text)
+          .join("\n") ?? "";
+      return {
+        text,
+        transcript,
+        usage: result.usage,
+        ...(result.output !== undefined ? { output: result.output } : {}),
+      };
     } finally {
       signal.removeEventListener("abort", onAbort);
     }
   };
 
-  if (depth < maxDepth) tools.set("spawn_agent", spawnAgentTool(gate, runChild, () => runController.signal));
+  if (depth < maxDepth)
+    tools.set(
+      "spawn_agent",
+      spawnAgentTool(gate, runChild, () => runController.signal),
+    );
   tools.set(submitResultTool.name, submitResultTool);
-  tools.set("ask_user", askUserTool((question, signal) => askQuestion(question, decisionDeps, signal), () => runController.signal));
+  tools.set(
+    "ask_user",
+    askUserTool(
+      (question, signal) => askQuestion(question, decisionDeps, signal),
+      () => runController.signal,
+    ),
+  );
   state.activeTools = [...tools.keys()];
 
   // §1.1 唯一的构造期校验：Chat 模式（ctx 缺省）不得装配需要执行环境的工具。
   // 默认沿用风险级别判断；自带执行环境的只读工具可显式声明不需要 ToolContext。
   if (!config.ctx) {
-    const unsafe = [...tools.values()].find(tool => tool.requiresContext ?? (tool.risk ?? "exec") !== "none");
+    const unsafe = [...tools.values()].find((tool) => tool.requiresContext ?? (tool.risk ?? "exec") !== "none");
     if (unsafe) throw new Error(`Chat 模式（未注入 ctx）不能装配 risk !== "none" 的工具：${unsafe.name}`);
   }
 
   return {
     sessionId,
     prompt,
-    steer: msg => { void queues.enqueue("steering", msg); },
-    followUp: msg => { void queues.enqueue("followUp", msg); },
-    nextRun: msg => { void queues.enqueue("nextRun", msg); },
+    steer: (msg) => {
+      void queues.enqueue("steering", msg);
+    },
+    followUp: (msg) => {
+      void queues.enqueue("followUp", msg);
+    },
+    nextRun: (msg) => {
+      void queues.enqueue("nextRun", msg);
+    },
     abort,
     compact,
     fork,
@@ -349,7 +456,9 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     },
     subscribe(listener) {
       listeners.add(listener);
-      return () => { listeners.delete(listener); };
+      return () => {
+        listeners.delete(listener);
+      };
     },
   };
 }

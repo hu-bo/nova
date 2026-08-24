@@ -3,7 +3,11 @@
 import type { AgentTool } from "../types.js";
 import { z } from "../tool-schema.js";
 
-export interface AskInput { question: string; options?: string[]; multiSelect?: boolean }
+export interface AskInput {
+  question: string;
+  options?: string[];
+  multiSelect?: boolean;
+}
 const askInput = z.object({
   question: z.string().trim().min(1).describe("要问用户的问题"),
   options: z.array(z.string()).optional().describe("候选选项（可选）"),
@@ -24,9 +28,19 @@ export function askUserTool(
         { question: args.question, options: args.options, multiSelect: args.multiSelect },
         ctx?.signal ?? runSignal(),
       );
-      if (answers === "aborted") return { status: "error", content: [{ type: "text", text: "提问被中断，未获得回答。" }], details: null };
-      if (answers === null) return { status: "error", content: [{ type: "text", text: "用户未在限定时间内回答，请基于已有信息继续。" }], details: null };
-      return { status: "ok", content: [{ type: "text", text: answers.map(answer => `- ${answer}`).join("\n") }], details: { answers } };
+      if (answers === "aborted")
+        return { status: "error", content: [{ type: "text", text: "提问被中断，未获得回答。" }], details: null };
+      if (answers === null)
+        return {
+          status: "error",
+          content: [{ type: "text", text: "用户未在限定时间内回答，请基于已有信息继续。" }],
+          details: null,
+        };
+      return {
+        status: "ok",
+        content: [{ type: "text", text: answers.map((answer) => `- ${answer}`).join("\n") }],
+        details: { answers },
+      };
     },
   };
 }

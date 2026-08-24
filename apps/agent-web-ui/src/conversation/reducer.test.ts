@@ -28,23 +28,28 @@ describe("conversationReducer", () => {
   });
 
   it("keeps the concrete send failure for the user", () => {
-    const state = conversationReducer({
-      ...initialConversationState,
-      messages: [{
-        id: "message-1",
-        conversationId: "conversation-1",
-        role: "user",
-        blocks: [{ type: "text", text: "hello" }],
-        status: "done",
-        createdAt: 1,
-      }],
-      isRunning: true,
-    }, {
-      type: "optimistic.fail",
-      messageId: "message-1",
-      keepRunning: false,
-      message: "Runner 不可用（请求 ID：request-1）",
-    });
+    const state = conversationReducer(
+      {
+        ...initialConversationState,
+        messages: [
+          {
+            id: "message-1",
+            conversationId: "conversation-1",
+            role: "user",
+            blocks: [{ type: "text", text: "hello" }],
+            status: "done",
+            createdAt: 1,
+          },
+        ],
+        isRunning: true,
+      },
+      {
+        type: "optimistic.fail",
+        messageId: "message-1",
+        keepRunning: false,
+        message: "Runner 不可用（请求 ID：request-1）",
+      },
+    );
 
     expect(state.error).toBe("Runner 不可用（请求 ID：request-1）");
     expect(state.messages[0]?.status).toBe("error");

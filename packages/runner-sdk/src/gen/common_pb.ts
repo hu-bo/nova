@@ -9,8 +9,11 @@ import type { Message } from "@bufbuild/protobuf";
 /**
  * Describes the file common.proto.
  */
-export const file_common: GenFile = /*@__PURE__*/
-  fileDesc("Cgxjb21tb24ucHJvdG8SDm5vdmEuY29tbW9uLnYxIkEKBUVycm9yEicKBGNvZGUYASABKA4yGS5ub3ZhLmNvbW1vbi52MS5FcnJvckNvZGUSDwoHbWVzc2FnZRgCIAEoCSqIAwoJRXJyb3JDb2RlEhoKFkVSUk9SX0NPREVfVU5TUEVDSUZJRUQQABIYChRFUlJPUl9DT0RFX05PVF9GT1VORBABEhkKFUVSUk9SX0NPREVfUEVSTUlTU0lPThACEhYKEkVSUk9SX0NPREVfSU5WQUxJRBADEh8KG0VSUk9SX0NPREVfT1VUX09GX1dPUktTUEFDRRAEEhgKFEVSUk9SX0NPREVfVE9PX0xBUkdFEAUSFgoSRVJST1JfQ09ERV9USU1FT1VUEAYSGAoURVJST1JfQ09ERV9DQU5DRUxMRUQQBxIaChZFUlJPUl9DT0RFX1VOU1VQUE9SVEVEEAgSEwoPRVJST1JfQ09ERV9CVVNZEAkSEQoNRVJST1JfQ09ERV9JTxAKEhUKEUVSUk9SX0NPREVfSVNfRElSEAsSFgoSRVJST1JfQ09ERV9OT1RfRElSEAwSFQoRRVJST1JfQ09ERV9FWElTVFMQDRIbChdFUlJPUl9DT0RFX1NQQVdOX0ZBSUxFRBAOYgZwcm90bzM");
+export const file_common: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    "Cgxjb21tb24ucHJvdG8SDm5vdmEuY29tbW9uLnYxIkEKBUVycm9yEicKBGNvZGUYASABKA4yGS5ub3ZhLmNvbW1vbi52MS5FcnJvckNvZGUSDwoHbWVzc2FnZRgCIAEoCSqIAwoJRXJyb3JDb2RlEhoKFkVSUk9SX0NPREVfVU5TUEVDSUZJRUQQABIYChRFUlJPUl9DT0RFX05PVF9GT1VORBABEhkKFUVSUk9SX0NPREVfUEVSTUlTU0lPThACEhYKEkVSUk9SX0NPREVfSU5WQUxJRBADEh8KG0VSUk9SX0NPREVfT1VUX09GX1dPUktTUEFDRRAEEhgKFEVSUk9SX0NPREVfVE9PX0xBUkdFEAUSFgoSRVJST1JfQ09ERV9USU1FT1VUEAYSGAoURVJST1JfQ09ERV9DQU5DRUxMRUQQBxIaChZFUlJPUl9DT0RFX1VOU1VQUE9SVEVEEAgSEwoPRVJST1JfQ09ERV9CVVNZEAkSEQoNRVJST1JfQ09ERV9JTxAKEhUKEUVSUk9SX0NPREVfSVNfRElSEAsSFgoSRVJST1JfQ09ERV9OT1RfRElSEAwSFQoRRVJST1JfQ09ERV9FWElTVFMQDRIbChdFUlJPUl9DT0RFX1NQQVdOX0ZBSUxFRBAOYgZwcm90bzM",
+  );
 
 /**
  * @generated from message nova.common.v1.Error
@@ -31,8 +34,7 @@ export type Error = Message<"nova.common.v1.Error"> & {
  * Describes the message nova.common.v1.Error.
  * Use `create(ErrorSchema)` to create a new message.
  */
-export const ErrorSchema: GenMessage<Error> = /*@__PURE__*/
-  messageDesc(file_common, 0);
+export const ErrorSchema: GenMessage<Error> = /*@__PURE__*/ messageDesc(file_common, 0);
 
 /**
  * @generated from enum nova.common.v1.ErrorCode
@@ -117,6 +119,4 @@ export enum ErrorCode {
 /**
  * Describes the enum nova.common.v1.ErrorCode.
  */
-export const ErrorCodeSchema: GenEnum<ErrorCode> = /*@__PURE__*/
-  enumDesc(file_common, 0);
-
+export const ErrorCodeSchema: GenEnum<ErrorCode> = /*@__PURE__*/ enumDesc(file_common, 0);

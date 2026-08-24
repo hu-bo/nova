@@ -7,7 +7,7 @@ export type CompactionTrigger = "manual" | "threshold" | "overflow";
 
 export interface CompactionResult {
   trigger: CompactionTrigger;
-  summarized: boolean;          // false = 摘要失败硬截断，或没有可压缩内容（replacedFrom 为 null）
+  summarized: boolean; // false = 摘要失败硬截断，或没有可压缩内容（replacedFrom 为 null）
   replacedFrom: EntryId | null;
   replacedTo: EntryId | null;
 }
@@ -15,12 +15,13 @@ export interface CompactionResult {
 export interface CompactionPlan {
   summary: string;
   summarized: boolean;
-  cutIndex: number;             // 保留 entries[cutIndex..]，前缀被摘要替换
+  cutIndex: number; // 保留 entries[cutIndex..]，前缀被摘要替换
   replacedFrom: EntryId;
   replacedTo: EntryId;
 }
 
-const SUMMARIZER_SYSTEM = "你是会话压缩助手。把给定对话历史压缩成一份简洁但完整的摘要：保留用户目标、已做的决定、关键文件/命令/结果、未完成的事项。不遗漏会影响后续工作的细节，不复述寒暄。直接输出摘要正文。";
+const SUMMARIZER_SYSTEM =
+  "你是会话压缩助手。把给定对话历史压缩成一份简洁但完整的摘要：保留用户目标、已做的决定、关键文件/命令/结果、未完成的事项。不遗漏会影响后续工作的细节，不复述寒暄。直接输出摘要正文。";
 
 // 完整 turn 边界（§8：不得切开 tool_call 与 tool_result），从尾部找第一个合法位置：
 // ① 新 user message（不含 tool_result）= 一个完整 turn 的起点，切开它之前；
@@ -30,7 +31,7 @@ export function findCutPoint(entries: Entry[]): number | null {
   for (let i = entries.length - 1; i >= 1; i -= 1) {
     const item = entries[i]!;
     if (item.kind !== "message" || item.message.role !== "user") continue;
-    const hasToolResult = item.message.blocks.some(block => block.type === "tool_result");
+    const hasToolResult = item.message.blocks.some((block) => block.type === "tool_result");
     if (!hasToolResult) return i;
     if (i + 1 < entries.length) return i + 1;
   }
@@ -71,10 +72,20 @@ function findEarliestBoundary(entries: Entry[]): number | null {
   return null;
 }
 
-async function summarize(prefix: Entry[], deps: { stream: StreamFn; signal: AbortSignal }, instruction?: string): Promise<string | null> {
+async function summarize(
+  prefix: Entry[],
+  deps: { stream: StreamFn; signal: AbortSignal },
+  instruction?: string,
+): Promise<string | null> {
   const messages = toMessages(prefix);
   if (messages.length === 0) return null;
-  if (instruction) messages.push({ id: `compact-instruction`, role: "user", createdAt: Date.now(), blocks: [{ type: "text", text: `补充要求：${instruction}` }] });
+  if (instruction)
+    messages.push({
+      id: `compact-instruction`,
+      role: "user",
+      createdAt: Date.now(),
+      blocks: [{ type: "text", text: `补充要求：${instruction}` }],
+    });
   const request: ModelRequest = { system: SUMMARIZER_SYSTEM, messages, tools: [] };
 
   // 首次 + 重试 2 次
@@ -93,7 +104,8 @@ async function collectText(events: AsyncIterable<import("@nova/model-adapters").
   let text = "";
   for await (const event of events) {
     if (event.type === "block.end" && event.block.type === "text") text += event.block.text;
-    if (event.type === "finish" && event.stopReason === "error") throw new Error(event.errorMessage ?? "summarization stream failed");
+    if (event.type === "finish" && event.stopReason === "error")
+      throw new Error(event.errorMessage ?? "summarization stream failed");
   }
   return text;
 }

@@ -62,14 +62,14 @@ const compiled = compileSkills(codingSkills);
 
 内置集合刻意保持为 6 个互补 Skill：
 
-| Skill | 激活 | 解决的问题 |
-|---|---|---|
-| `minimal-change-engineering` | always | 最小修改，禁止平行实现、pass-through 层和投机抽象 |
-| `codebase-reconnaissance` | auto | 修改前定位真实入口、调用链、owner、生成源和已有能力 |
-| `root-cause-debugging` | auto | 从第一个错误分歧定位根因，避免症状补丁 |
-| `behavioral-verification` | auto | 验证真实行为、失败、取消和边界，不测试无意义 wrapper |
-| `change-cleanup-review` | auto | 交付前删除 dead code、重复抽象、旧导出和兼容残留 |
-| `concurrency-lifecycle-safety` | auto | 明确并发 owner、上限、backpressure、timeout、retry 和恢复 |
+| Skill                          | 激活   | 解决的问题                                                |
+| ------------------------------ | ------ | --------------------------------------------------------- |
+| `minimal-change-engineering`   | always | 最小修改，禁止平行实现、pass-through 层和投机抽象         |
+| `codebase-reconnaissance`      | auto   | 修改前定位真实入口、调用链、owner、生成源和已有能力       |
+| `root-cause-debugging`         | auto   | 从第一个错误分歧定位根因，避免症状补丁                    |
+| `behavioral-verification`      | auto   | 验证真实行为、失败、取消和边界，不测试无意义 wrapper      |
+| `change-cleanup-review`        | auto   | 交付前删除 dead code、重复抽象、旧导出和兼容残留          |
+| `concurrency-lifecycle-safety` | auto   | 明确并发 owner、上限、backpressure、timeout、retry 和恢复 |
 
 只有最短的最小变更纪律始终进入上下文；其余依赖 metadata 自动激活，避免为了代码质量永久注入大量检查清单。`weather-assistant.json` 只是 VM/API 格式示例，不属于 Coding Agent 默认集合。
 
@@ -151,15 +151,15 @@ async ({ input, sdk }) => {
   const response = await sdk.http.request("weather-api", {
     method: "GET",
     path: "/v1/weather",
-    query: { location: input.location }
+    query: { location: input.location },
   });
 
   return {
     status: "ok",
     content: `天气：${response.data.summary}`,
-    details: response.data
+    details: response.data,
   };
-}
+};
 ```
 
 VM 只获得：
@@ -195,11 +195,7 @@ console.log(set.catalog);
 ## 执行
 
 ```ts
-import {
-  compileSkill,
-  executeSkillAction,
-  type SkillHost
-} from "@nova/skills";
+import { compileSkill, executeSkillAction, type SkillHost } from "@nova/skills";
 
 const compiled = compileSkill(json);
 
@@ -214,22 +210,16 @@ const host: SkillHost = {
     return {
       mediaType: resource.mediaType,
       encoding: "utf8",
-      data: "..."
+      data: "...",
     };
-  }
+  },
 };
 
-const result = await executeSkillAction(
-  compiled,
-  "query-weather",
-  { location: "Shanghai", date: "2026-08-23" },
-  host,
-  {
-    trust: "verified",
-    signal: abortController.signal,
-    maxResultBytes: 1024 * 1024
-  }
-);
+const result = await executeSkillAction(compiled, "query-weather", { location: "Shanghai", date: "2026-08-23" }, host, {
+  trust: "verified",
+  signal: abortController.signal,
+  maxResultBytes: 1024 * 1024,
+});
 ```
 
 错误使用稳定 code：`UNTRUSTED_SKILL`、`UNKNOWN_ACTION`、`INVALID_INPUT`、`INVALID_OUTPUT`、`CAPABILITY_DENIED`、`VM_ERROR`、`TIMEOUT`、`CANCELLED`。
@@ -260,8 +250,8 @@ const document = importAgentSkillZip(zipBytes, {
     maxEntries: 256,
     maxFileBytes: 4 * 1024 * 1024,
     maxTotalBytes: 16 * 1024 * 1024,
-    maxCompressionRatio: 100
-  }
+    maxCompressionRatio: 100,
+  },
 });
 ```
 
@@ -277,16 +267,16 @@ sample-skill/
 
 映射关系：
 
-| Agent Skills | Nova |
-|---|---|
-| frontmatter `name` | `id`、`name` |
-| `description` | `description` |
-| Markdown body | `instructions.markdown` |
-| `metadata.version` | `version` |
-| `allowed-tools` | `source.allowedTools`，只作导入提示 |
-| `references/*` | reference resource |
-| `assets/*` | asset resource |
-| `scripts/*` | script resource |
+| Agent Skills       | Nova                                |
+| ------------------ | ----------------------------------- |
+| frontmatter `name` | `id`、`name`                        |
+| `description`      | `description`                       |
+| Markdown body      | `instructions.markdown`             |
+| `metadata.version` | `version`                           |
+| `allowed-tools`    | `source.allowedTools`，只作导入提示 |
+| `references/*`     | reference resource                  |
+| `assets/*`         | asset resource                      |
+| `scripts/*`        | script resource                     |
 
 市场脚本只保存为 Resource，`actions` 保持为空。Python/Bash 无法转换成 Node VM；JavaScript 也可能依赖 Node globals 或 npm 包，所以导入器不会猜测执行语义。后续可以由 AI 生成 Nova Action 草稿，再经过审核发布。
 

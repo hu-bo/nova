@@ -14,7 +14,7 @@ declare module "fastify" {
 export function registerAuth(app: FastifyInstance, verify: VerifyAccessToken, store: AgentStore): void {
   app.decorateRequest("currentUser", null);
   app.decorateRequest("userId", "");
-  app.addHook("onRequest", async request => {
+  app.addHook("onRequest", async (request) => {
     const token = bearerToken(request);
     if (!token) throw unauthorized();
     const user = await verify(token);

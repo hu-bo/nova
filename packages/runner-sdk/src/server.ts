@@ -9,7 +9,14 @@ import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { create } from "@bufbuild/protobuf";
 import { AcceptedSchema, RunnerConnection, ServerEnvelopeSchema } from "./gen/runner_pb.js";
 import type { Register, RunnerEnvelope } from "./gen/runner_pb.js";
-import { BoundedQueue, RunnerSessionImpl, ended, type RunnerIdentity, type RunnerSession, type ServerEnvelopeInit } from "./session.js";
+import {
+  BoundedQueue,
+  RunnerSessionImpl,
+  ended,
+  type RunnerIdentity,
+  type RunnerSession,
+  type ServerEnvelopeInit,
+} from "./session.js";
 import { runnerUnavailable } from "./errors.js";
 
 const DEFAULT_HEARTBEAT_MS = 5000;
@@ -77,8 +84,7 @@ export function createRunnerSdk(options: RunnerSdkOptions = {}): RunnerSdk {
     // 2. 接纳决策交给唯一的 Runner Module owner。
     const outbound = new BoundedQueue<ServerEnvelopeInit>(OUTBOUND_CAPACITY);
     type Decision =
-      | { kind: "accepted"; session: RunnerSessionImpl }
-      | { kind: "rejected"; code: string; message: string };
+      { kind: "accepted"; session: RunnerSessionImpl } | { kind: "rejected"; code: string; message: string };
     let decide!: (decision: Decision) => void;
     const decided = new Promise<Decision>((resolve) => {
       decide = resolve;

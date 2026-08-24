@@ -1,5 +1,14 @@
 import { createAgent } from "@nova/agent-core";
-import type { Agent, AgentConfig, AgentEvent, AgentHooks, AgentTool, PromptAsset, Risk, ToolCall } from "@nova/agent-core";
+import type {
+  Agent,
+  AgentConfig,
+  AgentEvent,
+  AgentHooks,
+  AgentTool,
+  PromptAsset,
+  Risk,
+  ToolCall,
+} from "@nova/agent-core";
 
 export interface AgentModule {
   readonly id: string;
@@ -9,7 +18,10 @@ export interface AgentModule {
   readonly observers?: readonly AgentObserver[];
 }
 
-export type ToolGuard = (call: ToolCall & { risk: Risk }, signal: AbortSignal) => "ask" | "deny" | undefined | Promise<"ask" | "deny" | undefined>;
+export type ToolGuard = (
+  call: ToolCall & { risk: Risk },
+  signal: AbortSignal,
+) => "ask" | "deny" | undefined | Promise<"ask" | "deny" | undefined>;
 export type AgentObserver = (event: AgentEvent) => void | Promise<void>;
 
 export interface HarnessConfig {
@@ -29,7 +41,10 @@ export interface Harness {
   readonly toolNames: readonly string[];
 }
 
-interface Contribution<T> { moduleId: string; value: T }
+interface Contribution<T> {
+  moduleId: string;
+  value: T;
+}
 
 export function createHarness(config: HarnessConfig): Harness {
   const moduleIds: string[] = [];
@@ -54,7 +69,8 @@ export function createHarness(config: HarnessConfig): Harness {
       prompts.push(Object.freeze({ ...prompt }));
     }
     for (const guard of module.guards ?? []) guards.push(Object.freeze({ moduleId: module.id, value: guard }));
-    for (const observer of module.observers ?? []) observers.push(Object.freeze({ moduleId: module.id, value: observer }));
+    for (const observer of module.observers ?? [])
+      observers.push(Object.freeze({ moduleId: module.id, value: observer }));
   }
 
   const resolvedModuleIds = Object.freeze([...moduleIds]);
@@ -81,7 +97,7 @@ export function createHarness(config: HarnessConfig): Harness {
       });
 
       if (resolvedObservers.length > 0) {
-        agent.subscribe(event => {
+        agent.subscribe((event) => {
           for (const observer of resolvedObservers) invokeObserver(observer, event, config.onObserverError);
         });
       }
@@ -129,15 +145,28 @@ function stricter(
   return current ?? next;
 }
 
-function invokeObserver(entry: Contribution<AgentObserver>, event: AgentEvent, onError: HarnessConfig["onObserverError"]): void {
+function invokeObserver(
+  entry: Contribution<AgentObserver>,
+  event: AgentEvent,
+  onError: HarnessConfig["onObserverError"],
+): void {
   try {
     const pending = entry.value(event);
-    if (pending && typeof pending.then === "function") void pending.catch(error => report(onError, error, entry.moduleId));
+    if (pending && typeof pending.then === "function")
+      void pending.catch((error) => report(onError, error, entry.moduleId));
   } catch (error) {
     report(onError, error, entry.moduleId);
   }
 }
 
-function report(handler: ((error: unknown, moduleId: string) => void) | undefined, error: unknown, moduleId: string): void {
-  try { handler?.(error, moduleId); } catch { /* error reporting must stay observational */ }
+function report(
+  handler: ((error: unknown, moduleId: string) => void) | undefined,
+  error: unknown,
+  moduleId: string,
+): void {
+  try {
+    handler?.(error, moduleId);
+  } catch {
+    /* error reporting must stay observational */
+  }
 }

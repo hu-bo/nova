@@ -1,9 +1,17 @@
 // §6 Decision —— 审批与反问同构：挂起 → 发请求 → 等人类 → 恢复。agent-core 只依赖 Decide 一个回调。
-import type { AgentEvent, ApprovalMode, ApprovalPolicy, Decide, DecisionRequest, DecisionResponse, Risk } from "../types.js";
+import type {
+  AgentEvent,
+  ApprovalMode,
+  ApprovalPolicy,
+  Decide,
+  DecisionRequest,
+  DecisionResponse,
+  Risk,
+} from "../types.js";
 import { record } from "../session/record.js";
 import type { SessionStorage } from "../session/storage.js";
 
-export const DECISION_TIMEOUT_MS = 5 * 60_000;   // 等待人类必须有 timeout，缺省 5 分钟
+export const DECISION_TIMEOUT_MS = 5 * 60_000; // 等待人类必须有 timeout，缺省 5 分钟
 
 export interface DecisionDeps {
   decide: Decide;
@@ -20,7 +28,12 @@ const DEFAULT_POLICY: Required<Pick<ApprovalPolicy, "default">> & ApprovalPolicy
   byRisk: { none: "auto", read: "auto", write: "ask", exec: "ask" },
 };
 
-export function approvalMode(policy: ApprovalPolicy | undefined, toolName: string, risk: Risk, allowlist: ReadonlySet<string>): ApprovalMode {
+export function approvalMode(
+  policy: ApprovalPolicy | undefined,
+  toolName: string,
+  risk: Risk,
+  allowlist: ReadonlySet<string>,
+): ApprovalMode {
   if (allowlist.has(toolName)) return "auto";
   const effective = policy ?? DEFAULT_POLICY;
   return effective.byTool?.[toolName] ?? effective.byRisk?.[risk] ?? effective.default;
@@ -38,7 +51,10 @@ export async function requestDecision(
   deps: DecisionDeps,
   signal: AbortSignal,
 ): Promise<DecisionResponse | "timeout" | null> {
-  await deps.storage.appendRecord(deps.sessionId, record(deps.runId(), { kind: "decision-requested", decisionId: request.decisionId, request }));
+  await deps.storage.appendRecord(
+    deps.sessionId,
+    record(deps.runId(), { kind: "decision-requested", decisionId: request.decisionId, request }),
+  );
   deps.emit({ type: "decision.requested", request });
 
   const timeoutMs = deps.timeoutMs ?? DECISION_TIMEOUT_MS;
@@ -51,17 +67,24 @@ export async function requestDecision(
   }
   if (signal.aborted) outcome = null;
 
-  await deps.storage.appendRecord(deps.sessionId, record(deps.runId(), {
-    kind: "decision-resolved",
-    decisionId: request.decisionId,
-    response: outcome === null ? "timeout" : outcome,
-  }));
+  await deps.storage.appendRecord(
+    deps.sessionId,
+    record(deps.runId(), {
+      kind: "decision-resolved",
+      decisionId: request.decisionId,
+      response: outcome === null ? "timeout" : outcome,
+    }),
+  );
   deps.emit({ type: "decision.resolved", decisionId: request.decisionId });
   return outcome;
 }
 
-function raceHuman(pending: Promise<DecisionResponse>, timeoutMs: number, signal: AbortSignal): Promise<DecisionResponse | "timeout" | null> {
-  return new Promise(resolve => {
+function raceHuman(
+  pending: Promise<DecisionResponse>,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<DecisionResponse | "timeout" | null> {
+  return new Promise((resolve) => {
     let settled = false;
     const finish = (value: DecisionResponse | "timeout" | null) => {
       if (settled) return;
@@ -73,11 +96,17 @@ function raceHuman(pending: Promise<DecisionResponse>, timeoutMs: number, signal
     const timer = setTimeout(() => finish("timeout"), timeoutMs);
     const onAbort = () => finish(null);
     signal.addEventListener("abort", onAbort, { once: true });
-    pending.then(response => finish(response), () => finish("timeout"));
+    pending.then(
+      (response) => finish(response),
+      () => finish("timeout"),
+    );
   });
 }
 
-export interface ApprovalOutcome { allowed: boolean; alwaysAllowed: boolean }
+export interface ApprovalOutcome {
+  allowed: boolean;
+  alwaysAllowed: boolean;
+}
 
 // 审批一个 tool call：mode 由调用方合成（policy + hooks.beforeToolCall，见 §4.3/§6）；
 // allow_always 写入 session 级 allowlist（第一版不跨 session 持久化）
@@ -91,7 +120,14 @@ export async function requestApproval(
   if (mode === "auto") return { allowed: true, alwaysAllowed: false };
   if (mode === "deny") return { allowed: false, alwaysAllowed: false };
 
-  const request: DecisionRequest = { kind: "approval", decisionId: newDecisionId(), callId: call.callId, toolName: call.name, args: call.args, risk: call.risk };
+  const request: DecisionRequest = {
+    kind: "approval",
+    decisionId: newDecisionId(),
+    callId: call.callId,
+    toolName: call.name,
+    args: call.args,
+    risk: call.risk,
+  };
   const response = await requestDecision(request, deps, signal);
   if (response === null) return "aborted";
   if (response === "timeout" || response.kind !== "approval") return { allowed: false, alwaysAllowed: false };

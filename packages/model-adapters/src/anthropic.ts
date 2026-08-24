@@ -19,7 +19,11 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
         system: request.system,
         max_tokens: request.maxOutput ?? 16_384,
         messages: messages(request.messages),
-        tools: request.tools.map(tool => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })),
+        tools: request.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          input_schema: tool.parameters,
+        })),
         ...thinking(ref.reasoningFormat ?? "anthropic", request),
       }),
     });
@@ -30,8 +34,18 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
 
   if (!response.ok || !response.body) {
     const body = await response.text().catch(() => "");
-    if (isContextOverflow(response.status, body)) throw new ProviderError(providerResponseMessage(response, body, "Provider context overflow"), false, undefined, "context_overflow");
-    throw new ProviderError(providerResponseMessage(response, body), response.status === 429 || response.status >= 500, response.status === 429 ? retryAfterMs(response.headers.get("retry-after")) : undefined);
+    if (isContextOverflow(response.status, body))
+      throw new ProviderError(
+        providerResponseMessage(response, body, "Provider context overflow"),
+        false,
+        undefined,
+        "context_overflow",
+      );
+    throw new ProviderError(
+      providerResponseMessage(response, body),
+      response.status === 429 || response.status >= 500,
+      response.status === 429 ? retryAfterMs(response.headers.get("retry-after")) : undefined,
+    );
   }
 
   const decoder = new TextDecoder();
@@ -42,22 +56,41 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
   const blocks = new Map<number, AccumulatedBlock>();
 
   const processLine = (line: string): ModelEvent[] => {
-    if (line.startsWith("event:")) { eventName = line.slice(6).trim(); return []; }
+    if (line.startsWith("event:")) {
+      eventName = line.slice(6).trim();
+      return [];
+    }
     if (!line.startsWith("data:")) return [];
     const raw = line.slice(5).trim();
     let data: any;
-    try { data = JSON.parse(raw); } catch { throw new ProviderError(`Malformed SSE chunk: ${raw.slice(0, 200)}`, true); }
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new ProviderError(`Malformed SSE chunk: ${raw.slice(0, 200)}`, true);
+    }
     const type = data.type ?? eventName;
     const events: ModelEvent[] = [];
 
-    if (type === "error") throw new ProviderError(data.error?.message ?? "Anthropic stream error", data.error?.type === "overloaded_error");
-    if (type === "message_start") { usage = mergeUsage(usage, data.message?.usage); return events; }
+    if (type === "error")
+      throw new ProviderError(data.error?.message ?? "Anthropic stream error", data.error?.type === "overloaded_error");
+    if (type === "message_start") {
+      usage = mergeUsage(usage, data.message?.usage);
+      return events;
+    }
     if (type === "content_block_start") {
       const index = Number(data.index);
       const block = data.content_block;
       if (block?.type === "text") blocks.set(index, { type: "text", text: block.text ?? "" });
-      else if (block?.type === "thinking") blocks.set(index, { type: "thinking", text: block.thinking ?? "", signature: block.signature });
-      else if (block?.type === "tool_use") blocks.set(index, { type: "tool_call", callId: block.id ?? "", name: block.name ?? "", json: "", input: block.input });
+      else if (block?.type === "thinking")
+        blocks.set(index, { type: "thinking", text: block.thinking ?? "", signature: block.signature });
+      else if (block?.type === "tool_use")
+        blocks.set(index, {
+          type: "tool_call",
+          callId: block.id ?? "",
+          name: block.name ?? "",
+          json: "",
+          input: block.input,
+        });
       const current = blocks.get(index);
       if (current) events.push({ type: "block.start", index, blockType: current.type });
       return events;
@@ -69,8 +102,10 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
       const delta = data.delta;
       if (current.type === "text" && delta?.type === "text_delta") current.text += delta.text ?? "";
       else if (current.type === "thinking" && delta?.type === "thinking_delta") current.text += delta.thinking ?? "";
-      else if (current.type === "thinking" && delta?.type === "signature_delta") current.signature = (current.signature ?? "") + (delta.signature ?? "");
-      else if (current.type === "tool_call" && delta?.type === "input_json_delta") current.json += delta.partial_json ?? "";
+      else if (current.type === "thinking" && delta?.type === "signature_delta")
+        current.signature = (current.signature ?? "") + (delta.signature ?? "");
+      else if (current.type === "tool_call" && delta?.type === "input_json_delta")
+        current.json += delta.partial_json ?? "";
       const value = delta?.text ?? delta?.thinking ?? delta?.partial_json ?? "";
       if (value) events.push({ type: "block.delta", index, delta: value });
       return events;
@@ -84,7 +119,11 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
     if (type === "message_delta") {
       usage = mergeUsage(usage, data.usage);
       const reason = data.delta?.stop_reason;
-      if (reason) finish = { type: "finish", stopReason: reason === "tool_use" ? "tool_use" : reason === "max_tokens" ? "max_tokens" : "stop" };
+      if (reason)
+        finish = {
+          type: "finish",
+          stopReason: reason === "tool_use" ? "tool_use" : reason === "max_tokens" ? "max_tokens" : "stop",
+        };
       return events;
     }
     if (type === "message_stop") {
@@ -120,9 +159,16 @@ type AccumulatedBlock =
 
 function finishBlock(block: AccumulatedBlock): Block {
   if (block.type === "text") return block;
-  if (block.type === "thinking") return { type: "thinking", text: block.text, ...(block.signature ? { signature: block.signature } : {}) };
+  if (block.type === "thinking")
+    return { type: "thinking", text: block.text, ...(block.signature ? { signature: block.signature } : {}) };
   let args = block.input ?? {};
-  if (block.json) { try { args = JSON.parse(block.json); } catch { args = {}; } }
+  if (block.json) {
+    try {
+      args = JSON.parse(block.json);
+    } catch {
+      args = {};
+    }
+  }
   return { type: "tool_call", callId: block.callId, name: block.name, args };
 }
 
@@ -152,23 +198,43 @@ function mergeUsage(current: Usage, raw: any): Usage {
 }
 
 function messages(source: Message[]): unknown[] {
-  return source.map(message => ({ role: message.role, content: message.blocks.flatMap(toAnthropicBlock) }));
+  return source.map((message) => ({ role: message.role, content: message.blocks.flatMap(toAnthropicBlock) }));
 }
 
 function toAnthropicBlock(block: Block): unknown[] {
   switch (block.type) {
-    case "text": return [{ type: "text", text: block.text }];
-    case "thinking": return [{ type: "thinking", thinking: block.text, ...(block.signature ? { signature: block.signature } : {}) }];
-    case "image": return [{ type: "image", source: { type: "base64", media_type: block.mimeType, data: block.data } }];
-    case "tool_call": return [{ type: "tool_use", id: block.callId, name: block.name, input: block.args }];
-    case "tool_result": return [{ type: "tool_result", tool_use_id: block.callId, is_error: block.status === "error", content: block.content.map(part => part.type === "text" ? { type: "text", text: part.text } : { type: "image", source: { type: "base64", media_type: part.mimeType, data: part.data } }) }];
+    case "text":
+      return [{ type: "text", text: block.text }];
+    case "thinking":
+      return [{ type: "thinking", thinking: block.text, ...(block.signature ? { signature: block.signature } : {}) }];
+    case "image":
+      return [{ type: "image", source: { type: "base64", media_type: block.mimeType, data: block.data } }];
+    case "tool_call":
+      return [{ type: "tool_use", id: block.callId, name: block.name, input: block.args }];
+    case "tool_result":
+      return [
+        {
+          type: "tool_result",
+          tool_use_id: block.callId,
+          is_error: block.status === "error",
+          content: block.content.map((part) =>
+            part.type === "text"
+              ? { type: "text", text: part.text }
+              : { type: "image", source: { type: "base64", media_type: part.mimeType, data: part.data } },
+          ),
+        },
+      ];
   }
 }
 
 function isContextOverflow(status: number, body: string): boolean {
   if (status !== 400 && status !== 413) return false;
   const normalized = body.toLowerCase();
-  return normalized.includes("prompt is too long") || normalized.includes("context window") || normalized.includes("too many tokens");
+  return (
+    normalized.includes("prompt is too long") ||
+    normalized.includes("context window") ||
+    normalized.includes("too many tokens")
+  );
 }
 
 function retryAfterMs(header: string | null): number | undefined {

@@ -3,7 +3,13 @@ import { createRequire } from "node:module";
 import { Script } from "node:vm";
 import { Ajv, type ErrorObject, type ValidateFunction } from "ajv";
 import type { FormatsPlugin } from "ajv-formats";
-import { parseSkillDocument, type SkillAction, type SkillConnection, type SkillDocument, type SkillResource } from "./schema.js";
+import {
+  parseSkillDocument,
+  type SkillAction,
+  type SkillConnection,
+  type SkillDocument,
+  type SkillResource,
+} from "./schema.js";
 
 export interface CompiledSkillAction {
   readonly skillId: string;
@@ -25,11 +31,20 @@ export interface CompiledSkill {
 export interface CompiledSkills {
   readonly skills: ReadonlyMap<string, CompiledSkill>;
   readonly actions: ReadonlyMap<string, CompiledSkillAction>;
-  readonly catalog: readonly { id: string; version: string; name: string; description: string; activation: SkillDocument["activation"] }[];
+  readonly catalog: readonly {
+    id: string;
+    version: string;
+    name: string;
+    description: string;
+    activation: SkillDocument["activation"];
+  }[];
 }
 
 export class SkillCompileError extends Error {
-  constructor(message: string, readonly path?: string) {
+  constructor(
+    message: string,
+    readonly path?: string,
+  ) {
     super(path ? `${path}: ${message}` : message);
     this.name = "SkillCompileError";
   }
@@ -40,8 +55,8 @@ const addFormats = (require("ajv-formats").default ?? require("ajv-formats")) as
 
 export function compileSkill(input: unknown): CompiledSkill {
   const document = parseSkillDocument(input);
-  const connections = uniqueMap(document.connections, item => item.id, "connection");
-  const resources = uniqueMap(document.resources, item => item.id, "resource");
+  const connections = uniqueMap(document.connections, (item) => item.id, "connection");
+  const resources = uniqueMap(document.resources, (item) => item.id, "resource");
   const actionIds = new Set<string>();
   const actionNames = new Set<string>();
   const actions = new Map<string, CompiledSkillAction>();
@@ -49,36 +64,44 @@ export function compileSkill(input: unknown): CompiledSkill {
 
   for (const resource of document.resources) {
     if (resource.content.kind !== "inline" || resource.sha256 === undefined) continue;
-    const data = resource.content.encoding === "utf8"
-      ? Buffer.from(resource.content.data, "utf8")
-      : Buffer.from(resource.content.data, "base64");
+    const data =
+      resource.content.encoding === "utf8"
+        ? Buffer.from(resource.content.data, "utf8")
+        : Buffer.from(resource.content.data, "base64");
     const actual = createHash("sha256").update(data).digest("hex");
-    if (actual !== resource.sha256) throw new SkillCompileError("inline resource checksum does not match content", `resources.${resource.id}`);
+    if (actual !== resource.sha256)
+      throw new SkillCompileError("inline resource checksum does not match content", `resources.${resource.id}`);
   }
 
   for (const action of document.actions) {
     unique(actionIds, action.id, "action id");
     unique(actionNames, action.name, "action name");
     for (const connectionId of action.runtime.capabilities.http) {
-      if (!connections.has(connectionId)) throw new SkillCompileError(`unknown HTTP connection: ${connectionId}`, `actions.${action.id}`);
+      if (!connections.has(connectionId))
+        throw new SkillCompileError(`unknown HTTP connection: ${connectionId}`, `actions.${action.id}`);
     }
     for (const resourceId of action.runtime.capabilities.resources) {
-      if (!resources.has(resourceId)) throw new SkillCompileError(`unknown resource: ${resourceId}`, `actions.${action.id}`);
+      if (!resources.has(resourceId))
+        throw new SkillCompileError(`unknown resource: ${resourceId}`, `actions.${action.id}`);
     }
     validateVmSource(action.runtime.source, `${document.id}/${action.id}.js`);
     const toolName = `skill__${document.id.replaceAll("-", "_")}__${action.name}`;
     const validateInput = compileJsonSchema(ajv, action.inputSchema, `${document.id}/${action.id}/inputSchema`);
-    const validateOutput = action.outputSchema === undefined
-      ? undefined
-      : compileJsonSchema(ajv, action.outputSchema, `${document.id}/${action.id}/outputSchema`);
-    actions.set(action.id, Object.freeze({
-      skillId: document.id,
-      skillVersion: document.version,
-      toolName,
-      action,
-      validateInput,
-      ...(validateOutput ? { validateOutput } : {}),
-    }));
+    const validateOutput =
+      action.outputSchema === undefined
+        ? undefined
+        : compileJsonSchema(ajv, action.outputSchema, `${document.id}/${action.id}/outputSchema`);
+    actions.set(
+      action.id,
+      Object.freeze({
+        skillId: document.id,
+        skillVersion: document.version,
+        toolName,
+        action,
+        validateInput,
+        ...(validateOutput ? { validateOutput } : {}),
+      }),
+    );
   }
 
   return Object.freeze({
@@ -98,13 +121,15 @@ export function compileSkills(inputs: readonly unknown[]): CompiledSkills {
     unique(skills, skill.document.id, "skill id", skill);
     for (const action of skill.actions.values()) unique(actions, action.toolName, "tool name", action);
   }
-  const catalog = [...skills.values()].map(skill => Object.freeze({
-    id: skill.document.id,
-    version: skill.document.version,
-    name: skill.document.name,
-    description: skill.document.description,
-    activation: skill.document.activation,
-  }));
+  const catalog = [...skills.values()].map((skill) =>
+    Object.freeze({
+      id: skill.document.id,
+      version: skill.document.version,
+      name: skill.document.name,
+      description: skill.document.description,
+      activation: skill.document.activation,
+    }),
+  );
   return Object.freeze({ skills, actions, catalog: Object.freeze(catalog) });
 }
 
@@ -148,14 +173,17 @@ function unique<T>(target: Set<string> | Map<string, T>, key: string, kind: stri
 
 function formatAjvErrors(errors: ErrorObject[] | null | undefined): string {
   if (!errors?.length) return "validation failed";
-  return errors.map(error => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`).join("; ");
+  return errors.map((error) => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`).join("; ");
 }
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(",")}}`;
   }
   return JSON.stringify(value);
 }

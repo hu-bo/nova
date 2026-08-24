@@ -10,10 +10,10 @@ export interface ToolOutcome {
   callId: string;
   name: string;
   status: "ok" | "error";
-  content: ContentPart[];   // 已截断
+  content: ContentPart[]; // 已截断
   details: unknown;
   terminate: boolean;
-  executed: boolean;        // false = 未真正执行（未知工具 / 被拒 / 中断），结果是合成的 error
+  executed: boolean; // false = 未真正执行（未知工具 / 被拒 / 中断），结果是合成的 error
   usage?: Usage;
 }
 
@@ -32,7 +32,9 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
   const outcomes = new Map<string, ToolOutcome>();
   const flow = createFlow({ concurrency: deps.concurrency });
   // abort 后不再启动新 task；已启动的经 tool ctx.signal 收敛（§4.2）
-  const onAbort = () => { flow.cancel(); };
+  const onAbort = () => {
+    flow.cancel();
+  };
   deps.signal.addEventListener("abort", onAbort, { once: true });
 
   let lastSequential: string | null = null;
@@ -67,23 +69,30 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
     flow.addTask({
       id: taskId,
       deps: taskDeps,
-      run: async () => { outcomes.set(call.callId, await runOne(call, tool, risk, deps)); },
+      run: async () => {
+        outcomes.set(call.callId, await runOne(call, tool, risk, deps));
+      },
     });
   }
 
-  for await (const _ of flow.run()) { /* tool.start/tool.end 已在回调里外发，这里只驱动调度 */ }
+  for await (const _ of flow.run()) {
+    /* tool.start/tool.end 已在回调里外发，这里只驱动调度 */
+  }
   deps.signal.removeEventListener("abort", onAbort);
 
   // 每个 tool_call 都必须有对应 tool_result（provider 契约）：被取消/未启动的补 error 结果
-  return calls.map((call): ToolOutcome => outcomes.get(call.callId) ?? {
-    callId: call.callId,
-    name: call.name,
-    status: "error",
-    content: [{ type: "text", text: "tool call was not executed (run aborted)" }],
-    details: null,
-    terminate: false,
-    executed: false,
-  });
+  return calls.map(
+    (call): ToolOutcome =>
+      outcomes.get(call.callId) ?? {
+        callId: call.callId,
+        name: call.name,
+        status: "error",
+        content: [{ type: "text", text: "tool call was not executed (run aborted)" }],
+        details: null,
+        terminate: false,
+        executed: false,
+      },
+  );
 }
 
 async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, deps: BatchDeps): Promise<ToolOutcome> {
@@ -101,7 +110,10 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
   if (deps.signal.aborted) return fail("tool call was not executed (run aborted)");
 
   const parsed = tool.schema.safeParse(call.args);
-  if (!parsed.success) return fail(`invalid arguments: ${parsed.error.issues.map(issue => `${issue.path.join(".") || "arguments"}: ${issue.message}`).join("; ")}`);
+  if (!parsed.success)
+    return fail(
+      `invalid arguments: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "arguments"}: ${issue.message}`).join("; ")}`,
+    );
 
   const approval = await deps.approve({ ...call, risk });
   if (approval === "aborted") return fail("tool call was not executed (run aborted)");

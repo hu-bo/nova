@@ -11,8 +11,10 @@ const BUILTIN_SKILL_FILES = Object.freeze([
 ]);
 
 export function loadBuiltinSkills(): readonly SkillDocument[] {
-  return Object.freeze(BUILTIN_SKILL_FILES.map(file => {
-    const source = readFileSync(new URL(`../skills/${file}`, import.meta.url), "utf8");
-    return parseSkillDocument(JSON.parse(source));
-  }));
+  return Object.freeze(
+    BUILTIN_SKILL_FILES.map((file) => {
+      const source = readFileSync(new URL(`../skills/${file}`, import.meta.url), "utf8");
+      return parseSkillDocument(JSON.parse(source));
+    }),
+  );
 }

@@ -8,30 +8,163 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>Nova · 模型配置</title>
     <style>
-      html, body { min-width: 320px; min-height: 100%; margin: 0; background: #f8fafc; }
-      #nova-boot { position: fixed; inset: 0; z-index: 9999; display: grid; grid-template-columns: 256px minmax(0, 1fr); background: #f8fafc; color: transparent; opacity: 1; transition: opacity 160ms ease; }
-      #nova-boot[data-ready] { pointer-events: none; opacity: 0; }
-      .nova-boot-sidebar { display: flex; flex-direction: column; gap: 28px; padding: 20px 18px; background: #fff; box-shadow: inset -1px 0 #e2e8f0; }
-      .nova-boot-logo { width: 128px; height: 40px; }
-      .nova-boot-nav { display: grid; gap: 10px; }
-      .nova-boot-nav span { height: 48px; }
-      .nova-boot-workspace { min-width: 0; }
-      .nova-boot-header { height: 64px; background: #fff; box-shadow: inset 0 -1px #e2e8f0; }
-      .nova-boot-main { display: grid; gap: 28px; padding: 40px; }
-      .nova-boot-heading { display: grid; gap: 12px; max-width: 560px; }
-      .nova-boot-heading span:first-child { width: 32%; height: 14px; }
-      .nova-boot-heading span:nth-child(2) { width: 68%; height: 32px; }
-      .nova-boot-heading span:last-child { width: 100%; height: 14px; }
-      .nova-boot-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-      .nova-boot-card { height: 132px; border-radius: 14px; background: #fff; box-shadow: inset 0 0 0 1px #e2e8f0; }
-      .nova-boot-panels { display: grid; grid-template-columns: 1.2fr .8fr; gap: 28px; }
-      .nova-boot-panel { height: 310px; border-radius: 14px; background: #fff; box-shadow: inset 0 0 0 1px #e2e8f0; }
-      .nova-boot-shape, .nova-boot-logo, .nova-boot-nav span { overflow: hidden; border-radius: 10px; background: linear-gradient(100deg, #e8edf4 30%, #f8fafc 50%, #e8edf4 70%); background-size: 240% 100%; animation: nova-boot-shimmer 1.6s ease-in-out infinite; }
-      .nova-boot-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-      @keyframes nova-boot-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
-      @media (max-width: 1023px) { #nova-boot { grid-template-columns: 1fr; } .nova-boot-sidebar { display: none; } .nova-boot-main { padding: 32px; } }
-      @media (max-width: 700px) { .nova-boot-main { gap: 22px; padding: 22px 16px; } .nova-boot-metrics { grid-template-columns: 1fr; } .nova-boot-card { height: 96px; } .nova-boot-panels { grid-template-columns: 1fr; } .nova-boot-panels .nova-boot-panel:last-child { display: none; } }
-      @media (prefers-reduced-motion: reduce) { #nova-boot { transition: none; } .nova-boot-shape, .nova-boot-logo, .nova-boot-nav span { animation: none; } }
+      html,
+      body {
+        min-width: 320px;
+        min-height: 100%;
+        margin: 0;
+        background: #f8fafc;
+      }
+      #nova-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        grid-template-columns: 256px minmax(0, 1fr);
+        background: #f8fafc;
+        color: transparent;
+        opacity: 1;
+        transition: opacity 160ms ease;
+      }
+      #nova-boot[data-ready] {
+        pointer-events: none;
+        opacity: 0;
+      }
+      .nova-boot-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+        padding: 20px 18px;
+        background: #fff;
+        box-shadow: inset -1px 0 #e2e8f0;
+      }
+      .nova-boot-logo {
+        width: 128px;
+        height: 40px;
+      }
+      .nova-boot-nav {
+        display: grid;
+        gap: 10px;
+      }
+      .nova-boot-nav span {
+        height: 48px;
+      }
+      .nova-boot-workspace {
+        min-width: 0;
+      }
+      .nova-boot-header {
+        height: 64px;
+        background: #fff;
+        box-shadow: inset 0 -1px #e2e8f0;
+      }
+      .nova-boot-main {
+        display: grid;
+        gap: 28px;
+        padding: 40px;
+      }
+      .nova-boot-heading {
+        display: grid;
+        gap: 12px;
+        max-width: 560px;
+      }
+      .nova-boot-heading span:first-child {
+        width: 32%;
+        height: 14px;
+      }
+      .nova-boot-heading span:nth-child(2) {
+        width: 68%;
+        height: 32px;
+      }
+      .nova-boot-heading span:last-child {
+        width: 100%;
+        height: 14px;
+      }
+      .nova-boot-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .nova-boot-card {
+        height: 132px;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: inset 0 0 0 1px #e2e8f0;
+      }
+      .nova-boot-panels {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 28px;
+      }
+      .nova-boot-panel {
+        height: 310px;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: inset 0 0 0 1px #e2e8f0;
+      }
+      .nova-boot-shape,
+      .nova-boot-logo,
+      .nova-boot-nav span {
+        overflow: hidden;
+        border-radius: 10px;
+        background: linear-gradient(100deg, #e8edf4 30%, #f8fafc 50%, #e8edf4 70%);
+        background-size: 240% 100%;
+        animation: nova-boot-shimmer 1.6s ease-in-out infinite;
+      }
+      .nova-boot-sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      }
+      @keyframes nova-boot-shimmer {
+        from {
+          background-position: 100% 0;
+        }
+        to {
+          background-position: -100% 0;
+        }
+      }
+      @media (max-width: 1023px) {
+        #nova-boot {
+          grid-template-columns: 1fr;
+        }
+        .nova-boot-sidebar {
+          display: none;
+        }
+        .nova-boot-main {
+          padding: 32px;
+        }
+      }
+      @media (max-width: 700px) {
+        .nova-boot-main {
+          gap: 22px;
+          padding: 22px 16px;
+        }
+        .nova-boot-metrics {
+          grid-template-columns: 1fr;
+        }
+        .nova-boot-card {
+          height: 96px;
+        }
+        .nova-boot-panels {
+          grid-template-columns: 1fr;
+        }
+        .nova-boot-panels .nova-boot-panel:last-child {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #nova-boot {
+          transition: none;
+        }
+        .nova-boot-shape,
+        .nova-boot-logo,
+        .nova-boot-nav span {
+          animation: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -45,9 +178,19 @@
       <div class="nova-boot-workspace" aria-hidden="true">
         <div class="nova-boot-header"></div>
         <main class="nova-boot-main">
-          <div class="nova-boot-heading"><span class="nova-boot-shape"></span><span class="nova-boot-shape"></span><span class="nova-boot-shape"></span></div>
-          <div class="nova-boot-metrics"><div class="nova-boot-card"></div><div class="nova-boot-card"></div><div class="nova-boot-card"></div></div>
-          <div class="nova-boot-panels"><div class="nova-boot-panel"></div><div class="nova-boot-panel"></div></div>
+          <div class="nova-boot-heading">
+            <span class="nova-boot-shape"></span><span class="nova-boot-shape"></span
+            ><span class="nova-boot-shape"></span>
+          </div>
+          <div class="nova-boot-metrics">
+            <div class="nova-boot-card"></div>
+            <div class="nova-boot-card"></div>
+            <div class="nova-boot-card"></div>
+          </div>
+          <div class="nova-boot-panels">
+            <div class="nova-boot-panel"></div>
+            <div class="nova-boot-panel"></div>
+          </div>
         </main>
       </div>
     </div>

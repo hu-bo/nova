@@ -2,7 +2,12 @@
 import type { Entry, EntryId } from "./entry.js";
 import type { Record } from "./record.js";
 
-export interface RecordFilter { runId?: string; kind?: Record["kind"]; limit?: number; desc?: boolean }
+export interface RecordFilter {
+  runId?: string;
+  kind?: Record["kind"];
+  limit?: number;
+  desc?: boolean;
+}
 
 export interface SessionStorage {
   appendEntry(sessionId: string, entry: Entry): Promise<void>;
@@ -51,8 +56,8 @@ export function memoryStorage(): SessionStorage {
     },
     async loadRecords(sessionId, filter) {
       let records = getSession(sessionId).records;
-      if (filter?.runId !== undefined) records = records.filter(record => record.runId === filter.runId);
-      if (filter?.kind !== undefined) records = records.filter(record => record.kind === filter.kind);
+      if (filter?.runId !== undefined) records = records.filter((record) => record.runId === filter.runId);
+      if (filter?.kind !== undefined) records = records.filter((record) => record.kind === filter.kind);
       if (filter?.desc) records = [...records].reverse();
       if (filter?.limit !== undefined) records = records.slice(0, filter.limit);
       return records;

@@ -2,7 +2,13 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 export function Card({ className, ...props }: ComponentProps<"div">) {
-  return <div data-slot="card" className={cn("flex flex-col rounded-xl bg-white text-slate-950 ring-1 ring-slate-200 shadow-soft", className)} {...props} />;
+  return (
+    <div
+      data-slot="card"
+      className={cn("flex flex-col rounded-xl bg-white text-slate-950 ring-1 ring-slate-200 shadow-soft", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardHeader({ className, ...props }: ComponentProps<"div">) {
@@ -10,7 +16,9 @@ export function CardHeader({ className, ...props }: ComponentProps<"div">) {
 }
 
 export function CardTitle({ className, ...props }: ComponentProps<"div">) {
-  return <div data-slot="card-title" className={cn("font-semibold leading-none text-slate-900", className)} {...props} />;
+  return (
+    <div data-slot="card-title" className={cn("font-semibold leading-none text-slate-900", className)} {...props} />
+  );
 }
 
 export function CardDescription({ className, ...props }: ComponentProps<"div">) {

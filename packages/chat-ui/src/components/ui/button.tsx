@@ -8,12 +8,17 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-slate-900 text-white shadow-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white",
+        default:
+          "bg-slate-900 text-white shadow-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white",
         primary: "bg-indigo-600 text-white shadow-sm shadow-indigo-500/15 hover:scale-[1.02] hover:bg-indigo-700",
-        outline: "border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white",
-        secondary: "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700",
-        ghost: "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
-        destructive: "bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/70",
+        outline:
+          "border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white",
+        secondary:
+          "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700",
+        ghost:
+          "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+        destructive:
+          "bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/70",
         warning: "bg-amber-600 text-white shadow-sm hover:scale-[1.02] hover:bg-amber-700",
       },
       size: {
@@ -29,10 +34,18 @@ const buttonVariants = cva(
   },
 );
 
-function Button({ className, variant, size, icon, children, ...props }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & { icon?: ReactNode }) {
+function Button({
+  className,
+  variant,
+  size,
+  icon,
+  children,
+  ...props
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & { icon?: ReactNode }) {
   return (
     <ButtonPrimitive data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props}>
-      {icon}{children}
+      {icon}
+      {children}
     </ButtonPrimitive>
   );
 }

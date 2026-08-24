@@ -4,14 +4,18 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { UserRow } from "../../store.js";
 
 export function userRoutes(app: FastifyInstance): void {
-  app.withTypeProvider<ZodTypeProvider>().get("/me", {
-    schema: {
-      operationId: "getCurrentUser",
-      tags: ["users"],
-      security: [{ bearerAuth: [] }],
-      response: { 200: CurrentUserSchema, 401: ApiErrorSchema },
+  app.withTypeProvider<ZodTypeProvider>().get(
+    "/me",
+    {
+      schema: {
+        operationId: "getCurrentUser",
+        tags: ["users"],
+        security: [{ bearerAuth: [] }],
+        response: { 200: CurrentUserSchema, 401: ApiErrorSchema },
+      },
     },
-  }, request => currentUserView(request.currentUser!));
+    (request) => currentUserView(request.currentUser!),
+  );
 }
 
 function currentUserView(user: UserRow): CurrentUser {

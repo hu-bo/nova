@@ -20,10 +20,16 @@ function assistantEntry(text: string): Entry {
   return entry({ kind: "message", message: message("assistant", [{ type: "text", text }]) });
 }
 function toolCallEntry(callId: string): Entry {
-  return entry({ kind: "message", message: message("assistant", [{ type: "tool_call", callId, name: "t", args: {} }]) });
+  return entry({
+    kind: "message",
+    message: message("assistant", [{ type: "tool_call", callId, name: "t", args: {} }]),
+  });
 }
 function toolResultEntry(callId: string): Entry {
-  return entry({ kind: "message", message: message("user", [{ type: "tool_result", callId, status: "ok", content: [{ type: "text", text: "r" }] }]) });
+  return entry({
+    kind: "message",
+    message: message("user", [{ type: "tool_result", callId, status: "ok", content: [{ type: "text", text: "r" }] }]),
+  });
 }
 
 describe("truncateContent", () => {
@@ -35,7 +41,7 @@ describe("truncateContent", () => {
   it("超长内容保头尾、中间省略并标注行数", () => {
     const lines = Array.from({ length: 6000 }, (_, i) => `line-${i}`);
     const parts = truncateContent([{ type: "text", text: lines.join("\n") }]);
-    const joined = parts.map(part => (part.type === "text" ? part.text : "")).join("");
+    const joined = parts.map((part) => (part.type === "text" ? part.text : "")).join("");
     expect(joined.startsWith("line-0\n")).toBe(true);
     expect(joined.endsWith("\nline-5999")).toBe(true);
     expect(joined).toMatch(/中间省略 \d+ 行/);
@@ -46,7 +52,7 @@ describe("truncateContent", () => {
     const image = { type: "image" as const, mimeType: "image/png", data: "AAA" };
     const long = "x".repeat(DEFAULT_CONTENT_LIMIT + 5000);
     const parts = truncateContent([{ type: "text", text: long }, image]);
-    expect(parts.some(part => part.type === "image")).toBe(true);
+    expect(parts.some((part) => part.type === "image")).toBe(true);
   });
 });
 
@@ -79,7 +85,13 @@ describe("findCutPoint（不得切开 tool_call 与 tool_result）", () => {
   });
 
   it("切点之前的 tool_call 一定带着自己的 tool_result（或都不在保留段）", () => {
-    const entries = [userEntry("a"), toolCallEntry("c1"), toolResultEntry("c1"), toolCallEntry("c2"), toolResultEntry("c2")];
+    const entries = [
+      userEntry("a"),
+      toolCallEntry("c1"),
+      toolResultEntry("c1"),
+      toolCallEntry("c2"),
+      toolResultEntry("c2"),
+    ];
     const cut = findCutPoint(entries);
     // c2 的 result 是最后一条 → 只能切在 c1 的 result 之后
     expect(cut).toBe(3);
@@ -89,7 +101,11 @@ describe("findCutPoint（不得切开 tool_call 与 tool_result）", () => {
         for (const block of item.message.blocks) {
           if (block.type !== "tool_result") continue;
           // 对应 tool_call 必须也在保留段里
-          const hasCall = kept.some(other => other.kind === "message" && other.message.blocks.some(b => b.type === "tool_call" && b.callId === block.callId));
+          const hasCall = kept.some(
+            (other) =>
+              other.kind === "message" &&
+              other.message.blocks.some((b) => b.type === "tool_call" && b.callId === block.callId),
+          );
           expect(hasCall).toBe(true);
         }
       }
@@ -110,7 +126,12 @@ describe("planCompaction", () => {
       yield { type: "block.end", index: 0, block: { type: "text", text: outcome } } satisfies ModelEvent;
       yield { type: "finish", stopReason: "stop" } satisfies ModelEvent;
     };
-    return { stream, get calls() { return state.calls; } };
+    return {
+      stream,
+      get calls() {
+        return state.calls;
+      },
+    };
   }
 
   const entries = () => [userEntry("goal"), assistantEntry("work"), userEntry("next step"), assistantEntry("more")];
@@ -147,7 +168,10 @@ describe("planCompaction", () => {
 
   it("无可切内容 → null", async () => {
     const { stream } = summarizerStream(["S"]);
-    const plan = await planCompaction([userEntry("only"), assistantEntry("reply")], { stream, signal: new AbortController().signal });
+    const plan = await planCompaction([userEntry("only"), assistantEntry("reply")], {
+      stream,
+      signal: new AbortController().signal,
+    });
     expect(plan).toBeNull();
   });
 });
@@ -161,7 +185,7 @@ describe("branchView / toMessages", () => {
     const c1 = entry({ kind: "compaction", summary: "S1", replacedFrom: m0.id, replacedTo: m1.id });
     const c2 = entry({ kind: "compaction", summary: "S2", replacedFrom: c1.id, replacedTo: m2.id });
     const view = branchView([m0, m1, m2, m3, c1, c2]);
-    expect(view.map(item => item.id)).toEqual([c2.id, m3.id]);
+    expect(view.map((item) => item.id)).toEqual([c2.id, m3.id]);
   });
 
   it("toMessages：message → 消息；compaction → 摘要 user 消息；配置类 Entry 不进上下文", () => {

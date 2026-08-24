@@ -5,11 +5,17 @@ import { editFile } from "./edit-file.js";
 import { readUrl } from "./read-url.js";
 
 it("maps Runner failures and non-zero command exits to error", async () => {
-  const runnerFailure = await bash.execute({ command: "test" }, ctx({ ok: false, error: { code: "RUNNER_UNAVAILABLE", message: "offline" } }));
+  const runnerFailure = await bash.execute(
+    { command: "test" },
+    ctx({ ok: false, error: { code: "RUNNER_UNAVAILABLE", message: "offline" } }),
+  );
   expect(runnerFailure.status).toBe("error");
   expect(runnerFailure.details).toMatchObject({ code: "RUNNER_UNAVAILABLE" });
 
-  const nonZero = await bash.execute({ command: "test" }, ctx({ ok: true, value: { exitCode: 2, stdout: "", stderr: "failed", truncated: false, durationMs: 1 } }));
+  const nonZero = await bash.execute(
+    { command: "test" },
+    ctx({ ok: true, value: { exitCode: 2, stdout: "", stderr: "failed", truncated: false, durationMs: 1 } }),
+  );
   expect(nonZero.status).toBe("error");
   expect(nonZero.details).toMatchObject({ exitCode: 2 });
 });

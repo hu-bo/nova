@@ -88,7 +88,13 @@ export interface AgentStore {
   findRunnerToken(token: string): Promise<RunnerTokenRow | null>;
   deleteRunnerToken(input: { userId: string; id: string }): Promise<string[]>;
   upsertRunner(input: Omit<RunnerRow, "registeredAt" | "lastSeenAt">): Promise<RunnerRow>;
-  updateRunnerStatus(input: { ownerId: string; id: string; running: number; reportedState: RunnerRow["reportedState"]; lastSeenAt: Date }): Promise<void>;
+  updateRunnerStatus(input: {
+    ownerId: string;
+    id: string;
+    running: number;
+    reportedState: RunnerRow["reportedState"];
+    lastSeenAt: Date;
+  }): Promise<void>;
   listRunners(input: { userId: string; limit: number; cursor?: string }): Promise<Page<RunnerRow>>;
   listRunnerIdsByToken(input: { userId: string; tokenId: string }): Promise<string[]>;
   deleteRunner(input: { userId: string; id: string }): Promise<void>;
@@ -104,12 +110,22 @@ export interface AgentStore {
     title: string;
     modelConfig: ModelConfig;
   }): Promise<ConversationRow>;
-  listConversations(input: { userId: string; projectId?: string; limit: number; cursor?: string }): Promise<Page<ConversationRow>>;
+  listConversations(input: {
+    userId: string;
+    projectId?: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<Page<ConversationRow>>;
   routeConversation(userId: string, id: string): Promise<EntryRoute>;
   updateConversationRunner(input: { userId: string; id: string; runnerId: string }): Promise<ConversationRow>;
   updateConversationModel(input: { userId: string; id: string; modelConfig: ModelConfig }): Promise<ConversationRow>;
   appendMessage(input: Omit<MessageRow, "seq">): Promise<MessageRow>;
-  listMessages(input: { userId: string; conversationId: string; before?: string; limit: number }): Promise<Page<MessageRow>>;
+  listMessages(input: {
+    userId: string;
+    conversationId: string;
+    before?: string;
+    limit: number;
+  }): Promise<Page<MessageRow>>;
 }
 
 export function createRunnerTokenSecret(): string {
@@ -164,30 +180,36 @@ export function createMemoryStore(): AgentStore {
       return state.users.get(casdoorId) ?? null;
     },
     async ensureRunnerToken(input) {
-      const existing = [...state.runnerTokens.values()].find(item => item.userId === input.userId);
+      const existing = [...state.runnerTokens.values()].find((item) => item.userId === input.userId);
       if (existing) return existing;
       const token = { id: randomUUID(), userId: input.userId, slot: 1, token: input.token, createdAt: new Date() };
       state.runnerTokens.set(token.id, token);
       return token;
     },
     async createRunnerToken(input) {
-      const used = new Set([...state.runnerTokens.values()].filter(item => item.userId === input.userId).map(item => item.slot));
-      const slot = [1, 2, 3].find(value => !used.has(value));
+      const used = new Set(
+        [...state.runnerTokens.values()].filter((item) => item.userId === input.userId).map((item) => item.slot),
+      );
+      const slot = [1, 2, 3].find((value) => !used.has(value));
       if (!slot) throw conflict("Each user can create up to 3 runner tokens");
       const token = { id: randomUUID(), userId: input.userId, slot, token: input.token, createdAt: new Date() };
       state.runnerTokens.set(token.id, token);
       return token;
     },
     async listRunnerTokens(userId) {
-      return [...state.runnerTokens.values()].filter(item => item.userId === userId).sort((left, right) => left.slot - right.slot);
+      return [...state.runnerTokens.values()]
+        .filter((item) => item.userId === userId)
+        .sort((left, right) => left.slot - right.slot);
     },
     async findRunnerToken(token) {
-      return [...state.runnerTokens.values()].find(item => item.token === token) ?? null;
+      return [...state.runnerTokens.values()].find((item) => item.token === token) ?? null;
     },
     async deleteRunnerToken(input) {
       const token = state.runnerTokens.get(input.id);
       if (!token || token.userId !== input.userId) throw notFound("Runner token");
-      const bound = [...state.runners.values()].filter(item => item.ownerId === input.userId && item.tokenId === input.id).map(item => item.id);
+      const bound = [...state.runners.values()]
+        .filter((item) => item.ownerId === input.userId && item.tokenId === input.id)
+        .map((item) => item.id);
       if (!bound.length) state.runnerTokens.delete(input.id);
       return bound;
     },
@@ -202,17 +224,29 @@ export function createMemoryStore(): AgentStore {
     async updateRunnerStatus(input) {
       const key = runnerKey(input.ownerId, input.id);
       const runner = state.runners.get(key);
-      if (runner) state.runners.set(key, { ...runner, running: input.running, reportedState: input.reportedState, lastSeenAt: input.lastSeenAt });
+      if (runner)
+        state.runners.set(key, {
+          ...runner,
+          running: input.running,
+          reportedState: input.reportedState,
+          lastSeenAt: input.lastSeenAt,
+        });
     },
     async listRunners(input) {
       const offset = decodeOffset(input.cursor);
-      const all = [...state.runners.values()].filter(item => item.ownerId === input.userId)
-        .sort((left, right) => right.lastSeenAt.getTime() - left.lastSeenAt.getTime() || right.id.localeCompare(left.id));
+      const all = [...state.runners.values()]
+        .filter((item) => item.ownerId === input.userId)
+        .sort(
+          (left, right) => right.lastSeenAt.getTime() - left.lastSeenAt.getTime() || right.id.localeCompare(left.id),
+        );
       const items = all.slice(offset, offset + input.limit);
       return { items, nextCursor: offset + items.length < all.length ? encodeOffset(offset + items.length) : null };
     },
     async listRunnerIdsByToken(input) {
-      return [...state.runners.values()].filter(item => item.ownerId === input.userId && item.tokenId === input.tokenId).map(item => item.id).sort();
+      return [...state.runners.values()]
+        .filter((item) => item.ownerId === input.userId && item.tokenId === input.tokenId)
+        .map((item) => item.id)
+        .sort();
     },
     async deleteRunner(input) {
       if (!state.runners.delete(runnerKey(input.userId, input.id))) throw notFound("Runner");
@@ -233,7 +267,7 @@ export function createMemoryStore(): AgentStore {
     },
     async listProjects(userId) {
       return [...state.projects.values()]
-        .filter(project => project.userId === userId)
+        .filter((project) => project.userId === userId)
         .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
     },
     async updateProject(input) {
@@ -243,9 +277,12 @@ export function createMemoryStore(): AgentStore {
       return updated;
     },
     async bindProject(input) {
-      const duplicate = [...state.projects.values()].some(project =>
-        project.userId === input.userId && project.id !== input.id &&
-        project.runnerId === input.runnerId && project.workspace === input.workspace,
+      const duplicate = [...state.projects.values()].some(
+        (project) =>
+          project.userId === input.userId &&
+          project.id !== input.id &&
+          project.runnerId === input.runnerId &&
+          project.workspace === input.workspace,
       );
       if (duplicate) throw conflict("A project already uses this runner workspace");
       const project = ownedProject(input.userId, input.id);
@@ -257,10 +294,10 @@ export function createMemoryStore(): AgentStore {
       ownedProject(input.userId, input.id);
       state.projects.delete(input.id);
       const conversationIds = new Set(
-        [...state.conversations.values()].filter(item => item.projectId === input.id).map(item => item.id),
+        [...state.conversations.values()].filter((item) => item.projectId === input.id).map((item) => item.id),
       );
       for (const id of conversationIds) state.conversations.delete(id);
-      state.messages = state.messages.filter(message => !conversationIds.has(message.conversationId));
+      state.messages = state.messages.filter((message) => !conversationIds.has(message.conversationId));
     },
     async createConversation(input) {
       if (input.projectId) ownedProject(input.userId, input.projectId);
@@ -281,7 +318,10 @@ export function createMemoryStore(): AgentStore {
     async listConversations(input) {
       const offset = decodeOffset(input.cursor);
       const all = [...state.conversations.values()]
-        .filter(item => item.userId === input.userId && (input.projectId === undefined || item.projectId === input.projectId))
+        .filter(
+          (item) =>
+            item.userId === input.userId && (input.projectId === undefined || item.projectId === input.projectId),
+        )
         .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || right.id.localeCompare(left.id));
       const items = all.slice(offset, offset + input.limit);
       return { items, nextCursor: offset + items.length < all.length ? encodeOffset(offset + items.length) : null };
@@ -314,7 +354,7 @@ export function createMemoryStore(): AgentStore {
       ownedConversation(input.userId, input.conversationId);
       const before = input.before ? decodeOffset(input.before) : Number.POSITIVE_INFINITY;
       const all = state.messages
-        .filter(message => message.conversationId === input.conversationId && message.seq < before)
+        .filter((message) => message.conversationId === input.conversationId && message.seq < before)
         .sort((left, right) => right.seq - left.seq);
       const items = all.slice(0, input.limit).reverse();
       return { items, nextCursor: all.length > input.limit ? encodeOffset(all[input.limit - 1]!.seq) : null };

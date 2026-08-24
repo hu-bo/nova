@@ -19,18 +19,20 @@ it("publishes and persists the concrete run error on the failed assistant messag
   project({ type: "message.end", messageId: "message-1", stopReason: "error" });
   project({ type: "error", code: "stream_error", message: "Provider returned 401: invalid API key" });
   project({ type: "run.end", runId: "run-1", stopReason: "error", usage: { input: 0, output: 0 } });
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
 
-  expect(saved).toMatchObject([{
-    id: "message-1",
-    conversationId: "conversation-1",
-    status: "error",
-    blocks: [{ type: "error", code: "stream_error", message: "Provider returned 401: invalid API key" }],
-  }]);
+  expect(saved).toMatchObject([
+    {
+      id: "message-1",
+      conversationId: "conversation-1",
+      status: "error",
+      blocks: [{ type: "error", code: "stream_error", message: "Provider returned 401: invalid API key" }],
+    },
+  ]);
   const replay = events.replay("conversation-1", "0");
   expect(replay.kind).toBe("events");
   if (replay.kind === "events") {
-    expect(replay.events.map(item => item.event)).toContainEqual({
+    expect(replay.events.map((item) => item.event)).toContainEqual({
       type: "block.end",
       messageId: "message-1",
       index: 0,

@@ -8,14 +8,30 @@ const noopTool = (name: string): AgentTool => ({
   description: name,
   schema: z.record(z.string(), z.unknown()),
   risk: "none",
-  async execute() { return { status: "ok", content: [{ type: "text", text: "ok" }], details: { name } }; },
+  async execute() {
+    return { status: "ok", content: [{ type: "text", text: "ok" }], details: { name } };
+  },
 });
 
 describe("createHarness", () => {
   it("fails fast on duplicate module, tool, and prompt names", () => {
     expect(() => createHarness({ modules: [{ id: "same" }, { id: "same" }] })).toThrow("duplicate module id");
-    expect(() => createHarness({ modules: [{ id: "a", tools: [noopTool("read")] }, { id: "b", tools: [noopTool("read")] }] })).toThrow("duplicate tool name");
-    expect(() => createHarness({ modules: [{ id: "a", prompts: [{ name: "rules", content: "a" }] }, { id: "b", prompts: [{ name: "rules", content: "b" }] }] })).toThrow("duplicate prompt name");
+    expect(() =>
+      createHarness({
+        modules: [
+          { id: "a", tools: [noopTool("read")] },
+          { id: "b", tools: [noopTool("read")] },
+        ],
+      }),
+    ).toThrow("duplicate tool name");
+    expect(() =>
+      createHarness({
+        modules: [
+          { id: "a", prompts: [{ name: "rules", content: "a" }] },
+          { id: "b", prompts: [{ name: "rules", content: "b" }] },
+        ],
+      }),
+    ).toThrow("duplicate prompt name");
   });
 
   it("keeps module order, appends instance prompts, and freezes the snapshot", async () => {
@@ -26,7 +42,9 @@ describe("createHarness", () => {
     const requests: ModelRequest[] = [];
     const harness = createHarness({ modules });
     modules.push({ id: "late", tools: [noopTool("late")] });
-    const agent = harness.createAgent(baseConfig(captureStop(requests), { systemPrompt: [{ name: "p3", content: "third" }] }));
+    const agent = harness.createAgent(
+      baseConfig(captureStop(requests), { systemPrompt: [{ name: "p3", content: "third" }] }),
+    );
     await agent.prompt("go");
     expect(harness.moduleIds).toEqual(["a", "b"]);
     expect(harness.toolNames).toEqual(["one", "two"]);
@@ -41,32 +59,54 @@ describe("createHarness", () => {
     const harness = createHarness({
       modules: [
         { id: "ask", tools: [noopTool("work")], guards: [() => "ask"] },
-        { id: "broken", guards: [() => { throw new Error("guard failed"); }] },
+        {
+          id: "broken",
+          guards: [
+            () => {
+              throw new Error("guard failed");
+            },
+          ],
+        },
       ],
       onGuardError: guardError,
     });
-    const agent = harness.createAgent(baseConfig(toolThenStop("work"), {
-      decide: async request => { asked(); return request.kind === "approval" ? { kind: "approval", decision: "allow" } : { kind: "question", answers: [] }; },
-    }));
+    const agent = harness.createAgent(
+      baseConfig(toolThenStop("work"), {
+        decide: async (request) => {
+          asked();
+          return request.kind === "approval"
+            ? { kind: "approval", decision: "allow" }
+            : { kind: "question", answers: [] };
+        },
+      }),
+    );
     await agent.prompt("go");
     expect(asked).not.toHaveBeenCalled();
     expect(guardError).toHaveBeenCalledWith(expect.any(Error), "broken");
     const records = await baseStorage(agent).loadRecords(agent.sessionId);
-    expect(records.some(record => record.kind === "tool-started")).toBe(false);
+    expect(records.some((record) => record.kind === "tool-started")).toBe(false);
   });
 
   it("isolates observer sync errors and promise rejections", async () => {
     const seen: string[] = [];
     const errors = vi.fn();
     const harness = createHarness({
-      modules: [{
-        id: "observe",
-        observers: [
-          () => { throw new Error("sync"); },
-          async () => { throw new Error("async"); },
-          event => { seen.push(event.type); },
-        ],
-      }],
+      modules: [
+        {
+          id: "observe",
+          observers: [
+            () => {
+              throw new Error("sync");
+            },
+            async () => {
+              throw new Error("async");
+            },
+            (event) => {
+              seen.push(event.type);
+            },
+          ],
+        },
+      ],
       onObserverError: errors,
     });
     const agent = harness.createAgent(baseConfig(captureStop([])));
@@ -90,7 +130,9 @@ function baseConfig(stream: StreamFn, extra: Partial<HarnessAgentConfig> = {}): 
   };
 }
 
-function baseStorage(_agent: unknown) { return lastStorage; }
+function baseStorage(_agent: unknown) {
+  return lastStorage;
+}
 
 function captureStop(requests: ModelRequest[]): StreamFn {
   return async function* (request) {
@@ -102,13 +144,14 @@ function captureStop(requests: ModelRequest[]): StreamFn {
 function toolThenStop(name: string): StreamFn {
   let turn = 0;
   return async function* () {
-    const events: ModelEvent[] = turn++ === 0
-      ? [
-          { type: "block.start", index: 0, blockType: "tool_call" },
-          { type: "block.end", index: 0, block: { type: "tool_call", callId: "c1", name, args: {} } },
-          { type: "finish", stopReason: "tool_use" },
-        ]
-      : [{ type: "finish", stopReason: "stop" }];
+    const events: ModelEvent[] =
+      turn++ === 0
+        ? [
+            { type: "block.start", index: 0, blockType: "tool_call" },
+            { type: "block.end", index: 0, block: { type: "tool_call", callId: "c1", name, args: {} } },
+            { type: "finish", stopReason: "tool_use" },
+          ]
+        : [{ type: "finish", stopReason: "stop" }];
     for (const event of events) yield event;
   };
 }

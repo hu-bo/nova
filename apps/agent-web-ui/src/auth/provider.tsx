@@ -42,19 +42,23 @@ function AuthBridge({ children }: { children: ReactNode }) {
     window.addEventListener("nova:unauthorized", auth.logout);
     return () => window.removeEventListener("nova:unauthorized", auth.logout);
   }, [auth.logout]);
-  const api = useMemo(() => auth.accessToken
-    ? createApiClient({ accessToken: auth.accessToken })
-    : null, [auth.accessToken]);
-  const value = useMemo<AuthContextValue>(() => ({
-    isAuthenticated: auth.isAuthenticated,
-    isLoading: auth.isLoading,
-    userId: auth.user?.id ?? null,
-    displayName: auth.user?.displayName || auth.user?.name || null,
-    error: auth.error,
-    login: auth.login,
-    logout: auth.logout,
-    api,
-  }), [auth.isAuthenticated, auth.isLoading, auth.user, auth.error, auth.login, auth.logout, api]);
+  const api = useMemo(
+    () => (auth.accessToken ? createApiClient({ accessToken: auth.accessToken }) : null),
+    [auth.accessToken],
+  );
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      isAuthenticated: auth.isAuthenticated,
+      isLoading: auth.isLoading,
+      userId: auth.user?.id ?? null,
+      displayName: auth.user?.displayName || auth.user?.name || null,
+      error: auth.error,
+      login: auth.login,
+      logout: auth.logout,
+      api,
+    }),
+    [auth.isAuthenticated, auth.isLoading, auth.user, auth.error, auth.login, auth.logout, api],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

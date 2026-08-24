@@ -275,11 +275,13 @@ export class RunnerSessionImpl implements RunnerSession {
 
   private buildFs(): FileSystemOps {
     return {
-      stat: async (path) => (await this.fileOp({ case: "stat", value: create(StatOpSchema, { path }) })).result
-          .value as FileInfo,
+      stat: async (path) =>
+        (await this.fileOp({ case: "stat", value: create(StatOpSchema, { path }) })).result.value as FileInfo,
       list: async (path, depth) =>
-        ((await this.fileOp({ case: "list", value: create(ListOpSchema, { path, depth: depth ?? 1 }) })).result
-          .value as { entries: DirEntry[] }).entries,
+        (
+          (await this.fileOp({ case: "list", value: create(ListOpSchema, { path, depth: depth ?? 1 }) })).result
+            .value as { entries: DirEntry[] }
+        ).entries,
       remove: async (path, opts) => {
         await this.fileOp({
           case: "remove",
@@ -296,15 +298,17 @@ export class RunnerSessionImpl implements RunnerSession {
         (await this.fileOp({ case: "tempDir", value: create(TempDirOpSchema, { prefix: prefix ?? "" }) })).result
           .value as string,
       grep: async (pattern, opts) =>
-        (await this.fileOp({
-          case: "grep",
-          value: create(GrepOpSchema, {
-            pattern,
-            path: opts?.path ?? "",
-            glob: opts?.glob ?? "",
-            maxResults: opts?.maxResults ?? 0,
-          }),
-        })).result.value as GrepResult,
+        (
+          await this.fileOp({
+            case: "grep",
+            value: create(GrepOpSchema, {
+              pattern,
+              path: opts?.path ?? "",
+              glob: opts?.glob ?? "",
+              maxResults: opts?.maxResults ?? 0,
+            }),
+          })
+        ).result.value as GrepResult,
       readFile: (path, opts) => this.readFile(path, opts?.offset ?? 0, opts?.limit ?? 0),
       writeFile: (path, data, opts) => this.writeFile(path, data, opts?.append ?? false),
     };
@@ -320,7 +324,11 @@ export class RunnerSessionImpl implements RunnerSession {
     return env.payload.value as FileOpResponse;
   }
 
-  private async readFile(path: string, offset: number, limit: number): Promise<{ data: Uint8Array; totalSize: number }> {
+  private async readFile(
+    path: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ data: Uint8Array; totalSize: number }> {
     const requestId = this.nextRequestId();
     const chunks: Uint8Array[] = [];
     let totalSize = 0;

@@ -13,32 +13,39 @@ if (!output) throw new Error("Usage: pnpm openapi:export <output-path>");
 
 const events = createEventHub();
 const store = createMemoryStore();
-const app = await buildApp({
-  store,
-  events,
-  decisions: createPendingDecisions(events),
-  runners: createRunnerRegistry(store),
-  runnerEndpoint: "http://127.0.0.1:50051",
-  modelConfigStore: createMemoryModelConfigStore(),
-  credentialCipher: createCredentialCipher(Buffer.alloc(32).toString("base64url")),
-  verifyAccessToken: async () => ({
-    casdoorId: "openapi",
-    username: "openapi",
-    displayName: "OpenAPI",
-    role: "",
-    isAdmin: false,
-    isActive: true,
-  }),
-  runtimes: {
-    async send() {},
-    async abort() {},
-    invalidate() {},
+const app = await buildApp(
+  {
+    store,
+    events,
+    decisions: createPendingDecisions(events),
+    runners: createRunnerRegistry(store),
+    runnerEndpoint: "http://127.0.0.1:50051",
+    modelConfigStore: createMemoryModelConfigStore(),
+    credentialCipher: createCredentialCipher(Buffer.alloc(32).toString("base64url")),
+    verifyAccessToken: async () => ({
+      casdoorId: "openapi",
+      username: "openapi",
+      displayName: "OpenAPI",
+      role: "",
+      isAdmin: false,
+      isActive: true,
+    }),
+    runtimes: {
+      async send() {},
+      async abort() {},
+      invalidate() {},
+    },
+    authService: {
+      async verifyAccessToken() {
+        return null;
+      },
+      async createAuthorizeUrl() {
+        return { url: "https://auth.example.com/login" };
+      },
+    },
   },
-  authService: {
-    async verifyAccessToken() { return null; },
-    async createAuthorizeUrl() { return { url: "https://auth.example.com/login" }; },
-  },
-}, false);
+  false,
+);
 
 try {
   const response = await app.inject({
@@ -70,7 +77,13 @@ function normalizeNullableSchemas(value: unknown): unknown {
 }
 
 function isNullableOnlySchema(value: unknown): boolean {
-  return isRecord(value) && value.nullable === true && Array.isArray(value.enum) && value.enum.length === 1 && value.enum[0] === null;
+  return (
+    isRecord(value) &&
+    value.nullable === true &&
+    Array.isArray(value.enum) &&
+    value.enum.length === 1 &&
+    value.enum[0] === null
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

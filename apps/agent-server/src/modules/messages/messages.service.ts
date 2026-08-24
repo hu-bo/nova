@@ -6,7 +6,12 @@ import type { ModelConfigStore } from "../model-config/model-config.store.js";
 import { resolveCatalogModel } from "../model-config/model-config.store.js";
 import type { CredentialCipher } from "../model-config/credential.js";
 
-export function createMessagesService(store: AgentStore, runtimes: ConversationRuntimes, models: ModelConfigStore, cipher: CredentialCipher) {
+export function createMessagesService(
+  store: AgentStore,
+  runtimes: ConversationRuntimes,
+  models: ModelConfigStore,
+  cipher: CredentialCipher,
+) {
   const view = (message: MessageRow): ChatMessage => ({
     id: message.id,
     conversationId: message.conversationId,
@@ -24,7 +29,7 @@ export function createMessagesService(store: AgentStore, runtimes: ConversationR
     async send(userId: string, conversationId: string, input: SendMessage) {
       let route = await store.routeConversation(userId, conversationId);
       if (input.modelConfig || input.modelId) {
-        const modelConfig = input.modelConfig ?? await resolveCatalogModel(models, cipher, userId, input.modelId!);
+        const modelConfig = input.modelConfig ?? (await resolveCatalogModel(models, cipher, userId, input.modelId!));
         await store.updateConversationModel({ userId, id: conversationId, modelConfig });
         runtimes.invalidate(conversationId);
         route = await store.routeConversation(userId, conversationId);

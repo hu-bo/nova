@@ -1,9 +1,24 @@
 import type { ChatMessage } from "@nova/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type Dispatch, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  type Dispatch,
+  type ReactNode,
+} from "react";
 import { queryKeys } from "../api/query-keys.js";
 import { useAuth } from "../auth/provider.js";
-import { conversationReducer, initialConversationState, type ConversationAction, type ConversationState } from "./reducer.js";
+import {
+  conversationReducer,
+  initialConversationState,
+  type ConversationAction,
+  type ConversationState,
+} from "./reducer.js";
 import { useSse } from "./use-sse.js";
 
 interface ConversationContextValue {
@@ -61,13 +76,16 @@ export function ConversationProvider({ conversationId, children }: { conversatio
     onUnauthorized: logout,
   });
 
-  const value = useMemo<ConversationContextValue>(() => ({
-    state,
-    dispatch,
-    isLoading: history.isLoading,
-    historyError: history.error,
-    retryHistory: () => void history.refetch(),
-  }), [state, history.isLoading, history.error, history.refetch]);
+  const value = useMemo<ConversationContextValue>(
+    () => ({
+      state,
+      dispatch,
+      isLoading: history.isLoading,
+      historyError: history.error,
+      retryHistory: () => void history.refetch(),
+    }),
+    [state, history.isLoading, history.error, history.refetch],
+  );
   return <ConversationContext.Provider value={value}>{children}</ConversationContext.Provider>;
 }
 

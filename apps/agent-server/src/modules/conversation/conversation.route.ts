@@ -29,34 +29,52 @@ export function conversationRoutes(
   const server = app.withTypeProvider<ZodTypeProvider>();
   const conversations = createConversationService(store, runners, runtimes, models, cipher);
 
-  server.post("/conversations", {
-    schema: {
-      operationId: "createConversation",
-      tags: ["conversations"],
-      security: [{ bearerAuth: [] }],
-      body: CreateConversationSchema,
-      response: { 201: ConversationSchema, 400: ApiErrorSchema, 401: ApiErrorSchema, 404: ApiErrorSchema },
+  server.post(
+    "/conversations",
+    {
+      schema: {
+        operationId: "createConversation",
+        tags: ["conversations"],
+        security: [{ bearerAuth: [] }],
+        body: CreateConversationSchema,
+        response: { 201: ConversationSchema, 400: ApiErrorSchema, 401: ApiErrorSchema, 404: ApiErrorSchema },
+      },
     },
-  }, async (request, reply) => reply.code(201).send(await conversations.create(request.userId, request.body)));
+    async (request, reply) => reply.code(201).send(await conversations.create(request.userId, request.body)),
+  );
 
-  server.get("/conversations", {
-    schema: {
-      operationId: "listConversations",
-      tags: ["conversations"],
-      security: [{ bearerAuth: [] }],
-      querystring: ConversationQuerySchema,
-      response: { 200: pageSchema(ConversationSchema), 400: ApiErrorSchema, 401: ApiErrorSchema },
+  server.get(
+    "/conversations",
+    {
+      schema: {
+        operationId: "listConversations",
+        tags: ["conversations"],
+        security: [{ bearerAuth: [] }],
+        querystring: ConversationQuerySchema,
+        response: { 200: pageSchema(ConversationSchema), 400: ApiErrorSchema, 401: ApiErrorSchema },
+      },
     },
-  }, request => conversations.list(request.userId, request.query));
+    (request) => conversations.list(request.userId, request.query),
+  );
 
-  server.patch("/conversations/:id/runner", {
-    schema: {
-      operationId: "updateConversationRunner",
-      tags: ["conversations"],
-      security: [{ bearerAuth: [] }],
-      params: IdParams,
-      body: UpdateConversationRunnerSchema,
-      response: { 200: ConversationSchema, 400: ApiErrorSchema, 401: ApiErrorSchema, 404: ApiErrorSchema, 409: ApiErrorSchema },
+  server.patch(
+    "/conversations/:id/runner",
+    {
+      schema: {
+        operationId: "updateConversationRunner",
+        tags: ["conversations"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        body: UpdateConversationRunnerSchema,
+        response: {
+          200: ConversationSchema,
+          400: ApiErrorSchema,
+          401: ApiErrorSchema,
+          404: ApiErrorSchema,
+          409: ApiErrorSchema,
+        },
+      },
     },
-  }, request => conversations.changeRunner(request.userId, request.params.id, request.body.runnerId));
+    (request) => conversations.changeRunner(request.userId, request.params.id, request.body.runnerId),
+  );
 }

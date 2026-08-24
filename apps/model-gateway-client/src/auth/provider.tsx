@@ -40,14 +40,17 @@ function AuthBridge({ children }: { children: ReactNode }) {
     window.addEventListener("nova:unauthorized", auth.logout);
     return () => window.removeEventListener("nova:unauthorized", auth.logout);
   }, [auth.logout]);
-  const value = useMemo<AuthContextValue>(() => ({
-    isAuthenticated: auth.isAuthenticated,
-    isLoading: auth.isLoading,
-    displayName: auth.user?.displayName || auth.user?.name || null,
-    error: auth.error,
-    login: auth.login,
-    logout: auth.logout,
-  }), [auth.isAuthenticated, auth.isLoading, auth.user, auth.error, auth.login, auth.logout]);
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      isAuthenticated: auth.isAuthenticated,
+      isLoading: auth.isLoading,
+      displayName: auth.user?.displayName || auth.user?.name || null,
+      error: auth.error,
+      login: auth.login,
+      logout: auth.logout,
+    }),
+    [auth.isAuthenticated, auth.isLoading, auth.user, auth.error, auth.login, auth.logout],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

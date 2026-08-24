@@ -14,7 +14,8 @@ const buttonVariants = cva(
         outline: "border-border bg-card text-foreground shadow-xs hover:bg-muted",
         secondary: "border-border bg-card text-slate-700 shadow-xs hover:bg-muted hover:text-foreground",
         ghost: "text-slate-600 hover:bg-muted hover:text-foreground",
-        destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20",
+        destructive:
+          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20",
         danger: "bg-destructive text-white shadow-sm hover:bg-destructive/90 focus-visible:ring-destructive/30",
         link: "min-h-0 px-0 text-primary underline-offset-4 hover:scale-100 hover:underline",
       },
@@ -29,8 +30,20 @@ const buttonVariants = cva(
   },
 );
 
-function Button({ className, variant = "secondary", size = "default", icon, children, ...props }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & { icon?: ReactNode }) {
-  return <ButtonPrimitive data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props}>{icon}{children}</ButtonPrimitive>;
+function Button({
+  className,
+  variant = "secondary",
+  size = "default",
+  icon,
+  children,
+  ...props
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & { icon?: ReactNode }) {
+  return (
+    <ButtonPrimitive data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props}>
+      {icon}
+      {children}
+    </ButtonPrimitive>
+  );
 }
 
 export { Button, buttonVariants };
