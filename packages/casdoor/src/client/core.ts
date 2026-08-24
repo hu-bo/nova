@@ -13,7 +13,6 @@ type TokenExchangeResult = {
   user: CasdoorUser;
 };
 
-const OAUTH_LOGIN_PENDING_TTL_MS = 5 * 60 * 1000;
 const callbackExchangeInFlight = new Map<string, Promise<TokenExchangeResult>>();
 const callbackExchangeConsumed = new Set<string>();
 
@@ -140,24 +139,6 @@ export class CasdoorClient {
     window.history.replaceState({}, document.title, `${url.pathname}${search ? `?${search}` : ''}${url.hash}`);
   }
 
-  private hasPendingLoginRedirect(): boolean {
-    if (typeof sessionStorage === 'undefined') {
-      return false;
-    }
-
-    const pendingAt = Number(sessionStorage.getItem(this.getOAuthLoginPendingStorageKey()));
-    if (!Number.isFinite(pendingAt)) {
-      return false;
-    }
-
-    if (Date.now() - pendingAt > OAUTH_LOGIN_PENDING_TTL_MS) {
-      sessionStorage.removeItem(this.getOAuthLoginPendingStorageKey());
-      return false;
-    }
-
-    return true;
-  }
-
   private markLoginRedirectPending(): void {
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem(this.getOAuthLoginPendingStorageKey(), Date.now().toString());
@@ -221,9 +202,12 @@ export class CasdoorClient {
   }
 
   async login(): Promise<void> {
-    if (this.loginRedirectInProgress || this.hasPendingLoginRedirect()) {
+    if (this.loginRedirectInProgress) {
       return;
     }
+    // A persisted pending marker cannot resume a navigation after a reload or
+    // interrupted request. Let a new explicit login attempt replace it.
+    this.clearLoginRedirectPending();
     this.loginRedirectInProgress = true;
     this.markLoginRedirectPending();
 
@@ -246,6 +230,9 @@ export class CasdoorClient {
     this.storage.clear();
     this.clearRefreshTimer();
     this.clearLoginRedirectPending();
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(this.getOAuthStateStorageKey());
+    }
     this.updateState({
       isAuthenticated: false,
       isLoading: false,

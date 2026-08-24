@@ -17,7 +17,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const config = {
   appName: "nova",
-  authApiBase: "/api",
+  authApiBase: "//auth.8and1.cn/api",
   redirectUri: `${window.location.origin}/callback`,
   logoutRedirectUri: window.location.origin,
   storage: {
