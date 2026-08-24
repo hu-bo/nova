@@ -6,7 +6,7 @@ export default defineConfig({
     output: {
       mode: "single",
       target: "./src/api/generated/model-config.ts",
-      schemas: "./src/api/generated/model",
+      schemas: false,
       client: "react-query",
       httpClient: "fetch",
       clean: true,

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "pnpm --filter @nova/casdoor build && pnpm api:generate",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "api:generate": "orval --config orval.config.ts",
     "api:check": "pnpm api:generate && git diff --exit-code -- openapi.json src/api/generated",

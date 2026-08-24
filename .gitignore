@@ -11,7 +11,6 @@ output/
 apps/agent-server/logs/
 apps/agent-server/drizzle/meta/
 packages/runner-sdk/src/gen/
-**/src/api/generated/
 **/src/gen/
 
 target/

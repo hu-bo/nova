@@ -13,21 +13,23 @@ export {
 } from "./generated/model-config.js";
 import { apiMutator } from "./orval-mutator.js";
 
-export type { GetUsageParams } from "./generated/model/index.js";
-export type { CreateModelBody as CreateModel } from "./generated/model/createModelBody.js";
-export type { CreateProviderBody as CreateProvider } from "./generated/model/createProviderBody.js";
-export type { UpdateProviderBody as UpdateProvider } from "./generated/model/updateProviderBody.js";
-export type { UpdateQuotaBody as UpdateQuota } from "./generated/model/updateQuotaBody.js";
-export type { ListModels200Item as Model } from "./generated/model/listModels200Item.js";
-export type { ListProviders200Item as Provider } from "./generated/model/listProviders200Item.js";
-export type { ListQuotas200Item as Quota } from "./generated/model/listQuotas200Item.js";
-export type { GetUsage200 as UsageReport } from "./generated/model/getUsage200.js";
-export type { GetUsage200ItemsItem as UsageItem } from "./generated/model/getUsage200ItemsItem.js";
-export type { GetUsageStatus as UsageStatus } from "./generated/model/getUsageStatus.js";
-export type { CreateProviderBodyProtocol as Protocol } from "./generated/model/createProviderBodyProtocol.js";
-export type { CreateModelBodyReasoningFormat as ReasoningFormat } from "./generated/model/createModelBodyReasoningFormat.js";
-export type { CreateModelBodyThinkingLevelsItem as ThinkingLevel } from "./generated/model/createModelBodyThinkingLevelsItem.js";
-export type { CreateModelBodyInputModalitiesItem as InputModality } from "./generated/model/createModelBodyInputModalitiesItem.js";
+export type {
+  CreateModelBody as CreateModel,
+  CreateModelBodyInputModalitiesItem as InputModality,
+  CreateModelBodyReasoningFormat as ReasoningFormat,
+  CreateModelBodyThinkingLevelsItem as ThinkingLevel,
+  CreateProviderBody as CreateProvider,
+  CreateProviderBodyProtocol as Protocol,
+  GetUsage200 as UsageReport,
+  GetUsage200ItemsItem as UsageItem,
+  GetUsageParams,
+  GetUsageStatus as UsageStatus,
+  ListModels200Item as Model,
+  ListProviders200Item as Provider,
+  ListQuotas200Item as Quota,
+  UpdateProviderBody as UpdateProvider,
+  UpdateQuotaBody as UpdateQuota,
+} from "./generated/model-config.js";
 
 export interface ApiKey {
   id: string;
