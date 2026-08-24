@@ -34,3 +34,4 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Securit
 
 [build-dependencies]
 tonic-build = "0.12"
+protoc-bin-vendored = "3"

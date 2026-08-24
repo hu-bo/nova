@@ -1,4 +1,10 @@
 fn main() {
+    let protoc = protoc_bin_vendored::protoc_bin_path()
+        .expect("failed to locate the vendored protoc binary");
+    // Keep protobuf generation independent of tools installed on the build host.
+    // This is required for the Linux, macOS and Windows release jobs to be reproducible.
+    unsafe { std::env::set_var("PROTOC", protoc) };
+
     // runner.proto imports execution.proto + common.proto; all three are compiled from the
     // shared include dir. Only the client side exists here — the Runner connects out (docs/runner.md §4).
     tonic_build::configure()
