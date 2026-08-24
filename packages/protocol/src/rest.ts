@@ -130,7 +130,7 @@ export type Project = z.infer<typeof ProjectSchema>;
 export const ConversationSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1).nullable(),
-  runnerId: z.string().min(1),
+  runnerId: z.string().min(1).nullable(),
   title: z.string(),
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
@@ -170,7 +170,7 @@ export const CreateConversationSchema = z
   .object({
     title: z.string().trim().min(1).optional(),
     projectId: z.string().min(1).optional(),
-    runnerId: z.string().trim().min(1),
+    runnerId: z.string().trim().min(1).optional(),
     modelConfig: ModelConfigSchema.optional(),
     modelId: z.uuid().optional(),
   })

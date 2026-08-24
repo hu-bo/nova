@@ -99,4 +99,10 @@ describe("chat-ui", () => {
     expect(html).toContain('data-slot="button"');
     expect(html).not.toContain("<select");
   });
+
+  it("replaces the send button with an abort action while a run is active", () => {
+    const html = renderToStaticMarkup(<Composer isRunning onAbort={() => undefined} onSubmit={() => undefined} />);
+    expect(html).toContain('aria-label="中断当前运行"');
+    expect(html).not.toContain('aria-label="发送消息"');
+  });
 });

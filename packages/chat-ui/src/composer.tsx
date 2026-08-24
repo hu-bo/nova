@@ -1,4 +1,4 @@
-import { BrainCircuit, ChevronDown, Cpu, FileText, LoaderCircle, Paperclip, Send, X } from "lucide-react";
+import { BrainCircuit, ChevronDown, CircleStop, Cpu, FileText, LoaderCircle, Paperclip, Send, X } from "lucide-react";
 import {
   useRef,
   useState,
@@ -35,6 +35,9 @@ export interface ComposerSubmission {
 
 export interface ComposerProps {
   disabled?: boolean | undefined;
+  isRunning?: boolean | undefined;
+  isAborting?: boolean | undefined;
+  onAbort?: (() => void | Promise<void>) | undefined;
   allowFiles?: boolean | undefined;
   placeholder?: string | undefined;
   models?: readonly ComposerOption[] | undefined;
@@ -88,6 +91,9 @@ function OptionMenu({
 
 export function Composer({
   disabled = false,
+  isRunning = false,
+  isAborting = false,
+  onAbort,
   allowFiles = true,
   placeholder = "输入消息或粘贴截图，Shift+Enter 换行",
   models = [],
@@ -259,23 +265,41 @@ export function Composer({
             )}
           </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            size="icon"
-            disabled={!canSubmit}
-            aria-label={submitting ? "正在发送" : "发送消息"}
-            className="rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 shadow-md shadow-indigo-500/20"
-          >
-            {submitting ? (
-              <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-            ) : (
-              <Send
-                className="size-4 transition-transform group-hover:translate-x-px group-hover:-translate-y-px"
-                aria-hidden="true"
-              />
-            )}
-          </Button>
+          {isRunning && onAbort ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              disabled={isAborting}
+              aria-label={isAborting ? "正在中断" : "中断当前运行"}
+              onClick={() => void onAbort()}
+              className="rounded-xl"
+            >
+              {isAborting ? (
+                <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              ) : (
+                <CircleStop className="size-4" aria-hidden="true" />
+              )}
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              variant="primary"
+              size="icon"
+              disabled={!canSubmit}
+              aria-label={submitting ? "正在发送" : "发送消息"}
+              className="rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 shadow-md shadow-indigo-500/20"
+            >
+              {submitting ? (
+                <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              ) : (
+                <Send
+                  className="size-4 transition-transform group-hover:translate-x-px group-hover:-translate-y-px"
+                  aria-hidden="true"
+                />
+              )}
+            </Button>
+          )}
         </div>
       </form>
     </Card>

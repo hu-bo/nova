@@ -44,7 +44,7 @@ describe("protocol schemas", () => {
     })).toThrow();
   });
 
-  it("requires an explicit runner and safe model endpoint for conversations", async () => {
+  it("allows an unbound runner and requires a safe model endpoint for conversations", async () => {
     const { CreateConversationSchema } = await import("./index.js");
     const input = {
       runnerId: "runner-1",
@@ -62,6 +62,7 @@ describe("protocol schemas", () => {
       },
     };
     expect(CreateConversationSchema.parse(input).runnerId).toBe("runner-1");
+    expect(CreateConversationSchema.parse({ modelConfig: input.modelConfig }).runnerId).toBeUndefined();
     expect(() => CreateConversationSchema.parse({
       ...input,
       modelConfig: { ...input.modelConfig, endpoint: "http://localhost:11434" },
