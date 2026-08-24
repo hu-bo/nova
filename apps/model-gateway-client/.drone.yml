@@ -33,7 +33,7 @@ steps:
       - corepack enable
       - corepack prepare pnpm@9 --activate
       - pnpm config set store-dir /cache/pnpm-store
-      - pnpm config set registry https://registry.npmjs.org/
+      - pnpm config set registry https://registry.npmmirror.com/
       - pnpm -w install --no-frozen-lockfile --filter "$APP_NAME..."
       - cd $APP_DIR
       - pnpm run build

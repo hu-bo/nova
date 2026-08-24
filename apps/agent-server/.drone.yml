@@ -27,14 +27,24 @@ steps:
     volumes:
       - name: pnpm-cache
         path: /cache
+    environment:
+      API_CONFIG_TOKEN_SECRET:
+        from_secret: API_CONFIG_TOKEN_SECRET
+      NODE_CACHE_DIR: /cache/node-cache
+      PNPM_HOME: /cache/pnpm-store               # ← pnpm store
+      COREPACK_CACHE_DIR: /tmp/corepack-cache 
     commands:
       - APP_NAME=agent-server
       - APP_DIR=apps/$APP_NAME
       - APP_DEPLOY_DIR=/drone/src/$APP_NAME-deploy
       - corepack enable
       - corepack prepare pnpm@9 --activate
+      - cd $APP_DIR
+      # 内网拉配置
+      - 'wget --header="Authorization: Bearer $API_CONFIG_TOKEN_SECRET" "http://config.8and1.cn/api/pull/nova-server/env" -O .env'
+      # 单应用构建
       - pnpm config set store-dir /cache/pnpm-store
-      - pnpm config set registry https://registry.npmjs.org/
+      - pnpm config set registry https://registry.npmmirror.com/
       - pnpm -w install --no-frozen-lockfile --filter "$APP_NAME..."
       - pnpm --filter "$APP_NAME" run typecheck
       - pnpm deploy --filter "$APP_NAME" --node-linker=hoisted "$APP_DEPLOY_DIR" --legacy --prod=false
