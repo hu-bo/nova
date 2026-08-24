@@ -23,7 +23,7 @@ steps:
         - /cache/pnpm-store
 
   - name: build and package
-    image: node:22-alpine
+    image: node:20-alpine
     volumes:
       - name: pnpm-cache
         path: /cache
