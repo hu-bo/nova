@@ -17,3 +17,4 @@ target/
 .playwright-cli
 .pnpm-store
 .claude
+deepseek-harness-master

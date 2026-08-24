@@ -1,6 +1,6 @@
 {
-  "name": "@nova/runner",
-  "version": "0.0.0",
+  "name": "nova-runner",
+  "version": "0.0.1",
   "description": "Cross-platform nova-runner binary distribution",
   "license": "UNLICENSED",
   "type": "module",

@@ -49,6 +49,12 @@
 |---|---|
 | [testing.md](./testing.md) | 三层测试、集成测试装配、交付判据 |
 
+### 专题分析
+
+| 文档 | 一句话 |
+|---|---|
+| [deepseek-harness-agent-core-feasibility.md](./deepseek-harness-agent-core-feasibility.md) | DeepSeek Harness 替代 agent-core 的能力差异、方案、迁移路线与 Go/No-Go 条件 |
+
 ### Agent 组装
 
 | 文档 | 对应 | 一句话 |
