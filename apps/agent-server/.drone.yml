@@ -48,6 +48,8 @@ steps:
       - pnpm -w install --no-frozen-lockfile --filter "$APP_NAME..."
       - pnpm --filter "$APP_NAME" run typecheck
       - pnpm deploy --filter "$APP_NAME" --node-linker=hoisted "$APP_DEPLOY_DIR" --prod=false
+      - cp docker-compose.yml "$APP_DEPLOY_DIR/docker-compose.yml"
+      - cp .env "$APP_DEPLOY_DIR/.env"
       - tar -czf /drone/src/$APP_NAME.tar.gz -C $APP_DEPLOY_DIR .
 
   - name: rebuild-pnpm-cache
@@ -113,6 +115,6 @@ steps:
         - tar xzf /temp/app/$APP_NAME.tar.gz -C $APP_DIR
         - rm -f /temp/app/$APP_NAME.tar.gz
         - cd $APP_DIR
-        - nohup ./node_modules/.bin/tsx src/server.ts > server.log 2>&1 & echo $! > $PID_FILE
-        - sleep 2
-        - cat server.log
+        - docker compose up -d --force-recreate
+        - docker compose ps
+        - docker compose logs --no-color --tail=100 agent-server

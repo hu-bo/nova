@@ -1,0 +1,23 @@
+services:
+  agent-server:
+    image: node:20-alpine
+    container_name: nova-agent-server
+    working_dir: /data/app/agent-server
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 9203
+      RUNNER_HOST: 0.0.0.0
+      RUNNER_PORT: 9204
+      RUNNER_PUBLIC_URL: http://nova-grpc.8and1.cn
+    ports:
+      - "9203:9203"
+      - "9204:9204"
+    volumes:
+      - /data/app/agent-server:/data/app/agent-server
+    networks:
+      - shared_network
+    command: ["./node_modules/.bin/tsx", "src/server.ts"]
+    init: true
+    restart: unless-stopped
