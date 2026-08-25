@@ -6,14 +6,39 @@ on:
       - "runner-v*"
 
 jobs:
-  build:
+  build-linux:
+    name: Build linux-x64 (Rocky Linux 9)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build with glibc 2.34
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            rockylinux:9 \
+            bash -lc '
+              set -euo pipefail
+              dnf install -y gcc gcc-c++ make curl perl pkg-config openssl-devel
+              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+              source "$HOME/.cargo/env"
+              cargo build -p nova-runner --release
+            '
+      - uses: actions/upload-artifact@v6
+        with:
+          name: nova-runner-linux-x64
+          path: target/release/nova-runner
+          if-no-files-found: error
+
+  build-native:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { target: linux-x64, os: ubuntu-latest, binary: target/release/nova-runner }
           - { target: darwin-x64, os: macos-15-intel, binary: target/release/nova-runner }
           - { target: darwin-arm64, os: macos-14, binary: target/release/nova-runner }
           - { target: win32-x64, os: windows-latest, binary: target/release/nova-runner.exe }
@@ -28,7 +53,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
+    needs: [build-linux, build-native]
     runs-on: ubuntu-latest
     permissions:
       contents: read
