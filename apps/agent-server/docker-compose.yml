@@ -21,3 +21,6 @@ services:
     command: ["./node_modules/.bin/tsx", "src/server.ts"]
     init: true
     restart: unless-stopped
+networks:
+  shared_network:
+    external: true
