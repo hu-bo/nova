@@ -11,6 +11,7 @@ import { Card } from "../components/ui/card.js";
 import { Dialog } from "../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table.js";
+import { installCommand, runnerCommand } from "./commands.js";
 import { useRunnerCatalog, useRunnerConnection, useRunnerTokens } from "./use-runners.js";
 
 interface RunnerManagerDialogProps {
@@ -71,6 +72,16 @@ export function RunnerManagerDialog({ open, onClose, selectedRunnerId, onSelect 
       <Dialog open={open} onClose={onClose} size="xl" title="Runner 与连接令牌">
         <div className="grid gap-8">
           <section aria-labelledby="runner-token-title">
+            <div className="mb-6 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <p className="text-sm font-semibold text-slate-900">安装 Runner</p>
+              <p className="mt-1 text-sm text-slate-500">在目标设备执行 npm 安装，然后使用下方命令启动 Runner。</p>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200">
+                <code className="min-w-0 overflow-x-auto whitespace-nowrap text-xs text-slate-700">
+                  {installCommand}
+                </code>
+                <CopyButton value={installCommand} label="复制安装命令" compact />
+              </div>
+            </div>
             <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h3 id="runner-token-title" className="font-semibold text-slate-900">
@@ -207,11 +218,7 @@ export function RunnerManagerDialog({ open, onClose, selectedRunnerId, onSelect 
                           <TableCell>
                             {token ? (
                               <CopyButton
-                                value={
-                                  endpoint
-                                    ? runnerCommand(endpoint, token.token, runner.id, runner.rootWorkspace)
-                                    : null
-                                }
+                                value={endpoint ? runnerCommand(endpoint, token.token, runner.id) : null}
                                 label="复制命令"
                                 compact
                               />
@@ -368,11 +375,6 @@ function CopyButton({ value, label, compact = false }: { value: string | null; l
       {copied ? "已复制" : label}
     </Button>
   );
-}
-
-function runnerCommand(endpoint: string, token: string, runnerId?: string, workspace = "<workspace>") {
-  const executable = import.meta.env.DEV ? "cargo run -p nova-runner --" : "nova-runner";
-  return `${executable} --server "${endpoint}" --token "${token}"${runnerId ? ` --runner-id "${runnerId}"` : ""} `;
 }
 
 function displayWorkspacePath(path: string) {

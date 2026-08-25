@@ -12,22 +12,32 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import type { RunnerToken } from "@nova/protocol";
 import { useAuth } from "../auth/provider.js";
 import { Button } from "../components/ui/button.js";
-
-const installCommand = "cargo install nova-runner";
+import { installCommand, runnerCommand } from "../runner/commands.js";
+import { useRunnerConnection, useRunnerTokens } from "../runner/use-runners.js";
 
 export function LandingRoute() {
   const auth = useAuth();
-  const [copied, setCopied] = useState(false);
+  const runnerTokens = useRunnerTokens(auth.isAuthenticated);
+  const runnerConnection = useRunnerConnection(auth.isAuthenticated);
+  const [copiedCommand, setCopiedCommand] = useState<"install" | "run" | null>(null);
   const [copyFailed, setCopyFailed] = useState(false);
+  const token = (runnerTokens.data?.[0] as RunnerToken | undefined)?.token;
+  const runCommand =
+    token && runnerConnection.data?.endpoint
+      ? runnerCommand(runnerConnection.data.endpoint, token)
+      : auth.isAuthenticated
+        ? "正在生成启动命令…"
+        : "登录后生成带 Token 的启动命令";
 
-  async function copyInstall() {
+  async function copyCommand(command: string, kind: "install" | "run") {
     try {
-      await navigator.clipboard.writeText(installCommand);
-      setCopied(true);
+      await navigator.clipboard.writeText(command);
+      setCopiedCommand(kind);
       setCopyFailed(false);
-      setTimeout(() => setCopied(false), 1_800);
+      setTimeout(() => setCopiedCommand(null), 1_800);
     } catch {
       setCopyFailed(true);
     }
@@ -102,21 +112,39 @@ export function LandingRoute() {
             <div id="install" className="mt-10 max-w-xl rounded-2xl bg-black/30 p-2 ring-1 ring-white/10 backdrop-blur">
               <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
                 <span className="select-none text-indigo-400">$</span>
-                <code className="min-w-0 flex-1 select-all overflow-x-auto whitespace-nowrap text-sm text-slate-200">
-                  {installCommand}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => void copyInstall()}
-                  className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
-                  aria-label={copied ? "已复制" : "复制安装命令"}
-                >
-                  {copied ? (
-                    <Check className="size-4 text-emerald-400" aria-hidden="true" />
-                  ) : (
-                    <Clipboard className="size-4" aria-hidden="true" />
-                  )}
-                </button>
+                <div className="min-w-0 flex-1 space-y-2 text-sm text-slate-200">
+                  <code className="block select-all overflow-x-auto whitespace-nowrap">{installCommand}</code>
+                  <code className="block select-all overflow-x-auto whitespace-nowrap text-slate-400">
+                    {runCommand}
+                  </code>
+                </div>
+                <div className="flex shrink-0 flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => void copyCommand(installCommand, "install")}
+                    className="grid size-9 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
+                    aria-label={copiedCommand === "install" ? "已复制安装命令" : "复制安装命令"}
+                  >
+                    {copiedCommand === "install" ? (
+                      <Check className="size-4 text-emerald-400" aria-hidden="true" />
+                    ) : (
+                      <Clipboard className="size-4" aria-hidden="true" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => token && runnerConnection.data?.endpoint && void copyCommand(runCommand, "run")}
+                    disabled={!token || !runnerConnection.data?.endpoint}
+                    className="grid size-9 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
+                    aria-label={copiedCommand === "run" ? "已复制启动命令" : "复制启动命令"}
+                  >
+                    {copiedCommand === "run" ? (
+                      <Check className="size-4 text-emerald-400" aria-hidden="true" />
+                    ) : (
+                      <Clipboard className="size-4" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
               </div>
               {copyFailed && (
                 <p className="px-3 pb-1 pt-2 text-xs text-amber-300" role="alert">
