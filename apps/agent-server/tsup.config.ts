@@ -11,4 +11,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   noExternal: [/^@nova\//],
+  external: ["mammoth"],
 });
