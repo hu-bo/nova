@@ -47,7 +47,11 @@ steps:
       - pnpm config set registry https://registry.npmmirror.com/
       - pnpm -w install --no-frozen-lockfile --filter "$APP_NAME..."
       - pnpm --filter "$APP_NAME" run typecheck
+      - pnpm --filter "$APP_NAME" run build
       - pnpm deploy --filter "$APP_NAME" --node-linker=hoisted "$APP_DEPLOY_DIR" --prod=false
+      - cp -R dist "$APP_DEPLOY_DIR/dist"
+      - cp -R drizzle "$APP_DEPLOY_DIR/drizzle"
+      - cp drizzle.config.ts "$APP_DEPLOY_DIR/drizzle.config.ts"
       - cp docker-compose.yml "$APP_DEPLOY_DIR/docker-compose.yml"
       - cp .env "$APP_DEPLOY_DIR/.env"
       - tar -czf /drone/src/$APP_NAME.tar.gz -C $APP_DEPLOY_DIR .

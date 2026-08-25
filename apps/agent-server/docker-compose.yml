@@ -16,9 +16,14 @@ services:
       - "9204:9204"
     volumes:
       - /data/app/agent-server:/data/app/agent-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - shared_network
-    command: ["./node_modules/.bin/tsx", "src/server.ts"]
+    command:
+      - /bin/sh
+      - -c
+      - ./node_modules/.bin/drizzle-kit migrate --config=drizzle.config.ts && node dist/server.js
     init: true
     restart: unless-stopped
 networks:
