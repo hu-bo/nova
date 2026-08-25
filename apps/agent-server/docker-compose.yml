@@ -23,7 +23,7 @@ services:
     command:
       - /bin/sh
       - -c
-      - ./node_modules/.bin/drizzle-kit migrate --config=drizzle.config.ts && node dist/server.js
+      - node dist/server.js
     init: true
     restart: unless-stopped
 networks:

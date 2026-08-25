@@ -121,4 +121,5 @@ steps:
         - cd $APP_DIR
         - docker compose up -d --force-recreate
         - docker compose ps
+        - sleep 2
         - docker compose logs --no-color --tail=100 agent-server
