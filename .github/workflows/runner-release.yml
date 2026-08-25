@@ -14,14 +14,14 @@ jobs:
       matrix:
         include:
           - { target: linux-x64, os: ubuntu-latest, binary: target/release/nova-runner }
-          - { target: darwin-x64, os: macos-13, binary: target/release/nova-runner }
+          - { target: darwin-x64, os: macos-15-intel, binary: target/release/nova-runner }
           - { target: darwin-arm64, os: macos-14, binary: target/release/nova-runner }
           - { target: win32-x64, os: windows-latest, binary: target/release/nova-runner.exe }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build -p nova-runner --release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: nova-runner-${{ matrix.target }}
           path: ${{ matrix.binary }}
@@ -33,7 +33,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: 22.19.0
           registry-url: https://registry.npmjs.org
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           pattern: nova-runner-*
           path: artifacts
