@@ -4,9 +4,13 @@ import {
   ChevronRight,
   Clipboard,
   Code2,
+  FolderKanban,
   Github,
+  LayoutDashboard,
   MonitorCog,
+  MessageCircle,
   Server,
+  Settings,
   Sparkles,
   TerminalSquare,
 } from "lucide-react";
@@ -113,8 +117,13 @@ export function LandingRoute() {
               <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
                 <span className="select-none text-indigo-400">$</span>
                 <div className="min-w-0 flex-1 space-y-2 text-sm text-slate-200">
-                  <code className="block select-all overflow-x-auto whitespace-nowrap">{installCommand}</code>
-                  <code className="block select-all overflow-x-auto whitespace-nowrap text-slate-400">
+                  <code className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap" title={installCommand}>
+                    {installCommand}
+                  </code>
+                  <code
+                    className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap text-slate-400"
+                    title={runCommand}
+                  >
                     {runCommand}
                   </code>
                 </div>
@@ -206,48 +215,80 @@ function TerminalDemo() {
           </div>
           <span className="mx-auto flex items-center gap-2 text-[11px] text-slate-500">
             <TerminalSquare className="size-3.5" aria-hidden="true" />
-            nova / project
+            nova / workspace
           </span>
         </div>
-        <div className="grid min-h-[400px] sm:grid-cols-[150px_1fr]">
-          <div className="border-b border-white/10 p-4 sm:border-b-0 sm:border-r">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600">Runner</p>
-            <div className="mt-3 flex items-center gap-2 text-xs text-slate-300">
-              <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" />
-              Windows PC
+        <div className="grid min-h-[400px] sm:grid-cols-[168px_1fr]">
+          <aside className="border-b border-white/10 p-3 sm:border-b-0 sm:border-r" aria-label="工作台侧栏示意">
+            <div className="flex items-center gap-2 px-2 py-1.5">
+              <span className="grid size-6 place-items-center rounded-lg bg-indigo-500 text-white">
+                <Sparkles className="size-3.5" aria-hidden="true" />
+              </span>
+              <span className="text-xs font-semibold tracking-tight text-slate-200">Nova</span>
             </div>
-            <p className="mt-1 truncate pl-4 text-[10px] text-slate-600">E:\Project\nova</p>
-            <p className="mt-6 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Plan</p>
-            <div className="mt-3 space-y-2 text-[10px] text-slate-500">
-              <p className="text-emerald-400">✓ Inspect routes</p>
-              <p className="text-indigo-300">~ Build dashboard</p>
-              <p>○ Verify build</p>
-            </div>
-          </div>
-          <div className="p-5 font-mono text-xs leading-6">
-            <p className="text-slate-500">you</p>
-            <p className="mt-1 text-slate-200">把工作台的空状态和移动端布局补完整。</p>
-            <p className="mt-6 text-indigo-300">nova</p>
-            <p className="mt-1 text-slate-300">我先检查现有页面和共享组件，再补齐状态，不会改动聊天渲染边界。</p>
-            <div className="mt-4 rounded-lg bg-white/[0.035] px-3 py-2 ring-1 ring-white/10">
-              <p className="flex items-center gap-2 text-slate-400">
-                <ChevronRight className="size-3 text-emerald-400" aria-hidden="true" />
-                read routes/home.tsx
+            <div className="mt-4 space-y-1 text-[10px] font-medium">
+              <p className="flex items-center gap-2 rounded-lg bg-indigo-400/15 px-2.5 py-2 text-indigo-200">
+                <LayoutDashboard className="size-3.5" aria-hidden="true" />
+                工作台
               </p>
-              <p className="flex items-center gap-2 text-slate-400">
-                <ChevronRight className="size-3 text-emerald-400" aria-hidden="true" />
-                edit layout.css
-              </p>
-              <p className="flex items-center gap-2 text-slate-400">
-                <ChevronRight className="size-3 animate-pulse text-indigo-400" aria-hidden="true" />
-                run typecheck
+              <p className="flex items-center gap-2 px-2.5 py-2 text-slate-500">
+                <Settings className="size-3.5" aria-hidden="true" />
+                设置
               </p>
             </div>
-            <p className="mt-5 text-slate-300">布局已完成。窄屏切换为抽屉导航，错误与空状态保留下一步操作。</p>
-            <span
-              className="mt-3 inline-block h-4 w-1.5 animate-pulse bg-indigo-400 motion-reduce:animate-none"
-              aria-hidden="true"
-            />
+            <p className="mt-5 px-2.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600">项目</p>
+            <div className="mt-2 rounded-lg px-2.5 py-2 text-[10px] text-slate-300">
+              <div className="flex min-w-0 items-center gap-2">
+                <FolderKanban className="size-3.5 shrink-0 text-indigo-300" aria-hidden="true" />
+                <span className="truncate">Nova workspace</span>
+              </div>
+              <p className="mt-1 truncate pl-5 text-[9px] text-slate-600">E:\Project\nova</p>
+            </div>
+            <p className="mt-4 px-2.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600">最近</p>
+            <p className="mt-2 flex min-w-0 items-center gap-2 truncate px-2.5 text-[10px] text-slate-500">
+              <MessageCircle className="size-3.5 shrink-0" aria-hidden="true" />
+              空状态与移动端布局
+            </p>
+          </aside>
+          <div className="min-w-0">
+            <div className="flex h-12 items-center justify-between border-b border-white/10 px-4 sm:px-5">
+              <div className="min-w-0">
+                <p className="truncate text-[11px] font-semibold text-slate-200">Nova workspace</p>
+                <p className="mt-0.5 flex items-center gap-1.5 text-[9px] text-slate-600">
+                  <span className="size-1.5 rounded-full bg-emerald-400" /> Runner 已就绪 · Windows PC
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-emerald-400/10 px-2 py-1 text-[9px] font-semibold text-emerald-300">
+                可执行
+              </span>
+            </div>
+            <div className="p-4 font-mono text-[11px] leading-5 sm:p-5">
+              <p className="text-slate-600">you</p>
+              <p className="mt-1 truncate text-slate-200">把工作台的空状态和移动端布局补完整。</p>
+              <p className="mt-5 text-indigo-300">nova</p>
+              <p className="mt-1 text-slate-300">我会先检查页面和共享组件，再补齐状态。</p>
+              <div className="mt-4 rounded-lg bg-white/[0.035] px-3 py-2.5 ring-1 ring-white/10">
+                <p className="mb-2 flex items-center gap-2 text-[9px] font-semibold uppercase tracking-wider text-slate-600">
+                  <span className="size-1.5 rounded-full bg-indigo-400" /> 执行计划
+                </p>
+                <p className="flex items-center gap-2 truncate text-slate-400">
+                  <ChevronRight className="size-3 shrink-0 text-emerald-400" aria-hidden="true" />
+                  inspect routes/home.tsx
+                </p>
+                <p className="flex items-center gap-2 truncate text-slate-400">
+                  <ChevronRight className="size-3 shrink-0 text-emerald-400" aria-hidden="true" />
+                  update empty and mobile states
+                </p>
+                <p className="flex items-center gap-2 truncate text-slate-400">
+                  <ChevronRight className="size-3 shrink-0 animate-pulse text-indigo-400" aria-hidden="true" />
+                  run typecheck
+                </p>
+              </div>
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-400/5 px-3 py-2 text-[10px] text-emerald-300 ring-1 ring-emerald-400/10">
+                <Check className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">准备开始修改，workspace 边界已锁定</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

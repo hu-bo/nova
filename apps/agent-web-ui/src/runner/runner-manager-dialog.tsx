@@ -74,9 +74,9 @@ export function RunnerManagerDialog({ open, onClose, selectedRunnerId, onSelect 
           <section aria-labelledby="runner-token-title">
             <div className="mb-6 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
               <p className="text-sm font-semibold text-slate-900">安装 Runner</p>
-              <p className="mt-1 text-sm text-slate-500">在目标设备执行 npm 安装，然后使用下方命令启动 Runner。</p>
+              <p className="mt-1 text-sm text-slate-500">可先执行 npm 安装，也可以直接使用下方 npx 命令启动 Runner。</p>
               <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200">
-                <code className="min-w-0 overflow-x-auto whitespace-nowrap text-xs text-slate-700">
+                <code className="min-w-0 truncate text-ellipsis whitespace-nowrap text-xs text-slate-700" title={installCommand}>
                   {installCommand}
                 </code>
                 <CopyButton value={installCommand} label="复制安装命令" compact />

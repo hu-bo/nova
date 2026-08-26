@@ -21,7 +21,7 @@ jobs:
             rockylinux:9 \
             bash -lc '
               set -euo pipefail
-              dnf install -y gcc gcc-c++ make curl perl pkg-config openssl-devel
+              dnf install -y gcc gcc-c++ make perl pkg-config openssl-devel
               curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
               source "$HOME/.cargo/env"
               cargo build -p nova-runner --release
