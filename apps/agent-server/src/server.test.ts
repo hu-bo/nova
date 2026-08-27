@@ -13,7 +13,7 @@ import { createAgentRuntime } from "./modules/runtime/create-agent-runtime.js";
 let app: FastifyInstance | undefined;
 afterEach(async () => app?.close());
 
-it("creates a standalone chat runtime with the self-contained URL reader", () => {
+it("creates an unbound standalone chat runtime with only self-contained tools", () => {
   const events = createEventHub();
   const agent = createAgentRuntime(
     {
@@ -23,7 +23,7 @@ it("creates a standalone chat runtime with the self-contained URL reader", () =>
         id: "0e484465-b5a8-47d0-9ffb-49bc1913e7eb",
         userId: "alice",
         projectId: null,
-        runnerId: "local",
+        runnerId: null,
         title: "Chat",
         modelConfig: {
           provider: "openai",
@@ -49,6 +49,54 @@ it("creates a standalone chat runtime with the self-contained URL reader", () =>
   );
 
   expect(agent.state.activeTools).toContain("read_url");
+  expect(agent.state.activeTools).not.toContain("bash");
+});
+
+it("creates a runner-bound standalone chat runtime with coding tools", () => {
+  const events = createEventHub();
+  const picks: unknown[][] = [];
+  const pick = (...args: unknown[]) => {
+    picks.push(args);
+    return { identity: { workspace: "E:\\workspace" } };
+  };
+  const runners = {
+    pick,
+  } as unknown as ReturnType<typeof createRunnerRegistry>;
+  const agent = createAgentRuntime(
+    {
+      userId: "alice",
+      project: null,
+      conversation: {
+        id: "3a7d1744-a854-4a9c-98f3-d1f314ab5b58",
+        userId: "alice",
+        projectId: null,
+        runnerId: "runner-1",
+        title: "Chat with runner",
+        modelConfig: {
+          provider: "openai",
+          endpoint: "https://api.openai.com/v1",
+          model: "gpt-5",
+          credential: "test-secret",
+          contextWindow: 128_000,
+          maxOutput: 16_384,
+          thinkingLevels: ["off", "high"],
+          parallelToolCalls: true,
+          reasoningFormat: "openai",
+          inputModalities: ["text"],
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    },
+    {
+      storage: () => memoryStorage(),
+      decisions: createPendingDecisions(events),
+      runners,
+    },
+  );
+
+  expect(agent.state.activeTools).toContain("bash");
+  expect(picks).toEqual([["alice", "runner-1"]]);
 });
 
 it("runs the authenticated project and conversation flow with ownership isolation", async () => {

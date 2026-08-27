@@ -38,9 +38,9 @@ Agent 有且只有两种运行形态，差别只在**有没有 workspace**。
 | | Chat 模式 | Project 模式 |
 |---|---|---|
 | workspace | 无 | 固定，由 project 定义 |
-| `ctx: ToolContext` | **不注入** | 注入 |
-| Runner | **不启动** | 必需 |
-| 可用工具 | `risk: "none"` 的（`todo_write` 等） | 全部 |
+| `ctx: ToolContext` | 未绑定 Runner 时**不注入**；Host 可为绑定 Runner 的普通会话注入 | 注入 |
+| Runner | 未绑定时**不启动**；绑定后由 Host 提供 | 必需 |
+| 可用工具 | 无 `ctx` 时仅 `risk: "none"`（`todo_write` 等）；有 `ctx` 时由 Host 选择 | 全部 |
 | 典型用途 | 普通提问、方案讨论、纯推理 | 改代码、跑测试、验证 |
 | 闭环 | 模型直接回答 | 意图识别 → TODO → 执行 → 勾选 → 验证（§9.5） |
 

@@ -80,10 +80,10 @@ Composition Root。用户消息进入 Agent 后，是否自行处理、调用 To
 
 ```text
 Project                        独立 Chat
-  workspace  已绑定目录          workspace  无
-  Runner     创建后可延后绑定      Runner     不需要绑定，也不注入 coding ToolContext
+  workspace  已绑定目录          workspace  未绑定 Runner 时无；绑定后为 Runner root
+  Runner     创建后可延后绑定      Runner     可选；绑定且 READY 时注入 coding ToolContext
   │                              │
-  ├── Conversation A             └── Conversation（projectId = null）
+  ├── Conversation A             └── Conversation（projectId = null，可选绑定 Runner）
   ├── Conversation B
   └── Conversation C
       三个会话共享 workspace 与 Runner，各自独立的上下文与 TODO
@@ -92,10 +92,10 @@ Project                        独立 Chat
 | | 独立 Chat | Project 下的 Chat |
 |---|---|---|
 | `conversations.project_id` | `null` | project 的 id |
-| workspace | 无 | `projects.workspace` |
-| Runner | 不要求绑定 | 优先使用 conversation 的 `runner_id`，否则使用 Project 的绑定，并校验 workspace（§8） |
-| 注入的 `ctx` | `undefined` | `toToolContext(runner, ...)` |
-| 工具集 | `risk === "none"` | 全部 |
+| workspace | 未绑定 Runner 时无；绑定后为 Runner 的 `root_workspace` | `projects.workspace` |
+| Runner | 不要求绑定；绑定后仅使用该 Runner 的 root | 优先使用 conversation 的 `runner_id`，否则使用 Project 的绑定，并校验 workspace（§8） |
+| 注入的 `ctx` | 未绑定时 `undefined`；绑定且 READY 时 `toToolContext(runner, { cwd: root_workspace })` | `toToolContext(runner, ...)` |
+| 工具集 | 未绑定时 `risk === "none"`；绑定且 READY 时全部 | 全部 |
 | TODO | 有，属于该 conversation | 有，属于该 conversation（**不跨会话共享**） |
 
 **Project 是 workspace 的容器，不是会话的容器。** 创建 Project 时不立即绑定 Runner；
@@ -195,8 +195,9 @@ function createAgentRuntime(conv: Conversation, project: Project | null, userId:
 }
 ```
 
-`todoWrite` 是 Chat 唯一额外 Module 能力，`risk === "none"`，因此 Chat 有会话级 TODO，
-但没有文件或命令能力。不要用空 Harness 后再在 handler 中临时塞 Tool。
+`todoWrite` 是未绑定 Runner 的 Chat 唯一额外 Module 能力，`risk === "none"`，因此仍有会话级
+TODO。普通 Chat 绑定 READY Runner 后使用 coding Harness，并以 Runner 的 `root_workspace` 作为
+`cwd`；这不会创建或关联 Project。不要用空 Harness 后再在 handler 中临时塞 Tool。
 
 Provider 与场景选择都在这里（`agent-core.md` §2）。**除了这个文件，没有第二处知道
 agent-core / Runner Module / runner-sdk / model-adapters 同时存在。**
@@ -651,16 +652,17 @@ Runner 的 Bearer token 必须在接纳 `RunnerSessionCandidate` 前解析为可
 自报字段不能决定所有者。`runner-sdk` 的接纳回调必须把已验证的连接身份交给 Runner Module，
 否则多用户部署不能上线。bootstrap token 明文不进入 `runners` 表和日志。
 
-**`pick(userId, runnerId, workspace)` 的第一版策略**：只在 `ownerId === userId`、指定
-`runnerId` 为 `READY` 且 workspace 位于该 Runner root 内的 Runner 中选择。**没有匹配的 Runner
-就报错**，不回落到任意一个 ——
+**`pick(userId, runnerId, workspace?)` 的第一版策略**：只在 `ownerId === userId`、指定
+`runnerId` 为 `READY`，且提供时 workspace 位于该 Runner root 内的 Runner 中选择。未提供 workspace
+时以 Runner root 为执行目录。**没有匹配的 Runner 就报错**，不回落到任意一个 ——
 回落意味着 agent 会在错误的代码库上改文件。
 
 workspace 必须位于指定 Runner 的 root 内；Project 的 workspace 是设备上的工作目录，Runner
 本身是设备级连接，不随 Project 创建或销毁。不做标签匹配、亲和性、加权。
 
-**Chat 模式不调 `pick`**。Runner 连接属于 server 级 Control Plane，
-不与某个 conversation 的生命周期绑定。
+未绑定 Runner 的 Chat 不调 `pick`。已绑定 Runner 的 Chat 调 `pick(userId, runnerId)`，以该
+Runner 的 `root_workspace` 作为 `cwd`；Project Chat 仍必须传入并校验 Project workspace。Runner
+连接属于 server 级 Control Plane，不与某个 conversation 的生命周期绑定。
 
 Runner 断连时，其上运行的 execution 全部失败为 `RUNNER_UNAVAILABLE`
 （`runner-sdk.md` §4），由 taskflow 或 agent-core 决定后续。

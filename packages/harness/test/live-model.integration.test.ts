@@ -17,6 +17,7 @@ it.skipIf(!live)(
     if (!apiKey || !modelName) throw new Error("OPENAI_API_KEY and MODEL are required in .env");
     const ref = {
       provider: "openai" as const,
+      wireApi: "chat-completions" as const,
       model: modelName,
       apiKey,
       ...(process.env.OPENAI_BASE_URL ? { baseUrl: process.env.OPENAI_BASE_URL } : {}),

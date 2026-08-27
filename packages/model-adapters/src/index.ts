@@ -13,7 +13,7 @@ export function createModel(ref: ModelRef): Model {
   const stream =
     protocol === "anthropic"
       ? anthropicStream(ref)
-      : ref.api === "chat-completions"
+      : ref.wireApi === "chat-completions"
         ? openAiChatStream(ref)
         : openAiResponsesStream(ref);
   const reasoningFormat =

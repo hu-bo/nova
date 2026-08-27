@@ -17,7 +17,7 @@ const newProfile: ModelProfileForm = {
   endpoint: "https://api.openai.com/v1",
   model: "",
   credential: "",
-  contextWindow: 128_000,
+  contextWindow: 200_000,
   maxOutput: 16_384,
   reasoningFormat: "openai",
   thinkingLevels: ["off", "low", "medium", "high"],

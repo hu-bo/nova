@@ -15,7 +15,7 @@ export interface RunnerRegistry {
   state(userId: string, runnerId: string | null, workspace: string | null): RunnerState;
   status(userId: string, runnerId: string): RunnerState;
   isOnline(userId: string, runnerId: string): boolean;
-  pick(userId: string, runnerId: string, workspace: string): RunnerSession;
+  pick(userId: string, runnerId: string, workspace?: string): RunnerSession;
   verifyWorkspace(userId: string, runnerId: string, workspace: string): Promise<void>;
   listDirectories(userId: string, runnerId: string, requestedPath?: string): Promise<RunnerDirectory>;
   subscribe(userId: string, listener: (event: RunnerEvent) => void): () => void;
@@ -49,10 +49,10 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 5
     return reportedState(registered.session.state as number);
   };
 
-  const available = (userId: string, runnerId: string, workspace: string): Registered | null => {
+  const available = (userId: string, runnerId: string, workspace?: string): Registered | null => {
     const registered = current(userId, runnerId);
     if (!registered || status(userId, runnerId) === "disconnected") return null;
-    if (!withinRoot(registered.session.identity.workspace, workspace)) return null;
+    if (workspace && !withinRoot(registered.session.identity.workspace, workspace)) return null;
     return registered;
   };
 

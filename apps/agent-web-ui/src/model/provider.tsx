@@ -2,6 +2,7 @@ import type { ModelConfig } from "@nova/protocol";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../auth/provider.js";
+import { LocalStore } from "../lib/storage.js";
 import type { ModelProfileForm } from "./schemas.js";
 
 export interface ModelProfile extends ModelProfileForm {
@@ -27,28 +28,13 @@ interface ModelSettingsValue {
   modelSelection: (profileId: string) => { modelConfig: ModelConfig } | { modelId: string } | null;
 }
 
-const SETTINGS_KEY = "nova_model_settings";
-const initialProfile: ModelProfile = {
-  id: "openai-default",
-  source: "local",
-  providerName: "OpenAI",
-  provider: "openai",
-  endpoint: "https://api.openai.com/v1",
-  model: "gpt-5",
-  credential: "",
-  contextWindow: 128_000,
-  maxOutput: 16_384,
-  reasoningFormat: "openai",
-  thinkingLevels: ["off", "low", "medium", "high"],
-  parallelToolCalls: true,
-  supportsImages: true,
-};
+const settingsStore = new LocalStore<PersistedSettings | null>("nova_model_settings", null);
 
 const ModelSettingsContext = createContext<ModelSettingsValue | null>(null);
 
 function loadSettings(): { profiles: ModelProfile[]; defaultProfileId: string; defaultRunnerId: string } {
   try {
-    const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "null") as PersistedSettings | null;
+    const parsed = settingsStore.get();
     if (!parsed?.profiles.length) throw new Error("empty");
     // Older saved profiles did not include `source`. They are local profiles
     // by definition; normalise them so the edit/delete actions remain usable.
@@ -63,7 +49,7 @@ function loadSettings(): { profiles: ModelProfile[]; defaultProfileId: string; d
       defaultRunnerId: parsed.defaultRunnerId ?? "",
     };
   } catch {
-    return { profiles: [initialProfile], defaultProfileId: initialProfile.id, defaultRunnerId: "" };
+    return { profiles: [], defaultProfileId: "", defaultRunnerId: "" };
   }
 }
 
@@ -103,14 +89,11 @@ export function ModelSettingsProvider({ children }: { children: ReactNode }) {
   const profiles = useMemo(() => [...settings.profiles, ...serverProfiles], [settings.profiles, serverProfiles]);
 
   const persist = useCallback((next: typeof settings) => {
-    localStorage.setItem(
-      SETTINGS_KEY,
-      JSON.stringify({
-        profiles: next.profiles,
-        defaultProfileId: next.defaultProfileId,
-        defaultRunnerId: next.defaultRunnerId,
-      } satisfies PersistedSettings),
-    );
+    settingsStore.set({
+      profiles: next.profiles,
+      defaultProfileId: next.defaultProfileId,
+      defaultRunnerId: next.defaultRunnerId,
+    });
     return next;
   }, []);
 

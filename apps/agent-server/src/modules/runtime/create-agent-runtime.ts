@@ -38,12 +38,13 @@ export function createAgentRuntime(route: EntryRoute, dependencies: AgentRuntime
   const model = createModel(ref);
   const workspace = project ? requireWorkspace(project.workspace) : undefined;
   const runnerId = conversation.runnerId ?? project?.runnerId;
-  const ctx = project
-    ? toToolContext(dependencies.runners.pick(userId, requireRunner(runnerId), workspace!), {
-        cwd: workspace!,
-      })
-    : undefined;
-  const harness = project ? codingHarness : chatHarness;
+  const runner = project
+    ? dependencies.runners.pick(userId, requireRunner(runnerId), workspace)
+    : runnerId
+      ? dependencies.runners.pick(userId, runnerId)
+      : undefined;
+  const ctx = runner ? toToolContext(runner, { cwd: workspace ?? runner.identity.workspace }) : undefined;
+  const harness = ctx ? codingHarness : chatHarness;
   return harness.createAgent({
     model: ref,
     stream: model.stream,
@@ -60,6 +61,7 @@ function resolveModelRef(config: EntryRoute["conversation"]["modelConfig"]): Mod
   return {
     provider: config.provider,
     protocol: config.provider,
+    ...(config.provider === "openai" ? { wireApi: "chat-completions" as const } : {}),
     model: config.model,
     apiKey: config.credential,
     baseUrl: config.endpoint,

@@ -13,7 +13,7 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
   if (!ref.apiKey) throw new ProviderError("Missing API key for OpenAI-compatible provider");
   let response: Response;
   try {
-    response = await fetch(`${(ref.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "")}/chat/completions`, {
+    response = await fetch(`${chatCompletionsBaseUrl(ref.baseUrl)}/chat/completions`, {
       method: "POST",
       signal,
       headers: {
@@ -145,6 +145,18 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
   }
   if (!stopReason) throw new ProviderError("Chat Completions stream ended before finish", true);
   yield { type: "finish", stopReason };
+}
+
+/** Accept both SDK-style roots (https://host) and API prefixes (https://host/v1). */
+function chatCompletionsBaseUrl(baseUrl: string | undefined): string {
+  const value = (baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
+  try {
+    const url = new URL(value);
+    if (!url.pathname || url.pathname === "/") url.pathname = "/v1";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return value;
+  }
 }
 
 type OutputState = {

@@ -63,7 +63,7 @@ const defaults: ModelFormValues = {
   publicName: "",
   providerId: "",
   upstreamName: "",
-  contextWindow: 128000,
+  contextWindow: 200000,
   maxOutput: 8192,
   thinkingLevels: [],
   parallelToolCalls: true,

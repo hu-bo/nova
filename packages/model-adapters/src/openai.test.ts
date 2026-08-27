@@ -30,7 +30,7 @@ it("supports OpenAI-compatible Chat Completions gateways", async () => {
     openAiChatStream(
       {
         provider: "gateway",
-        api: "chat-completions",
+        wireApi: "chat-completions",
         baseUrl: "https://api.orcarouter.ai/v1",
         apiKey: "key",
         model: "qwen/qwen3.8-27b-free",
@@ -53,6 +53,25 @@ it("supports OpenAI-compatible Chat Completions gateways", async () => {
   expect(events.at(-1)).toEqual({ type: "finish", stopReason: "stop" });
 });
 
+it("adds /v1 when an OpenAI-compatible provider gives its host as the base URL", async () => {
+  let url = "";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      url = String(input);
+      return sse([{ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }]);
+    }),
+  );
+
+  await collect(
+    openAiChatStream({ provider: "openai", baseUrl: "https://api.aigcdesk.com", apiKey: "key", model: "test" }, {
+      max: 0,
+    })(request(), new AbortController().signal),
+  );
+
+  expect(url).toBe("https://api.aigcdesk.com/v1/chat/completions");
+});
+
 it("maps Chat Completions tool calls", async () => {
   vi.stubGlobal(
     "fetch",
@@ -72,7 +91,7 @@ it("maps Chat Completions tool calls", async () => {
     ),
   );
   const events = await collect(
-    openAiChatStream({ provider: "gateway", api: "chat-completions", apiKey: "key", model: "test" }, { max: 0 })(
+    openAiChatStream({ provider: "gateway", wireApi: "chat-completions", apiKey: "key", model: "test" }, { max: 0 })(
       request(),
       new AbortController().signal,
     ),

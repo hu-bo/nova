@@ -48,7 +48,7 @@ type StreamFn = (req: ModelRequest, signal: AbortSignal) => AsyncIterable<ModelE
 interface ModelRef {
   provider: "openai" | "anthropic" | "gateway"
   protocol?: "openai" | "anthropic" // wire format；缺省由 provider 推断
-  api?: "responses" | "chat-completions" // OpenAI wire API；缺省为 responses
+  wireApi?: "responses" | "chat-completions" // OpenAI wire API；缺省为 responses
   model: string                    // direct 时为上游名；gateway 时为 public_name
   apiKey?: string                  // gateway 模式下为 gateway 的 token
   baseUrl?: string
@@ -208,16 +208,30 @@ MiniMax、DeepSeek、OpenAI 中转商的上游 URL、真实模型名和 provider
 直接复用对应的 OpenAI adapter，`protocol = "anthropic"` 直接复用 `anthropic.ts`；两者都只替换
 `baseUrl`、公开模型名和 gateway token。
 
-OpenAI-compatible 的 Chat Completions gateway 使用 `api: "chat-completions"`：
+OpenAI-compatible 的 Chat Completions gateway 使用 `wireApi: "chat-completions"`：
 
 ```ts
 createModel({
   provider: "gateway",
   protocol: "openai",
-  api: "chat-completions",
+  wireApi: "chat-completions",
   baseUrl: "https://api.orcarouter.ai/v1",
   apiKey: process.env.ORCAROUTER_API_KEY,
   model: "qwen/qwen3.8-27b-free",
+})
+```
+
+AIGCDesk 使用同一条适配路径。它的文档将 `https://api.aigcdesk.com` 称为 Base URL，
+适配器会在仅有 host 或 `/v1` 前缀时正确请求 `/v1/chat/completions`：
+
+```ts
+createModel({
+  provider: "openai",
+  protocol: "openai",
+  wireApi: "chat-completions",
+  baseUrl: "https://api.aigcdesk.com",
+  apiKey: process.env.AIGCDESK_API_KEY,
+  model: "控制台中允许调用的模型名",
 })
 ```
 

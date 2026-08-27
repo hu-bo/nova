@@ -8,10 +8,13 @@ import { Dialog } from "../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { useConversationMutations } from "../conversation/mutations.js";
 import { ConversationProvider, useConversationStore } from "../conversation/store.js";
+import { LocalStore } from "../lib/storage.js";
 import { useModelSettings } from "../model/provider.js";
 import { useConversations, useProject } from "../project/use-projects.js";
 import { RunnerBadge } from "./home.js";
 import { RunnerManagerDialog } from "../runner/runner-manager-dialog.js";
+
+const SELECTED_MODEL_STORE = new LocalStore("nova_selected_model_profile", "");
 
 export function ConversationRoute() {
   const { projectId, conversationId } = useParams();
@@ -59,7 +62,11 @@ function ConversationView({
   project?: { id: string; name: string; workspace: string | null; runnerId: string | null; runnerState: string } | undefined;
 }) {
   const models = useModelSettings();
-  const [modelProfileId, setModelProfileId] = useState(models.defaultProfileId || models.profiles[0]?.id || "");
+  const [storedProfileId, setStoredProfileId] = useState(() => SELECTED_MODEL_STORE.get());
+  // 存储的模型可能已被删除或不在当前用户的服务端目录里，此时回落到默认值
+  const modelProfileId = models.profiles.some((profile) => profile.id === storedProfileId)
+    ? storedProfileId
+    : models.defaultProfileId || models.profiles[0]?.id || "";
   const [queue, setQueue] = useState<"steering" | "nextRun">("steering");
   const [runnerOpen, setRunnerOpen] = useState(false);
   const [runnerWarning, setRunnerWarning] = useState<ComposerSubmission | null>(null);
@@ -254,7 +261,10 @@ function ConversationView({
                 placeholder={project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行"}
                 models={modelOptions}
                 model={modelProfileId}
-                onModelChange={setModelProfileId}
+                onModelChange={(id) => {
+                  SELECTED_MODEL_STORE.set(id);
+                  setStoredProfileId(id);
+                }}
                 onSubmit={submit}
               />
               <div className="mt-1.5 flex items-center justify-between gap-3 px-1 text-[11px] text-slate-400">
