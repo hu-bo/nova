@@ -33,12 +33,18 @@ export function HomeRoute() {
 
   const projectItems = projects.data ?? [];
   const conversationItems = conversations.data?.items ?? [];
+  const createError = createConversation.error;
   const online = projectItems.filter(
     (project) => project.runnerState === "ready" || project.runnerState === "busy",
   ).length;
 
   return (
     <div className="mx-auto max-w-[1500px] p-5 sm:p-6 lg:p-8">
+      {createError && (
+        <p className="mb-6 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200" role="alert">
+          新建会话失败：{errorMessage(createError)}
+        </p>
+      )}
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-semibold text-indigo-600">今天想完成什么？</p>
@@ -51,10 +57,11 @@ export function HomeRoute() {
         </div>
         <Button
           variant="primary"
+          disabled={createConversation.isPending}
           icon={<Plus className="size-4" aria-hidden="true" />}
           onClick={() => createConversation.mutate(undefined)}
         >
-          新建会话
+          {createConversation.isPending ? "正在创建…" : "新建会话"}
         </Button>
       </div>
 
@@ -115,8 +122,13 @@ export function HomeRoute() {
               title="还没有 Project"
               description="创建第一个 Project，并把它绑定到设备上的 workspace。"
               action={
-                <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => createConversation.mutate(undefined)}>
-                  新建并开始
+                <Button
+                  variant="primary"
+                  disabled={createConversation.isPending}
+                  icon={<Plus className="size-4" />}
+                  onClick={() => createConversation.mutate(undefined)}
+                >
+                  {createConversation.isPending ? "正在创建…" : "新建并开始"}
                 </Button>
               }
             />

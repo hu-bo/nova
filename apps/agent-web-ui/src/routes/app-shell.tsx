@@ -6,6 +6,7 @@ import { useConversations, useProjects } from "../project/use-projects.js";
 import { RunnerLiveUpdates } from "../runner/live-updates.js";
 import { useQuickConversationCreate } from "../project/new-conversation.js";
 import { NewProjectDrawer } from "../project/new-project.js";
+import { errorMessage } from "../api/client.js";
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -110,6 +111,13 @@ export function AppShell() {
       </dialog>
 
       <main className="min-h-screen pt-14 lg:pl-64">
+        {createChat.error && (
+          <div className="mx-5 pt-4 lg:mx-8" role="alert">
+            <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200">
+              新建会话失败：{errorMessage(createChat.error)}
+            </p>
+          </div>
+        )}
         <Outlet />
       </main>
       <NewProjectDrawer open={projectCreatorOpen} onClose={() => setProjectCreatorOpen(false)} />
@@ -223,7 +231,11 @@ function SidebarContent({
               return (
                 <NavItem
                   key={conversation.id}
-                  to={conversation.projectId ? `/p/${conversation.projectId}/c/${conversation.id}` : `/c/${conversation.id}`}
+                  to={
+                    conversation.projectId
+                      ? `/p/${conversation.projectId}/c/${conversation.id}`
+                      : `/c/${conversation.id}`
+                  }
                   icon={
                     projectConversation ? (
                       <FolderKanban className="size-4" aria-hidden="true" />

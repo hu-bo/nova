@@ -124,13 +124,20 @@ export function ProjectRoute() {
           </Button>
           <Button
             variant="primary"
+            disabled={createConversation.isPending}
             onClick={() => createConversation.mutate({ id: project.id, runnerId: project.runnerId })}
             icon={<Plus className="size-4" aria-hidden="true" />}
           >
-            新建会话
+            {createConversation.isPending ? "正在创建…" : "新建会话"}
           </Button>
         </div>
       </div>
+
+      {createConversation.error && (
+        <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200" role="alert">
+          新建会话失败：{errorMessage(createConversation.error)}
+        </p>
+      )}
 
       {project.runnerState === "disconnected" && (
         <section className="mt-8 rounded-xl bg-amber-50 p-5 ring-1 ring-amber-200" aria-labelledby="runner-guide-title">
@@ -235,13 +242,21 @@ export function ProjectRoute() {
                 : "先绑定 Runner 与 workspace，才能创建 coding 会话。"
             }
             action={
-              <Button
-                variant="primary"
-                onClick={() => createConversation.mutate({ id: project.id, runnerId: project.runnerId })}
-                icon={<Plus className="size-4" />}
-              >
-                新建会话
-              </Button>
+              <div className="flex flex-col items-center gap-3">
+                <Button
+                  variant="primary"
+                  disabled={createConversation.isPending}
+                  onClick={() => createConversation.mutate({ id: project.id, runnerId: project.runnerId })}
+                  icon={<Plus className="size-4" />}
+                >
+                  {createConversation.isPending ? "正在创建…" : "新建会话"}
+                </Button>
+                {createConversation.error && (
+                  <p className="max-w-sm text-center text-sm text-rose-600" role="alert">
+                    {errorMessage(createConversation.error)}
+                  </p>
+                )}
+              </div>
             }
           />
         )}
