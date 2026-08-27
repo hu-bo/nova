@@ -1,144 +1,241 @@
-import { jsonSchema, streamText, tool } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import { ProviderError, retryStream, type RetryConfig } from "./retry.js";
-import type { Block, Message, ModelEvent, ModelRef, ModelRequest, StreamFn } from "./types.js";
+import { ProviderError, providerResponseMessage, retryStream, type RetryConfig } from "./retry.js";
+import type { Block, Message, ModelEvent, ModelRef, ModelRequest, StreamFn, Usage } from "./types.js";
 
-export function openAiStream(ref: ModelRef, retry?: RetryConfig): StreamFn {
+/** OpenAI Chat Completions-compatible adapter, including OpenAI-compatible gateways. */
+export function openAiChatStream(ref: ModelRef, retry?: RetryConfig): StreamFn {
   return (request, signal) => retryStream(() => attempt(ref, request, signal), signal, retry);
 }
 
+/** @deprecated Use openAiChatStream for the Chat Completions wire format. */
+export const openAiStream = openAiChatStream;
+
 async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSignal): AsyncIterable<ModelEvent> {
   if (!ref.apiKey) throw new ProviderError("Missing API key for OpenAI-compatible provider");
-  console.log(ref)
+  let response: Response;
   try {
-    const provider = createOpenAI({ apiKey: ref.apiKey, baseURL: ref.baseUrl ?? "https://api.openai.com/v1" });
-    const inputMessages = messages(request.messages);
-    const result = streamText({
-      model: provider.responses(ref.model),
-      system: request.system || undefined,
-      ...(inputMessages.length ? { messages: inputMessages } : { prompt: " " }),
-      tools: Object.fromEntries(
-        request.tools.map((item) => [
-          item.name,
-          tool({ description: item.description, inputSchema: jsonSchema(item.parameters) }),
-        ]),
-      ),
-      maxOutputTokens: request.maxOutput,
-      abortSignal: signal,
-      providerOptions: {
-        openai: {
-          ...(request.thinking && request.thinking !== "off" ? { reasoningEffort: request.thinking } : {}),
-        },
+    response = await fetch(`${(ref.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      signal,
+      headers: {
+        accept: "text/event-stream",
+        "content-type": "application/json",
+        authorization: `Bearer ${ref.apiKey}`,
       },
+      body: JSON.stringify({
+        model: ref.model,
+        stream: true,
+        stream_options: { include_usage: true },
+        messages: chatMessages(request),
+        ...(request.tools.length
+          ? {
+              tools: request.tools.map((item) => ({
+                type: "function",
+                function: { name: item.name, description: item.description, parameters: item.parameters },
+              })),
+            }
+          : {}),
+        ...(request.maxOutput ? { max_tokens: request.maxOutput } : {}),
+        ...reasoning(request.thinking),
+      }),
     });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    throw new ProviderError(`Connection failed: ${error instanceof Error ? error.message : String(error)}`, true);
+  }
+  if (!response.ok || !response.body) {
+    const body = await response.text().catch(() => "");
+    throw new ProviderError(
+      providerResponseMessage(response, body),
+      response.status === 429 || response.status >= 500,
+      response.status === 429 ? retryAfterMs(response.headers.get("retry-after")) : undefined,
+      isContextOverflow(response.status, body) ? "context_overflow" : undefined,
+    );
+  }
 
-    const indexes = new Map<string, number>();
-    const states = new Map<number, { kind: "text" | "thinking" | "tool_call"; text: string; ended: boolean }>();
-    let nextIndex = 0;
-    let finished = false;
-
-    const indexOf = (id: string): number => {
-      const existing = indexes.get(id);
-      if (existing !== undefined) return existing;
-      const index = nextIndex++;
-      indexes.set(id, index);
-      return index;
-    };
-
-    const start = (index: number, kind: "text" | "thinking" | "tool_call"): ModelEvent => {
-      if (!states.has(index)) states.set(index, { kind, text: "", ended: false });
-      return { type: "block.start", index, blockType: kind };
-    };
-
-    for await (const part of result.stream) {
-      if (part.type === "text-delta") {
-        const index = indexOf(part.id);
-        if (part.text) {
-          if (!states.has(index)) yield start(index, "text");
-          states.get(index)!.text += part.text;
-          yield { type: "block.delta", index, delta: part.text };
-        }
-      } else if (part.type === "reasoning-delta") {
-        const index = indexOf(part.id);
-        if (part.text) {
-          if (!states.has(index)) yield start(index, "thinking");
-          states.get(index)!.text += part.text;
-          yield { type: "block.delta", index, delta: part.text };
-        }
-      } else if (part.type === "tool-call") {
-        const index = indexOf(part.toolCallId);
-        if (!states.has(index)) yield start(index, "tool_call");
-        yield {
-          type: "block.end",
-          index,
-          block: { type: "tool_call", callId: part.toolCallId, name: part.toolName, args: part.input },
-        };
-        states.get(index)!.ended = true;
-      } else if (part.type === "finish") {
-        for (const [index, state] of states) {
-          if (state.ended) continue;
-          const block: Block =
-            state.kind === "thinking" ? { type: "thinking", text: state.text } : { type: "text", text: state.text };
-          yield { type: "block.end", index, block };
-          state.ended = true;
-        }
-        const usage = part.totalUsage;
-        yield {
-          type: "usage",
-          usage: {
-            input: usage.inputTokens ?? 0,
-            output: usage.outputTokens ?? 0,
-            cacheRead: usage.inputTokenDetails?.cacheReadTokens,
-          },
-        };
-        yield { type: "finish", stopReason: finishReason(part.finishReason) };
-        finished = true;
-      } else if (part.type === "error") {
-        throw new ProviderError(errorMessage(part.error));
+  const states = new Map<number, OutputState>();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let stopReason: Extract<ModelEvent, { type: "finish" }>["stopReason"] | undefined;
+  const getState = (index: number, kind: OutputState["kind"]): OutputState => {
+    const existing = states.get(index);
+    if (existing) return existing;
+    const created: OutputState = { kind, text: "", callId: "", name: "", started: false, ended: false };
+    states.set(index, created);
+    return created;
+  };
+  const end = (index: number, state: OutputState): ModelEvent[] => {
+    if (state.ended) return [];
+    state.ended = true;
+    const block: Block =
+      state.kind === "tool_call"
+        ? { type: "tool_call", callId: state.callId, name: state.name, args: parseArguments(state.text) }
+        : state.kind === "thinking"
+          ? { type: "thinking", text: state.text }
+          : { type: "text", text: state.text };
+    return [
+      ...(state.started ? [] : [{ type: "block.start", index, blockType: state.kind } as ModelEvent]),
+      { type: "block.end", index, block },
+    ];
+  };
+  const process = (chunk: any): ModelEvent[] => {
+    const choice = chunk.choices?.[0];
+    const delta = choice?.delta ?? {};
+    const events: ModelEvent[] = [];
+    if (typeof delta.content === "string" && delta.content) {
+      const state = getState(0, "text");
+      if (!state.started) {
+        state.started = true;
+        events.push({ type: "block.start", index: 0, blockType: "text" });
+      }
+      state.text += delta.content;
+      events.push({ type: "block.delta", index: 0, delta: delta.content });
+    }
+    const reasoningText = typeof delta.reasoning_content === "string" ? delta.reasoning_content : delta.reasoning;
+    if (typeof reasoningText === "string" && reasoningText) {
+      const state = getState(1, "thinking");
+      if (!state.started) {
+        state.started = true;
+        events.push({ type: "block.start", index: 1, blockType: "thinking" });
+      }
+      state.text += reasoningText;
+      events.push({ type: "block.delta", index: 1, delta: reasoningText });
+    }
+    for (const call of delta.tool_calls ?? []) {
+      const index = Number(call.index ?? 0) + 2;
+      const state = getState(index, "tool_call");
+      if (call.id) state.callId = String(call.id);
+      if (call.function?.name) state.name = String(call.function.name);
+      if (!state.started) {
+        state.started = true;
+        events.push({ type: "block.start", index, blockType: "tool_call" });
+      }
+      if (typeof call.function?.arguments === "string" && call.function.arguments) {
+        state.text += call.function.arguments;
+        events.push({ type: "block.delta", index, delta: call.function.arguments });
       }
     }
-
-    if (!finished) throw new ProviderError("OpenAI stream ended before finish", true);
+    if (chunk.usage) events.push({ type: "usage", usage: chatUsage(chunk.usage) });
+    if (choice?.finish_reason) {
+      for (const [index, state] of states) events.push(...end(index, state));
+      stopReason = finishReason(choice.finish_reason);
+    }
+    return events;
+  };
+  try {
+    for await (const bytes of response.body) {
+      buffer += decoder.decode(bytes, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        try {
+          for (const event of process(JSON.parse(data))) yield event;
+        } catch (error) {
+          if (error instanceof ProviderError) throw error;
+          throw new ProviderError("Malformed Chat Completions SSE event", true);
+        }
+      }
+    }
   } catch (error) {
     if (signal.aborted) throw error;
     if (error instanceof ProviderError) throw error;
-    throw new ProviderError(errorMessage(error), true);
+    throw new ProviderError(`Stream interrupted: ${error instanceof Error ? error.message : String(error)}`, true);
+  }
+  if (!stopReason) throw new ProviderError("Chat Completions stream ended before finish", true);
+  yield { type: "finish", stopReason };
+}
+
+type OutputState = {
+  kind: "text" | "thinking" | "tool_call";
+  text: string;
+  callId: string;
+  name: string;
+  started: boolean;
+  ended: boolean;
+};
+
+function chatMessages(request: ModelRequest): unknown[] {
+  return [
+    ...(request.system ? [{ role: "system", content: request.system }] : []),
+    ...request.messages.flatMap(messageToChat),
+  ];
+}
+function messageToChat(message: Message): unknown[] {
+  const content: unknown[] = [],
+    toolCalls: unknown[] = [],
+    toolResults: unknown[] = [];
+  for (const block of message.blocks) {
+    if (block.type === "text") content.push({ type: "text", text: block.text });
+    if (block.type === "image")
+      content.push({ type: "image_url", image_url: { url: `data:${block.mimeType};base64,${block.data}` } });
+    if (block.type === "tool_call")
+      toolCalls.push({
+        id: block.callId,
+        type: "function",
+        function: { name: block.name, arguments: JSON.stringify(block.args) },
+      });
+    if (block.type === "tool_result")
+      toolResults.push({
+        role: "tool",
+        tool_call_id: block.callId,
+        content: block.content
+          .map((part) => (part.type === "text" ? part.text : `[image:${part.mimeType}]`))
+          .join("\n"),
+      });
+  }
+  const messages: unknown[] = [];
+  if (content.length || toolCalls.length)
+    messages.push({
+      role: message.role,
+      content:
+        content.length === 1 && (content[0] as any).type === "text"
+          ? (content[0] as any).text
+          : content.length
+            ? content
+            : null,
+      ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+    });
+  messages.push(...toolResults);
+  return messages;
+}
+function reasoning(thinking: ModelRequest["thinking"]): Record<string, unknown> {
+  return !thinking || thinking === "off" ? {} : { reasoning_effort: thinking };
+}
+function chatUsage(value: any): Usage {
+  return {
+    input: value.prompt_tokens ?? 0,
+    output: value.completion_tokens ?? 0,
+    cacheRead: value.prompt_tokens_details?.cached_tokens,
+  };
+}
+function finishReason(reason: string): Extract<ModelEvent, { type: "finish" }>["stopReason"] {
+  return reason === "tool_calls" || reason === "function_call"
+    ? "tool_use"
+    : reason === "length"
+      ? "max_tokens"
+      : "stop";
+}
+function parseArguments(value: string): unknown {
+  try {
+    return JSON.parse(value || "{}");
+  } catch {
+    return {};
   }
 }
-
-function messages(source: Message[]): any[] {
-  return source.flatMap((message): any[] => {
-    const content = message.blocks.flatMap((block): any[] => {
-      if (block.type === "text") return [{ type: "text", text: block.text }];
-      if (block.type === "image") return [{ type: "image", image: `data:${block.mimeType};base64,${block.data}` }];
-      if (block.type === "tool_call")
-        return [{ type: "tool-call", toolCallId: block.callId, toolName: block.name, input: block.args }];
-      if (block.type === "tool_result")
-        return [
-          {
-            type: "tool-result",
-            toolCallId: block.callId,
-            toolName: "",
-            output: {
-              type: "text",
-              value: block.content
-                .map((part) => (part.type === "text" ? part.text : `[image:${part.mimeType}]`))
-                .join("\n"),
-            },
-          },
-        ];
-      return [];
-    });
-    return content.length ? [{ role: message.role, content }] : [];
-  });
+function isContextOverflow(status: number, body: string): boolean {
+  if (status !== 400 && status !== 413) return false;
+  const text = body.toLowerCase();
+  return (
+    text.includes("context_length_exceeded") ||
+    text.includes("maximum context length") ||
+    text.includes("context window") ||
+    text.includes("too many tokens")
+  );
 }
-
-function finishReason(reason: string): Extract<ModelEvent, { type: "finish" }>["stopReason"] {
-  if (reason === "tool-calls") return "tool_use";
-  if (reason === "length") return "max_tokens";
-  return "stop";
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function retryAfterMs(header: string | null): number | undefined {
+  if (!header) return undefined;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : undefined;
 }

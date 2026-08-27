@@ -48,6 +48,7 @@ type StreamFn = (req: ModelRequest, signal: AbortSignal) => AsyncIterable<ModelE
 interface ModelRef {
   provider: "openai" | "anthropic" | "gateway"
   protocol?: "openai" | "anthropic" // wire format；缺省由 provider 推断
+  api?: "responses" | "chat-completions" // OpenAI wire API；缺省为 responses
   model: string                    // direct 时为上游名；gateway 时为 public_name
   apiKey?: string                  // gateway 模式下为 gateway 的 token
   baseUrl?: string
@@ -145,7 +146,8 @@ packages/model-adapters/src/
 ├── index.ts          # createModel
 ├── types.ts          # §3 §4
 ├── retry.ts          # §5，provider 无关
-├── openai.ts
+├── openai.ts              # OpenAI-compatible Chat Completions
+├── responses.ts           # OpenAI Responses API
 └── anthropic.ts
 ```
 
@@ -203,8 +205,21 @@ MiniMax、DeepSeek、OpenAI 中转商的上游 URL、真实模型名和 provider
 ```
 
 由于 gateway 暴露 OpenAI / Anthropic 兼容接口，不建 `gateway.ts`。`protocol = "openai"`
-直接复用 `openai.ts`，`protocol = "anthropic"` 直接复用 `anthropic.ts`；两者都只替换
+直接复用对应的 OpenAI adapter，`protocol = "anthropic"` 直接复用 `anthropic.ts`；两者都只替换
 `baseUrl`、公开模型名和 gateway token。
+
+OpenAI-compatible 的 Chat Completions gateway 使用 `api: "chat-completions"`：
+
+```ts
+createModel({
+  provider: "gateway",
+  protocol: "openai",
+  api: "chat-completions",
+  baseUrl: "https://api.orcarouter.ai/v1",
+  apiKey: process.env.ORCAROUTER_API_KEY,
+  model: "qwen/qwen3.8-27b-free",
+})
+```
 
 ---
 

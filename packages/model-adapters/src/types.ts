@@ -1,10 +1,12 @@
 export type ThinkingLevel = "off" | "low" | "medium" | "high" | "max";
 export type ModelProtocol = "openai" | "anthropic";
+export type OpenAiApi = "responses" | "chat-completions";
 export type ReasoningFormat = "none" | "openai" | "anthropic" | "deepseek" | "minimax";
 export type InputModality = "text" | "image";
 export interface ModelRef {
   provider: "openai" | "anthropic" | "gateway";
   protocol?: ModelProtocol;
+  api?: OpenAiApi;
   model: string;
   apiKey?: string;
   baseUrl?: string;
