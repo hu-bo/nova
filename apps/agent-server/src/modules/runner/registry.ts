@@ -82,6 +82,10 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 5
       );
       publish(registered.ownerId, runnerId, state);
     }
+    if (!registered.session.connected) {
+      sessions.delete(key(registered.ownerId, runnerId));
+      return;
+    }
     void store?.updateRunnerStatus({
       ownerId: registered.ownerId,
       id: runnerId,
@@ -89,7 +93,6 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 5
       reportedState: state === "disconnected" ? null : state,
       lastSeenAt: new Date(),
     });
-    if (!registered.session.lastHeartbeatAt) sessions.delete(key(registered.ownerId, runnerId));
   };
 
   return {
@@ -140,7 +143,6 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 5
         },
         "runner registration persisted",
       );
-      update(registered);
     },
     markDisconnected(ownerId, runnerId) {
       const registered = sessions.get(key(ownerId, runnerId));

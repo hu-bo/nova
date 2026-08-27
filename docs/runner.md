@@ -201,6 +201,7 @@ nova-runner \
 ```
 
 - `--server` 和凭据是建立出站连接的必需配置。
+- Runner 启动后立即尝试连接；连接失败或断开后继续注册，重试间隔从 1 分钟按 2 倍递增，最大 10 分钟，最多尝试 1000 次。达到上限后进程退出并记录错误。
 - token 只用于 Runner 连接身份；用户权限判定在 Runner Module。
 - 日志可输出到终端或文件，但 stdio 不得成为 Execution transport。
 - Rust binary 的安装和发布可以由 `packages/runner` 这个纯分发包完成，但它不得进入

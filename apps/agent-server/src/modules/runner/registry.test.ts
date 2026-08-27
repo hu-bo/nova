@@ -5,7 +5,7 @@ import { createRunnerRegistry } from "./registry.js";
 describe("runner directory browsing", () => {
   it("lists owned directories from the runner root and rejects paths outside it", async () => {
     const root = "E:\\work";
-    const session = {
+    const mutableSession = {
       identity: { runnerId: "runner-1", workspace: root },
       generation: "generation-1",
       lastHeartbeatAt: Date.now(),
@@ -21,7 +21,8 @@ describe("runner directory browsing", () => {
           { name: "packages", kind: 2 },
         ],
       },
-    } as unknown as RunnerSession;
+    };
+    const session = mutableSession as unknown as RunnerSession;
     const registry = createRunnerRegistry();
     await registry.register("alice", "token-1", session);
 
@@ -37,5 +38,38 @@ describe("runner directory browsing", () => {
     await expect(registry.listDirectories("alice", "runner-1", "E:\\outside")).rejects.toMatchObject({
       code: "RUNNER_UNAVAILABLE",
     });
+  });
+});
+
+describe("runner registration lifecycle", () => {
+  it("keeps an accepted session until its first heartbeat", async () => {
+    let notify: (() => void) | undefined;
+    const mutableSession: {
+      lastHeartbeatAt: number | null;
+      state: number;
+      [key: string]: unknown;
+    } = {
+      identity: { runnerId: "runner-1", workspace: "E:\\work" },
+      generation: "generation-1",
+      connected: true,
+      lastHeartbeatAt: null,
+      state: 0,
+      running: 0,
+      onStatus: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+      close: async () => {},
+    };
+    const session = mutableSession as unknown as RunnerSession;
+    const registry = createRunnerRegistry();
+
+    await registry.register("alice", "token-1", session);
+    expect(registry.status("alice", "runner-1")).toBe("disconnected");
+
+    mutableSession.lastHeartbeatAt = Date.now();
+    mutableSession.state = 1;
+    notify?.();
+    expect(registry.status("alice", "runner-1")).toBe("ready");
   });
 });

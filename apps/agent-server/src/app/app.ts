@@ -1,4 +1,4 @@
-import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
+import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
 import { fileURLToPath } from "node:url";
 import pino from "pino";
@@ -49,6 +49,8 @@ export function createApp(logger = true): FastifyInstance {
   const base = {
     requestIdHeader: "x-request-id",
     genReqId: (request: IncomingMessage) => request.headers["x-request-id"]?.toString() ?? crypto.randomUUID(),
+    // Access logs are high-volume noise; application warnings and errors are logged explicitly.
+    logController: new LogController({ disableRequestLogging: true }),
   };
   if (!logger) return Fastify({ ...base, logger: false });
   const options = {

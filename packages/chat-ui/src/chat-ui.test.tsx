@@ -6,10 +6,14 @@ import { BlockView, Composer, DecisionPrompt, MessageList, TodoPanel } from "./i
 describe("chat-ui", () => {
   it("renders markdown and structured code", () => {
     const markdown = renderToStaticMarkup(<BlockView block={{ type: "text", text: "**完成**" }} />);
+    const fencedCode = renderToStaticMarkup(<BlockView block={{ type: "text", text: "```text\n.\n└── src/\n```" }} />);
     const code = renderToStaticMarkup(
       <BlockView block={{ type: "code", language: "ts", code: "const done = true", path: "src/a.ts", startLine: 4 }} />,
     );
     expect(markdown).toContain("<strong>完成</strong>");
+    expect(fencedCode).toContain("[&amp;_pre_code]:text-slate-200");
+    expect(fencedCode).toContain('class="language-text"');
+    expect(fencedCode).toContain(".\n└── src/");
     expect(code).toContain("src/a.ts:4");
     expect(code).toContain("const");
   });

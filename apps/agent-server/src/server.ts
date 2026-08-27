@@ -45,6 +45,7 @@ const runners = createRunnerRegistry(database.store);
 const runnerSdk = createRunnerSdk({ host: config.RUNNER_HOST, port: config.RUNNER_PORT });
 runnerSdk.onSession((candidate) => {
   void (async () => {
+    console.log(candidate)
     const token = await database.store.findRunnerToken(candidate.token);
     if (!token) {
       logger.warn(

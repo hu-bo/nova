@@ -43,7 +43,7 @@ it("sends Responses API input and streams text with usage", async () => {
     model: "test",
     stream: true,
     instructions: "Be useful",
-    input: [{ role: "user", content: [{ type: "input_text", text: "hello" }] }],
+    input: [{ role: "user", content: "hello" }],
     tools: [{ type: "function", name: "read", description: "Read", parameters: { type: "object" } }],
     max_output_tokens: 100,
     reasoning: { effort: "high" },

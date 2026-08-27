@@ -16,8 +16,8 @@ export default defineConfig({
         target: "http://auth.8and1.cn",
         changeOrigin: true,
       },
-      "/api": "http://127.0.0.1:3001",
-      "/admin": "http://127.0.0.1:3001",
+      "/api": "http://127.0.0.1:9203",
+      "/admin": "http://127.0.0.1:9203",
     },
   },
 });

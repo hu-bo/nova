@@ -8,6 +8,7 @@ export function anthropicStream(ref: ModelRef, retry?: RetryConfig): StreamFn {
 async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSignal): AsyncIterable<ModelEvent> {
   if (!ref.apiKey) throw new ProviderError("Missing API key for Anthropic provider");
   let response: Response;
+  console.log(3333)
   try {
     response = await fetch(`${(ref.baseUrl ?? "https://api.anthropic.com").replace(/\/$/, "")}/v1/messages`, {
       method: "POST",

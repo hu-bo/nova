@@ -9,6 +9,7 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
   if (!ref.apiKey) throw new ProviderError("Missing API key for OpenAI-compatible provider");
   let response: Response;
   try {
+  
     response = await fetch(`${(ref.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "")}/responses`, {
       method: "POST",
       signal,
@@ -37,6 +38,7 @@ async function* attempt(ref: ModelRef, request: ModelRequest, signal: AbortSigna
       }),
     });
   } catch (error) {
+    console.error('Error sending request to OpenAI Responses API:', error);
     if (signal.aborted) throw error;
     throw new ProviderError(`Connection failed: ${error instanceof Error ? error.message : String(error)}`, true);
   }
@@ -214,7 +216,17 @@ function responseInput(messages: Message[]): unknown[] {
       if (block.type === "image")
         content.push({ type: "input_image", image_url: `data:${block.mimeType};base64,${block.data}` });
     }
-    if (content.length) input.push({ role: message.role, content });
+    if (content.length) {
+      // Responses API accepts a string for text-only input messages. Some
+      // OpenAI-compatible gateways incorrectly validate input content items
+      // with the output-content enum and reject `input_text`.
+      input.push({
+        role: message.role,
+        content: content.every((part) => part.type === "input_text")
+          ? content.map((part) => part.text).join("\n")
+          : content,
+      });
+    }
     for (const block of message.blocks) {
       if (block.type === "tool_call") {
         input.push({

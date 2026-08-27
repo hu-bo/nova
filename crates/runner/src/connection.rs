@@ -20,8 +20,9 @@ use crate::protocol::{self, ConnectionState, SessionEnd};
 use crate::workspace::Workspace;
 
 const ENVELOPE_BUFFER: usize = 64;
-const INITIAL_RECONNECT_DELAY: Duration = Duration::from_millis(100);
-const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(10);
+const INITIAL_RECONNECT_DELAY: Duration = Duration::from_secs(1);
+const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(10 * 60);
+const MAX_CONNECT_ATTEMPTS: u64 = 1_000;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(15);
 const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -54,8 +55,10 @@ pub async fn run(
                 match result {
                     Ok(SessionEnd::Shutdown) => return Ok(()),
                     Ok(SessionEnd::Disconnected) => {
-                        delay = INITIAL_RECONNECT_DELAY;
+                        // A completed connect_once means registration succeeded. Do not carry
+                        // failures from an older server outage into the next outage.
                         attempt = 0;
+                        delay = INITIAL_RECONNECT_DELAY;
                         tracing::warn!(
                             runner_id = %config.runner_id,
                             server = %config.server,
@@ -63,14 +66,16 @@ pub async fn run(
                             "runner connection closed; reconnecting"
                         );
                     }
-                    Err(error) => tracing::warn!(
-                        runner_id = %config.runner_id,
-                        server = %config.server,
-                        attempt,
-                        retry_in_ms = delay.as_millis(),
-                        %error,
-                        "runner connection failed; reconnecting"
-                    ),
+                    Err(error) => {
+                        tracing::warn!(
+                            runner_id = %config.runner_id,
+                            server = %config.server,
+                            attempt,
+                            retry_in_ms = delay.as_millis(),
+                            %error,
+                            "runner connection failed; reconnecting"
+                        );
+                    }
                 }
             }
             changed = shutdown.changed() => {
@@ -78,6 +83,12 @@ pub async fn run(
                 executor.cancel_all();
                 return Ok(());
             }
+        }
+
+        if attempt >= MAX_CONNECT_ATTEMPTS {
+            return Err(anyhow::anyhow!(
+                "runner connection failed after {MAX_CONNECT_ATTEMPTS} attempts"
+            ));
         }
 
         tokio::select! {
@@ -88,10 +99,15 @@ pub async fn run(
                 return Ok(());
             }
         }
-        if attempt > 0 {
-            delay = (delay * 2).min(MAX_RECONNECT_DELAY);
-        }
+        delay = next_reconnect_delay(delay);
     }
+}
+
+fn next_reconnect_delay(current: Duration) -> Duration {
+    current
+        .checked_mul(2)
+        .unwrap_or(MAX_RECONNECT_DELAY)
+        .min(MAX_RECONNECT_DELAY)
 }
 
 async fn connect_once(
@@ -194,5 +210,30 @@ async fn send_heartbeats(
             return;
         }
         tracing::debug!(%runner_id, running = executor.running_count(), "runner heartbeat sent");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{INITIAL_RECONNECT_DELAY, MAX_RECONNECT_DELAY, next_reconnect_delay};
+    use std::time::Duration;
+
+    #[test]
+    fn reconnect_delay_grows_from_one_second_to_ten_minutes() {
+        let delays = [
+            INITIAL_RECONNECT_DELAY,
+            next_reconnect_delay(INITIAL_RECONNECT_DELAY),
+            next_reconnect_delay(Duration::from_secs(2)),
+            next_reconnect_delay(Duration::from_secs(4)),
+            next_reconnect_delay(Duration::from_secs(8 * 60)),
+            next_reconnect_delay(MAX_RECONNECT_DELAY),
+        ];
+
+        assert_eq!(delays[0], Duration::from_secs(1));
+        assert_eq!(delays[1], Duration::from_secs(2));
+        assert_eq!(delays[2], Duration::from_secs(4));
+        assert_eq!(delays[3], Duration::from_secs(8));
+        assert_eq!(delays[4], Duration::from_secs(10 * 60));
+        assert_eq!(delays[5], MAX_RECONNECT_DELAY);
     }
 }

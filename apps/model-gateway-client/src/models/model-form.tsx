@@ -25,17 +25,37 @@ const modelSchema = z
     priceOut: price,
     priceCacheRead: price,
   })
-  .superRefine((values, context) => {
+  .check(({ value: values, issues }) => {
     if (values.maxOutput > values.contextWindow)
-      context.addIssue({ code: "custom", path: ["maxOutput"], message: "不能超过上下文窗口" });
+      issues.push({ input: values.maxOutput, code: "custom", path: ["maxOutput"], message: "不能超过上下文窗口" });
     if (!values.inputModalities.includes("text"))
-      context.addIssue({ code: "custom", path: ["inputModalities"], message: "必须支持文本输入" });
+      issues.push({
+        input: values.inputModalities,
+        code: "custom",
+        path: ["inputModalities"],
+        message: "必须支持文本输入",
+      });
     if (new Set(values.thinkingLevels).size !== values.thinkingLevels.length)
-      context.addIssue({ code: "custom", path: ["thinkingLevels"], message: "Thinking 等级不能重复" });
+      issues.push({
+        input: values.thinkingLevels,
+        code: "custom",
+        path: ["thinkingLevels"],
+        message: "Thinking 等级不能重复",
+      });
     if (values.reasoningFormat === "none" && values.thinkingLevels.length > 0)
-      context.addIssue({ code: "custom", path: ["thinkingLevels"], message: "无 reasoning 格式时等级必须为空" });
+      issues.push({
+        input: values.thinkingLevels,
+        code: "custom",
+        path: ["thinkingLevels"],
+        message: "无 reasoning 格式时等级必须为空",
+      });
     if (values.reasoningFormat !== "none" && values.thinkingLevels.length === 0)
-      context.addIssue({ code: "custom", path: ["thinkingLevels"], message: "请选择至少一个 Thinking 等级" });
+      issues.push({
+        input: values.thinkingLevels,
+        code: "custom",
+        path: ["thinkingLevels"],
+        message: "请选择至少一个 Thinking 等级",
+      });
   });
 
 type ModelFormValues = z.infer<typeof modelSchema>;

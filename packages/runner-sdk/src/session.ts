@@ -94,6 +94,7 @@ export interface FileSystemOps {
 export interface RunnerSession {
   readonly identity: RunnerIdentity;
   readonly generation: string;
+  readonly connected: boolean;
   // 心跳只更新事实；状态推导（DISCONNECTED 等）是 Runner Module 的职责
   readonly lastHeartbeatAt: number | null;
   readonly state: RunnerState;
@@ -114,6 +115,7 @@ type Pending = {
 };
 
 export class RunnerSessionImpl implements RunnerSession {
+  connected = true;
   lastHeartbeatAt: number | null = null;
   state: RunnerState = RunnerState.UNSPECIFIED;
   running = 0;
@@ -235,6 +237,7 @@ export class RunnerSessionImpl implements RunnerSession {
   failTransport(err: RunnerError): void {
     if (this.closed) return;
     this.closed = true;
+    this.connected = false;
     this.lastHeartbeatAt = null;
     this.state = RunnerState.UNSPECIFIED;
     this.running = 0;
