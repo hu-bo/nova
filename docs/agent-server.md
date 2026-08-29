@@ -498,9 +498,10 @@ agent-server ──────────────────────�
 > Nova 使用 Fastify。认证钩子从 `Authorization: Bearer <token>` 取 token，调用 auth-service 的 `/api/me`，
 > 成功后执行 `users` 表幂等 upsert；不要在这里增加角色或权限判断。
 
-**SSE 的 token**：`EventSource` 不支持自定义 header。
-用 `fetch` + `ReadableStream` 手写 SSE 客户端（`agent-web-ui.md` §4），**不把 token 放 query string**
-—— query string 会进 access log。
+**SSE 不携带 token**：浏览器使用原生 `EventSource`，不在 query string 暴露凭证。
+身份与 Conversation 所有权在 `POST /api/conversations/:id/messages`、历史读取、Decision 和中断等
+REST 操作上校验；`GET /api/conversations/:id/events` 是只读订阅端点，以高熵 Conversation UUID
+作为订阅能力标识，不能修改状态或启动执行。
 
 **边界**
 
@@ -521,11 +522,21 @@ agent-server ──────────────────────�
 
 `GET /api/conversations/:id/events` → 订阅该 conversation 的 `UiEvent`。
 
+该路由注册在 Bearer 认证插件之外，响应必须立即 flush `200` 与
+`Content-Type: text/event-stream`。前端发送事务先懒创建 EventSource，等待 `open` 后才 POST，
+使订阅成功成为启动 run 的建连屏障。首次发送建立的流在会话页面存续期间跨 run 复用；
+`run.end` 不关闭流，因为 `nextRun` 可能紧接着产生下一组事件。
+
+flush headers 后必须立即写入 SSE 注释帧 `:connected\n\n`。不能等待业务事件或 15s 心跳才写
+首个 body chunk；开发代理和部分反向代理会在首个 chunk 前缓冲响应，导致浏览器收不到
+`EventSource.open`。
+
 | 关注点 | 做法 |
 |---|---|
 | 事件 id | 进程内每 conversation 一个单调递增计数器，写进 SSE `id:` 字段 |
-| 重连 | 客户端带 `Last-Event-ID` header，server 从环形缓冲（每 conversation 最近 500 条）重放 |
+| 重连 | 原生 `EventSource` 自动带 `Last-Event-ID` header，server 从环形缓冲（每 conversation 最近 500 条）重放 |
 | 缓冲区外 | 返回一次 `error{code:"RESYNC"}`，客户端重新拉 `GET /messages` 全量对齐 |
+| 建连帧 | headers 后立即发送 `:connected` 注释，强制代理转发并完成 `EventSource.open` |
 | 心跳 | 每 15s 发注释行 `:ka`，防代理断连 |
 | 多标签页 | 同一 conversation 多个订阅者，广播 |
 

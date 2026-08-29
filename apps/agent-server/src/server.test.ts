@@ -359,6 +359,24 @@ it("runs the authenticated project and conversation flow with ownership isolatio
   expect(createdConversation.statusCode).toBe(201);
   const conversationId = createdConversation.json().id as string;
 
+  const origin = await app.listen({ host: "127.0.0.1", port: 0 });
+  const eventController = new AbortController();
+  const eventResponse = await fetch(`${origin}/api/conversations/${conversationId}/events`, {
+    signal: eventController.signal,
+  });
+  expect(eventResponse.status).toBe(200);
+  expect(eventResponse.headers.get("content-type")).toBe("text/event-stream; charset=utf-8");
+  const eventReader = eventResponse.body!.getReader();
+  const connectedChunk = await eventReader.read();
+  expect(new TextDecoder().decode(connectedChunk.value)).toBe(":connected\n\n");
+
+  const unauthenticatedSend = await app.inject({
+    method: "POST",
+    url: `/api/conversations/${conversationId}/messages`,
+    payload: { text: "This must not run" },
+  });
+  expect(unauthenticatedSend.statusCode).toBe(401);
+
   const sent = await app.inject({
     method: "POST",
     url: `/api/conversations/${conversationId}/messages`,
@@ -366,6 +384,15 @@ it("runs the authenticated project and conversation flow with ownership isolatio
     payload: { text: "Build the server" },
   });
   expect(sent.statusCode).toBe(202);
+  let eventText = "";
+  while (!eventText.includes('data: {"type":"run.end","runId":"run-1","stopReason":"done"}')) {
+    const chunk = await eventReader.read();
+    if (chunk.done) break;
+    eventText += new TextDecoder().decode(chunk.value);
+  }
+  expect(eventText).toContain('data: {"type":"run.end","runId":"run-1","stopReason":"done"}');
+  await eventReader.cancel();
+  eventController.abort();
 
   const history = await app.inject({
     method: "GET",
@@ -410,5 +437,6 @@ it("runs the authenticated project and conversation flow with ownership isolatio
   expect(openapi.json().paths["/api/apps/{appName}/oauth/authorize-url"].post.operationId).toBe("createAuthorizeUrl");
   expect(openapi.json().paths["/api/me"].get.operationId).toBe("getCurrentUser");
   expect(openapi.json().paths["/api/conversations/{id}/messages"].post.operationId).toBe("sendMessage");
+  expect(openapi.json().paths["/api/conversations/{id}/events"].get.security).toBeUndefined();
   expect(openapi.json().paths["/admin/model-config/providers"].get.operationId).toBe("listProviders");
 });

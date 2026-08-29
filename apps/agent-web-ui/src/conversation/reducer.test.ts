@@ -54,4 +54,35 @@ describe("conversationReducer", () => {
     expect(state.error).toBe("Runner 不可用（请求 ID：request-1）");
     expect(state.messages[0]?.status).toBe("error");
   });
+
+  it("keeps next-run messages above the composer until they are steered or the run ends", () => {
+    const queuedMessage = {
+      id: "message-2",
+      conversationId: "conversation-1",
+      role: "user" as const,
+      blocks: [{ type: "text" as const, text: "change the layout" }],
+      status: "done" as const,
+      createdAt: 2,
+    };
+    const running = { ...initialConversationState, isRunning: true };
+    const queuedItem = { message: queuedMessage, request: { text: "change the layout" } };
+    const queued = conversationReducer(running, { type: "optimistic.queue", queued: queuedItem });
+    expect(queued.messages).toEqual([]);
+    expect(queued.queuedMessages).toEqual([queuedItem]);
+
+    const steered = conversationReducer(queued, { type: "queue.start", messageId: queuedMessage.id });
+    expect(steered.messages).toEqual([queuedMessage]);
+    expect(steered.queuedMessages).toEqual([]);
+
+    const queuedAgain = conversationReducer(running, { type: "optimistic.queue", queued: queuedItem });
+    const completed = conversationReducer(queuedAgain, {
+      type: "event",
+      conversationId: "conversation-1",
+      event: { type: "run.end", runId: "run-1", stopReason: "done" },
+    });
+    expect(completed.messages).toEqual([]);
+    expect(completed.queuedMessages).toEqual([queuedItem]);
+    expect(completed.isRunning).toBe(false);
+    expect(completed.queueReady).toBe(true);
+  });
 });

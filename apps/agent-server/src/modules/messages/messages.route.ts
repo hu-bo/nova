@@ -16,7 +16,6 @@ export function messageRoutes(
   app: FastifyInstance,
   store: AgentStore,
   runtimes: ConversationRuntimes,
-  events: EventHub,
   models: ModelConfigStore,
   cipher: CredentialCipher,
 ): void {
@@ -79,6 +78,10 @@ export function messageRoutes(
       return reply.code(204).send(null);
     },
   );
+}
+
+export function conversationEventRoutes(app: FastifyInstance, events: EventHub): void {
+  const server = app.withTypeProvider<ZodTypeProvider>();
 
   server.get(
     "/conversations/:id/events",
@@ -86,14 +89,11 @@ export function messageRoutes(
       schema: {
         operationId: "subscribeConversationEvents",
         tags: ["events"],
-        security: [{ bearerAuth: [] }],
         params: IdParams,
         headers: EventHeaders,
-        response: { 401: ApiErrorSchema, 404: ApiErrorSchema },
       },
     },
     async (request, reply) => {
-      await store.routeConversation(request.userId, request.params.id);
       const replay = events.replay(request.params.id, request.headers["last-event-id"]);
       reply.hijack();
       reply.raw.writeHead(200, {
@@ -102,6 +102,8 @@ export function messageRoutes(
         connection: "keep-alive",
         "x-accel-buffering": "no",
       });
+      reply.raw.flushHeaders();
+      reply.raw.write(":connected\n\n");
       if (replay.kind === "resync") {
         writeSse(reply.raw, null, { type: "error", code: "RESYNC", message: "Event history is no longer available" });
       } else {

@@ -1,12 +1,13 @@
 import type { ComposerSubmission } from "@nova/chat-ui";
 import type { ChatMessage, DecisionResponse } from "@nova/protocol";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { ApiClientError, errorMessage } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAuth } from "../auth/provider.js";
 import { useModelSettings } from "../pages/settings/model/provider.js";
 import { useConversationStore } from "./store.js";
+import type { QueuedMessage } from "./reducer.js";
 
 export interface RunnerAttachmentMetadata {
   runnerId: string;
@@ -17,20 +18,18 @@ export function useConversationMutations(conversationId: string, modelProfileId:
   const { api } = useAuth();
   const models = useModelSettings();
   const queryClient = useQueryClient();
-  const { state, dispatch } = useConversationStore();
+  const { state, dispatch, ensureStreamConnected } = useConversationStore();
 
   const refreshLists = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists, refetchType: "none" });
   }, [queryClient]);
 
   const sendMutation = useMutation({
     mutationFn: async ({
       submission,
-      queue,
       retryId,
     }: {
       submission: ComposerSubmission<RunnerAttachmentMetadata>;
-      queue?: "steering" | "nextRun";
       retryId?: string;
     }) => {
       const model = models.modelSelection(modelProfileId);
@@ -45,6 +44,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
       const text = [submission.text, attachmentText].filter(Boolean).join("\n\n");
       const wasRunning = state.isRunning;
       const messageId = retryId ?? crypto.randomUUID();
+      const request = { text, ...model };
       if (retryId) {
         dispatch({ type: "optimistic.retry", messageId });
       } else {
@@ -56,14 +56,15 @@ export function useConversationMutations(conversationId: string, modelProfileId:
           status: "done",
           createdAt: Date.now(),
         };
+        if (wasRunning) {
+          dispatch({ type: "optimistic.queue", queued: { message, request } });
+          return;
+        }
         dispatch({ type: "optimistic.add", message });
       }
       try {
-        await api!.sendMessage(conversationId, {
-          text,
-          ...(queue ? { queue } : {}),
-          ...model,
-        });
+        await ensureStreamConnected();
+        await api!.sendMessage(conversationId, request);
       } catch (error) {
         dispatch({ type: "optimistic.fail", messageId, keepRunning: wasRunning, message: errorMessage(error) });
         throw error;
@@ -76,6 +77,59 @@ export function useConversationMutations(conversationId: string, modelProfileId:
     mutationFn: () => api!.abortConversation(conversationId),
     onSuccess: refreshLists,
   });
+
+  const steerMutation = useMutation({
+    mutationFn: async (queued: QueuedMessage) => {
+      dispatch({ type: "queue.start", messageId: queued.message.id });
+      try {
+        await ensureStreamConnected();
+        await api!.sendMessage(conversationId, { ...queued.request, queue: "steering" });
+      } catch (error) {
+        dispatch({
+          type: "optimistic.fail",
+          messageId: queued.message.id,
+          keepRunning: true,
+          message: errorMessage(error),
+        });
+        throw error;
+      }
+    },
+    onSuccess: refreshLists,
+  });
+
+  const queuedRunMutation = useMutation({
+    mutationFn: async (queued: QueuedMessage) => {
+      dispatch({ type: "queue.start", messageId: queued.message.id });
+      try {
+        await ensureStreamConnected();
+        await api!.sendMessage(conversationId, queued.request);
+      } catch (error) {
+        dispatch({
+          type: "optimistic.fail",
+          messageId: queued.message.id,
+          keepRunning: false,
+          message: errorMessage(error),
+        });
+        throw error;
+      }
+    },
+    onSuccess: refreshLists,
+  });
+
+  const nextQueued = state.queuedMessages[0];
+  const startQueuedRun = queuedRunMutation.mutate;
+  useEffect(() => {
+    if (!state.queueReady || state.isRunning || !nextQueued || queuedRunMutation.isPending || steerMutation.isPending)
+      return;
+    startQueuedRun(nextQueued);
+  }, [
+    nextQueued,
+    queuedRunMutation.isPending,
+    startQueuedRun,
+    state.isRunning,
+    state.queueReady,
+    steerMutation.isPending,
+  ]);
 
   const decisionMutation = useMutation({
     mutationFn: ({ decisionId, response }: { decisionId: string; response: DecisionResponse }) =>
@@ -92,8 +146,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
   });
 
   return {
-    send: (submission: ComposerSubmission<RunnerAttachmentMetadata>, queue?: "steering" | "nextRun") =>
-      sendMutation.mutateAsync({ submission, ...(queue ? { queue } : {}) }),
+    send: (submission: ComposerSubmission<RunnerAttachmentMetadata>) => sendMutation.mutateAsync({ submission }),
     retry: (messageId: string) => {
       const index = state.messages.findIndex((item) => item.id === messageId);
       const message = state.messages[index];
@@ -112,6 +165,12 @@ export function useConversationMutations(conversationId: string, modelProfileId:
       });
     },
     abort: () => abortMutation.mutateAsync(),
+    steerQueued: (messageId: string) => {
+      const queued = state.queuedMessages.find((item) => item.message.id === messageId);
+      if (!queued) return Promise.resolve();
+      return steerMutation.mutateAsync(queued);
+    },
+    removeQueued: (messageId: string) => dispatch({ type: "queue.remove", messageId }),
     resolveDecision: async (response: DecisionResponse) => {
       const request = state.pendingDecision;
       if (!request) return;
@@ -125,6 +184,8 @@ export function useConversationMutations(conversationId: string, modelProfileId:
     changeRunner: (runnerId: string) => runnerMutation.mutateAsync(runnerId),
     sendMutation,
     abortMutation,
+    steerMutation,
+    queuedRunMutation,
     decisionMutation,
     runnerMutation,
   };

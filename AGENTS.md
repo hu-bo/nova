@@ -3,7 +3,7 @@
 ## 核心规则
 
 - 先改现有实现，再考虑新增
-- 少抽象，少 wrapper，少 pass-through 层
+- 抽象符合人类阅读，少 wrapper，少 pass-through 层
 - 控制流、状态、并发都要有唯一 owner
 - Agent、TaskFlow、Runner、Tool 职责分离，决策和执行分离
 - 优先组合和显式数据结构，不要为了模式而模式

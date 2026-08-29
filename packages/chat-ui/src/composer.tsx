@@ -110,7 +110,8 @@ export function Composer<TMetadata = unknown>({
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const locked = disabled || submitting;
-  const canSubmit = !locked && Boolean(text.trim() || files.length || attachments.length);
+  const hasDraft = Boolean(text.trim() || files.length || attachments.length);
+  const canSubmit = !locked && hasDraft;
 
   function clearDraft() {
     setText("");
@@ -118,17 +119,25 @@ export function Composer<TMetadata = unknown>({
     onAttachmentsChange?.([]);
   }
 
+  function restoreDraft(draft: ComposerSubmission<TMetadata>) {
+    setText(draft.text);
+    setFiles(draft.files);
+    onAttachmentsChange?.(draft.attachments);
+  }
+
   function submit(event?: FormEvent) {
     event?.preventDefault();
     if (!canSubmit) return;
-    const result = onSubmit({ text: text.trim(), files, attachments: [...attachments], model, reasoningEffort });
+    const draft = { text: text.trim(), files, attachments: [...attachments], model, reasoningEffort };
+    const result = onSubmit(draft);
     if (result instanceof Promise) {
       setSubmitting(true);
+      clearDraft();
       void result
         .then((accepted) => {
-          if (accepted !== false) clearDraft();
+          if (accepted === false) restoreDraft(draft);
         })
-        .catch(() => undefined)
+        .catch(() => restoreDraft(draft))
         .finally(() => setSubmitting(false));
     } else if (result !== false) {
       clearDraft();
@@ -195,41 +204,43 @@ export function Composer<TMetadata = unknown>({
                 )}
               </div>
 
-              {isRunning && onAbort ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  disabled={isAborting}
-                  aria-label={isAborting ? "正在中断" : "中断当前运行"}
-                  onClick={() => void onAbort()}
-                  className="rounded-xl"
-                >
-                  {isAborting ? (
-                    <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                  ) : (
-                    <CircleStop className="size-4" aria-hidden="true" />
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="icon"
-                  disabled={!canSubmit}
-                  aria-label={submitting ? "正在发送" : "发送消息"}
-                  className="rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 shadow-md shadow-indigo-500/20"
-                >
-                  {submitting ? (
-                    <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                  ) : (
-                    <Send
-                      className="size-4 transition-transform group-hover:translate-x-px group-hover:-translate-y-px"
-                      aria-hidden="true"
-                    />
-                  )}
-                </Button>
-              )}
+              <div className="flex shrink-0 items-center gap-1.5">
+                {isRunning && onAbort && !hasDraft && !submitting ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    disabled={isAborting}
+                    aria-label={isAborting ? "正在中断" : "中断当前运行"}
+                    onClick={() => void onAbort()}
+                    className="rounded-xl"
+                  >
+                    {isAborting ? (
+                      <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    ) : (
+                      <CircleStop className="size-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="icon"
+                    disabled={!canSubmit || submitting}
+                    aria-label={submitting ? "正在发送" : "发送消息"}
+                    className="rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 shadow-md shadow-indigo-500/20"
+                  >
+                    {submitting ? (
+                      <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    ) : (
+                      <Send
+                        className="size-4 transition-transform group-hover:translate-x-px group-hover:-translate-y-px"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
           </form>
         )}

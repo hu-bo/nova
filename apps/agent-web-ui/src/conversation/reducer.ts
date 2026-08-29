@@ -1,11 +1,18 @@
-import type { Block, ChatMessage, Todo, UiEvent } from "@nova/protocol";
+import type { Block, ChatMessage, SendMessage, Todo, UiEvent } from "@nova/protocol";
+
+export interface QueuedMessage {
+  message: ChatMessage;
+  request: SendMessage;
+}
 
 export interface ConversationState {
   messages: ChatMessage[];
+  queuedMessages: QueuedMessage[];
   todos: Todo[];
   pendingDecision: Extract<UiEvent, { type: "decision.requested" }>["request"] | null;
   connection: "connecting" | "open" | "reconnecting" | "closed";
   isRunning: boolean;
+  queueReady: boolean;
   error: string | null;
 }
 
@@ -14,16 +21,21 @@ export type ConversationAction =
   | { type: "connection"; connection: ConversationState["connection"] }
   | { type: "event"; event: UiEvent; conversationId: string }
   | { type: "optimistic.add"; message: ChatMessage }
+  | { type: "optimistic.queue"; queued: QueuedMessage }
   | { type: "optimistic.fail"; messageId: string; keepRunning: boolean; message: string }
   | { type: "optimistic.retry"; messageId: string }
+  | { type: "queue.start"; messageId: string }
+  | { type: "queue.remove"; messageId: string }
   | { type: "clear-error" };
 
 export const initialConversationState: ConversationState = {
   messages: [],
+  queuedMessages: [],
   todos: [],
   pendingDecision: null,
-  connection: "connecting",
+  connection: "closed",
   isRunning: false,
+  queueReady: false,
   error: null,
 };
 
@@ -36,6 +48,7 @@ export function conversationReducer(state: ConversationState, action: Conversati
         todos: latestTodos(action.messages),
         pendingDecision: null,
         isRunning: action.messages.some((message) => message.status === "streaming"),
+        queueReady: false,
         error: null,
       };
     case "connection":
@@ -43,12 +56,18 @@ export function conversationReducer(state: ConversationState, action: Conversati
     case "optimistic.add":
       return state.messages.some((message) => message.id === action.message.id)
         ? state
-        : { ...state, messages: [...state.messages, action.message], isRunning: true, error: null };
+        : { ...state, messages: [...state.messages, action.message], isRunning: true, queueReady: false, error: null };
+    case "optimistic.queue":
+      return state.queuedMessages.some((queued) => queued.message.id === action.queued.message.id)
+        ? state
+        : { ...state, queuedMessages: [...state.queuedMessages, action.queued], error: null };
     case "optimistic.fail":
       return {
         ...state,
         messages: updateMessage(state.messages, action.messageId, (message) => ({ ...message, status: "error" })),
+        queuedMessages: state.queuedMessages.filter((queued) => queued.message.id !== action.messageId),
         isRunning: action.keepRunning,
+        queueReady: false,
         error: action.message,
       };
     case "optimistic.retry":
@@ -56,7 +75,25 @@ export function conversationReducer(state: ConversationState, action: Conversati
         ...state,
         messages: updateMessage(state.messages, action.messageId, (message) => ({ ...message, status: "done" })),
         isRunning: true,
+        queueReady: false,
         error: null,
+      };
+    case "queue.start": {
+      const queued = state.queuedMessages.find((item) => item.message.id === action.messageId);
+      if (!queued) return state;
+      return {
+        ...state,
+        messages: [...state.messages, queued.message],
+        queuedMessages: state.queuedMessages.filter((item) => item.message.id !== action.messageId),
+        isRunning: true,
+        queueReady: false,
+        error: null,
+      };
+    }
+    case "queue.remove":
+      return {
+        ...state,
+        queuedMessages: state.queuedMessages.filter((item) => item.message.id !== action.messageId),
       };
     case "clear-error":
       return { ...state, error: null };
@@ -69,7 +106,7 @@ function reduceEvent(state: ConversationState, event: UiEvent, conversationId: s
   switch (event.type) {
     case "message.start": {
       if (state.messages.some((message) => message.id === event.messageId)) {
-        return { ...state, isRunning: true, error: null };
+        return { ...state, isRunning: true, queueReady: false, error: null };
       }
       const message: ChatMessage = {
         id: event.messageId,
@@ -79,7 +116,7 @@ function reduceEvent(state: ConversationState, event: UiEvent, conversationId: s
         status: "streaming",
         createdAt: Date.now(),
       };
-      return { ...state, messages: [...state.messages, message], isRunning: true, error: null };
+      return { ...state, messages: [...state.messages, message], isRunning: true, queueReady: false, error: null };
     }
     case "block.start":
       return { ...state, messages: setBlock(state.messages, event.messageId, event.index, event.block) };
@@ -101,7 +138,11 @@ function reduceEvent(state: ConversationState, event: UiEvent, conversationId: s
     case "todo.updated":
       return { ...state, todos: event.items };
     case "run.end":
-      return { ...state, isRunning: false };
+      return {
+        ...state,
+        isRunning: false,
+        queueReady: event.stopReason !== "aborted" && event.stopReason !== "error",
+      };
     case "error":
       return event.code === "RESYNC" ? state : { ...state, error: event.message };
   }

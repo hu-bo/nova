@@ -64,7 +64,7 @@ Runner 状态改变后，应失效相关 query；`block.delta`、`tool.output` �
 - Fastify 的 OpenAPI 文档是 REST 契约的唯一来源；前端不得根据页面需要自行猜测路径、字段或枚举值。
 - Orval 生成代码放在 `src/api/generated/`（或等价的明确生成目录），**只读、不手改**；生成命令与配置应在 app 的 `package.json` 中可发现。
 - 业务代码只从 `src/api/` 的稳定出口导入生成类型和 hooks。该目录可放 query key、轮询策略和少量 UI 适配，不能重新声明 API type。
-- SSE 是流式传输，不适合由 OpenAPI client / Query hook 消费；仍按 §4 使用 `fetch` + `parseSSE`。其事件 payload 使用 `packages/protocol` 的 type-only 类型。
+- SSE 是流式传输，不适合由 OpenAPI client / Query hook 消费；按 §4 使用浏览器原生 `EventSource`。其事件 payload 使用 `packages/protocol` 的 type-only 类型。
 - 生成产物更新必须与服务端 OpenAPI 变更同一提交；CI 至少校验生成后工作区没有 diff，防止契约漂移。
 
 推荐的资源 key 形状：
@@ -211,23 +211,21 @@ npm install / docker run / nova-runner 安装命令                 [复制]
 
 ## 4. SSE 客户端
 
-**不用 `EventSource`。** 它不支持自定义 header，token 只能放 query string，
-而 query string 会进 access log（`agent-server.md` §5）。
+使用浏览器原生 `EventSource`。对话消息的 `POST /messages` 已完成身份与 Conversation
+所有权校验；只读事件流不再重复携带 token，也不把 token 放进 query string。
 
 ```ts
-const res = await fetch(`/api/conversations/${id}/events`, {
-  headers: { Authorization: `Bearer ${token}`, "Last-Event-ID": lastId ?? "" },
-  signal,
-})
-for await (const ev of parseSSE(res.body)) { dispatch(ev) }
+await stream.ensureConnected() // 内部等待 EventSource.open
+await api.sendMessage(id, input)
 ```
 
 | 关注点 | 做法 |
 |---|---|
-| 重连 | 指数退避（1s → 30s 上限 + 抖动），带 `Last-Event-ID` |
-| `error{code:"RESYNC"}` | 重新 `GET /messages` 全量对齐，清空本地增量 |
-| 页面隐藏 | `visibilitychange` 隐藏超过 5 分钟断开，回来重连。省服务端连接数 |
-| 网络恢复 | 监听 `online` 立即重连，不等退避 |
+| 建连 owner | 页面挂载不建流。第一次发送事务调用 `ensureConnected()`，等待 `EventSource.open` 后才 POST；运行中的后续发送复用同一连接 |
+| 生命周期 | 首次发送建流后跨 run 复用，`run.end` 不关闭，避免 `nextRun` 紧接当前 run 时丢事件。React effect 只负责页面卸载时 cleanup，不负责建连 |
+| 重连 | 交给 `EventSource`；浏览器自动携带最后收到的 SSE `id` |
+| `error{code:"RESYNC"}` | 关闭旧 `EventSource`，重新 `GET /messages` 全量对齐，再创建一个没有旧 event id 的新连接 |
+| 并发发送 | `ensureConnected()` 共享同一个 pending-open Promise，不得创建第二个 EventSource |
 | 幂等 | 按 `messageId + index` 更新，重放不会产生重复块 |
 
 **幂等这条是重连正确性的全部依赖。** reducer 必须写成"设置成这个值"而不是"追加这段" ——
@@ -281,7 +279,8 @@ Composer 接受两种附件来源。浏览器拖入 / 粘贴的本地 `File` 先
 `POST /api/uploads { name }`，再直接 `PUT` 到返回的 `upload` 地址；MinIO 请求不携带 Nova Bearer token。
 点击附件按钮时，宿主打开 `chat-ui` 的 `RemoteExplorer`，通过 `GET /api/runners/directories`
 浏览当前 Runner 并支持多选，提交时对每个远程路径调用 `POST /api/uploads/runner`。两条结果统一成
-附件 Markdown；任一上传失败都保留 Composer 草稿和选择，成功后才清空。
+附件 Markdown。提交后 Composer 立即清空可见草稿并显示发送中状态；任一上传或发送失败都恢复
+提交前的草稿和附件，避免用户重新输入。
 
 Project workspace 绑定也复用同一个 `RemoteExplorer`，但使用 `mode="directory"` 和单选。
 Runner id、目录请求、已选路径和上传 mutation 全部由 `agent-web-ui` 持有；`chat-ui` 不知道 Runner。
@@ -291,15 +290,21 @@ Runner id、目录请求、已选路径和上传 mutation 全部由 `agent-web-u
 | 情况 | queue |
 |---|---|
 | 没在运行 | 不传，新开一个 run |
-| 运行中，默认 | `steering` —— 用户想的是"插一句话让它调整" |
-| 运行中，用户显式选"下一轮再说" | `nextRun` |
+| 运行中，默认发送 | 前端暂存，不立即请求 server；当前 run 结束后逐条发送 |
+| 运行中，用户点击待处理项的“调整方向” | 立即以 `steering` 发送该本地待处理项 |
+
+运行中但 Composer 为空时，发送位保留中断按钮；用户开始输入下一条消息后，按钮切回发送。
+普通发送立即清空草稿并展示在 Composer 上方的紧凑本地待处理列表中，不在输入框里提前展示
+queue 选项，也不立即请求 server。每个待处理项提供“调整方向”，点击后才以 `steering`
+发送；否则 `run.end` 到达后，前端按 FIFO 自动取一条作为新 run 发送。
 
 `followUp` 不暴露给用户手动选 —— 它的语义（"它想停下时让它继续"）
 对用户不可见，由 server 在特定场景使用。
 
 ### 中断
 
-对话输入区在 `isRunning` 时将发送按钮替换为中断按钮 → `POST /abort`。
+对话输入区在 `isRunning` 且没有新草稿时将发送按钮替换为中断按钮 → `POST /abort`；
+有新草稿时恢复发送按钮，让用户提交下一轮消息；steering 由已发送待处理项的“调整方向”触发。
 **中断必须随时可点**，这是长任务体验的底线。
 
 ### Decision
@@ -401,7 +406,8 @@ Runner 恢复后状态灯自动转绿（Registry 状态随 `GET /projects` 轮�
 - access token 使用 `localStorage` 持久化，并使用 `af_webui_` 前缀和 `access_token` 键名，避免与其他应用冲突
 - 开启 `silentRefresh`；刷新失败时清除 token 并回到登录流程
 - REST 请求统一带 `Authorization: Bearer <access_token>`
-- SSE 使用 `fetch` + `ReadableStream`，同样带 Authorization header；不使用把 token 放进 query 的 `EventSource`
+- `GET /api/conversations/:id/events` 使用原生 `EventSource`，不携带 Authorization；Conversation UUID 是该只读流的订阅能力标识
+- 消息提交、历史读取、Decision 和中断仍由 REST 完成鉴权与所有权校验；事件流只能观察，不能发起执行或修改状态
 - 401 → 清除本地 token，回到登录页，**不自动刷新后重试**，避免无限循环
 - auth state 只暴露 `isAuthenticated`、当前 `userId` 和登录错误；角色/权限不进入 UI 契约
 
@@ -429,11 +435,13 @@ apps/agent-web-ui/src/
 │   ├── new-conversation.tsx  # §7.1 的模式选择
 │   └── schemas.ts            # Zod schema；由 RHF 表单复用
 ├── conversation/
-│   ├── store.ts              # §3
+│   ├── store.tsx             # §3
 │   ├── reducer.ts            # §5
-│   ├── use-sse.ts            # §4
+│   ├── conversation-stream.ts     # §4，EventSource 生命周期与并发 owner
+│   ├── conversation-stream.test.ts # controller 的真实状态机边界
+│   ├── use-conversation-stream.ts # controller 的 React 适配与卸载 cleanup
 │   ├── mutations.ts          # 发送 / 中断 / Decision，成功后失效 query
-│   └── schemas.ts            # Composer、Decision 的输入 schema
+│   └── reducer.test.ts       # reducer 的事件投影边界
 └── auth/
     └── provider.tsx
 ```
@@ -466,16 +474,19 @@ const newProjectSchema = z.object({
 
 | 事件 | 立即更新 | 同步 / 失效策略 |
 |---|---|---|
-| 进入会话 | `GET /messages` 作为 reducer 的初始快照 | Query 缓存历史消息，SSE 接管当前会话增量 |
-| 发送消息 | reducer 乐观插入用户消息 | 成功后失效会话列表；失败按 §6 标红并允许重试 |
-| 收到 `message.end` / `run.end` | reducer 结束流状态 | 失效当前 messages、会话列表、project runner 状态，保证下次进入有完整快照 |
+| 进入会话 | `GET /messages` 作为 reducer 的初始快照 | 不创建 SSE；空闲连接状态为 `closed`，Composer 可立即输入和提交 |
+| 发送消息 | reducer 乐观插入用户消息；controller 首次建流并等待 `open` | `open` 后才 POST；后续发送复用该流；成功后只把会话列表标记 stale，不立即 GET；失败按 §6 标红 |
+| 收到 `message.end` / `run.end` | reducer 结束当前 run 状态 | SSE 跨 run 保持连接，避免紧接的 `nextRun` 丢事件；只把会话列表与 project runner 状态标记 stale，不立即 GET |
 | 提交 Decision / 中断 | mutation pending 驱动按钮状态 | 成功后失效当前会话与相关列表；SSE 仍是进行中界面的即时来源 |
 | Runner 状态轮询或推送改变 | project query 更新 | 只刷新 project / conversations 范围，不清空对话 reducer |
 | `RESYNC` | 停止应用后续增量 | 按 §4 全量拉取、重建 reducer 基线后再恢复订阅 |
 
 `QueryClient` 应在应用根部只创建一次。默认缓存时间、重试次数和窗口聚焦刷新需按
-资源区分：会话/项目列表可刷新；运行中的 SSE 对话不可因 focus 自动再建第二条流。
+资源区分：会话/项目列表可刷新；SSE 只能由发送事务创建，不得因 mount、focus、token 刷新或 query 刷新建流。
 所有 mutation error 都要映射为用户可理解的提示，保留服务端错误码供诊断。
+
+`GET /messages` 只用于首次进入页面、显式重试历史加载和 `RESYNC`。正常发送、流式输出与
+run 结束都不能靠重新拉历史消息刷新聊天窗口，否则页面会把真实流退化成终态快照模拟。
 
 ---
 

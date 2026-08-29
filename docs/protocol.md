@@ -68,7 +68,8 @@ interface Todo {
 
 ## 3. REST
 
-所有路径前缀 `/api`，全部要 Bearer token。
+所有路径前缀 `/api`。除只读的 `GET /conversations/:id/events` 外，REST 端点都要 Bearer token；
+事件流以高熵 Conversation UUID 作为只读订阅能力标识，不接受 token query 参数。
 
 | Method | Path | Body / Query | Response |
 |---|---|---|---|
@@ -164,7 +165,13 @@ Phase 2 的 UI 只需要看到对话与其中的 tool 执行，Task / Execution 
 
 ## 4. SSE
 
-`GET /conversations/:id/events`，`text/event-stream`。
+`GET /conversations/:id/events`，`text/event-stream`，由浏览器原生 `EventSource` 订阅且不携带
+Authorization。页面挂载不订阅；第一次发送事务必须先懒创建连接并等待 `open`，再执行
+`POST /messages`，保证 run 事件不会早于订阅。连接在会话页面存续期间跨 run 复用；
+`run.end` 不关闭连接，因为排队的 `nextRun` 可能紧接着开始。
+
+服务端写完响应头后立即发送 `:connected\n\n` 注释帧作为首个 body chunk，保证开发代理和
+反向代理不在首个业务事件到来前缓冲响应。该注释不进入 `UiEvent`，也不分配事件 id。
 
 ```ts
 type UiEvent =

@@ -163,6 +163,20 @@ describe("chat-ui", () => {
     const html = renderToStaticMarkup(<Composer isRunning onAbort={() => undefined} onSubmit={() => undefined} />);
     expect(html).toContain('aria-label="中断当前运行"');
     expect(html).not.toContain('aria-label="发送消息"');
+    expect(html).not.toContain("立即调整");
+  });
+
+  it("restores the send action when a running composer has a draft", () => {
+    const html = renderToStaticMarkup(
+      <Composer
+        isRunning
+        onAbort={() => undefined}
+        attachments={[{ id: "draft-1", name: "context.txt", metadata: {} }]}
+        onSubmit={() => undefined}
+      />,
+    );
+    expect(html).toContain('aria-label="发送消息"');
+    expect(html).not.toContain('aria-label="中断当前运行"');
   });
 
   it("renders controlled host attachments without replacing the native file fallback", () => {

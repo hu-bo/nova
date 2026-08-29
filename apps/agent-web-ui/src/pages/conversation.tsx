@@ -7,7 +7,16 @@ import {
   type ComposerAttachment,
   type ComposerSubmission,
 } from "@nova/chat-ui";
-import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle, Server } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CornerDownLeft,
+  CornerDownRight,
+  FolderKanban,
+  MessageCircle,
+  Server,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
@@ -77,7 +86,6 @@ function ConversationView({
   const modelProfileId = models.profiles.some((profile) => profile.id === storedProfileId)
     ? storedProfileId
     : models.defaultProfileId || models.profiles[0]?.id || "";
-  const [queue, setQueue] = useState<"steering" | "nextRun">("steering");
   const [runnerOpen, setRunnerOpen] = useState(false);
   const [runnerWarning, setRunnerWarning] = useState<ComposerSubmission<RunnerAttachmentMetadata> | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -125,13 +133,12 @@ function ConversationView({
       setRunnerWarning(submission);
       return false;
     }
-    const selectedQueue = store.state.isRunning ? queue : undefined;
-    return mutations.send(submission, selectedQueue);
+    return mutations.send(submission);
   }
 
   return (
     <div className="nova-conversation-viewport flex min-h-0 overflow-hidden bg-slate-50">
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex min-h-14 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-5">
           <Link
             to={project ? `/p/${project.id}` : "/app"}
@@ -142,9 +149,6 @@ function ConversationView({
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-slate-900">{conversation.title || "未命名会话"}</h1>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
-              <span className="truncate">{project ? project.name : "独立 Chat"}</span>
-            </div>
           </div>
           {project && (
             <span className="hidden md:block">
@@ -174,8 +178,10 @@ function ConversationView({
           </div>
         )}
 
-        <div className={`grid min-h-0 flex-1 ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}>
-          <div className="flex min-h-0 min-w-0 flex-col">
+        <div
+          className={`grid min-h-0 flex-1 overflow-hidden ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}
+        >
+          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
             <div className="relative min-h-0 flex-1 overflow-hidden px-3 py-3 sm:px-5">
               {store.state.messages.length ? (
                 <MessageList messages={store.state.messages} onRetry={(messageId) => void mutations.retry(messageId)} />
@@ -194,7 +200,7 @@ function ConversationView({
               )}
             </div>
 
-            <div className="shrink-0 border-t border-slate-200 bg-white px-3 pb-2 pt-2 sm:px-4">
+            <div className="min-w-0 shrink-0 overflow-hidden border-t border-slate-200 bg-white px-3 pb-2 pt-2 sm:px-4">
               {incompleteTodos > 0 && (
                 <div className="mb-2 xl:hidden">
                   <TodoPanel items={store.state.todos} collapsed />
@@ -250,6 +256,30 @@ function ConversationView({
                   {errorMessage(mutations.decisionMutation.error)}
                 </div>
               )}
+              {mutations.steerMutation.error && (
+                <div
+                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
+                  role="alert"
+                >
+                  调整方向失败：{errorMessage(mutations.steerMutation.error)}
+                </div>
+              )}
+              {mutations.queuedRunMutation.error && (
+                <div
+                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
+                  role="alert"
+                >
+                  待处理消息发送失败：{errorMessage(mutations.queuedRunMutation.error)}
+                </div>
+              )}
+              {(store.state.connection === "connecting" || store.state.connection === "reconnecting") && (
+                <div
+                  className="mb-2 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200"
+                  role="status"
+                >
+                  {store.state.connection === "connecting" ? "正在连接实时消息流" : "实时消息流已断开，正在重连"}
+                </div>
+              )}
               {store.state.pendingDecision && (
                 <div className="mb-2">
                   <DecisionPrompt
@@ -259,71 +289,80 @@ function ConversationView({
                   />
                 </div>
               )}
-              {store.state.isRunning && (
-                <div className="mb-2 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
-                  <span className="font-semibold text-slate-700">正在运行，新消息：</span>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="radio"
-                      name="queue"
-                      checked={queue === "steering"}
-                      onChange={() => setQueue("steering")}
-                      className="accent-indigo-600"
-                    />
-                    立即调整
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="radio"
-                      name="queue"
-                      checked={queue === "nextRun"}
-                      onChange={() => setQueue("nextRun")}
-                      className="accent-indigo-600"
-                    />
-                    下一轮再说
-                  </label>
+              {store.state.queuedMessages.length > 0 && (
+                <div className="relative z-0 mx-4 -mb-3 overflow-hidden rounded-t-2xl border border-b-0 border-slate-200 bg-white pb-3 shadow-sm sm:mx-5">
+                  <div className="max-h-44 overflow-x-hidden overflow-y-auto overscroll-contain">
+                    {store.state.queuedMessages.map((queued) => {
+                      const { message } = queued;
+                      const text = message.blocks.find((block) => block.type === "text")?.text ?? "待处理消息";
+                      const steering =
+                        mutations.steerMutation.isPending &&
+                        mutations.steerMutation.variables?.message.id === message.id;
+                      return (
+                        <div
+                          key={message.id}
+                          className="flex min-h-11 min-w-0 items-center gap-2 overflow-hidden border-b border-slate-100 px-3.5 text-sm last:border-b-0"
+                        >
+                          <CornerDownRight className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                          <span className="min-w-0 flex-1 truncate text-slate-800">{text}</span>
+                          <button
+                            type="button"
+                            disabled={mutations.steerMutation.isPending}
+                            onClick={() => void mutations.steerQueued(message.id)}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-45"
+                          >
+                            <CornerDownLeft className="size-3" aria-hidden="true" />
+                            {steering ? "正在调整" : "调整方向"}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="删除待处理消息"
+                            disabled={mutations.steerMutation.isPending}
+                            onClick={() => mutations.removeQueued(message.id)}
+                            className="grid size-7 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-45"
+                          >
+                            <Trash2 className="size-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
-              <Composer
-                disabled={mutations.sendMutation.isPending}
-                isRunning={store.state.isRunning}
-                isAborting={mutations.abortMutation.isPending}
-                onAbort={() => mutations.abort()}
-                allowFiles
-                attachments={attachments}
-                onAttachmentsChange={setAttachments}
-                onAttachmentButtonClick={() => {
-                  if (!runnerId) {
-                    setAttachmentError(
-                      "请先为当前会话选择 Runner，再从 Runner 中添加附件。你仍可将本地文件拖到输入框中。",
-                    );
-                    return;
-                  }
-                  setAttachmentError(null);
-                  setAttachmentOpen(true);
-                }}
-                placeholder={project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行"}
-                models={modelOptions}
-                model={modelProfileId}
-                onModelChange={(id) => {
-                  SELECTED_MODEL_STORE.set(id);
-                  setStoredProfileId(id);
-                }}
-                onSubmit={submit}
-              />
-              <div className="mt-1.5 flex items-center justify-between gap-3 px-1 text-[11px] text-slate-400">
-                <span>
-                  {selectedProfile
-                    ? `${selectedProfile.source === "server" ? "服务端" : selectedProfile.provider} · ${selectedProfile.model}`
-                    : "请先配置模型"}
-                </span>
-                <span>模型变更会与下一次发送串行下发</span>
+              <div className="relative z-10">
+                <Composer
+                  disabled={mutations.sendMutation.isPending}
+                  isRunning={store.state.isRunning}
+                  isAborting={mutations.abortMutation.isPending}
+                  onAbort={() => mutations.abort()}
+                  allowFiles
+                  attachments={attachments}
+                  onAttachmentsChange={setAttachments}
+                  onAttachmentButtonClick={() => {
+                    if (!runnerId) {
+                      setAttachmentError(
+                        "请先为当前会话选择 Runner，再从 Runner 中添加附件。你仍可将本地文件拖到输入框中。",
+                      );
+                      return;
+                    }
+                    setAttachmentError(null);
+                    setAttachmentOpen(true);
+                  }}
+                  placeholder={project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行"}
+                  models={modelOptions}
+                  model={modelProfileId}
+                  onModelChange={(id) => {
+                    SELECTED_MODEL_STORE.set(id);
+                    setStoredProfileId(id);
+                  }}
+                  onSubmit={submit}
+                />
               </div>
             </div>
           </div>
 
           {incompleteTodos > 0 && (
-            <aside className="hidden min-h-0 border-l border-slate-200 bg-white p-3 xl:block">
+            <aside className="hidden min-h-0 overflow-x-hidden overflow-y-auto border-l border-slate-200 bg-white p-3 xl:block">
               <div className="sticky top-3">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">当前计划</p>
                 <TodoPanel items={store.state.todos} />

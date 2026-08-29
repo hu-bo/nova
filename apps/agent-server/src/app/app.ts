@@ -17,7 +17,7 @@ import type { AuthServiceClient } from "./auth-service.js";
 import { authRoutes } from "../modules/auth/auth.route.js";
 import { projectRoutes } from "../modules/project/project.route.js";
 import { conversationRoutes } from "../modules/conversation/conversation.route.js";
-import { messageRoutes } from "../modules/messages/messages.route.js";
+import { conversationEventRoutes, messageRoutes } from "../modules/messages/messages.route.js";
 import { decisionRoutes } from "../modules/decision/decision.route.js";
 import { userRoutes } from "../modules/user/user.route.js";
 import { runnerRoutes } from "../modules/runner/runner.route.js";
@@ -91,6 +91,7 @@ export async function registerApp(app: FastifyInstance, dependencies: AppDepende
   await app.register(
     async (api) => {
       authRoutes(api, dependencies.authService);
+      conversationEventRoutes(api, dependencies.events);
     },
     { prefix: "/api" },
   );
@@ -125,7 +126,6 @@ export async function registerApp(app: FastifyInstance, dependencies: AppDepende
         api,
         dependencies.store,
         dependencies.runtimes,
-        dependencies.events,
         dependencies.modelConfigStore,
         dependencies.credentialCipher,
       );

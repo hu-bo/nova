@@ -7,7 +7,6 @@ import {
   useEffect,
   useMemo,
   useReducer,
-  useRef,
   type Dispatch,
   type ReactNode,
 } from "react";
@@ -19,7 +18,7 @@ import {
   type ConversationAction,
   type ConversationState,
 } from "./reducer.js";
-import { useSse } from "./use-sse.js";
+import { useConversationStream } from "./use-conversation-stream.js";
 
 interface ConversationContextValue {
   state: ConversationState;
@@ -27,14 +26,14 @@ interface ConversationContextValue {
   isLoading: boolean;
   historyError: Error | null;
   retryHistory: () => void;
+  ensureStreamConnected: () => Promise<void>;
 }
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
 
 export function ConversationProvider({ conversationId, children }: { conversationId: string; children: ReactNode }) {
-  const { api, logout } = useAuth();
+  const { api } = useAuth();
   const queryClient = useQueryClient();
-  const terminalRefreshPending = useRef(false);
   const [state, dispatch] = useReducer(conversationReducer, initialConversationState);
   const history = useQuery({
     queryKey: queryKeys.messages(conversationId),
@@ -54,26 +53,18 @@ export function ConversationProvider({ conversationId, children }: { conversatio
     return snapshot.items;
   }, [api, conversationId, queryClient]);
 
-  const onTerminal = useCallback(() => {
-    if (terminalRefreshPending.current) return;
-    terminalRefreshPending.current = true;
+  const onRunEnd = useCallback(() => {
     void Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects }),
-    ]).finally(() => {
-      terminalRefreshPending.current = false;
-    });
-  }, [conversationId, queryClient]);
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists, refetchType: "none" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects, refetchType: "none" }),
+    ]);
+  }, [queryClient]);
 
-  useSse({
+  const stream = useConversationStream({
     conversationId,
-    accessToken: api?.accessToken ?? "",
-    enabled: Boolean(api && history.isSuccess),
     dispatch,
     loadSnapshot,
-    onTerminal,
-    onUnauthorized: logout,
+    onRunEnd,
   });
 
   const value = useMemo<ConversationContextValue>(
@@ -83,8 +74,9 @@ export function ConversationProvider({ conversationId, children }: { conversatio
       isLoading: history.isLoading,
       historyError: history.error,
       retryHistory: () => void history.refetch(),
+      ensureStreamConnected: stream.ensureConnected,
     }),
-    [state, history.isLoading, history.error, history.refetch],
+    [state, history.isLoading, history.error, history.refetch, stream.ensureConnected],
   );
   return <ConversationContext.Provider value={value}>{children}</ConversationContext.Provider>;
 }

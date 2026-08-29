@@ -2049,18 +2049,6 @@ export type AbortConversation409 = {
   requestId?: string;
 };
 
-export type SubscribeConversationEvents401 = {
-  code: string;
-  message: string;
-  requestId?: string;
-};
-
-export type SubscribeConversationEvents404 = {
-  code: string;
-  message: string;
-  requestId?: string;
-};
-
 export type ResolveDecisionBody = {
   kind: 'approval';
   decision: 'allow' | 'deny' | 'allow_always';
@@ -2254,6 +2242,101 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateAuthorizeUrlMutationOptions(options), queryClient);
     }
+
+export const getSubscribeConversationEventsUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/events`
+}
+
+export const subscribeConversationEvents = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<void> => {
+
+  return apiMutator<void>(getSubscribeConversationEventsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSubscribeConversationEventsQueryKey = (id: string,) => {
+    return [
+    `/api/conversations/${id}/events`
+    ] as const;
+    }
+
+
+export const getSubscribeConversationEventsQueryOptions = <TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSubscribeConversationEventsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof subscribeConversationEvents>>> = ({ signal }) => subscribeConversationEvents(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SubscribeConversationEventsQueryResult = NonNullable<Awaited<ReturnType<typeof subscribeConversationEvents>>>
+export type SubscribeConversationEventsQueryError = ErrorType<unknown>
+
+
+export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof subscribeConversationEvents>>,
+          TError,
+          Awaited<ReturnType<typeof subscribeConversationEvents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof subscribeConversationEvents>>,
+          TError,
+          Awaited<ReturnType<typeof subscribeConversationEvents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSubscribeConversationEventsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListProvidersUrl = () => {
 
@@ -4869,101 +4952,6 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getAbortConversationMutationOptions(options), queryClient);
     }
-
-export const getSubscribeConversationEventsUrl = (id: string,) => {
-
-
-
-
-  return `/api/conversations/${id}/events`
-}
-
-export const subscribeConversationEvents = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<unknown> => {
-
-  return apiMutator<unknown>(getSubscribeConversationEventsUrl(id),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getSubscribeConversationEventsQueryKey = (id: string,) => {
-    return [
-    `/api/conversations/${id}/events`
-    ] as const;
-    }
-
-
-export const getSubscribeConversationEventsQueryOptions = <TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<SubscribeConversationEvents401 | SubscribeConversationEvents404>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getSubscribeConversationEventsQueryKey(id);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof subscribeConversationEvents>>> = ({ signal }) => subscribeConversationEvents(id, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type SubscribeConversationEventsQueryResult = NonNullable<Awaited<ReturnType<typeof subscribeConversationEvents>>>
-export type SubscribeConversationEventsQueryError = ErrorType<SubscribeConversationEvents401 | SubscribeConversationEvents404>
-
-
-export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<SubscribeConversationEvents401 | SubscribeConversationEvents404>>(
- id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof subscribeConversationEvents>>,
-          TError,
-          Awaited<ReturnType<typeof subscribeConversationEvents>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof apiMutator>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<SubscribeConversationEvents401 | SubscribeConversationEvents404>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof subscribeConversationEvents>>,
-          TError,
-          Awaited<ReturnType<typeof subscribeConversationEvents>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof apiMutator>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<SubscribeConversationEvents401 | SubscribeConversationEvents404>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-
-export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<SubscribeConversationEvents401 | SubscribeConversationEvents404>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getSubscribeConversationEventsQueryOptions(id,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
 
 export const getResolveDecisionUrl = (decisionId: string,) => {
 
