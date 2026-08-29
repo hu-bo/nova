@@ -157,6 +157,7 @@ interface SetupOpts {
   maxTurns?: number;
   toolConcurrency?: number;
   contextWindow?: number;
+  maxOutput?: number;
   sessionId?: string;
   storage?: SessionStorage;
 }
@@ -164,7 +165,12 @@ interface SetupOpts {
 function setup(stream: StreamFn, opts: SetupOpts = {}) {
   const storage = opts.storage ?? memoryStorage();
   const agent = createAgent({
-    model: { provider: "gateway", model: "test-model", contextWindow: opts.contextWindow },
+    model: {
+      provider: "gateway",
+      model: "test-model",
+      contextWindow: opts.contextWindow,
+      maxOutput: opts.maxOutput,
+    },
     stream,
     tools: opts.tools ?? [],
     storage,
@@ -365,6 +371,37 @@ describe("主流程", () => {
     ]);
     const { agent } = setup(stream);
     expect((await agent.prompt("go")).stopReason).toBe("max_tokens");
+  });
+
+  it("将模型配置的 maxOutput 传给每次模型请求", async () => {
+    const { stream, requests } = scripted([textEvents("done")]);
+    const { agent } = setup(stream, { maxOutput: 1024 });
+
+    await agent.prompt("go");
+
+    expect(requests[0]!.maxOutput).toBe(1024);
+  });
+
+  it("流式文本连续重复三次时停止，并保留已生成的内容", async () => {
+    const unit = "供应商主数据应保持唯一来源，阶段信息通过生命周期状态表达，避免跨库复制导致一致性风险。".repeat(4);
+    const { stream } = scripted([
+      [
+        { type: "block.start", index: 0, blockType: "text" },
+        { type: "block.delta", index: 0, delta: unit },
+        { type: "block.delta", index: 0, delta: unit },
+        { type: "block.delta", index: 0, delta: unit },
+        { type: "block.delta", index: 0, delta: "不应继续生成" },
+        { type: "block.end", index: 0, block: { type: "text", text: "unreachable" } },
+        { type: "finish", stopReason: "stop" },
+      ],
+    ]);
+    const { agent } = setup(stream);
+
+    const result = await agent.prompt("go");
+
+    expect(result.stopReason).toBe("repetition_detected");
+    expect(result.errorMessage).toContain("重复");
+    expect(textOf(result.message!.blocks)).toBe(unit.repeat(3));
   });
 
   it("typed context overflow 压缩后重试，普通错误不触发压缩", async () => {

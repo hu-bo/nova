@@ -125,6 +125,13 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
       return finish(host, "error", lastAssistant, message);
     }
 
+    if (streamed.finish === "repetition_detected") {
+      const message = "模型输出出现重复，已停止本次回答以避免继续生成无效内容。";
+      host.streaming({ errorMessage: message });
+      host.emit({ type: "error", code: "repetition_detected", message });
+      return finish(host, "repetition_detected", lastAssistant, message);
+    }
+
     const toolCalls: ToolCall[] = streamed.message.blocks
       .filter((block): block is Extract<Block, { type: "tool_call" }> => block.type === "tool_call")
       .map((block) => ({ callId: block.callId, name: block.name, args: block.args }));
@@ -238,13 +245,19 @@ function assemble(host: LoopHost): ModelRequest {
   const tools = [...host.tools.values()]
     .filter((tool) => active.has(tool.name))
     .map((tool) => ({ name: tool.name, description: tool.description, parameters: toolParameters(tool.schema) }));
-  return { system: host.systemPrompt, messages, tools, thinking: host.thinkingLevel() };
+  return {
+    system: host.systemPrompt,
+    messages,
+    tools,
+    thinking: host.thinkingLevel(),
+    maxOutput: host.modelRef().maxOutput,
+  };
 }
 
 interface StreamedTurn {
   message: Message;
   usage: Usage | null;
-  finish: "stop" | "tool_use" | "max_tokens" | "error" | "aborted";
+  finish: "stop" | "tool_use" | "max_tokens" | "repetition_detected" | "error" | "aborted";
   errorMessage?: string;
   errorCode?: "context_overflow";
 }
@@ -257,6 +270,8 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
   host.streaming({ isStreaming: true, streamingMessage: message });
 
   const blocks: Block[] = [];
+  const openText = new Map<number, string>();
+  const repetitionCheckpoints = new Map<number, number>();
   let usage: Usage | null = null;
   let finishReason: StreamedTurn["finish"] = "stop";
   let errorMessage: string | undefined;
@@ -264,11 +279,28 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
 
   try {
     for await (const event of host.stream(request, host.signal())) {
-      if (event.type === "block.start")
+      if (event.type === "block.start") {
+        if (event.blockType === "text") openText.set(event.index, "");
         host.emit({ type: "block.start", messageId, index: event.index, blockType: event.blockType });
-      else if (event.type === "block.delta")
+      } else if (event.type === "block.delta") {
+        const text = openText.get(event.index);
+        if (text !== undefined) {
+          const next = text + event.delta;
+          openText.set(event.index, next);
+          const checkpoint = repetitionCheckpoints.get(event.index) ?? 0;
+          if (next.length - checkpoint >= 128 && hasRepeatedTail(next)) {
+            const block: Block = { type: "text", text: next };
+            blocks[event.index] = block;
+            host.emit({ type: "block.delta", messageId, index: event.index, delta: event.delta });
+            host.emit({ type: "block.end", messageId, index: event.index, block });
+            finishReason = "repetition_detected";
+            break;
+          }
+          repetitionCheckpoints.set(event.index, next.length);
+        }
         host.emit({ type: "block.delta", messageId, index: event.index, delta: event.delta });
-      else if (event.type === "block.end") {
+      } else if (event.type === "block.end") {
+        openText.delete(event.index);
         blocks[event.index] = event.block;
         message.blocks = blocks.filter(Boolean);
         host.emit({ type: "block.end", messageId, index: event.index, block: event.block });
@@ -296,7 +328,9 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
           ? "aborted"
           : finishReason === "max_tokens"
             ? "max_tokens"
-            : "done",
+            : finishReason === "repetition_detected"
+              ? "repetition_detected"
+              : "done",
   });
   host.streaming({ isStreaming: false, streamingMessage: null });
   return {
@@ -306,6 +340,16 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
     ...(errorMessage !== undefined ? { errorMessage } : {}),
     ...(errorCode !== undefined ? { errorCode } : {}),
   };
+}
+
+// 只截断明显退化：同一段至少 160 个字符连续出现三次。短语复用、代码中的重复行不触发。
+function hasRepeatedTail(text: string): boolean {
+  const maxUnit = Math.min(1024, Math.floor(text.length / 3));
+  for (let size = 160; size <= maxUnit; size += 1) {
+    const tail = text.slice(-size);
+    if (text.slice(-size * 2, -size) === tail && text.slice(-size * 3, -size * 2) === tail) return true;
+  }
+  return false;
 }
 
 async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutcome[]> {

@@ -80,9 +80,21 @@ interface Todo {
 | `GET` | `/conversations` | `?projectId&limit&cursor` | `Page<Conversation>` |
 | `GET` | `/conversations/:id/messages` | `?before&limit` | `Page<ChatMessage>` |
 | `POST` | `/conversations/:id/messages` | `SendMessage` | `202` |
+| `GET` | `/runners/directories` | `?runnerId&path?` | `RunnerDirectory` |
+| `POST` | `/uploads` | `CreateUpload` | `UploadTicket` |
+| `POST` | `/uploads/runner` | `{ runnerId, path }` | `UploadedFile` |
 | `POST` | `/conversations/:id/abort` | — | `204` |
 | `POST` | `/decisions/:decisionId` | `DecisionResponse` | `204` |
 | `GET` | `/conversations/:id/events` | `Last-Event-ID` header（可选） | **SSE 流** |
+
+浏览器拖入的附件采用直传对象存储：`POST /uploads` 接收文件名并返回 MinIO 的
+`upload`、`download` 两个签名地址，浏览器直接 `PUT upload`。从 Runner 选择的附件走
+`POST /uploads/runner`：server 校验 Runner 所有权与 root 边界，从现有 Runner 会话读取文件并写入
+同一对象存储。两条路径都只在上传成功后把读取 URL 组装进消息；Runner 本地文件单文件上限为 20 MiB。
+
+`GET /runners/directories` 是 RemoteExplorer 的数据接口。返回当前目录的 `root`、`path`、
+`parent` 和一层 `entries`；每项只有稳定选择所需的 `name`、`path`、`kind`（`file` / `directory`）。
+server 必须拒绝 Runner root 外的路径，目录排在文件前且各自按名称排序。
 
 ```ts
 interface Project {

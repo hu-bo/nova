@@ -82,7 +82,7 @@ interface Agent {
 
 ```ts
 interface AgentConfig {
-  model: ModelRef                    // 见 model-adapters.md
+  model: ModelRef                    // 见 model-adapters.md；其中 maxOutput 是单次模型输出硬上限
   stream: StreamFn                   // 注入，不在包内选 provider
   tools: AgentTool[]
   ctx?: ToolContext                  // 注入，见 §3.4。缺省 = Chat 模式，见 §1.1
@@ -122,6 +122,8 @@ interface RunResult {
 
 type StopReason =
   | "done"          // 模型不再请求 tool
+  | "max_tokens"    // 达到模型输出上限，最终消息可能不完整
+  | "repetition_detected" // 流式输出出现长文本连续重复，已保留部分内容并停止
   | "terminate"     // batch 内全部结果置 terminate
   | "max_turns"
   | "aborted"

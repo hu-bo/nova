@@ -12,6 +12,7 @@ import {
   bindProjectWorkspace,
   createConversation,
   createProject,
+  createUpload,
   deleteProject,
   deleteRunner,
   deleteRunnerToken,
@@ -28,6 +29,7 @@ import {
   sendMessage,
   updateConversationRunner,
   updateProject,
+  uploadRunnerFile,
 } from "./generated/agent-server.js";
 import { ApiClientError } from "./errors.js";
 
@@ -53,24 +55,24 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
     listRunners,
     listAvailableModels,
     uploadFile: async (file: File) => {
-      const body = new FormData();
-      body.append("file", file, file.name);
-      const response = await fetch("/api/uploads", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-        body,
-      });
+      const mimeType = file.type || "application/octet-stream";
+      const { upload, download } = await createUpload({ name: file.name });
+      let response: Response;
+      try {
+        response = await fetch(upload, { method: "PUT", headers: { "Content-Type": mimeType }, body: file });
+      } catch {
+        throw new ApiClientError(0, "UPLOAD_NETWORK_ERROR", "无法连接附件存储，请检查网络后重试");
+      }
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { code?: string; message?: string } | null;
         throw new ApiClientError(
           response.status,
-          payload?.code ?? "UPLOAD_FAILED",
-          payload?.message ?? `上传失败（${response.status}）`,
-          response.headers.get("x-request-id") ?? undefined,
+          "UPLOAD_FAILED",
+          response.status === 403 ? "上传凭证已失效，请重试" : `附件上传失败（${response.status}）`,
         );
       }
-      return response.json() as Promise<{ url: string; name: string; size: number; mimeType: string }>;
+      return { url: download, name: file.name, size: file.size, mimeType };
     },
+    uploadRunnerFile,
     deleteRunner,
     listConversations: (projectId?: string) => listConversations({ limit: 100, ...(projectId ? { projectId } : {}) }),
     createConversation: (input: CreateConversation) => {

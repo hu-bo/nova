@@ -1228,11 +1228,20 @@ runnerId: string;
 path?: string;
 };
 
-export type ListRunnerDirectories200DirectoriesItem = {
+export type ListRunnerDirectories200EntriesItemKind = typeof ListRunnerDirectories200EntriesItemKind[keyof typeof ListRunnerDirectories200EntriesItemKind];
+
+
+export const ListRunnerDirectories200EntriesItemKind = {
+  file: 'file',
+  directory: 'directory',
+} as const;
+
+export type ListRunnerDirectories200EntriesItem = {
   /** @minLength 1 */
   name: string;
   /** @minLength 1 */
   path: string;
+  kind: ListRunnerDirectories200EntriesItemKind;
 };
 
 export type ListRunnerDirectories200 = {
@@ -1245,7 +1254,7 @@ export type ListRunnerDirectories200 = {
      * @nullable
      */
   parent: string | null;
-  directories: ListRunnerDirectories200DirectoriesItem[];
+  entries: ListRunnerDirectories200EntriesItem[];
 };
 
 export type ListRunnerDirectories400 = {
@@ -2063,6 +2072,87 @@ export type ResolveDecision401 = {
 };
 
 export type ResolveDecision404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type CreateUploadBody = {
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+};
+
+export type CreateUpload200 = {
+  upload: string;
+  download: string;
+};
+
+export type CreateUpload400 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type CreateUpload401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type CreateUpload503 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type UploadRunnerFileBody = {
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  runnerId: string;
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  path: string;
+};
+
+export type UploadRunnerFile200 = {
+  url: string;
+  /** @minLength 1 */
+  name: string;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  size: number;
+  /** @minLength 1 */
+  mimeType: string;
+};
+
+export type UploadRunnerFile400 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type UploadRunnerFile401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type UploadRunnerFile409 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type UploadRunnerFile503 = {
   code: string;
   message: string;
   requestId?: string;
@@ -4862,4 +4952,134 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getResolveDecisionMutationOptions(options), queryClient);
+    }
+
+export const getCreateUploadUrl = () => {
+
+
+
+
+  return `/api/uploads`
+}
+
+export const createUpload = async (createUploadBody: CreateUploadBody, options?: Parameters<typeof apiMutator>[1]): Promise<CreateUpload200> => {
+
+  return apiMutator<CreateUpload200>(getCreateUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createUploadBody)
+  }
+);}
+
+
+
+
+
+export const getCreateUploadMutationOptions = <TError = ErrorType<CreateUpload400 | CreateUpload401 | CreateUpload503>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUpload>>, TError,{data: BodyType<CreateUploadBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
+): UseMutationOptions<Awaited<ReturnType<typeof createUpload>>, TError,{data: BodyType<CreateUploadBody>}, TContext> => {
+
+const mutationKey = ['createUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUpload>>, {data: BodyType<CreateUploadBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateUploadMutationResult = NonNullable<Awaited<ReturnType<typeof createUpload>>>
+    export type CreateUploadMutationBody = BodyType<CreateUploadBody>
+    export type CreateUploadMutationError = ErrorType<CreateUpload400 | CreateUpload401 | CreateUpload503>
+
+    export const useCreateUpload = <TError = ErrorType<CreateUpload400 | CreateUpload401 | CreateUpload503>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUpload>>, TError,{data: BodyType<CreateUploadBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createUpload>>,
+        TError,
+        {data: BodyType<CreateUploadBody>},
+        TContext
+      > => {
+      return useMutation(getCreateUploadMutationOptions(options), queryClient);
+    }
+
+export const getUploadRunnerFileUrl = () => {
+
+
+
+
+  return `/api/uploads/runner`
+}
+
+export const uploadRunnerFile = async (uploadRunnerFileBody: UploadRunnerFileBody, options?: Parameters<typeof apiMutator>[1]): Promise<UploadRunnerFile200> => {
+
+  return apiMutator<UploadRunnerFile200>(getUploadRunnerFileUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(uploadRunnerFileBody)
+  }
+);}
+
+
+
+
+
+export const getUploadRunnerFileMutationOptions = <TError = ErrorType<UploadRunnerFile400 | UploadRunnerFile401 | UploadRunnerFile409 | UploadRunnerFile503>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadRunnerFile>>, TError,{data: BodyType<UploadRunnerFileBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadRunnerFile>>, TError,{data: BodyType<UploadRunnerFileBody>}, TContext> => {
+
+const mutationKey = ['uploadRunnerFile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadRunnerFile>>, {data: BodyType<UploadRunnerFileBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadRunnerFile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadRunnerFileMutationResult = NonNullable<Awaited<ReturnType<typeof uploadRunnerFile>>>
+    export type UploadRunnerFileMutationBody = BodyType<UploadRunnerFileBody>
+    export type UploadRunnerFileMutationError = ErrorType<UploadRunnerFile400 | UploadRunnerFile401 | UploadRunnerFile409 | UploadRunnerFile503>
+
+    export const useUploadRunnerFile = <TError = ErrorType<UploadRunnerFile400 | UploadRunnerFile401 | UploadRunnerFile409 | UploadRunnerFile503>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadRunnerFile>>, TError,{data: BodyType<UploadRunnerFileBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof uploadRunnerFile>>,
+        TError,
+        {data: BodyType<UploadRunnerFileBody>},
+        TContext
+      > => {
+      return useMutation(getUploadRunnerFileMutationOptions(options), queryClient);
     }

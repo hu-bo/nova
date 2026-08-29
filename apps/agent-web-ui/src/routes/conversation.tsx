@@ -1,18 +1,27 @@
-import { Composer, DecisionPrompt, MessageList, TodoPanel, type ComposerSubmission } from "@nova/chat-ui";
+import {
+  Composer,
+  DecisionPrompt,
+  MessageList,
+  RemoteExplorer,
+  TodoPanel,
+  type ComposerAttachment,
+  type ComposerSubmission,
+} from "@nova/chat-ui";
 import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle, Server, Wifi, WifiOff } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Dialog } from "../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
-import { useConversationMutations } from "../conversation/mutations.js";
+import { useConversationMutations, type RunnerAttachmentMetadata } from "../conversation/mutations.js";
 import { ConversationProvider, useConversationStore } from "../conversation/store.js";
 import { LocalStore } from "../lib/storage.js";
 import { useModelSettings } from "../model/provider.js";
 import { useConversations, useProject } from "../project/use-projects.js";
 import { RunnerBadge } from "./home.js";
 import { RunnerManagerDialog } from "../runner/runner-manager-dialog.js";
+import { useRunnerDirectoryLoader } from "../runner/use-runners.js";
 
 const SELECTED_MODEL_STORE = new LocalStore("nova_selected_model_profile", "");
 
@@ -59,7 +68,8 @@ function ConversationView({
   project,
 }: {
   conversation: { id: string; title: string; runnerId: string | null; projectId: string | null };
-  project?: { id: string; name: string; workspace: string | null; runnerId: string | null; runnerState: string } | undefined;
+  project?:
+    { id: string; name: string; workspace: string | null; runnerId: string | null; runnerState: string } | undefined;
 }) {
   const models = useModelSettings();
   const [storedProfileId, setStoredProfileId] = useState(() => SELECTED_MODEL_STORE.get());
@@ -69,9 +79,22 @@ function ConversationView({
     : models.defaultProfileId || models.profiles[0]?.id || "";
   const [queue, setQueue] = useState<"steering" | "nextRun">("steering");
   const [runnerOpen, setRunnerOpen] = useState(false);
-  const [runnerWarning, setRunnerWarning] = useState<ComposerSubmission | null>(null);
+  const [runnerWarning, setRunnerWarning] = useState<ComposerSubmission<RunnerAttachmentMetadata> | null>(null);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<ComposerAttachment<RunnerAttachmentMetadata>[]>([]);
   const store = useConversationStore();
   const mutations = useConversationMutations(conversation.id, modelProfileId);
+  const runnerId = conversation.runnerId ?? project?.runnerId ?? "";
+  const loadDirectory = useRunnerDirectoryLoader(runnerId);
+  const selectedRunnerAttachmentPaths = useMemo(
+    () =>
+      attachments
+        .filter((attachment) => attachment.metadata.runnerId === runnerId)
+        .map((attachment) => attachment.metadata.path),
+    [attachments, runnerId],
+  );
+  useEffect(() => setAttachmentOpen(false), [runnerId]);
   const incompleteTodos = store.state.todos.filter((todo) => todo.status !== "completed").length;
   const selectedProfile = models.profiles.find((profile) => profile.id === modelProfileId);
 
@@ -97,7 +120,7 @@ function ConversationView({
       </div>
     );
 
-  function submit(submission: ComposerSubmission) {
+  function submit(submission: ComposerSubmission<RunnerAttachmentMetadata>) {
     if (project && (!project.workspace || !project.runnerId)) {
       setRunnerWarning(submission);
       return false;
@@ -210,6 +233,17 @@ function ConversationView({
                   中断失败：{errorMessage(mutations.abortMutation.error)}
                 </div>
               )}
+              {attachmentError && (
+                <div
+                  className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200"
+                  role="alert"
+                >
+                  <span>{attachmentError}</span>
+                  <button type="button" className="font-semibold" onClick={() => setAttachmentError(null)}>
+                    关闭
+                  </button>
+                </div>
+              )}
               {mutations.decisionMutation.error && (
                 <div
                   className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
@@ -258,6 +292,18 @@ function ConversationView({
                 isAborting={mutations.abortMutation.isPending}
                 onAbort={() => mutations.abort()}
                 allowFiles
+                attachments={attachments}
+                onAttachmentsChange={setAttachments}
+                onAttachmentButtonClick={() => {
+                  if (!runnerId) {
+                    setAttachmentError(
+                      "请先为当前会话选择 Runner，再从 Runner 中添加附件。你仍可将本地文件拖到输入框中。",
+                    );
+                    return;
+                  }
+                  setAttachmentError(null);
+                  setAttachmentOpen(true);
+                }}
                 placeholder={project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行"}
                 models={modelOptions}
                 model={modelProfileId}
@@ -294,6 +340,33 @@ function ConversationView({
         onClose={() => setRunnerOpen(false)}
         selectedRunnerId={conversation.runnerId ?? undefined}
         onSelect={(runnerId) => mutations.changeRunner(runnerId)}
+      />
+
+      <RemoteExplorer
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        loadDirectory={loadDirectory}
+        mode="file"
+        multiple
+        initialPath={project?.workspace ?? undefined}
+        selectedPaths={selectedRunnerAttachmentPaths}
+        onConfirm={(entries) => {
+          setAttachments((current) => {
+            const merged = new Map(current.map((attachment) => [attachment.id, attachment]));
+            for (const entry of entries) {
+              const id = `${runnerId}:${entry.path}`;
+              merged.set(id, {
+                id,
+                name: entry.name,
+                description: entry.path,
+                metadata: { runnerId, path: entry.path },
+              });
+            }
+            return [...merged.values()].slice(0, 10);
+          });
+          setAttachmentOpen(false);
+        }}
+        title="从 Runner 添加附件"
       />
 
       <Dialog

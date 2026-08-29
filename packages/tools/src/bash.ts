@@ -7,7 +7,7 @@ const schema = z.object({
 });
 export const bash: Tool<z.output<typeof schema>> = {
   name: "bash",
-  description: "Run a command in the workspace.",
+  description: "Run an executable in the workspace. Pass its arguments separately in args; command is not shell-parsed.",
   schema,
   risk: "exec",
   async execute(input, ctx) {

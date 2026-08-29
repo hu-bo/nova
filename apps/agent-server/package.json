@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "@fastify/env": "^7.0.0",
-    "@fastify/multipart": "^10.1.1",
     "@fastify/swagger": "^9.8.1",
     "@nova/agent-core": "workspace:^",
     "@nova/coding-agent": "workspace:^",

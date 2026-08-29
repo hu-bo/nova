@@ -43,6 +43,18 @@ const app = await buildApp(
         return { url: "https://auth.example.com/login" };
       },
     },
+    uploadStorage: {
+      async ensureBucket() {},
+      async createUpload() {
+        return {
+          upload: "https://storage.example.com/uploads/openapi/example.txt?upload=1",
+          download: "https://storage.example.com/uploads/openapi/example.txt?download=1",
+        };
+      },
+      async putFile() {
+        return { download: "https://storage.example.com/uploads/openapi/example.txt?download=1" };
+      },
+    },
   },
   false,
 );

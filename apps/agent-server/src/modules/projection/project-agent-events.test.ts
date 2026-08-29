@@ -40,3 +40,22 @@ it("publishes and persists the concrete run error on the failed assistant messag
     });
   }
 });
+
+it("marks a repetition-stopped response as an error instead of a completed message", async () => {
+  const saved: MessageRow[] = [];
+  const store: Pick<AgentStore, "appendMessage"> = {
+    async appendMessage(message) {
+      const row = { ...message, seq: saved.length + 1 };
+      saved.push(row);
+      return row;
+    },
+  };
+  const project = projectAgentEvents("conversation-1", createEventHub(), store);
+
+  project({ type: "message.start", messageId: "message-1", role: "assistant" });
+  project({ type: "message.end", messageId: "message-1", stopReason: "repetition_detected" });
+  project({ type: "run.end", runId: "run-1", stopReason: "repetition_detected", usage: { input: 0, output: 0 } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(saved[0]!.status).toBe("error");
+});

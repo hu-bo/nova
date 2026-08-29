@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "@nova/protocol";
-import { BlockView, Composer, DecisionPrompt, MessageList, TodoPanel } from "./index.js";
+import { BlockView, Composer, DecisionPrompt, MessageList, RemoteExplorer, TodoPanel, UploadCover } from "./index.js";
 
 describe("chat-ui", () => {
   it("renders markdown and structured code", () => {
@@ -43,6 +43,61 @@ describe("chat-ui", () => {
     expect(html.match(/read_file/g)).toHaveLength(1);
     expect(html).not.toContain("todo_write");
     expect(html).toContain("ship");
+  });
+
+  it("renders tool output as plain preformatted text instead of file controls", () => {
+    const html = renderToStaticMarkup(
+      <MessageList
+        messages={[
+          {
+            id: "message-1",
+            conversationId: "conversation-1",
+            role: "assistant",
+            status: "done",
+            createdAt: 1,
+            blocks: [
+              { type: "tool_call", callId: "call-1", name: "list_dir", args: { path: "." }, status: "ok" },
+              {
+                type: "tool_result",
+                callId: "call-1",
+                status: "ok",
+                blocks: [{ type: "text", text: '{\n  "entries": ["build.rs", "src"]\n}' }],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain('<pre class="m-0 max-h-80');
+    expect(html).toContain("&quot;build.rs&quot;");
+    expect(html).not.toContain("nova-file-block");
+  });
+
+  it("truncates long tool output in the preformatted view", () => {
+    const html = renderToStaticMarkup(
+      <MessageList
+        messages={[
+          {
+            id: "message-1",
+            conversationId: "conversation-1",
+            role: "assistant",
+            status: "done",
+            createdAt: 1,
+            blocks: [
+              { type: "tool_call", callId: "call-1", name: "bash", args: {}, status: "ok" },
+              {
+                type: "tool_result",
+                callId: "call-1",
+                status: "ok",
+                blocks: [{ type: "text", text: `${"a".repeat(12_000)}END_ONLY` }],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain("已省略 8 个字符");
+    expect(html).not.toContain("END_ONLY");
   });
 
   it("renders accessible decisions and read-only todos", () => {
@@ -108,5 +163,42 @@ describe("chat-ui", () => {
     const html = renderToStaticMarkup(<Composer isRunning onAbort={() => undefined} onSubmit={() => undefined} />);
     expect(html).toContain('aria-label="中断当前运行"');
     expect(html).not.toContain('aria-label="发送消息"');
+  });
+
+  it("renders controlled host attachments without replacing the native file fallback", () => {
+    const html = renderToStaticMarkup(
+      <Composer
+        attachments={[{ id: "remote-1", name: "runner.log", metadata: { path: "/tmp/runner.log" } }]}
+        onAttachmentsChange={() => undefined}
+        onAttachmentButtonClick={() => undefined}
+        onSubmit={() => undefined}
+      />,
+    );
+    expect(html).toContain("runner.log");
+    expect(html).toContain('aria-label="移除 runner.log"');
+    expect(html).toContain('type="file"');
+  });
+
+  it("exposes upload interactions through the standalone cover", () => {
+    const html = renderToStaticMarkup(
+      <UploadCover files={[]} onFilesChange={() => undefined}>
+        {({ trigger }) => <div>{trigger}</div>}
+      </UploadCover>,
+    );
+    expect(html).toContain('type="file"');
+    expect(html).toContain('aria-label="添加文件"');
+  });
+
+  it("exports the remote explorer dialog contract", () => {
+    const html = renderToStaticMarkup(
+      <RemoteExplorer
+        open={false}
+        mode="directory"
+        onClose={() => undefined}
+        loadDirectory={async () => ({ root: "/", path: "/", parent: null, entries: [] })}
+        onConfirm={() => undefined}
+      />,
+    );
+    expect(html).toBe("");
   });
 });

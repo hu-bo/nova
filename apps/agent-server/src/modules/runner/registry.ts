@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { RunnerSession } from "@nova/runner-sdk";
 import type { Project, RunnerDirectory, RunnerEvent } from "@nova/protocol";
-import { AppError, runnerUnavailable } from "../../errors.js";
+import { AppError, invalidInput, runnerUnavailable } from "../../errors.js";
 import type { AgentStore } from "../../store.js";
 import { createLogger } from "@nova/logger";
 
@@ -18,6 +18,12 @@ export interface RunnerRegistry {
   pick(userId: string, runnerId: string, workspace?: string): RunnerSession;
   verifyWorkspace(userId: string, runnerId: string, workspace: string): Promise<void>;
   listDirectories(userId: string, runnerId: string, requestedPath?: string): Promise<RunnerDirectory>;
+  readFile(
+    userId: string,
+    runnerId: string,
+    requestedPath: string,
+    maxSize: number,
+  ): Promise<{ name: string; size: number; data: Uint8Array }>;
   subscribe(userId: string, listener: (event: RunnerEvent) => void): () => void;
 }
 
@@ -183,18 +189,25 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 5
         const info = await registered.session.fs.stat(selected);
         if ((info.kind as number) !== 2) throw runnerUnavailable("The selected path is not a directory");
         const entries = await registered.session.fs.list(selected, 1);
-        const directories = entries
-          .filter((entry) => (entry.kind as number) === 2)
-          .map((entry) => ({ name: entry.name, path: flavor.join(selected, entry.name) }))
+        const explorerEntries = entries
+          .filter((entry) => (entry.kind as number) === 1 || (entry.kind as number) === 2)
+          .map((entry) => ({
+            name: entry.name,
+            path: flavor.join(selected, entry.name),
+            kind: (entry.kind as number) === 2 ? ("directory" as const) : ("file" as const),
+          }))
           .filter((entry) => withinRoot(root, entry.path))
-          .sort((left, right) => left.name.localeCompare(right.name));
+          .sort(
+            (left, right) =>
+              Number(left.kind === "file") - Number(right.kind === "file") || left.name.localeCompare(right.name),
+          );
         const normalizedRoot = flavor.normalize(root);
         const parentPath = flavor.dirname(selected);
         return {
           root: normalizedRoot,
           path: selected,
           parent: samePath(flavor, selected, normalizedRoot) ? null : parentPath,
-          directories,
+          entries: explorerEntries,
         };
       } catch (error) {
         if (error instanceof AppError) throw error;
@@ -203,6 +216,34 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 5
           "runner directory lookup failed",
         );
         throw runnerUnavailable("Unable to read directories from the selected runner");
+      }
+    },
+    async readFile(userId, runnerId, requestedPath, maxSize) {
+      const registered = current(userId, runnerId);
+      if (!registered || status(userId, runnerId) === "disconnected") throw runnerUnavailable();
+      const root = registered.session.identity.workspace;
+      const flavor = pathFlavor(root);
+      const selected = flavor.normalize(requestedPath);
+      if (!withinRoot(root, selected)) throw runnerUnavailable("Runner cannot access the selected file");
+      try {
+        const info = await registered.session.fs.stat(selected);
+        if ((info.kind as number) !== 1) throw invalidInput("The selected path is not a file");
+        const declaredSize = Number(info.size);
+        if (!Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > maxSize) {
+          throw invalidInput(`The selected file exceeds the ${formatBytes(maxSize)} limit`);
+        }
+        const result = await registered.session.fs.readFile(selected, { limit: maxSize + 1 });
+        if (result.totalSize > maxSize || result.data.byteLength > maxSize) {
+          throw invalidInput(`The selected file exceeds the ${formatBytes(maxSize)} limit`);
+        }
+        return { name: flavor.basename(selected), size: result.data.byteLength, data: result.data };
+      } catch (error) {
+        if (error instanceof AppError) throw error;
+        logger.warn(
+          { err: error, component: "server", dependency: "runner", runnerId, path: selected },
+          "runner file read failed",
+        );
+        throw runnerUnavailable("Unable to read the selected file from the runner");
       }
     },
     subscribe(userId, listener) {
@@ -253,4 +294,8 @@ function pathFlavor(root: string): typeof path.win32 | typeof path.posix {
 
 function samePath(flavor: typeof path.win32 | typeof path.posix, left: string, right: string): boolean {
   return flavor === path.win32 ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+function formatBytes(bytes: number): string {
+  return bytes % (1024 * 1024) === 0 ? `${bytes / (1024 * 1024)} MiB` : `${bytes} byte`;
 }

@@ -13,7 +13,9 @@ Nova 的聊天展示组件库，提供消息、结构化 Block、Decision、TODO
 - `BlockView`：渲染单个 `text`、`thinking`、`code`、`diff`、`file`、`tool_call`、`tool_result`、`todo` 或 `error` Block。
 - `DecisionPrompt`：展示审批或反问，并通过回调提交选择。
 - `TodoPanel`：展示只读任务清单。
-- `Composer`：输入文本、选择或移除文件、粘贴系统截图，以及选择模型和推理强度。
+- `Composer`：输入文本、组合 `UploadCover`，以及选择模型和推理强度。
+- `UploadCover`：统一处理文件拖放、粘贴、原生选择、附件列表和附件按钮。
+- `RemoteExplorer`：浏览宿主提供的远程目录，可复用于目录选择和文件多选。
 
 ## 用法
 
@@ -61,9 +63,9 @@ export function ChatComposer() {
   const [model, setModel] = useState("gpt-5");
   const [reasoningEffort, setReasoningEffort] = useState("medium");
 
-  function send({ text, files, model, reasoningEffort }: ComposerSubmission) {
-    // 宿主在这里上传 files，并把文本、模型和推理强度发送给服务端。
-    console.log({ text, files, model, reasoningEffort });
+  function send({ text, files, attachments, model, reasoningEffort }: ComposerSubmission) {
+    // 宿主在这里上传本地 files；attachments 是宿主已准备好的受控附件。
+    console.log({ text, files, attachments, model, reasoningEffort });
   }
 
   return (
@@ -82,7 +84,37 @@ export function ChatComposer() {
 ```
 
 点击“添加文件”可以选择多个文件；在消息输入框粘贴系统截图，会把剪贴板图片加入待发送附件。
-只有附件、没有文本时也可以发送。`onSubmit` 收到浏览器原生 `File[]`，实际上传及错误处理由宿主完成。
+也可以把本地文件直接拖入输入区。只有附件、没有文本时也可以发送。`onSubmit` 收到浏览器原生
+`File[]` 和通用 `attachments`，实际上传及错误处理由宿主完成。传入 `onAttachmentButtonClick` 后，
+附件按钮会调用宿主选择器；未传时继续使用浏览器原生文件选择框。受控附件通过 `attachments` 和
+`onAttachmentsChange` 管理，提交成功后 Composer 会用空数组通知宿主清空它们。
+这些上传交互由独立的 `UploadCover` 实现；它也可以脱离 Composer 使用，并通过 render prop
+把 `trigger` 与 `onPaste` 交给宿主布局。
+
+浏览远程目录：
+
+```tsx
+import { RemoteExplorer, type RemoteExplorerListing } from "@nova/chat-ui";
+
+async function loadDirectory(path?: string, signal?: AbortSignal): Promise<RemoteExplorerListing> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  const response = await fetch(`/api/files${query}`, { signal });
+  return response.json();
+}
+
+<RemoteExplorer
+  open={pickerOpen}
+  onClose={() => setPickerOpen(false)}
+  mode="file"
+  multiple
+  loadDirectory={loadDirectory}
+  onConfirm={(entries) => addAttachments(entries)}
+/>;
+```
+
+单击选择，双击目录进入；多选支持 `Shift` 连选、`⌘/Ctrl` 切换和 `⌘/Ctrl+A` 全选。
+目录模式在未选中子目录时会选择当前目录，因此根目录同样可选。目录数据完全由宿主的
+`loadDirectory` 提供，组件不请求业务接口。
 
 ## 开发命令
 

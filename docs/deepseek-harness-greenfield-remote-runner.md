@@ -1,473 +1,1091 @@
-# 基于 DeepSeek Harness 的 Greenfield Remote Runner 架构方案
+# 基于 DeepSeek Harness 的 Greenfield Web、Server 与 Remote Runner 架构方案
 
-> 状态：分析完成，可作为 PoC 与重新开发的架构输入  
-> 前提：不兼容、不重构 Nova 当前 `agent-core`，按重新开发评估  
-> 目标：复用 DeepSeek Harness（下文简称 DSH）Agent 核心，自研产品 Server，所有工作区能力只在 Remote Runner 执行  
-> 约束：DSH 上游目录只读，无长期补丁、无源码 fork；二开只存在于树外适配层
+> 状态：架构分析与部署方案
+>
+> 项目性质：全新项目，不集成、不兼容、不复用 Nova 代码
+>
+> 参考边界：只参考 Nova 已验证的产品体验与控制面／执行面分离思想
+>
+> 评估基线：本地 `deepseek-harness-master`，版本 `0.1.1-rc.2`
+>
+> 目标体验：用户访问类似 `https://nova.8and1.cn/` 的公网 Web 站点，在任意服务器、macOS 或 Windows 机器连接自己的 workspace，并通过浏览器聊天驱动远程代码任务
 
-## 1. 结论
+## 1. 执行结论
 
-该方案可行，而且 Greenfield 场景比“替换现有 `agent-core`”更适合轻量二开。因为不需要维持 Nova 现有 Agent API、Entry / Record 数据模型和内部状态机，可以直接接受 DSH 的 Agent、Session、Tool、Prompt、Compaction 与 Subagent 语义，只在产品边界做适配。
+该 Greenfield 方案可行。正确实现不是把 DeepSeek Harness（下文简称 DSH）现有 Web GUI 直接暴露到公网，也不是把整个 DSH 进程下发到开发机器，而是把系统明确拆成三层：
 
-推荐方案不是运行 `dsh-headless`、复用 DSH CLI，或修改 `dsh-base`，而是：
+1. 自研 Web UI 部署在公网服务器，负责登录、项目、Runner 选择、会话和事件展示；
+2. 自研 Control Server 部署在服务器，在进程内组装 DSH，持有 Agent 生命周期、模型调用、会话持久化和产品控制面；
+3. 自研 Remote Runner 安装在服务器、macOS 或 Windows 开发机，只执行文件与进程操作，通过主动发起的持久双向 gRPC 连接接收请求。
 
-1. 在自研 Server 进程内，把 DSH 当作公开的 Cordis Runtime 插件使用；
-2. 自建一个薄的 `dsh-runtime` 组合包，显式装配所需 DSH 核心插件；
-3. 树外实现 PostgreSQL Session Persistence、Remote FileSystem、Remote Shell、Server Event Bridge 和交互桥；
-4. Remote Runner 继续通过出站双向 gRPC 连接 Server，DSH 不理解 gRPC、用户、项目和浏览器协议；
-5. 每个 **Runner 连接代际**拥有独立 Harness Runtime Shard，Shard 内可运行多个 Agent；
-6. 上游 DSH 作为精确版本依赖或只读 Git 子模块存在，业务实现不得写入其目录。
+推荐链路是：
 
-第一版只实现远程文件系统和前台 Shell。后台任务、PTY、Terminal、LSP、ACP 和远程 Skill 分阶段增加，以最快形成“浏览器 → Server → DSH Agent → Remote Runner”闭环。
+```text
+Browser
+  │ HTTPS: REST + SSE
+  ▼
+Control Server
+  │ in-process public DSH APIs
+  ▼
+DeepSeek Harness Agent
+  │ tool call: fs / shell
+  ▼
+Remote FS / Shell Provider
+  │ outbound bidirectional gRPC stream
+  ▼
+Remote Runner on Linux / macOS / Windows
+  │
+  ▼
+real workspace / process / operating system
+```
 
-| 判断 | 结论 |
+用户 query 不应被原样“派发给 Runner”。Control Server 先把 query 交给 DSH Agent；DSH 决定是否需要工具。只有模型产生文件读取、文件修改或 Shell 调用时，Remote Provider 才把结构化操作通过 gRPC 发给 Runner。Runner 不认识 User、Conversation、Prompt、Agent 或 DSH 类型，也不决定下一步做什么。
+
+### 1.1 关键选型
+
+| 问题 | 决策 |
 |---|---|
-| DSH 没有产品 Server，能否嵌入自研 Server | 能。`ctx.agents` 是公开驱动面，DSH JSON-RPC Server 与 ACP 已证明传输可树外挂接 |
-| 是否需要修改 Agent Loop | 不需要。输入、取消、事件、工具、FS、Shell、LLM、持久化均有公开 seam |
-| Server 能否完全不访问本地 workspace | 能，但生产组合不得装载 DSH 本地 FS、Shell、Subprocess 和本地 Skill Provider |
-| 能否直接复用现有 Runner | 连接模型可以；文件协议需增加版本与原子写，后台进程和 PTY 后续扩展 |
-| DSH 更新后能否直接 `git pull` | 能保证上游目录可干净更新，不能保证 API 永不变化；仍须编译与契约测试 |
-| 是否直接依赖 `dsh-agent-spine-demo` | PoC 可以；生产应自行写小型显式组合，避免示例包隐式带入本地能力 |
+| Agent Loop 放在哪里 | Control Server 内，由 DSH 运行 |
+| Web UI 用什么 | 全新产品 UI，不使用 DSH Web 前端 |
+| 产品 Server 用什么 | 全新 Control Server，通过 `ctx.agents` 驱动 DSH |
+| workspace 放在哪里 | 只在 Remote Runner 所在机器 |
+| Server 是否挂载用户代码目录 | 不挂载，也不提供本地执行 fallback |
+| Server 与 Runner 如何通信 | Runner 主动建立出站双向 gRPC 长连接 |
+| macOS / Windows / Linux 如何统一 | 统一协议，平台相关路径、Shell 和进程语义由 Runner 实现 |
+| 会话如何恢复 | DSH Session Event Log 持久化到 PostgreSQL，产品表是投影 |
+| 是否复用 Nova 包、Proto 或数据库 | 不复用；所有包、协议和表在新项目重新定义 |
+| 是否修改 DSH 上游 | 不修改；只使用公开 package export 和 Cordis seam |
 
-DSH 负责“Agent 如何思考和调用工具”；Server 负责“谁可以运行、会话属于谁、事件如何交付”；Runner 负责“文件与命令实际如何执行”。
+### 1.2 为什么不能直接部署 DSH Web
 
-```text
-Browser / API Client
-        │ HTTP + SSE / WebSocket
-        ▼
-Own Product Server
-  ├─ Auth / Project / Conversation
-  ├─ AgentRuntimeRegistry
-  ├─ Session Projection / Interaction Broker
-  ├─ PostgreSQL DSH Persistence Provider
-  └─ RunnerRegistry + gRPC Gateway
-        │                         │
-        │ in-process public APIs │ outbound bidirectional gRPC
-        ▼                         ▼
-DeepSeek Harness Runtime      Remote Runner
-  ├─ Agent / Loop               ├─ workspace boundary
-  ├─ Session / Prompt           ├─ file operations
-  ├─ Tools / Compaction         ├─ process execution
-  ├─ Subagent / Goal            └─ cancellation / limits
-  └─ Remote FS + Shell adapters
-```
+DSH 的 `dsh-web-app` 是本地单用户 GUI 表层，不是互联网产品 Server。它的当前约束包括：
 
-## 2. 目标、非目标与不变量
+- Host WebServer 不提供 TLS、认证或多租户；
+- Web CLI 有意不支持直接以 `0.0.0.0` 方式对公网开放；
+- Browser 协议、Settings、Credentials、本机目录选择和 Host 桌面能力面向本地可信环境；
+- 部分交互状态只存在于 Host 进程内，Host 重启后不能恢复；
+- Client 与 Host 一起发布，协议当前没有独立版本协商。
 
-### 2.1 目标
+因此 DSH Web 只能作为以下设计的参考：`ctx.agents` 驱动、Session Event 投影、连接 generation、历史尾页与实时事件的收敛。产品公网入口、认证、权限、稳定 API、跨设备 Runner 和数据库模型必须由新项目拥有。
 
-- DSH 作为无 UI、无产品 Server 的 Agent Runtime Core；
-- 自研 Server 负责认证、项目、会话、在线 Runtime、REST/SSE/WebSocket 与数据库；
-- workspace 文件、命令和以后增加的终端能力只通过 Remote Runner；
-- Server 不提供本地 workspace fallback；
-- 二开表现为树外 Cordis 插件、Provider、Projection、Bridge 和组合包；
-- Server 与 Runner 协议由己方控制，不要求 DSH 上游接受 Remote Runner 设计；
-- 可在没有产品 Server 时启动测试 Runtime。
+## 2. 产品模型与不变量
 
-### 2.2 非目标
+### 2.1 控制面与执行面
 
-- 不保留当前 `@nova/agent-core` API、Entry / Record 或 ToolContext；
-- 不复用 DSH Web UI、CLI Host 或产品壳；
-- 不把 Nova 包写入 `deepseek-harness-master/packages`；
-- 不通过 `patch-package` 或修改 DSH Loop 集成；
-- 第一版不承诺后台进程、PTY、Terminal、LSP、ACP 和完整远程 Skill。
+Control Server 是控制面，负责：
 
-### 2.3 不变量
+- 用户认证与租户隔离；
+- Project、Workspace Binding 与 Conversation；
+- Runner 注册、在线状态、选择和连接代际；
+- DSH Runtime 组装与 AgentHandle 生命周期；
+- 模型配置、LLM 凭据和调用；
+- DSH Session 持久化、产品投影、SSE 和交互；
+- 工具请求路由、取消、限流与审计。
 
-1. `AgentRuntimeRegistry` 独占 AgentHandle 的创建、恢复、取消、驱逐和释放。
-2. `RunnerRegistry` 独占连接代际、请求关联、断线和取消。
-3. 一个 Runtime Shard 的 `ctx.fs` 与 `ctx.shell` 永远指向同一 Runner 连接代际。
-4. 同一 DSH Session 在所有 Server 副本中最多一个活动写者。
-5. DSH Session Event Log 是 Agent 历史事实，产品表是可重建查询投影。
-6. Runner 不可用时返回基础设施错误，绝不静默落到 Server 本机。
-7. CI 检查 DSH 工作树干净，所有扩展只依赖公开 package export。
+Remote Runner 是执行面，负责：
 
-## 3. DSH 的复用与装配方式
+- workspace root 与路径 containment；
+- 文件 resolve、stat、read、list、原子 write / edit；
+- Shell 进程、输出、超时、进程组取消和资源上限；
+- 平台能力上报、心跳、断线清理和背压；
+- 对每一项请求再次校验 workspace、generation 和授权范围。
 
-### 3.1 直接复用
+Runner 不负责：Agent Loop、Prompt、模型调用、会话持久化、任务规划、业务重试、用户权限或 UI 投影。
 
-| 能力 | DSH owner | 自研部分 |
+### 2.2 Greenfield 领域对象
+
+| 对象 | 含义 | 持久性 |
 |---|---|---|
-| Agent 生命周期与输入队列 | `dsh-agent`：`followup`、`steer`、`inject`、`cancel`、`whenIdle` | Server 管理 Handle 和准入 |
-| Agent Loop | `dsh-agent-loop` | 不修改 |
-| Session Event Log | `dsh-session` | PostgreSQL Provider 与产品投影 |
-| Tool 注册与执行 | `dsh-tools` 及工具插件 | Remote FS / Shell、审批桥 |
-| System Prompt | `dsh-system-prompt`、Agent Instructions | persona、按 Runner 平台选择工具 |
-| LLM 与重试 | `dsh-llm`、`dsh-llm-retry` | 官方 Provider 或树外网关 Adapter |
-| Compaction / Subagent / Goal | DSH 对应插件 | 配置，后两项延后启用 |
-| Scope / Preset | `dsh-scope`、`dsh-agent-presets` | Agent 能力套餐，不负责 Runner 路由 |
-| Approval / Questions | DSH 事件和回答 seam | Server Interaction Broker |
+| User | 登录用户与权限主体 | PostgreSQL |
+| Device | 用户的一台逻辑开发设备 | PostgreSQL |
+| Runner | 设备上的一个逻辑执行器身份 | PostgreSQL |
+| Runner Connection Generation | 一次真实 gRPC 连接生命周期 | Server 内存，必要事实入审计 |
+| Workspace Binding | Project 与某个 Runner workspace root 的显式绑定 | PostgreSQL |
+| Project | 产品中的代码项目 | PostgreSQL |
+| Conversation | UI 会话，固定一个 DSH Session 与 Workspace Binding | PostgreSQL |
+| Harness Session | DSH 的事件日志与恢复事实 | PostgreSQL Event Log |
+| Runtime Shard | 绑定一个 Runner generation 的 DSH 运行环境 | Server 内存 |
 
-### 3.2 不直接使用 `dsh-headless` / `dsh-base`
+这些是新项目自己的模型。它们不要求与 Nova 的 Project、Conversation、Runner 或协议字段相同。
 
-`dsh-headless` 是一次性任务入口，不是多租户可恢复 Server。`dsh-base` 会装配本地 Sandbox、FS、Shell 等能力，容易破坏“只经 Remote Runner”的约束。
+### 2.3 必须保持的不变量
 
-- `dsh-headless` 只作生命周期参考；
-- `dsh-base` 只作依赖闭包参考；
-- `dsh-agent-spine-demo` 用于 PoC；
-- 生产由 `@nova/dsh-runtime` 用公开插件显式组装。
+1. `AgentRuntimeRegistry` 独占 AgentHandle 的 create、resume、cancel、evict 和 dispose。
+2. `RunnerRegistry` 独占 Runner connection 的 admission、generation、request correlation 和 disconnect。
+3. 一个 Runtime Shard 的 `ctx.fs` 与 `ctx.shell` 永远绑定同一个 Runner generation。
+4. Conversation 在活动 turn 内固定 Workspace Binding，不允许中途切换机器。
+5. 同一个 DSH Session 在所有 Server 副本中最多一个活动写者。
+6. DSH Session Event Log 是 Agent 历史事实，产品 Message / Tool / Status 表是可重建投影。
+7. Runner 不可用时明确返回基础设施错误，绝不回退到 Control Server 本机。
+8. Server 不解析外部机器的路径语义；路径规范化、符号链接和 containment 由对应 Runner 判断。
+9. Runner 断线后不自动重放具有副作用的命令或写操作。
+10. DSH 上游目录只读，新项目代码只依赖公开 package root export。
 
-这个 Composition Root 只是明确选择插件，不复制 DSH 核心代码，也避免上游 Bundle 更新时意外带入本地执行器。
+## 3. DSH 可直接复用的公开能力
 
-### 3.3 第一版最小组合
+### 3.1 Agent 生命周期
+
+`@deepseek-ai/dsh-agent` 提供公开 `ctx.agents` 驱动面：
+
+- `ctx.agents.create({ sessionId, meta, agentOptions, setup })`；
+- `ctx.agents.resume({ resumeSessionId, agentOptions, setup })`；
+- 返回由调用方独占的 `AgentHandle`；
+- `agent.followup()` 提交普通用户后续输入；
+- `agent.steer()` 在运行中提交下一步骤 steering；
+- `agent.inject()` 添加下一步骤上下文但不主动唤醒；
+- `agent.cancel()` 中断当前活动；
+- `agent.whenIdle()` 等待整个 Agent 达到静止；
+- `handle.dispose()` 停止 Loop、注销 Agent、分离 Session 并释放 scope。
+
+这足以让自研 Server 管理长期在线、多轮、可取消、可恢复的 Agent，不需要修改 Agent Loop。
+
+### 3.2 Session 与事件
+
+DSH 的 `session/event` 是可回放 transcript 的权威来源；`agent/*` 事件主要用于实时状态、队列和运行协调。新项目应：
+
+- 持久保存全部已提交 Session Event；
+- 用 event seq 作为投影 watermark；
+- 从 Session Event 投影产品消息、工具卡、usage、turn 状态和标题；
+- 只把稳定、自有的浏览器协议暴露给 Web UI，不直接导出 DSH 联合类型；
+- Server 重启后从持久日志恢复 Agent，而不是从浏览器状态恢复。
+
+### 3.3 文件系统 seam
+
+`@deepseek-ai/dsh-fs` 的 `FileSystem` 已把远程实现需要的语义放在公开接口中：
+
+- 异步 `resolve()` 与稳定 `FsTarget`；
+- `processPath()`、`fileUrl()` 与 `contains()`；
+- `stat()`、`lstat()`、`readText()`、`streamText()`、`readBytes()`；
+- 稳定顺序的 `listDir()`；
+- 带 version guard 的原子 `writeText()`；
+- 把版本校验、literal match 和 rewrite 放在同一临界区的 `editText()`；
+- 类型化错误、观察策略和可选 sandbox fact。
+
+新项目实现 `RemoteFileSystem extends FileSystem`，继续复用 DSH 文件工具与 observation policy，不重写模型工具语义。
+
+### 3.4 Shell seam
+
+`@deepseek-ai/dsh-shell` 的 `ShellExecutor` 明确区分：
+
+- `resolve()`：补默认值、限制 cwd、timeout、env 和输出上限；
+- `run()`：前台执行，非零退出、超时和取消返回结果，基础设施失败才 reject；
+- `start()`：后台进程句柄；
+- `sandboxMode`：只能报告真实生效的能力。
+
+第一版只需对外开放前台 `run()`。RemoteShellExecutor 仍需实现抽象的 `start()`，但在后台协议完成前应明确返回 unsupported，同时把 `dsh-tool-bash` / `dsh-tool-pwsh` 配成 `enableRunInBackground: false`，让模型看不到 `run_in_background`。后台任务、PTY、Terminal 和 LSP 可后续增加，不能为了满足接口而伪造能力。
+
+### 3.5 Persistence seam
+
+`@deepseek-ai/dsh-session-persistence` 已提供 `PersistenceCoordinator`。推荐只实现 PostgreSQL `PersistenceBackend` 原语：
+
+- `loadStored()`；
+- `readStoredRevision()`；
+- 可选 `loadStoredFrom()`；
+- `appendBatch()`；
+- `commitRepair()`；
+- `list()`；
+- 可选 `close()`。
+
+Coordinator 继续拥有批写、顺序、准备、恢复、flush、crash repair 和 dispose quiescence。新项目不要复制这套状态机。
+
+### 3.6 不直接复用的 DSH 入口
+
+| DSH 能力 | 用法 |
+|---|---|
+| `dsh-agent-loop`、Agent、Session、Tools、Prompt、Compaction | 生产直接复用 |
+| `dsh-fs`、`dsh-shell` definition 与工具 consumer | 生产直接复用 |
+| `dsh-web-app` / Web Frontend | 只参考，不进入产品 |
+| `dsh-host-webserver` / connection | 只参考本地 GUI 的传输处理 |
+| `dsh-headless` | 只参考一次性任务生命周期 |
+| `dsh-sdk-jsonrpc-server` | 只参考 `ctx.agents` 驱动与事件转发 |
+| `dsh-base` | 只参考依赖闭包，不作为生产组合直接加载 |
+| DSH 本地 FS / Shell / Subprocess / Skill FileSystem | 生产禁止加载 |
+
+`dsh-sdk-jsonrpc-server` 目前没有逐 Session close、逐 prompt cancel 或逐 prompt 最终结果，不适合作为产品 Server。产品 Server 可以复用其“Server 持有 AgentHandle、先订阅事件、`followup()` 立即返回 MessageId、shutdown 完整 dispose”的模式。
+
+## 4. 推荐生产部署拓扑
+
+### 4.1 单 Server 副本的第一版
 
 ```text
-Cordis Context
-├─ timer / dsh-llm / dsh-session
-├─ our PostgreSQL session persistence
-├─ dsh-system-prompt / dsh-tools / dsh-agent / dsh-llm-retry
-├─ our RemoteFileSystem + dsh-fs-observation-policy + dsh-tool-fs
-├─ our RemoteShellExecutor + dsh-tool-bash OR dsh-tool-pwsh
-├─ optional dsh-agent-instructions
-└─ dsh-agent-loop
+Internet
+   │
+   ▼
+DNS / TLS
+   │
+   ▼
+Nginx or Caddy
+   ├─ app.example.com/                 → Web UI static assets
+   ├─ app.example.com/api/*            → Control Server HTTP
+   ├─ app.example.com/api/*/events     → Control Server SSE
+   └─ runner.example.com:443           → Control Server gRPC listener
+                                                 ▲
+                                                 │ outbound HTTP/2 + TLS
+                       ┌─────────────────────────┼─────────────────────────┐
+                       │                         │                         │
+                Linux server Runner       macOS Runner              Windows Runner
+                /srv/workspaces/x         /Users/a/code/x           D:\code\x
+
+Control Server
+   ├─ Product HTTP API
+   ├─ Runner gRPC Gateway + Registry
+   ├─ DSH Runtime Shards
+   ├─ AgentRuntimeRegistry
+   ├─ Session Projector / Interaction Broker
+   └─ PostgreSQL Persistence Provider
+             │
+             ▼
+         PostgreSQL
 ```
 
-生产不得装载 DSH 本地 FS、Shell、Subprocess、Sandbox、本地 Skill FileSystem 或本地持久化作为事实源。
+第一版应只运行一个有状态 Control Server 副本。Runner gRPC stream、AgentHandle、Runtime Shard、SSE 在线订阅和待回答交互都属于进程内状态；在没有连接 owner 路由与 Session fencing 前，把 HTTP 横向扩成多个副本会制造双写和请求找不到 Runner 的问题。
 
-### 3.4 Profile、Bundle 与 Preset
+### 4.2 进程与端口
 
-DSH Profile 可通过 `$DSH_HOME/profiles/<name>/package.json` 和 `cordis.patch.yml` 装载树外包，证明无需 fork 即可扩展。但产品 Server 推荐代码式组合：类型、生命周期、配置审计更清晰，也不依赖用户主目录和整段配置替换。Profile 只用于本地调试入口。
+| 组件 | 建议形态 | 对外暴露 |
+|---|---|---|
+| Web UI | Vite 等构建后的静态文件，由 Nginx / CDN 服务 | HTTPS 443 |
+| Control Server HTTP | Node.js 24 LTS 容器或 systemd 服务 | 仅反向代理可达，例如 3000 |
+| Control Server gRPC | 与 Server 同进程的独立 listener | 仅反向代理可达，例如 50051 |
+| PostgreSQL | 托管数据库或独立容器 | 只在私网 |
+| Object Storage | 仅附件功能需要时增加 | 只经 Server 签名或代理 |
+| Remote Runner | 各开发机原生进程或系统服务 | 不开放入站端口 |
 
-Preset 适合隔离工具、提示词和投影，通过 `AgentRegistry.create({ setup(agentCtx) })` 在 Agent 发布前挂载。但它不应选择 Runner：`ctx.fs` / `ctx.shell` 是 Runtime Service，FS API 没有 Agent 参数；同一根 Context 临时切换 Runner 容易串线。本方案由 Shard 固定执行世界，Preset 只决定 Agent 能看到什么。
+本地 `deepseek-harness-master` 要求 Node `^22.19.0 || >=24.0.0`。新 Server 镜像建议直接固定 Node 24，避免开发与生产使用不同主版本。
 
-## 4. 推荐总体架构
+### 4.3 反向代理要求
 
-### 4.1 每个 Runner 连接代际一个 Runtime Shard
+Web UI 与 HTTP API 推荐同源部署，浏览器只访问 `https://app.example.com`：
+
+- `/api` 反向代理到 Control Server；
+- SPA 路由未命中静态文件时回退 `index.html`；
+- SSE 路由关闭代理缓冲和响应压缩，设置足够长的 read timeout；
+- Server 定期发送 SSE heartbeat，代理和负载均衡器不得把空闲连接提前关闭；
+- Runner 使用独立 `runner.example.com`，代理必须支持端到端 HTTP/2 gRPC streaming；
+- HTTP 与 gRPC 入口都只信任代理转发的、经过清洗的来源头；
+- Control Server 的内部端口不直接暴露公网。
+
+### 4.4 Server 机器也作为开发机
+
+即使 workspace 位于部署 Server，同样启动一个独立 Remote Runner：
 
 ```text
-Runner logical id: runner-123, generation: 42
+Control Server container ──gRPC──► Runner service ──► /srv/workspaces/project
+```
+
+Control Server 容器不挂载 `/srv/workspaces/project`。Runner 可以通过私网入口或同机回环入口连接 gRPC Gateway。这样服务器、macOS、Windows 始终经过同一真实远程边界，测试与生产不会出现第二条执行路径。
+
+## 5. 跨服务器、macOS 与 Windows 的开发模型
+
+### 5.1 Runner 主动连接
+
+每台开发机只需安装新项目自己的 Runner binary，不需要运行 DSH 或 Control Server：
+
+```text
+remote-runner connect \
+  --server https://runner.example.com \
+  --token <one-time-or-device-token> \
+  --workspace <local-workspace-root>
+```
+
+Windows 使用 PowerShell 参数形式，协议与语义相同。Runner 主动建立出站连接，因此不要求家庭网络、公司网络、NAT、WSL 或开发服务器开放入站端口。
+
+连接注册至少上报：
+
+- logical runner id 与 device id；
+- Runner 版本、协议版本范围；
+- `linux` / `darwin` / `windows`、CPU 架构；
+- 默认 Shell 与可选命令；
+- workspace root 的展示值；
+- FS、foreground shell、background process、PTY、sandbox 等 capability；
+- 最大并发、输出上限和资源事实。
+
+Server 接纳后签发本次连接的 `generation`。重连产生新 generation，旧 generation 的 target、execution 和 process handle 永远不能复用。
+
+### 5.2 Project 与 Workspace Binding
+
+同一个 Project 可以有多条 Workspace Binding：
+
+```text
+Project A
+  ├─ binding-1 → runner-mac     → /Users/alice/code/project-a
+  ├─ binding-2 → runner-win     → D:\code\project-a
+  └─ binding-3 → runner-server  → /srv/workspaces/project-a
+```
+
+Conversation 创建时必须选择一条 binding，并在每个 turn 内固定它。这样历史中的路径、工具观察和副作用都指向一个明确执行世界。
+
+Control Server 不负责在三台机器之间同步代码。Git、团队同步工具或用户自己的同步方式负责让各 workspace 处于期望版本。产品可以显示 Runner 报告的 Git remote、branch 和 commit 作为提示，但不能据此假设文件内容相同。
+
+### 5.3 切换机器
+
+不允许在运行中的 Conversation 上静默切换 Runner。推荐规则：
+
+1. 当前 Agent 必须 idle；
+2. 用户显式选择新的 Workspace Binding；
+3. Server 获取新 Runner 的 repo identity、branch、commit 和 dirty 状态快照；
+4. 默认 fork 或新建 Conversation，并注入新的 workspace context；
+5. 只有用户确认两个 workspace 可承接同一历史时，才允许原 Conversation rebind；
+6. 旧 generation 上 outcome unknown 的命令绝不在新机器自动重试。
+
+第一版可以更严格：Conversation 创建后不可换 binding，只允许从历史 fork 到新 binding。这比隐式迁移安全，状态 owner 也更清晰。
+
+### 5.4 跨平台路径与 Shell
+
+- Server 把远程路径视为 opaque display/process path，不用 Node `path.resolve()` 解释 Windows 或 macOS 路径；
+- `FsTarget` 同时绑定 runner id、generation、workspace binding 和 opaque target id；
+- `processPath()` 由 Runner 返回，供同一执行世界的 Shell 使用；
+- POSIX Runner 装配 DSH bash tool，Windows Runner 装配 DSH PowerShell tool；
+- Runner 必须对路径大小写、盘符、UNC、符号链接或 junction 使用平台原生规则；
+- WSL 与 Windows 原生环境是两个不同 Runner，不混用路径。
+
+### 5.5 三种开发方式
+
+| 方式 | Web / Server | Runner | 用途 |
+|---|---|---|---|
+| 共享开发环境 | 部署在开发服务器 | 每位开发者本机 | 最接近目标产品，推荐日常联调 |
+| 全本地 | 本机 Web + Server + PostgreSQL | 本机真实 Runner 进程 | 离线开发与协议调试 |
+| 服务器 workspace | 部署在服务器 | 同机独立 Runner 服务 | 远程开发机、CI workspace 或长期任务 |
+
+共享开发环境中，用户和 Runner token 必须按开发者隔离。前端本地开发可通过 Vite proxy 访问开发 Server，避免为 cookie、CORS 和 SSE 维护另一套行为；OIDC callback 需要显式加入本地开发地址。
+
+## 6. 用户 query 到 Remote Runner 的完整链路
+
+### 6.1 前置条件
+
+在用户发送消息前：
+
+1. 用户已登录 Web UI；
+2. Runner 已通过 gRPC 注册并处于 ready；
+3. Project 已绑定该 Runner 的 workspace；
+4. Conversation 已记录 DSH Session id、Workspace Binding 和模型选择；
+5. 浏览器已打开该 Conversation 的 SSE，并持有最近 event id。
+
+### 6.2 时序
+
+```text
+Browser          Control Server       DSH Agent       Remote Provider      Remote Runner
+   │                    │                  │                   │                  │
+   │ POST user message  │                  │                   │                  │
+   ├───────────────────►│                  │                   │                  │
+   │                    │ auth + route     │                   │                  │
+   │                    │ ensure shard     │                   │                  │
+   │                    │ create/resume    │                   │                  │
+   │                    ├─────────────────►│                   │                  │
+   │                    │ subscribe events │                   │                  │
+   │                    │ followup(message)│                   │                  │
+   │                    ├─────────────────►│                   │                  │
+   │ 202 + messageId    │                  │                   │                  │
+   │◄───────────────────┤                  │                   │                  │
+   │                    │                  │ model request     │                  │
+   │                    │                  │ tool: read/bash   │                  │
+   │                    │                  ├──────────────────►│                  │
+   │                    │                  │                   │ gRPC request     │
+   │                    │                  │                   ├─────────────────►│
+   │                    │                  │                   │ output/result    │
+   │                    │                  │                   │◄─────────────────┤
+   │                    │                  │ tool result       │                  │
+   │                    │                  │◄──────────────────┤                  │
+   │                    │ Session events   │                   │                  │
+   │                    │◄─────────────────┤                   │                  │
+   │ SSE projection     │                  │                   │                  │
+   │◄───────────────────┤                  │                   │                  │
+```
+
+具体步骤：
+
+1. Browser 先保持 SSE 在线，再 `POST /api/conversations/:id/messages`，请求带 client-generated idempotency key。
+2. Server 验证用户、Conversation、Workspace Binding、Runner 归属和模型配置。
+3. `RunnerRegistry` 解析逻辑 Runner 当前 generation；不可用时返回 `RUNNER_UNAVAILABLE`。
+4. `AgentRuntimeRegistry` 取得 Session 单写 lease，并在对应 Runtime Shard create 或 resume DSH Agent。
+5. Server 在提交输入前订阅 `session/event` 与 `agent/status`，避免丢失同步发出的首批事件。
+6. Server 使用 DSH LLM helper 创建带唯一 MessageId 的用户消息，调用 `agent.followup()`。
+7. HTTP 返回 `202 Accepted + messageId`。MessageId 只代表 inbox 准入，不代表某一条最终 assistant answer。
+8. DSH Agent 调用模型。如果模型只回答文本，链路不会触达 Runner。
+9. 如果模型调用文件或 Shell 工具，DSH consumer 调用当前 Shard 的 `ctx.fs` / `ctx.shell`。
+10. Remote Provider 把调用转换为带 request id、generation 和 workspace binding 的 gRPC 消息。
+11. Runner 再次校验 generation、workspace、路径、并发和 policy，执行真实操作并流式返回事实。
+12. Provider 把结果映射回 DSH 约定，Agent 继续下一模型步骤或结束 turn。
+13. DSH Session Event 先提交到内存权威日志；PersistenceCoordinator 同步接纳该事件并异步有界批写，Projector 以同一 seq 生成稳定 UI event。`dsh-session-checkpoint-policy` 在模型请求、顶层工具副作用和下一 step 前执行 durability checkpoint。
+14. Browser reducer 按 event id / seq 幂等应用；断线后先补历史投影，再接实时事件。
+15. Agent 进入 idle 后，Server 显式 `ctx.sessions.flush(agent.session)`，成功后再发布带 durable watermark 的 run-completed 事件；flush 失败则显示运行结果未安全落盘，而不是宣称完成。
+
+### 6.3 取消
+
+取消链路只有一个控制 owner：
+
+```text
+Browser cancel
+  → Control Server authorizes
+  → AgentRuntimeRegistry.agent.cancel('user')
+  → active tool AbortSignal
+  → Remote Provider sends CancelRequest
+  → Runner kills process group or stops file stream
+  → terminal result / infrastructure error
+  → DSH closes step and turn consistently
+  → SSE publishes final status
+```
+
+取消不关闭整个 Runner gRPC stream，也不影响同一 Runner 上的其他 Conversation。
+
+### 6.4 Approval 与用户提问
+
+DSH Approval / User Question 通过 Server 的 `InteractionBroker` 投影为持久 interaction：
+
+- SSE 推送 interaction id、Conversation id、问题和允许的响应结构；
+- 浏览器通过 REST 回答；
+- Server 验证 owner、状态、id 和一次回答约束；
+- cancel、Agent dispose、Runner disconnect 或 Server shutdown 必须结算等待者；
+- 第一版若不支持 Server 重启后恢复等待中的调用，就必须把旧 interaction 标记为 unavailable，不能继续显示可回答状态。
+
+## 7. Runtime Shard 与路由所有权
+
+### 7.1 每个 Runner generation 一个 Shard
+
+```text
+logical runner: runner-mac-1
+connection generation: gen-42
         │
         ▼
 HarnessRuntimeShard
-  ├─ one Cordis root Context
-  ├─ RemoteFileSystem bound to lease 42
-  ├─ RemoteShellExecutor bound to lease 42
+  ├─ one Cordis Context
+  ├─ RemoteFileSystem bound to gen-42
+  ├─ RemoteShellExecutor bound to gen-42
   ├─ DSH core plugin graph
-  ├─ Agent A
-  ├─ Agent B
-  └─ Agent C
+  ├─ Agent A / Session A
+  └─ Agent B / Session B
 ```
 
-同一 Runner 的多个 Agent 共享 Provider，但各自 Session、scope、工具调用和 cwd 独立。不同 Runner或重连的新代际使用不同 Shard，绝不在旧 Context 上替换连接引用。这样同步的 `processPath()` / `contains()` 也始终对应一个文件命名空间，旧 `FsTarget` 和进程 Handle 不会被新连接误用。
+同一 generation 的多个 Agent 可以共享 Remote Provider 和数据库连接资源，但各自 Session、cwd、scope 和工具调用独立。不同 Runner 或同一 Runner 重连后的新 generation 使用新 Shard，不在旧 Context 中替换连接引用。
+
+这个边界避免：
+
+- 旧 `FsTarget` 在重连后指向另一命名空间；
+- 旧进程句柄操作新连接；
+- 一个 Context 的同步 `processPath()` 在不同平台间漂移；
+- 正在运行的 Agent 被无提示迁移到另一台机器。
+
+### 7.2 Runtime Shard 生命周期
 
 | 事件 | 行为 |
 |---|---|
-| Runner 注册 | 创建 generation、RunnerLease 和 Runtime Shard |
-| 首次访问 Session | 获取分布式 lease，在对应 Shard create / resume Agent |
-| 用户输入 | 先订阅事件，再 `agent.followup()`，返回 `messageId` |
-| 取消 | `agent.cancel()`，AbortSignal 传给 Runner request |
-| Agent 长时间 idle | flush、dispose Handle、释放 Session lease |
-| Runner 断线 | generation 失效，取消执行并 dispose Shard 内 Agent；持久化负责恢复 |
-| Runner 重连 | 新 generation、新 Shard；Session 从日志恢复，不复用旧对象 |
-| Server 关闭 | 停止准入，取消、等待、flush、dispose Agent 和 Shard |
+| Runner 接纳 | 创建 generation、RunnerLease 和 Runtime Shard |
+| 首次访问 Conversation | 取得 Session lease，create / resume Agent |
+| 用户输入 | 先订阅事件，再 `followup()` |
+| Agent idle 超时 | flush、dispose Handle、释放 Session lease |
+| Runner disconnect | generation 失效，取消请求，dispose Shard 内 Agent |
+| Runner reconnect | 新 generation、新 Shard，按需从 Session Event Log 恢复 |
+| Server shutdown | 停止准入，cancel、等待、flush、dispose Agent 与 Shard |
 
-### 4.2 Server 模块
+### 7.3 两个唯一 Registry
+
+`RunnerRegistry` 只管理连接事实：
+
+- token admission 与 user / runner 绑定；
+- current generation；
+- heartbeat、ready / busy / draining / disconnected；
+- request / execution correlation；
+- disconnect 和有界缓冲；
+- Shard 创建和 generation 失效通知。
+
+`AgentRuntimeRegistry` 只管理 DSH 生命周期：
+
+- Conversation → AgentHandle；
+- create / resume 单航班；
+- Session lease 与 fencing；
+- followup / steer / cancel；
+- idle eviction、flush、dispose 和 shutdown。
+
+Controller、Project Service、SSE Hub 和 Remote Provider 都不能缓存第二份 AgentHandle 或 Runner connection owner。
+
+## 8. 全新项目建议结构
+
+以下只是 Greenfield 结构建议，不映射 Nova 包：
 
 ```text
-apps/agent-server
-├─ HttpApi / ConversationService
-├─ AgentRuntimeRegistry / SessionLeaseManager
-├─ SessionEventProjector / InteractionBroker
-├─ RunnerRegistry / RuntimeComposition
+apps/
+├─ web-ui/                    # 公网产品 UI
+└─ control-server/            # HTTP、gRPC、认证、产品编排
 
-packages/dsh-integration
-├─ runtime
-├─ persistence-pg
-├─ runner-fs
-├─ runner-shell
-├─ server-bridge
-└─ testkit
+packages/
+├─ harness-runtime/           # 显式 DSH Composition Root
+├─ harness-runner-fs/         # DSH FileSystem → Runner client
+├─ harness-runner-shell/      # DSH ShellExecutor → Runner client
+├─ harness-persistence-pg/    # DSH PersistenceBackend → PostgreSQL
+├─ harness-server-bridge/     # Agent lifecycle / event / interaction bridge
+├─ product-protocol/          # Browser REST / SSE 稳定类型
+├─ runner-client/             # Node gRPC session 与消息关联
+└─ testkit/                   # fake LLM、真实 Runner harness、协议测试
+
+crates/
+└─ remote-runner/             # Rust 原生执行器
+
+proto/
+├─ runner.proto               # Connect、Register、Heartbeat、Drain
+├─ execution.proto            # foreground process、cancel、output
+└─ filesystem.proto           # resolve、stat、read、list、write、edit
+
+deploy/
+├─ nginx/
+├─ compose/
+└─ systemd/
 ```
 
-名字可调整，职责不可混合。
+不要建立以下 pass-through 层：
 
-### 4.3 无 Server 运行
+- DSH Agent API 的同名 wrapper；
+- Protobuf DTO → Transport DTO → Domain DTO 的多段复制；
+- Remote Provider 之外的第二套本地 FS / Shell；
+- 同时存在 Runner Gateway、Runner Manager、Runner Pool、Runner Adapter 且只做转发的结构；
+- Web Controller 持有 Agent 或 Runner 生命周期。
 
-提供内部 Testkit，调用与 Server 相同的 Runtime factory：
+## 9. 最小 DSH 生产组合
 
-```ts
-const runtime = await createHarnessRuntime({
-  runner: fakeRunnerLease,
-  persistence: memoryOrTempSqlite,
-  model: replayOrTestAdapter,
-})
-const agent = await runtime.createAgent({ cwd, model, provider })
-await agent.followup({ contentBlocks })
-await agent.whenIdle()
-await runtime.dispose()
+生产 Composition Root 应代码式显式装配，而不是直接加载 `dsh-base`：
+
+```text
+Cordis Context per Runtime Shard
+├─ timer
+├─ dsh-llm + selected provider adapters
+├─ dsh-session
+├─ PostgreSQL SessionPersistence provider
+├─ dsh-session-checkpoint-policy
+├─ dsh-system-prompt
+├─ dsh-tools
+├─ dsh-agent
+├─ dsh-llm-retry
+├─ RemoteFileSystem
+├─ dsh-fs-observation-policy
+├─ dsh-tool-fs / editor tools
+├─ RemoteShellExecutor
+├─ dsh-tool-bash OR dsh-tool-pwsh
+│  └─ phase 1: enableRunInBackground = false
+├─ optional product instructions
+├─ optional compaction
+└─ dsh-agent-loop
 ```
 
-它用于 DSH 升级契约、Adapter 测试和录制模型回归，不另建一套 Runtime。
+生产不得装载：
 
-## 5. Remote Runner Capability
+- DSH local FS；
+- DSH local Bash / PowerShell executor；
+- DSH local Subprocess；
+- DSH 本地 Sandbox provider；
+- 从 Control Server 文件系统发现 workspace Skill 的 provider；
+- JSONL / SQLite 作为生产 Session 事实源；
+- DSH Web Host、Settings UI 或本地 Credentials UI。
 
-### 5.1 第一版 Provider
+Skill 第一版可以关闭，或只使用随部署发布的只读内置 Skill。若需要读取 workspace 中的 `SKILL.md`，必须实现 Remote Skill Provider 或确认现有 consumer 全程只通过 `ctx.fs`，不能让 Server 本地 Skill FileSystem 读取同名路径。
 
-`RemoteFileSystem` 实现 DSH `FileSystem`：
+## 10. 新 Runner gRPC 契约
 
-- `resolve()` → 稳定 `FsTarget`；
-- 同步 `processPath()` / `fileUrl()` / `contains()`；
-- `stat()` / `lstat()`；
-- `readText()` / `streamText()` / 有界 `readBytes()`；
-- `listDir()`；
-- 带版本意图的原子 `writeText()`；
-- 带版本校验的原子 `editText()`；
-- 类型化 `FsError`。
+### 10.1 唯一连接模型
 
-继续复用 `dsh-tool-fs` 与 `dsh-fs-observation-policy`，不重写文件工具。
+Runner 只主动调用一个 RPC：
 
-`RemoteShellExecutor` 实现高层 `ShellExecutor`：`resolve()` 限制 cwd、timeout、输出、env 和 policy；`run()` 映射前台执行；`start()` 第二阶段实现。非零退出、超时和取消返回 `ShellRunResult`，只有连接失败等基础设施问题 reject。
+```proto
+rpc Connect(stream RunnerEnvelope) returns (stream ServerEnvelope);
+```
 
-完整 `SubprocessRuntime` 暴露 Node stream、进程树和 PTY，远程映射涉及背压、游标、stdin 半关闭、process-group kill、resize 和断线竞态，不是第一版必要条件。
+同一双向流复用控制、文件和进程消息：
 
-### 5.2 现有 Runner 的缺口
+| Runner → Server | Server → Runner |
+|---|---|
+| Register | Accepted / Rejected |
+| Heartbeat / capability change | Execute / Cancel |
+| Execution Started / Output / Finished | Resolve / Stat / Lstat |
+| File response / chunks | Read / List / Write / Edit |
+| Request-scoped typed error | Drain / Shutdown |
 
-| DSH 需求 | 现有能力 | 建议 |
-|---|---|---|
-| 出站双向连接、执行、取消 | 已有 | 保留并映射 `ShellExecutor.run()` |
-| stat/list/read/write | 基础已有 | 扩展为 DSH 语义 |
-| 稳定 `FsTarget` | 无明确协议 | 增加 ResolvePath，返回 opaque id 与 canonical process path |
-| `lstat` | 语义不完整 | 明确 follow / no-follow |
-| revision token | 无 | stat/read/write 都返回不透明 revision |
-| compare-and-write / atomic edit | 无 | 在 Runner 内版本校验与写入同一临界区完成 |
-| 后台进程 Handle | 不完整 | 第二阶段 start/read/kill + offset |
-| PTY | 无 | 第三阶段实现 |
-| Sandbox | 字段预留 | 未实际 enforce 前不得宣称 sandboxed |
+文件或执行请求使用 `request_id` 关联一问一答，长进程额外使用 `execution_id`；所有消息隐式属于当前 connection generation，持久 target 和 handle 还需显式携带 generation 进行防陈旧校验。
 
-建议文件语义：
+### 10.2 DSH FileSystem 对协议的要求
+
+第一版至少定义：
 
 ```text
 ResolvePath(path, cwd)
   -> target_id, target_key, display_path, process_path, file_url, generation
-Stat(target_id, follow_symlink) -> kind, size, mtime, revision
-ReadText(target_id, max_bytes) -> text, revision
-ListDir(target_id) -> children
+
+Stat(target_id, follow_symlink)
+  -> kind, size, mtime, revision
+
+Lstat(path, cwd)
+  -> kind, size, mtime
+
+ReadText(target_id, max_bytes)
+  -> text chunks, revision
+
+ReadBytes(target_id, max_bytes)
+  -> byte chunks, revision
+
+ListDir(target_id)
+  -> stable ordered children
+
 WriteText(target_id, content, intent, expected_revision?)
   -> operation, revision, before?, after
-EditText(target_id, old_text, new_text, expected_revision)
+
+EditText(target_id, old_text, new_text, replace_all, expected_revision?)
   -> revision, before, after
 ```
 
-规则：target 必须绑定 Runner id、generation 和 workspace；旧 generation 返回 stale-target；`process_path` 是远程路径；resolve 缓存元数据供同步方法使用；revision 不透明；原子校验在 Runner 内完成；Runner 始终再次验证 workspace containment 和 symlink 边界。
+约束：
 
-Shell 第一阶段复用 `Execute → Started/Output/Finished` 与 `Cancel`。第二阶段增加 `StartProcess / ReadProcess(offset) / KillProcess`。后台 Handle 属于发起它的 generation；断线后 outcome unknown，不自动在新 Runner 重放副作用命令。
+- target id 绑定 runner、generation 和 workspace binding；
+- revision 是 Runner 生成的不透明 token；
+- guarded write 的版本检查与原子 publish 在 Runner 同一临界区；
+- edit 的版本检查、literal match 和 rewrite 在 Runner 同一临界区；
+- read / write 有明确字节上限和取消；
+- Runner 每次操作都重新验证 containment 与 symlink / junction 边界；
+- Server 不能从 target key 推导远程路径。
 
-### 5.3 平台、Sandbox 与 Skill
-
-- POSIX Runner 装 `dsh-tool-bash`，Windows Runner 装 `dsh-tool-pwsh`；
-- Runner 注册报告平台、默认 shell、能力与协议版本；
-- Shard 的 shell 类型在生命周期内冻结；
-- Runner 才是安全边界；审批不是沙箱；
-- Runner 未实现 sandbox 时 Provider 不返回伪造的 sandbox facts；
-- Agent Instructions 启用前须确认只经 `ctx.fs` 读取；
-- 生产不装 DSH 本地 Skill FileSystem。第一版关闭 Skill 或仅使用部署内置只读 Skill，后续实现 Remote Skill Provider。
-
-## 6. 自研 Server
-
-### 6.1 输入与 Agent 生命周期
-
-采用异步语义：Client 先订阅 SSE，再 POST message；Server ensure Agent、先建立 DSH 订阅、再 `followup()`，返回 `202 + messageId`。`messageId` 只表示 inbox 准入，不等于唯一 assistant answer。自动化接口若需要最终结果，应单独定义 enqueue → Agent idle 活动区间。
-
-`AgentRuntimeRegistry` 应：
-
-- 对 ensure 做单航班，禁止并发 create / resume；
-- 创建或恢复前取得跨副本 Session lease；
-- 在 `setup(agentCtx)` 挂载 Preset，失败则整体回滚；
-- 独占 AgentHandle，不允许 Controller 缓存第二 owner；
-- idle 驱逐前 flush，再 dispose；
-- Runner generation 失效时准确清理所属 Handle；
-- shutdown 先停准入，再 cancel、等待、flush、dispose。
-
-### 6.2 PostgreSQL Session Persistence
-
-实现 DSH 公共 `SessionPersistence`，优先复用公开 `PersistenceCoordinator`，只实现 PostgreSQL `PersistenceBackend` 原语，从而继承批写、严格顺序、crash repair、inspect / prepare、flush 和 dispose 语义。
+### 10.3 Shell 第一版
 
 ```text
-dsh_session
-  session_id PK, format_version, header_jsonb,
-  next_seq, revision, created_at, updated_at
+Execute
+  -> Started
+  -> Output(stdout | stderr, bytes, sequence)*
+  -> Finished(status, exitCode?, signal?, error?, truncated, duration)
 
-dsh_session_event
-  session_id FK, seq, event_type, event_jsonb, created_at
+Cancel(execution_id)
+  -> found / already_finished
+```
+
+规则：
+
+- 非零 exit code 是已完成事实，不是 gRPC error；
+- timeout、cancel、spawn failure 和 disconnect 保持不同状态；
+- 输出按 bytes 分块，Node 端做增量 UTF-8 解码；
+- 每个 execution 和整个 connection 都使用有界缓冲；
+- 出站阻塞时 Runner 暂停读取 pipe 或进行有界 spill；
+- Cancel 终止进程组，不只终止父进程；
+- 断线后的副作用 outcome unknown，不自动重放。
+
+后台进程第二阶段增加 `StartProcess / ReadProcess(offset) / KillProcess`。PTY 还需要 stdin、resize、游标、半关闭和断线策略，不能与普通 Shell output 混成一个模糊接口。
+
+### 10.4 协议版本
+
+Register 同时报告：
+
+- Runner semantic version；
+- protocol min / max；
+- capability name + version；
+- platform 与 architecture。
+
+Server 只在存在兼容交集时接纳，并在 Accepted 中冻结本 generation 的协议与 capability snapshot。新字段遵循 Protobuf 兼容规则；删除或改变语义必须发布新版本，不依赖“Server 和 Runner 总会一起升级”。
+
+## 11. Control Server 设计
+
+### 11.1 HTTP / SSE 面
+
+第一版只需以下稳定产品 API：
+
+```text
+/api/auth/*
+/api/me
+/api/runners
+/api/runners/tokens
+/api/runners/:id/directories
+/api/projects
+/api/projects/:id/workspace-bindings
+/api/conversations
+/api/conversations/:id/messages
+/api/conversations/:id/events
+/api/conversations/:id/cancel
+/api/interactions/:id/answer
+```
+
+消息 POST 是异步准入：`202 + messageId`。SSE 是结果、状态和工具投影的主通道。浏览器重连提交 `Last-Event-ID`，Server 返回：
+
+1. 数据库中大于 watermark 的持久投影；
+2. 当前 interaction、queue 和 Runner state 基线；
+3. 在线 Event Hub 的后续事件。
+
+原始 token delta 可以只在线传输；已经提交的 assistant message、tool result 和 turn end 必须可从持久 Session / Projection 恢复。
+
+### 11.2 PostgreSQL 数据边界
+
+建议最小表：
+
+```text
+users
+devices
+runners
+runner_credentials
+projects
+workspace_bindings
+conversations
+conversation_messages       # 产品查询投影
+conversation_events         # 稳定 SSE 投影 / watermark
+pending_interactions
+dsh_sessions
+dsh_session_events
+session_leases
+```
+
+DSH 持久化可以使用：
+
+```text
+dsh_sessions
+  session_id PK
+  format_version
+  header_jsonb
+  next_seq
+  revision
+  created_at
+  updated_at
+
+dsh_session_events
+  session_id FK
+  seq
+  event_type
+  event_jsonb
+  created_at
   PK(session_id, seq)
 ```
 
-| Backend hook | PostgreSQL 行为 |
+`appendBatch()` 在事务中锁定 session row，验证首 seq 连续，批量插入事件并更新 `next_seq` / `revision`。Session lease 与 DSH revision 是不同职责：revision 检测存储变化，lease / fencing 阻止多 Server 同时驱动同一 Session。
+
+产品 Conversation 表只存 owner、Project、Workspace Binding、模型选择、标题和查询字段，不复制 DSH Loop 状态机。产品 Message / Event 是投影，可以从 DSH Session Event Log 重建。
+
+### 11.3 LLM 与凭据
+
+- LLM 在 Control Server 调用，不在 Runner；
+- 模型 API key 只保存在 Server 的凭据存储；
+- provider、model、max output、reasoning 等选择在 Conversation / Session 建立时快照；
+- DSH `agent/request` 和公开 LLM adapter seam 负责调用，不把网关逻辑写进 Loop；
+- 自研 Model Gateway 时实现树外 DSH Adapter，Runner 不认识模型供应商。
+
+### 11.4 多副本演进
+
+第一版不伪装成水平可扩展。需要多副本时，有两条清晰路线：
+
+1. 独立 Runner Gateway 持有全部 gRPC stream，Control Server 通过内部流式 RPC 调用它；
+2. 每个 Runner 连接由一个 Server shard 持有，HTTP 层根据 runner owner 和 session owner 做明确路由。
+
+无论哪条路线，都必须增加：
+
+- Runner connection owner 的可查询注册；
+- Session lease + fencing token；
+- 跨副本 Event Hub；
+- interaction owner 与恢复策略；
+- drain / deployment handoff；
+- 请求在 owner 丢失时的明确失败。
+
+仅增加 Redis Pub/Sub 或让负载均衡器随机分发 HTTP，不能解决流 owner、背压、取消和双写问题。
+
+## 12. 安全边界
+
+### 12.1 浏览器与用户
+
+- 使用 OIDC / OAuth 2.1 Authorization Code + PKCE；
+- Session cookie 设置 Secure、HttpOnly、SameSite；
+- 有副作用的 cookie API 使用同源与 CSRF 防护；
+- 默认不开放跨域 API；
+- 每个 Project、Conversation、Workspace Binding、Runner 和 Interaction 都按 user / tenant 校验；
+- SSE 订阅同样执行 owner 校验，不能只依赖不可猜 id；
+- 错误响应不泄露 Runner 本机绝对路径、命令输出之外的系统信息或 Provider 凭据。
+
+### 12.2 Runner 身份
+
+推荐两阶段凭据：
+
+1. Web UI 创建短时、一次性 enrollment token；
+2. Runner 首次连接后换取可撤销、轮换的 device credential，或签发客户端证书。
+
+所有连接必须 TLS。token 在数据库中只存 hash，并绑定 user、runner、过期时间和允许的 workspace scope。Runner 日志不得打印 token。撤销后 Server 关闭对应 stream，并使 generation 失效。
+
+### 12.3 Workspace 与命令
+
+- 一个 Runner 进程只服务启动时声明的一个 root，或显式且有限的 root 列表；
+- 所有 cwd 与文件路径经过规范化、realpath 和 containment；
+- 新文件的父目录也要验证符号链接边界；
+- Windows 额外处理盘符、UNC、junction 和大小写；
+- Shell env 使用 allowlist / denylist 清理，不转发 Server 环境；
+- 输出、stdin、文件大小、并发和运行时长有硬上限；
+- 审批不是 sandbox；只有 Runner 真正 enforce 后才上报 sandbox capability；
+- 未实现的资源限制返回 `UNSUPPORTED`，不得静默忽略。
+
+### 12.4 威胁与控制
+
+| 威胁 | 控制 |
 |---|---|
-| `loadStored` | 同一事务读取 header 与连续 event prefix，返回 revision |
-| `readStoredRevision` | 只读 revision |
-| `loadStoredFrom` | 按 session + seq 索引读取后缀 |
-| `appendBatch` | 锁 session 行，验证首 seq，批插入并递增 revision |
-| `commitRepair` | 清理 torn tail 并追加 synthetic closers |
-| `list` | 读取 header；注意 DSH 接口无分页 |
+| 窃取 Runner token | TLS、短时 enrollment、hash 存储、轮换与撤销 |
+| 用户访问他人 Runner | 每次 route 做 tenant + runner + binding 校验 |
+| 路径逃逸 | Runner 原生 realpath / containment，Server 不自行判断 |
+| 断线后重复副作用 | generation fencing，不自动重放 |
+| Server 本机被工具访问 | 生产不加载 local FS / Shell，Server 无 workspace mount |
+| 多副本双写 Session | lease + fencing，丢 lease 立即 cancel / dispose |
+| 无限输出耗尽内存 | Runner、gRPC client、SSE 三层有界缓冲 |
+| 伪造 sandbox | capability 只报告实际 enforce 的事实 |
 
-产品 Conversation 表不能代替 DSH Event Log，只存 owner、标题、Runner 绑定和查询投影。
+## 13. 配置、发布与运维
 
-### 6.3 单写者、Projection 与交互
+### 13.1 Server 配置
 
-DSH revision 不等于跨进程排他。多 Server 副本必须在 create / resume 前取得 PostgreSQL advisory lock，或使用带 expiry 和 fencing token 的 lease 表；owner 丢失 DB lease 时立即取消和 dispose Agent。
+配置名可以调整，但 owner 应保持清晰：
 
-Server 监听 `session/event`，投影消息、状态、工具卡和 usage，并发布 SSE。浏览器协议使用自有稳定类型，不直接暴露 DSH 联合类型；保留 DSH `seq` 作为 watermark。重连先补持久投影再接在线 Event Hub；原始模型增量可只在线传输，已提交事件才是恢复事实。
+| 配置 | Owner |
+|---|---|
+| `PUBLIC_ORIGIN` | Web / HTTP 外部地址 |
+| `DATABASE_URL` | PostgreSQL Provider 与产品 Store |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` | Auth 模块 |
+| `COOKIE_SECRET` | HTTP Session |
+| `HTTP_BIND` | Control Server HTTP listener |
+| `GRPC_BIND` | Runner gRPC listener |
+| `RUNNER_PUBLIC_ENDPOINT` | Web UI 生成连接命令 |
+| `RUNNER_HEARTBEAT_MS` | RunnerRegistry |
+| `RUNNER_ADMISSION_TIMEOUT_MS` | gRPC admission |
+| `SESSION_IDLE_EVICT_MS` | AgentRuntimeRegistry |
+| `SESSION_LEASE_TTL_MS` | SessionLeaseManager |
+| `DSH_VERSION` | Build / release metadata，不在运行时浮动解析 |
 
-Interaction Broker 把 DSH approval / question 转为持久 interaction 和 SSE，REST answer 完成等待 Promise。它必须保证一次回答、在 cancel/dispose/断线时结算等待者，并明确 Server 重启时恢复还是 unavailable。第一版接受 DSH 一次性权限语义，不私自增加 allow-always。
+凭据不进入前端 bundle、仓库、镜像层或 Runner 启动命令历史。Runner token 可通过 stdin、受限配置文件、系统 keychain 或一次性 device flow 交付。
 
-### 6.4 LLM 与协议参考
-
-可直接用 DSH Provider，或树外实现 Model Gateway `LlmAdapter`。Provider/model/输出上限和能力快照在 Session 创建时记录，恢复时重新解析；Loop 内不加入网关判断。
-
-`dsh-sdk-jsonrpc-server` 与 `dsh-acp` 只作桥接参考，不作为产品主协议：前者缺逐 Session close/prompt cancel，ACP 面向自动化且无完整 UI 投影和恢复。应复用它们“通过 `ctx.agents` 驱动、订阅事件、明确 Handle owner、释放时完整停稳”的模式。
-
-## 7. 零上游修改与升级
-
-### 7.1 依赖方式
-
-生产精确锁定同一版本的 DSH 已发布包并提交 lockfile，不用 `^` 漂移预览版。完整上游仓库可放在 `third_party/deepseek-harness/` 作为只读 Git 子模块或 sibling checkout，用于阅读源码、运行上游测试和验证目标 commit，不承载 Nova 代码。
-
-如果必须跟踪 Git 主干：
-
-1. 更新独立上游 checkout；
-2. 在上游自己的 pnpm / workspace 中构建；
-3. pack 公开包或发布到受控本地 registry；
-4. Nova 只消费构建产物；
-5. 不把两个 monorepo 合并为一个 pnpm workspace。
-
-严格禁止：修改 DSH `packages/**`、导入 `@deepseek-ai/*/src/*`、长期 patch、依赖 fixture、浮动 latest 自动生产、把 DSH 原始事件直接作为外部 API。
-
-合理自研范围：
-
-| 包 | 内容 | 复杂度 |
-|---|---|---|
-| `dsh-runtime` | 显式组合与配置 | 低 |
-| `dsh-runner-fs` | DSH FS ↔ Runner RPC | 中 |
-| `dsh-runner-shell` | DSH Shell ↔ Runner execution | 中 |
-| `dsh-persistence-pg` | PersistenceBackend ↔ PostgreSQL | 中高 |
-| `dsh-server-bridge` | lifecycle / event / interaction | 中 |
-| Runner 协议扩展 | revision、后台进程、以后 PTY | 分阶段中高 |
-
-这些代码都集中在边界包，DSH 更新时不会扩散到整个产品。
-
-### 7.2 更新流程
-
-零修改解决“可以干净 pull”，契约测试解决“pull 后仍可用”。流程必须是：
+### 13.2 健康检查
 
 ```text
-update DSH commit/version → build/install → public API compile
-→ provider conformance → recorded-model scenarios
-→ real Runner canary → session backward-read/recovery
-→ manual release decision
+/health/live   → 进程事件循环可响应
+/health/ready  → DB 可用、DSH Composition 完成、HTTP / gRPC 已开始准入
 ```
 
-记录 DSH package 版本或 SHA、Session format、Runner protocol、本集成层版本和验证过的 Node/pnpm/TypeScript 组合。
+ready 不要求至少一个用户 Runner 在线，否则没有连接 Runner 的空系统永远无法部署。Runner 在线状态属于产品 API，不属于 Server readiness。
 
-升级 CI 至少检查：上游工作树干净、无源码子路径 import、Adapter 编译；FS 的路径/版本/原子写；Shell 的退出/超时/取消/截断/断线；创建/工具/多轮/取消/恢复/压缩场景；旧版本 Session 被候选版本读取；Runner 断开无本地 fallback；生产组合无本地执行 Provider。
+### 13.3 安全关闭
 
-## 8. 实施路线
+部署滚动前：
 
-### Phase 0：上游契约 Spike（3–5 天）
+1. readiness 变为 false，停止新消息和新 Runner admission；
+2. RunnerRegistry 向 Runner 发送 drain；
+3. AgentRuntimeRegistry cancel 活动 Agent；
+4. 等待工具和 Agent 收敛；
+5. flush Session；
+6. dispose AgentHandle 与 Runtime Shard；
+7. 结算 interaction；
+8. 关闭 SSE、gRPC、HTTP 和数据库连接。
 
-- 用公开包创建最小 Context；
-- 假 LLM 完成 create、followup、event、cancel、dispose；
-- 完成共享 `createHarnessRuntime()` Testkit；
-- 冻结 DSH 版本 / SHA。
+第一版单副本部署会中断在线任务，应把 drain timeout 和维护提示做成真实产品行为。多副本 handoff 在拥有明确 owner 路由前不承诺无中断。
 
-验收：无 Server/CLI 完成一轮固定模型对话；无内部 import；上游零修改；dispose 后无悬挂资源。
+### 13.4 观测
 
-### Phase 1：Remote FS + 前台 Shell（1–2 周）
+日志和指标使用稳定 id，不记录 prompt、文件内容、token 或完整命令输出：
 
-- 扩展 Runner Resolve、revision、guarded write/edit；
-- 实现 Remote FS 与 Shell run；
-- 按平台装 bash/pwsh；
-- 先用 SQLite/JSONL/内存 persistence 端到端。
+- request id、conversation id、session id；
+- runner id、generation、execution id；
+- Agent status、turn / step、stop reason；
+- gRPC queue depth、output bytes、backpressure、disconnect reason；
+- Session append latency、flush latency、lease fencing；
+- SSE subscriber count、replay count 和 lag；
+- DSH package version、Runner protocol version。
 
-验收：远程 list/read/edit/create；并发修改不静默覆盖；退出、超时、取消事实正确；断线为基础设施错误；Server 无本地工作区旁路。
+## 14. DSH 依赖与零上游修改
 
-### Phase 2：Server + PostgreSQL（2–3 周）
+### 14.1 依赖策略
 
-- RunnerRegistry / Runtime Shard / AgentRuntimeRegistry；
-- Session lease、PostgreSQL Backend；
-- HTTP、SSE、Interaction Broker；
-- idle eviction 与 shutdown quiescence。
+DSH 当前仓库使用 MIT License，公开包版本为 `0.1.1-rc.2`。实现时应重新选择并精确锁定经过验证的版本：
 
-验收：多用户隔离；同 Session 无双恢复；Server 重启可恢复；SSE watermark 重放；中断工具按 DSH 规则闭合；Runner 重连不复用旧对象。
+- `package.json` 使用精确版本，不用 `^` 跟随 RC 漂移；
+- 提交 lockfile；
+- 只从 package root import；即使包暂时导出 `./src/*`，生产也不依赖内部源码路径；
+- 不使用 `patch-package`、长期私有补丁或修改 `deepseek-harness-master/packages/**`；
+- 完整上游仓库可以作为只读 Git submodule 或 sibling checkout，用于源码阅读与候选验证；
+- 新项目不与 DSH monorepo 合并为同一个 pnpm workspace。
 
-### Phase 3：后台进程与上下文（1–2 周）
+如需跟踪尚未发布的 DSH commit，应在独立上游 workspace 构建并 pack 公开包，新项目只安装产物。
 
-- Runner start/read/kill 和 `ShellExecutor.start()`；
-- background job UI；
-- 验证 Remote Agent Instructions；
-- 按需实现 Remote Skill Provider。
+### 14.2 升级检查
 
-### Phase 4：PTY / Terminal / LSP
+```text
+update exact DSH version / SHA
+  → build public packages
+  → integration packages compile
+  → fake-model runtime scenarios
+  → PostgreSQL persistence conformance
+  → real Linux / macOS / Windows Runner canary
+  → old Session backward-read and recovery
+  → production composition audit
+  → manual release decision
+```
 
-只有产品明确需要交互终端或语言服务器时再实现 Remote Subprocess / PTY，不作为替换 Agent Core 的前置条件。
+CI 至少验证：
 
-## 9. 风险与 Go / No-Go
+- 无 DSH 源码子路径 import；
+- 生产组合没有 local FS / Shell / Subprocess；
+- Agent create、followup、cancel、idle、dispose；
+- Session create、append、flush、resume 和 crash repair；
+- FS target、revision、guarded write / edit；
+- Shell exit、timeout、cancel、truncation、disconnect；
+- Runner 断线无本地 fallback；
+- 候选 DSH 能读取受支持的历史 Session。
+
+## 15. 实施路线
+
+### Phase 0：DSH 公开契约 Spike（3–5 天）
+
+- 用公开 package 创建最小 Cordis Context；
+- fake LLM 完成 create、followup、session event、cancel、dispose；
+- 实现最小内存 Remote FS / Shell fake；
+- 验证 PostgreSQL Backend 的最小原语；
+- 冻结 DSH 版本和 Node 版本。
+
+验收：不启动 DSH Web / CLI，也能通过自研入口完成一轮固定模型对话；无内部 import；上游零修改；dispose 后无悬挂资源。
+
+### Phase 1：真实 gRPC Runner（1–2 周）
+
+- 新建 Greenfield Proto，不复制 Nova package 或生成物；
+- Rust Runner 完成注册、心跳、generation、前台 execution 和 cancel；
+- 完成 Resolve、stat、lstat、read、list、guarded write / edit；
+- 实现 DSH RemoteFileSystem 与 RemoteShellExecutor；
+- 在 Linux、macOS、Windows 跑真实边界测试。
+
+验收：三种平台都能由 DSH Agent 远程 list / read / edit / create / execute；并发修改不静默覆盖；断线不重放；Server 无本地 workspace 访问。
+
+### Phase 2：公网 Server 与 Web UI（2–3 周）
+
+- Auth、Project、Workspace Binding、Conversation；
+- Runner enrollment、Registry、目录选择与状态 SSE；
+- AgentRuntimeRegistry、Runtime Shard 和 Session lease；
+- PostgreSQL DSH Persistence；
+- Message POST、Session projection、SSE replay、cancel；
+- Nginx / TLS / gRPC 长连接部署。
+
+验收：用户从公网 UI 登录、选择本机 Runner 与 workspace、发送 coding query，并看到 DSH 经 gRPC 读写真实 workspace；Server 重启可恢复已提交历史。
+
+### Phase 3：交互与多机器体验（1–2 周）
+
+- Approval / User Question InteractionBroker；
+- Project 多 Workspace Binding；
+- Conversation fork 到另一机器；
+- Runner token 撤销、版本升级提示、drain；
+- Git identity / branch / commit / dirty 状态提示。
+
+### Phase 4：按产品需求扩展
+
+- 后台进程和 job UI；
+- Remote Skill Provider；
+- PTY / Terminal；
+- LSP；
+- 多 Control Server / 独立 Runner Gateway；
+- 更强 sandbox 和资源限制。
+
+这些都不是首个“Browser → Server → DSH → gRPC → Remote Runner”闭环的前置条件。
+
+## 16. 验收场景
+
+### 16.1 核心闭环
+
+1. Windows Runner 连接公网 Server，绑定 `D:\code\demo`；
+2. 用户在 Web UI 创建 Conversation 并发送“读取 package.json，修改脚本并运行测试”；
+3. DSH 在 Server 调用模型；
+4. 文件读取、修改和测试命令全部通过 gRPC 到 Windows Runner；
+5. Web UI 按顺序显示 user message、reasoning / assistant、tool、result 与 turn end；
+6. Server 容器内没有该 workspace，也不能执行 fallback。
+
+同一场景必须分别在 macOS 与 Linux Server Runner 上通过。
+
+### 16.2 断线与恢复
+
+- 执行期间断开 Runner：当前工具以 `RUNNER_UNAVAILABLE` 结算，不自动重放；
+- Runner 重连：产生新 generation 和 Runtime Shard；
+- 用户再次发送消息：从 PostgreSQL Session 恢复 Agent；
+- 旧 target / execution / process handle 在新 generation 被拒绝；
+- Web SSE 重连：历史投影与实时事件不重复、不丢失。
+
+### 16.3 安全
+
+- 用户 A 不能列出或选择用户 B 的 Runner；
+- `..`、symlink、junction、UNC 等越界被 Runner 拒绝；
+- 撤销 token 后长连接断开；
+- 未实现 sandbox 的 Runner 不显示或接受 sandboxed 执行；
+- Control Server 文件系统上没有任何产品代码 workspace；
+- 日志中不出现 OIDC token、Runner token、模型 key 或文件内容。
+
+## 17. 风险与 Go / No-Go
 
 | 风险 | 控制 |
 |---|---|
-| DSH 预览版破坏 API | 精确锁版本、公开出口、升级契约 CI |
-| Session 格式变化 | 保留原始日志，升级前 backward-read canary，必要时保留旧 Runtime 只读 |
-| FS 版本语义不足 | Runner 内 revision + compare-and-write |
-| 断线命令结果未知 | 不自动重放副作用，恢复后验证 |
-| Context 路由多个 Runner | 按 generation 创建独立 Shard |
-| 多 Server 双写 | 分布式 lease / fencing |
-| 动态插件绕过 Runner | 生产代码式组合、禁用户 Profile、启动审计 Service |
-| PG Provider 损坏日志 | 复用 PersistenceCoordinator，做 crash/torn-tail/并发测试 |
+| DSH RC API 变化 | 精确锁版本、公开 export、升级契约 CI |
+| DSH Session 格式变化 | 保留原始事件、backward-read canary、版本记录 |
+| Remote FS 难以满足原子语义 | Runner 内 revision + 同临界区 compare-and-write |
+| Windows / POSIX 路径混淆 | Server 不解释路径，Runner 返回 opaque target 与 process path |
+| Runner 断线命令结果未知 | generation 失效，不自动重放副作用 |
+| Context 串到另一 Runner | generation 对应独立 Runtime Shard |
+| 多 Server 双写 | 第一版单副本；扩容前实现 lease、fencing 和 owner 路由 |
+| DSH local provider 绕过远程边界 | 代码式组合、启动审计、Server 不挂载 workspace |
+| 公网 DSH Web 暴露本地能力 | 不部署 DSH Web，全新产品协议与 Auth |
 
-进入正式开发前须满足：
+正式开发前的 Go 条件：
 
-- [ ] 公开 package root 足以组装 Runtime；
-- [ ] Remote FS 通过版本写与路径安全测试；
-- [ ] Remote Shell 正确处理取消、超时、断线；
-- [ ] PostgreSQL Backend 通过 recovery / prepare / flush 测试；
-- [ ] Shard 在断线时可完全 dispose；
-- [ ] 多副本 lease 不会双写；
-- [ ] 候选 DSH 能读取必要的基线 Session；
-- [ ] 生产组合没有本地 workspace Provider；
-- [ ] 团队接受 DSH Session / Tool / Approval 语义，不再维护 Nova 旧抽象。
+- [ ] 公开 package root 足以组装所需 Runtime；
+- [ ] 自研 Server 能通过 `ctx.agents` 完成多轮、取消和 dispose；
+- [ ] PostgreSQL Backend 通过 append、flush、resume 和 repair 测试；
+- [ ] Remote FS 通过 target、revision、原子写和路径安全测试；
+- [ ] Remote Shell 通过非零退出、超时、取消、截断和断线测试；
+- [ ] Linux、macOS、Windows 真实 Runner 均通过；
+- [ ] Runner generation 失效可完整清理对应 Shard；
+- [ ] 生产组合中不存在本地 workspace Provider；
+- [ ] 团队接受 DSH 的 Agent、Session、Tool、Approval 和 Compaction 语义。
 
-若前四项任一失败，说明公开 seam 不足。此时应向 DSH 上游贡献通用扩展点；上游合并前不要以长期私有 patch 进入生产。
+若 DSH 公开 seam 无法满足前三项，不应通过长期私有 patch 绕过。应先向上游贡献通用扩展点，或重新评估 DSH 版本与依赖策略。
 
-## 10. 依赖方向与最终推荐
+## 18. 最终推荐
+
+新项目的推荐组合是：
+
+> **全新 Web UI + 全新 Control Server + DSH public core packages + 自有最小 Runtime Composition + PostgreSQL Session Persistence + 自有 Remote FS / Shell Provider + 全新 gRPC 协议 + 跨平台 Rust Remote Runner。**
+
+Nova 只提供产品体验和架构思想参考：公网聊天入口、Server 控制面、Runner 主动出站连接、真实远程执行边界。新项目不依赖 Nova package、数据库、Proto、Runner binary 或内部类型。
+
+第一条生产纵向链路应严格证明：
 
 ```text
-packages/dsh-runtime → DSH public packages
-packages/dsh-runner-provider → DSH fs/shell definitions + runner-sdk
-packages/dsh-persistence-pg → DSH session-persistence + DB client
-packages/dsh-server-bridge → DSH agent/session + internal protocol
-apps/agent-server → above integration packages + product services
-crates/runner → runner protocol only; never DSH/Agent types
+用户打开公网 Web
+  → 登录并选择某台机器的 workspace
+  → query 进入 Control Server
+  → Server 内 DSH Agent 决策
+  → DSH 产生 fs / shell tool call
+  → Remote Provider 通过 gRPC 请求指定 Runner generation
+  → Runner 在真实 workspace 执行
+  → DSH Session Event 持久化
+  → 产品投影通过 SSE 回到 Web UI
 ```
 
-禁止 Provider 依赖 Web Controller、Runner 依赖 DSH 类型、产品协议导出 DSH 内部类型、Persistence 管理 Conversation、Projection 拥有 Agent lifecycle。
+这条链路成立后，服务器、macOS 和 Windows 只是同一 Remote Runner 协议下的不同执行世界，不需要三套 Agent 或三套 Server 实现。
 
-最终推荐组合是：
-
-> **DSH public core packages + 自有最小 Runtime Composition + PostgreSQL Persistence Provider + Remote FS / Shell Provider + 自有 HTTP/SSE Server + 现有 Runner 出站连接模型。**
-
-上游采用双轨：生产精确锁定已发布 packages，完整 Git 仓库作为只读参考和候选验证；若追 main，则在独立 workspace 构建并 pack，Nova 只消费产物。
-
-第一阶段先证明：Agent 只经 Remote Runner 完成真实任务；Session 可在 PostgreSQL 安全追加和恢复；Runner generation 对应唯一 Shard；DSH 更新的破坏只落在少量 Adapter 且能被 CI 发现。四项成立后，该方案能避免维护第二套 Agent Core，同时保持上游可持续升级。
-
-## 11. 本地参考资料
+## 19. 本地参考资料
 
 DeepSeek Harness：
 
-- `deepseek-harness-master/README.md`
+- `deepseek-harness-master/package.json`
+- `deepseek-harness-master/LICENSE`
+- `deepseek-harness-master/docs/architecture.zh.md`
+- `deepseek-harness-master/docs/agent-lifecycle.zh.md`
 - `deepseek-harness-master/docs/capability-seams.zh.md`
-- `deepseek-harness-master/docs/cookbook/extension-cookbook.zh.md`
+- `deepseek-harness-master/docs/api-gateway.zh.md`
+- `deepseek-harness-master/docs/subsystems/web-server.zh.md`
+- `deepseek-harness-master/docs/subsystems/session.zh.md`
+- `deepseek-harness-master/docs/subsystems/session-projection.zh.md`
 - `deepseek-harness-master/docs/subsystems/filesystem.zh.md`
-- `deepseek-harness-master/docs/subsystems/subprocess.zh.md`
 - `deepseek-harness-master/docs/subsystems/shell.zh.md`
+- `deepseek-harness-master/docs/subsystems/subprocess.zh.md`
+- `deepseek-harness-master/docs/subsystems/approval.zh.md`
+- `deepseek-harness-master/docs/subsystems/user-questions.zh.md`
+- `deepseek-harness-master/packages/core/agent/src/index.ts`
+- `deepseek-harness-master/packages/core/agent/src/runtime-types.ts`
 - `deepseek-harness-master/packages/examples/agent-spine-demo/src/index.ts`
-- `deepseek-harness-master/packages/bundle/headless/README.zh.md`
-- `deepseek-harness-master/packages/bundle/base/README.zh.md`
-- `deepseek-harness-master/packages/preset/agent-presets/README.zh.md`
-- `deepseek-harness-master/packages/fs/fs/README.zh.md`
-- `deepseek-harness-master/packages/subprocess/subprocess/README.zh.md`
-- `deepseek-harness-master/packages/shell/shell/README.zh.md`
-- `deepseek-harness-master/packages/session/session-persistence/README.zh.md`
+- `deepseek-harness-master/packages/session/session-persistence/src/coordinator.ts`
+- `deepseek-harness-master/packages/fs/fs/src/index.ts`
+- `deepseek-harness-master/packages/shell/shell/src/index.ts`
+- `deepseek-harness-master/packages/sdk/server/src/server.ts`
 - `deepseek-harness-master/packages/sdk/server/README.zh.md`
-- `deepseek-harness-master/packages/acp/acp/README.zh.md`
+- `deepseek-harness-master/packages/bundle/web-app/README.zh.md`
+- `deepseek-harness-master/packages/host/webserver/README.zh.md`
+- `deepseek-harness-master/packages/client/connection/README.zh.md`
 
-Nova 参考：`docs/runner.md`、`docs/runner-sdk.md`、`docs/proto.md`、`docs/agent-server.md`、`docs/deepseek-harness-agent-core-feasibility.md`。
+架构思想参考，不是依赖：
+
+- `docs/runner.md`
+- `docs/runner-sdk.md`
+- `docs/proto.md`
+- `docs/agent-server.md`
+- `docs/agent-web-ui.md`

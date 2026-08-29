@@ -1,44 +1,65 @@
-import multipart from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import { z } from "zod";
+import {
+  ApiErrorSchema,
+  CreateUploadSchema,
+  UploadedFileSchema,
+  UploadRunnerFileSchema,
+  UploadTicketSchema,
+} from "@nova/protocol";
+import type { RunnerRegistry } from "../runner/registry.js";
 import type { UploadStorage } from "./upload-storage.js";
+import { createUploadService } from "./upload.service.js";
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
-const UploadSchema = z.object({
-  url: z.url(),
-  name: z.string(),
-  size: z.number().int().nonnegative(),
-  mimeType: z.string(),
-});
-const ErrorSchema = z.object({ code: z.string(), message: z.string() });
-
-export async function uploadRoutes(app: FastifyInstance, storage: UploadStorage): Promise<void> {
-  await app.register(multipart, { limits: { files: 1, fileSize: MAX_FILE_SIZE } });
-  app.withTypeProvider<ZodTypeProvider>().post(
+export async function uploadRoutes(
+  app: FastifyInstance,
+  storage: UploadStorage,
+  runners: RunnerRegistry,
+): Promise<void> {
+  const server = app.withTypeProvider<ZodTypeProvider>();
+  const uploads = createUploadService(storage, runners);
+  server.post(
     "/uploads",
     {
       schema: {
-        operationId: "uploadFile",
+        operationId: "createUpload",
         tags: ["uploads"],
         security: [{ bearerAuth: [] }],
-        consumes: ["multipart/form-data"],
-        response: { 201: UploadSchema, 400: ErrorSchema, 401: ErrorSchema, 413: ErrorSchema },
+        body: CreateUploadSchema,
+        response: { 200: UploadTicketSchema, 400: ApiErrorSchema, 401: ApiErrorSchema, 503: ApiErrorSchema },
       },
     },
     async (request, reply) => {
-      const part = await request.file();
-      if (!part) return reply.code(400).send({ code: "FILE_REQUIRED", message: "请选择要上传的文件" });
-      const data = await part.toBuffer();
-      const uploaded = await storage.put({
-        userId: request.userId,
-        filename: part.filename,
-        mimeType: part.mimetype,
-        data,
-      });
-      return reply
-        .code(201)
-        .send({ url: uploaded.url, name: part.filename, size: data.byteLength, mimeType: part.mimetype });
+      const ticket = await uploads.createTicket(request.userId, request.body.name);
+      if (request.headers.referer?.startsWith("https://")) {
+        ticket.upload = ticket.upload.replace(/^http:/, "https:");
+        ticket.download = ticket.download.replace(/^http:/, "https:");
+      }
+      return reply.send(ticket);
+    },
+  );
+
+  server.post(
+    "/uploads/runner",
+    {
+      schema: {
+        operationId: "uploadRunnerFile",
+        tags: ["uploads"],
+        security: [{ bearerAuth: [] }],
+        body: UploadRunnerFileSchema,
+        response: {
+          200: UploadedFileSchema,
+          400: ApiErrorSchema,
+          401: ApiErrorSchema,
+          409: ApiErrorSchema,
+          503: ApiErrorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await uploads.uploadRunnerFile(request.userId, request.body.runnerId, request.body.path);
+      if (request.headers.referer?.startsWith("https://")) result.url = result.url.replace(/^http:/, "https:");
+      return reply.send(result);
     },
   );
 }

@@ -15,11 +15,13 @@
 - **SSE 订阅与状态管理**（一切副作用的 owner 在这里）
 - 鉴权接入
 - 把 `ChatMessage[]` 与 `Todo[]` 喂给 `chat-ui` 渲染
+- 取得附件签名地址后把文件直接上传 MinIO
 
 **不负责**
 
 - Block 渲染逻辑 —— 由 `packages/chat-ui` 承担，本 app 不重复实现
 - 从 Markdown 解析结构 —— 结构已经在 `Block` 里
+- 代理或持有 MinIO 凭证
 
 **依赖**：`packages/protocol`（type-only）+ `packages/chat-ui` + `@nova/casdoor/client/react`
 
@@ -274,6 +276,15 @@ onSubmit(text) {
   // 失败 → 该条标红 + 重试按钮，不静默丢
 }
 ```
+
+Composer 接受两种附件来源。浏览器拖入 / 粘贴的本地 `File` 先调用
+`POST /api/uploads { name }`，再直接 `PUT` 到返回的 `upload` 地址；MinIO 请求不携带 Nova Bearer token。
+点击附件按钮时，宿主打开 `chat-ui` 的 `RemoteExplorer`，通过 `GET /api/runners/directories`
+浏览当前 Runner 并支持多选，提交时对每个远程路径调用 `POST /api/uploads/runner`。两条结果统一成
+附件 Markdown；任一上传失败都保留 Composer 草稿和选择，成功后才清空。
+
+Project workspace 绑定也复用同一个 `RemoteExplorer`，但使用 `mode="directory"` 和单选。
+Runner id、目录请求、已选路径和上传 mutation 全部由 `agent-web-ui` 持有；`chat-ui` 不知道 Runner。
 
 `queue` 的选择规则（对应 `agent-core.md` §7 的三条队列）：
 

@@ -104,11 +104,15 @@ risk:    "write"   executionMode: "sequential"
 ### `bash`
 
 ```ts
-args:    { command: string; cwd?: string; timeoutMs?: number }
+args:    { command: string; args?: string[]; cwd?: string; timeoutMs?: number }
 content: stdout + stderr（合并，由 agent-core 截断）
 details: { exitCode, stdout, stderr, durationMs, truncated }
 risk:    "exec"
 ```
+
+`command` 是可执行文件名或路径，**不会按 shell 命令行解析**；参数必须放在 `args`，例如
+`{ command: "ls", args: ["/workspace/synes/"] }`。把整段 `ls /workspace/synes/` 放进
+`command` 会被当作一个可执行文件名，并以 `SPAWN_FAILED` 结束。
 
 **非零退出码不是 tool 错误**，照常返回 `status: "ok"`，让模型自己读 exit code 判断。
 只有 spawn 失败 / 超时 / Runner 不可用才是 error。

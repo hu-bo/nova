@@ -54,7 +54,7 @@
 | 文档 | 一句话 |
 |---|---|
 | [deepseek-harness-agent-core-feasibility.md](./deepseek-harness-agent-core-feasibility.md) | DeepSeek Harness 替代 agent-core 的能力差异、方案、迁移路线与 Go/No-Go 条件 |
-| [deepseek-harness-greenfield-remote-runner.md](./deepseek-harness-greenfield-remote-runner.md) | Greenfield 场景以 DSH 为核心、自研 Server、只经 Remote Runner 执行且保持上游零修改的轻量二开方案 |
+| [deepseek-harness-greenfield-remote-runner.md](./deepseek-harness-greenfield-remote-runner.md) | 全新项目以 DSH 为 Agent Core，自研公网 Web / Server / gRPC Runner，并支持 Linux、macOS、Windows workspace 的部署方案 |
 
 ### Agent 组装
 

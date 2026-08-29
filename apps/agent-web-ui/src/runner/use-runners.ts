@@ -1,5 +1,7 @@
 import type { Runner } from "@nova/protocol";
+import type { RemoteExplorerListing } from "@nova/chat-ui";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { queryKeys } from "../api/query-keys.js";
 import { useAuth } from "../auth/provider.js";
 
@@ -28,13 +30,18 @@ export function useRunnerTokens(enabled = true) {
   });
 }
 
-export function useRunnerDirectories(runnerId: string, path?: string) {
+export function useRunnerDirectoryLoader(runnerId: string) {
   const { api } = useAuth();
-  return useQuery({
-    queryKey: queryKeys.runnerDirectories(runnerId, path),
-    queryFn: () => api!.listRunnerDirectories({ runnerId, ...(path ? { path } : {}) }),
-    enabled: Boolean(api && runnerId),
-  });
+  return useCallback(
+    async (path?: string, signal?: AbortSignal) => {
+      if (!api || !runnerId) throw new Error("请先选择 Runner");
+      return api.listRunnerDirectories(
+        { runnerId, ...(path ? { path } : {}) },
+        signal ? { signal } : undefined,
+      ) satisfies Promise<RemoteExplorerListing>;
+    },
+    [api, runnerId],
+  );
 }
 
 export function useRunnerConnection(enabled = true) {

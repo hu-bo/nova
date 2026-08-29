@@ -7,13 +7,16 @@ const logger = createLogger("agent-server").child("upload-storage");
 
 export interface UploadStorage {
   ensureBucket(): Promise<void>;
-  put(input: {
+  createUpload(input: { userId: string; filename: string }): Promise<{ upload: string; download: string }>;
+  putFile(input: {
     userId: string;
     filename: string;
+    data: Uint8Array;
     mimeType: string;
-    data: Buffer;
-  }): Promise<{ url: string; key: string }>;
+  }): Promise<{ download: string }>;
 }
+
+const SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export function createMinioUploadStorage(config: {
   endPoint: string;
@@ -41,25 +44,43 @@ export function createMinioUploadStorage(config: {
   };
   return {
     ensureBucket,
-    async put(input) {
+    async createUpload(input) {
       try {
         await ensureBucket();
-        const suffix = safeExtension(input.filename);
-        const key = `uploads/${encodeURIComponent(input.userId)}/${randomUUID()}${suffix}`;
-        await client.putObject(config.bucket, key, input.data, input.data.byteLength, {
-          "Content-Type": input.mimeType || "application/octet-stream",
-          "X-Amz-Meta-Original-Name": encodeURIComponent(input.filename),
-        });
-        return { key, url: await client.presignedGetObject(config.bucket, key, 7 * 24 * 60 * 60) };
+        const key = objectKey(input.userId, input.filename);
+        const [upload, download] = await Promise.all([
+          client.presignedPutObject(config.bucket, key, SIGNED_URL_TTL_SECONDS),
+          client.presignedGetObject(config.bucket, key, SIGNED_URL_TTL_SECONDS),
+        ]);
+        return { upload, download };
       } catch (error) {
         logger.error(
-          { err: error, component: "server", dependency: "minio", bucket: config.bucket, mimeType: input.mimeType },
-          "upload failed",
+          { err: error, component: "server", dependency: "minio", bucket: config.bucket },
+          "failed to create upload URLs",
+        );
+        throw error;
+      }
+    },
+    async putFile(input) {
+      try {
+        await ensureBucket();
+        const key = objectKey(input.userId, input.filename);
+        const data = Buffer.from(input.data);
+        await client.putObject(config.bucket, key, data, data.byteLength, { "Content-Type": input.mimeType });
+        return { download: await client.presignedGetObject(config.bucket, key, SIGNED_URL_TTL_SECONDS) };
+      } catch (error) {
+        logger.error(
+          { err: error, component: "server", dependency: "minio", bucket: config.bucket },
+          "failed to store uploaded file",
         );
         throw error;
       }
     },
   };
+}
+
+function objectKey(userId: string, filename: string): string {
+  return `uploads/${encodeURIComponent(userId)}/${randomUUID()}${safeExtension(filename)}`;
 }
 
 function safeExtension(filename: string): string {

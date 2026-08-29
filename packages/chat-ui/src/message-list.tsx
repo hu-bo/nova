@@ -50,11 +50,7 @@ function renderBlocks(
     }
 
     nodes.push(
-      <ToolBlock call={block} {...(result ? { result } : {})} key={index}>
-        {result?.blocks.map((child, childIndex) => (
-          <BlockView block={child} renderers={renderers} {...(onOpenPath ? { onOpenPath } : {})} key={childIndex} />
-        ))}
-      </ToolBlock>,
+      <ToolBlock call={block} {...(result ? { result } : {})} key={index} />,
     );
   });
 

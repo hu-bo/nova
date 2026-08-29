@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, FolderKanban, MessageCircle, Pencil, Plus, Server, Trash2, Unplug } from "lucide-react";
-import { useEffect, useState } from "react";
+import { RemoteExplorer } from "@nova/chat-ui";
+import { ArrowRight, Folder, FolderKanban, MessageCircle, Pencil, Plus, Server, Trash2, Unplug } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
@@ -20,7 +21,7 @@ import { useConversations, useProject, useProjectMutations } from "../project/us
 import { RunnerBadge } from "./home.js";
 import { RunnerManagerDialog } from "../runner/runner-manager-dialog.js";
 import { RunnerSelect } from "../runner/runner-select.js";
-import { WorkspacePicker } from "../runner/workspace-picker.js";
+import { useRunnerDirectoryLoader } from "../runner/use-runners.js";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table.js";
 
 export function ProjectRoute() {
@@ -31,6 +32,7 @@ export function ProjectRoute() {
   const mutations = useProjectMutations();
   const [renameOpen, setRenameOpen] = useState(false);
   const [bindOpen, setBindOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [runnerManagerOpen, setRunnerManagerOpen] = useState(false);
   const [deleteValue, setDeleteValue] = useState("");
@@ -45,6 +47,10 @@ export function ProjectRoute() {
   });
   const project = projectQuery.project;
   const createConversation = useQuickConversationCreate();
+  const bindRunnerId = bindForm.watch("runnerId");
+  const bindWorkspace = bindForm.watch("workspace");
+  const loadDirectory = useRunnerDirectoryLoader(bindRunnerId);
+  const selectedWorkspacePaths = useMemo(() => (bindWorkspace ? [bindWorkspace] : []), [bindWorkspace]);
 
   useEffect(() => {
     if (project && renameOpen) renameForm.reset({ name: project.name });
@@ -52,6 +58,9 @@ export function ProjectRoute() {
   useEffect(() => {
     if (project && bindOpen) bindForm.reset({ runnerId: project.runnerId ?? "", workspace: project.workspace ?? "" });
   }, [project, bindOpen, bindForm]);
+  useEffect(() => {
+    if (!bindOpen) setWorkspaceOpen(false);
+  }, [bindOpen]);
 
   if (!projectId)
     return (
@@ -305,7 +314,7 @@ export function ProjectRoute() {
         <form onSubmit={bindForm.handleSubmit((values) => void bind(values))} className="space-y-5">
           <FieldLabel label="Runner" error={bindForm.formState.errors.runnerId?.message}>
             <RunnerSelect
-              value={bindForm.watch("runnerId")}
+              value={bindRunnerId}
               onChange={(value) => {
                 bindForm.setValue("runnerId", value, { shouldValidate: true });
                 bindForm.setValue("workspace", "", { shouldValidate: true });
@@ -317,11 +326,17 @@ export function ProjectRoute() {
             hint="从 Runner root 开始选择"
             error={bindForm.formState.errors.workspace?.message}
           >
-            <WorkspacePicker
-              runnerId={bindForm.watch("runnerId")}
-              value={bindForm.watch("workspace")}
-              onChange={(value) => bindForm.setValue("workspace", value, { shouldValidate: true })}
-            />
+            <Button
+              type="button"
+              className="w-full justify-start"
+              disabled={!bindRunnerId}
+              icon={<Folder className="size-4" aria-hidden="true" />}
+              onClick={() => setWorkspaceOpen(true)}
+            >
+              <span className="truncate">
+                {bindWorkspace || (bindRunnerId ? "选择 workspace…" : "请先选择 Runner")}
+              </span>
+            </Button>
           </FieldLabel>
           {mutations.bind.error && (
             <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
@@ -370,6 +385,20 @@ export function ProjectRoute() {
         open={runnerManagerOpen}
         onClose={() => setRunnerManagerOpen(false)}
         selectedRunnerId={project.runnerId ?? undefined}
+      />
+      <RemoteExplorer
+        open={workspaceOpen}
+        onClose={() => setWorkspaceOpen(false)}
+        loadDirectory={loadDirectory}
+        mode="directory"
+        initialPath={bindWorkspace || undefined}
+        selectedPaths={selectedWorkspacePaths}
+        onConfirm={(entries) => {
+          const selected = entries[0];
+          if (selected) bindForm.setValue("workspace", selected.path, { shouldValidate: true });
+          setWorkspaceOpen(false);
+        }}
+        title="选择 workspace"
       />
     </div>
   );

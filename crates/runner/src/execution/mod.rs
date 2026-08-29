@@ -412,6 +412,25 @@ mod tests {
         }
     }
 
+    fn command_line_as_executable_params(id: &str) -> ExecuteParams {
+        let command = if cfg!(windows) {
+            "cmd /C dir C:\\workspace\\synes\\".to_string()
+        } else {
+            "ls /workspace/synes/".to_string()
+        };
+        ExecuteParams {
+            execution_id: id.to_string(),
+            // `command` is an executable path, not a shell command line. Keeping the
+            // argument in this string must therefore fail to spawn rather than run `ls`/`cmd`.
+            command,
+            args: Vec::new(),
+            cwd: std::env::current_dir().unwrap(),
+            env: HashMap::new(),
+            timeout_ms: 5_000,
+            stdin: Vec::new(),
+        }
+    }
+
     #[cfg(unix)]
     fn process_alive(pid: u32) -> bool {
         unsafe { libc::kill(pid as i32, 0) == 0 }
@@ -510,5 +529,33 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         panic!("process {pid} is still alive 5s after being cancelled");
+    }
+
+    #[tokio::test]
+    async fn command_line_in_command_field_finishes_with_spawn_failed() {
+        let executor = Executor::new(1, 0, 5_000);
+        let stream = executor
+            .execute(command_line_as_executable_params("command-line"))
+            .expect("spawn failures are reported in-band after admission");
+        tokio::pin!(stream);
+
+        let events: Vec<_> = stream.collect().await;
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event.event, Some(execution_event::Event::Started(_)))),
+            "a failed spawn must not emit Started"
+        );
+        let Some(execution_event::Event::Finished(finished)) =
+            events.last().and_then(|event| event.event.as_ref())
+        else {
+            panic!("spawn failure must end with Finished");
+        };
+        assert_eq!(finished.status, ExecutionStatus::Failed as i32);
+        assert_eq!(finished.exit_code, -1);
+        assert_eq!(
+            finished.error.as_ref().map(|error| error.code),
+            Some(ErrorCode::SpawnFailed as i32)
+        );
     }
 }

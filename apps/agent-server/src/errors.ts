@@ -6,6 +6,7 @@ export type AppErrorCode =
   | "INVALID_INPUT"
   | "RUNNER_UNAVAILABLE"
   | "RUNTIME_UNAVAILABLE"
+  | "UPLOAD_UNAVAILABLE"
   | "AUTH_SERVICE_UNAVAILABLE"
   | "AUTH_SERVICE_ERROR";
 
@@ -28,6 +29,7 @@ export const runnerUnavailable = (message = "The selected runner is unavailable"
   new AppError("RUNNER_UNAVAILABLE", message, 409);
 export const runtimeUnavailable = (message = "The conversation runtime is unavailable") =>
   new AppError("RUNTIME_UNAVAILABLE", message, 503);
+export const uploadUnavailable = () => new AppError("UPLOAD_UNAVAILABLE", "附件存储暂时不可用，请稍后重试", 503);
 export const authServiceUnavailable = () =>
   new AppError("AUTH_SERVICE_UNAVAILABLE", "Authentication service is unavailable", 503);
 export const authServiceError = () =>

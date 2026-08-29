@@ -43,7 +43,7 @@ nova/
 │   ├── taskflow/                # Task 图 + 有界并发 + retry / timeout / cancel
 │   ├── tools/                   # Tool 定义与实现（RunnerTool / RemoteTool）
 │   ├── model-adapters/          # 抹平 provider 差异，产出统一流式事件
-│   ├── chat-ui/                 # Block 渲染组件库（纯展示，无状态无网络）
+│   ├── chat-ui/                 # Chat 组件与受控 RemoteExplorer（无网络、无全局状态）
 │   ├── runner-sdk/              # Node.js / TypeScript ↔ Rust Runner 技术桥梁
 │   └── protocol/                # 浏览器 ↔ agent-server 的 HTTP + SSE 契约（纯类型）
 │

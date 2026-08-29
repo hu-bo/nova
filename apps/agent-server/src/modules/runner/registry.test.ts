@@ -1,9 +1,9 @@
 import type { RunnerSession } from "@nova/runner-sdk";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createRunnerRegistry } from "./registry.js";
 
-describe("runner directory browsing", () => {
-  it("lists owned directories from the runner root and rejects paths outside it", async () => {
+describe("runner file browsing", () => {
+  it("lists owned files and directories from the runner root and rejects paths outside it", async () => {
     const root = "E:\\work";
     const mutableSession = {
       identity: { runnerId: "runner-1", workspace: root },
@@ -14,7 +14,7 @@ describe("runner directory browsing", () => {
       onStatus: () => () => {},
       close: async () => {},
       fs: {
-        stat: async () => ({ kind: 2 }),
+        stat: async () => ({ kind: 2, size: 0n }),
         list: async () => [
           { name: "src", kind: 2 },
           { name: "README.md", kind: 1 },
@@ -30,13 +30,54 @@ describe("runner directory browsing", () => {
       root,
       path: root,
       parent: null,
-      directories: [
-        { name: "packages", path: "E:\\work\\packages" },
-        { name: "src", path: "E:\\work\\src" },
+      entries: [
+        { name: "packages", path: "E:\\work\\packages", kind: "directory" },
+        { name: "src", path: "E:\\work\\src", kind: "directory" },
+        { name: "README.md", path: "E:\\work\\README.md", kind: "file" },
       ],
     });
     await expect(registry.listDirectories("alice", "runner-1", "E:\\outside")).rejects.toMatchObject({
       code: "RUNNER_UNAVAILABLE",
+    });
+  });
+
+  it("reads only an owned regular file within the configured size limit", async () => {
+    const stat = vi.fn(async () => ({ kind: 1, size: 5n }));
+    const readFile = vi.fn(async () => ({ data: new TextEncoder().encode("hello"), totalSize: 5 }));
+    const session = {
+      identity: { runnerId: "runner-1", workspace: "/workspace" },
+      generation: "generation-1",
+      lastHeartbeatAt: Date.now(),
+      state: 1,
+      running: 0,
+      onStatus: () => () => {},
+      close: async () => {},
+      fs: { stat, readFile },
+    } as unknown as RunnerSession;
+    const registry = createRunnerRegistry();
+    await registry.register("alice", "token-1", session);
+
+    await expect(registry.readFile("alice", "runner-1", "/workspace/note.txt", 20)).resolves.toEqual({
+      name: "note.txt",
+      size: 5,
+      data: new TextEncoder().encode("hello"),
+    });
+    expect(readFile).toHaveBeenCalledWith("/workspace/note.txt", { limit: 21 });
+
+    await expect(registry.readFile("bob", "runner-1", "/workspace/note.txt", 20)).rejects.toMatchObject({
+      code: "RUNNER_UNAVAILABLE",
+    });
+    await expect(registry.readFile("alice", "runner-1", "/outside/secret.txt", 20)).rejects.toMatchObject({
+      code: "RUNNER_UNAVAILABLE",
+    });
+
+    stat.mockResolvedValueOnce({ kind: 2, size: 0n });
+    await expect(registry.readFile("alice", "runner-1", "/workspace/src", 20)).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
+    stat.mockResolvedValueOnce({ kind: 1, size: 21n });
+    await expect(registry.readFile("alice", "runner-1", "/workspace/large.bin", 20)).rejects.toMatchObject({
+      code: "INVALID_INPUT",
     });
   });
 });

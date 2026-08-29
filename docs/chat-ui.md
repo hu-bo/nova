@@ -12,7 +12,9 @@
 - Block 渲染器：`text` / `thinking` / `code` / `diff` / `file` / `tool_call` / `tool_result` / `error`
 - Decision 交互组件：审批卡片、反问选项
 - 消息列表与流式增量渲染
-- Composer 文件选择与剪贴板截图收集、模型和推理强度选择
+- `UploadCover` 文件拖放、文件选择、剪贴板截图和附件列表交互
+- Composer 文本草稿、提交编排、模型和推理强度选择
+- `RemoteExplorer`：由宿主提供目录数据的远程文件 / 目录选择弹窗
 - **实例级渲染覆盖**：宿主可替换某种已知 block 的默认渲染
 
 **不负责**（全部属于宿主 `agent-web-ui`）
@@ -81,25 +83,52 @@
   reasoningEffort?={string}
   onReasoningEffortChange?={(effort: string) => void}
   accept?={string}
-  onSubmit={({ text, files, model, reasoningEffort }: ComposerSubmission) => void}
+  attachments?={ComposerAttachment[]}
+  onAttachmentsChange?={(attachments: ComposerAttachment[]) => void}
+  onAttachmentButtonClick?={() => void | Promise<void>}
+  onSubmit={({ text, files, attachments, model, reasoningEffort }: ComposerSubmission) => void}
+/>
+
+<UploadCover
+  files={File[]}
+  onFilesChange={(files: File[]) => void}
+  attachments?={UploadAttachment[]}
+  onAttachmentsChange?={(attachments: UploadAttachment[]) => void}
+>
+  {({ trigger, onPaste }) => ReactNode}
+</UploadCover>
+
+<RemoteExplorer
+  open={boolean}
+  mode={"file" | "directory"}
+  multiple?={boolean}
+  loadDirectory={(path?, signal?) => Promise<RemoteExplorerListing>}
+  onConfirm={(entries: RemoteExplorerEntry[]) => void}
+  onClose={() => void}
 />
 
 type BlockRenderer = (props: { block: Block; onOpenPath? }) => ReactNode
 type BlockRenderers = Record<string, BlockRenderer>
 ```
 
-五个组件；实例级 `renderers` 是唯一渲染扩展入口，不提供全局注册表。
+`RemoteExplorer` 与 Composer 一样只管理瞬时交互；实例级 `renderers` 是唯一渲染扩展入口，不提供全局注册表。
 
-`Composer` 的文件按钮使用浏览器原生文件选择器，并支持在输入框粘贴系统截图快捷键
-产生的剪贴板图片。组件只保留待发送的 `File[]` 并通过 `onSubmit` 上抛，文件上传、
-进度、失败重试与持久化仍由宿主负责。只有附件而没有文本时也允许提交。
+`Composer` 只组合独立的 `UploadCover`，不直接实现上传交互。`UploadCover` 支持把浏览器本地文件
+拖入覆盖区域、粘贴系统截图，并在宿主未提供
+`onAttachmentButtonClick` 时使用原生文件选择器。宿主提供该回调时，附件按钮只上抛“打开选择器”意图；
+宿主选择的远程附件通过受控 `attachments` 回传。组件通过 `onSubmit` 同时上抛本地 `File[]`
+和受控附件元数据，文件读取、上传、进度、失败重试与持久化仍由宿主负责。只有附件而没有文本时也允许提交。
+
+`RemoteExplorer` 不知道 Runner、HTTP 路径或权限。它只调用宿主传入的 `loadDirectory`，并负责
+导航历史、面包屑、单击选择、双击进入目录、Cmd/Ctrl 切换、Shift 连选和键盘操作。
+目录数据与最终选择的业务 owner 都是宿主；组件关闭后不缓存跨会话状态。
 宿主传入 `isRunning` 与 `onAbort` 时，发送按钮会替换为中断按钮；中断请求及其状态仍由宿主负责。
 
 模型与推理强度是受控选择：选项和当前值由宿主传入，变更通过回调上抛；没有选项时
 不渲染对应控件。这样模型能力、默认值和持久化仍只有宿主一个 owner。
 
-**所有交互通过 props 回调上抛，组件自己不发请求。** 这是"纯展示"的可检验定义 ——
-`onResolve` / `onSubmit` / `onRetry` / `onOpenPath` 之外，组件没有任何对外通路。
+**所有交互通过 props 回调上抛，组件自己不发请求。** 这是“纯展示”的可检验定义：
+消息、Decision、Composer 和 RemoteExplorer 都只能调用各自声明的 props 回调，没有隐式对外通路。
 
 `TodoPanel` **没有 `onToggle`**：TODO 只能由 agent 通过 `todo_write` 修改
 （`agent-core.md` §9.4 的唯一 owner 规则）。给用户一个勾选框会立刻产生
@@ -200,6 +229,8 @@ packages/chat-ui/src/
 ├── decision-prompt.tsx
 ├── todo-panel.tsx
 ├── composer.tsx
+├── upload-cover.tsx
+├── remote-explorer.tsx
 └── chat-ui.test.tsx
 ```
 

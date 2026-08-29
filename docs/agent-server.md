@@ -20,6 +20,8 @@
 
 **不负责**：Agent 决策逻辑、调度逻辑、执行；不做代理，不转发模型请求或模型 SSE。
 模型 adapter 根据 server 下发的配置直接连接官方或中转商；server 的 SSE 只承载 agent-core 的 UI 事件。
+浏览器本地附件不由 server 中转：server 只生成 MinIO PUT/GET 签名地址。Runner 本地附件由
+server 在校验用户、Runner 和 root 边界后读取并写入 MinIO，因为浏览器不能直接访问 Runner 文件系统。
 
 **技术栈**：Fastify + `@fastify/swagger` + PostgreSQL + Drizzle ORM
 
@@ -161,6 +163,21 @@ React TS API Client         发布型 TS SDK
 
 `@fastify/swagger` 只负责从 route schema 导出契约，不替代 Fastify 的运行时校验；
 Drizzle 表模型、agent-core 内部事件和 `proto/` gRPC 类型也都不是 HTTP OpenAPI 的来源。
+
+### 1.4 附件直传
+
+`POST /api/uploads` 接收 `{ name }`，为
+`uploads/<encoded-user-id>/<uuid>.<ext>` 生成 7 天有效的 MinIO PUT/GET 签名地址。返回值只有
+`{ upload, download }`；MinIO access key 和 secret key 永不返回浏览器。HTTPS 页面请求时把
+签名地址切到 HTTPS。签名失败映射为稳定的 `UPLOAD_UNAVAILABLE`。
+
+`POST /api/uploads/runner` 接收 `{ runnerId, path }`。应用层先通过 Runner Registry 校验当前用户
+拥有在线 Runner、路径位于其 root 内且目标是普通文件，并在读取前执行 20 MiB 上限检查；随后通过
+现有 Runner 文件通道读取字节，再由 `UploadStorage` 写入同一用户前缀。Runner / 路径错误保留稳定的
+Runner 或输入错误语义；只有对象存储失败映射为 `UPLOAD_UNAVAILABLE`，不得把底层错误泄漏给客户端。
+
+`GET /api/runners/directories` 同时返回目录和普通文件的一层条目，作为 RemoteExplorer 唯一目录源。
+Registry 是 root 边界与在线状态的 owner；HTTP handler 不自行拼接或校验跨平台路径。
 
 ---
 

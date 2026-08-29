@@ -1,6 +1,8 @@
 import { CheckCircle2, ChevronRight, CircleOff, LoaderCircle, TerminalSquare, XCircle } from "lucide-react";
-import type { ReactNode } from "react";
+import type { Block } from "@nova/protocol";
 import type { ExtractBlock } from "../types.js";
+
+const MAX_OUTPUT_CHARS = 12_000;
 
 function formatArgs(args: unknown): string {
   if (typeof args === "string") return args;
@@ -11,14 +13,44 @@ function formatArgs(args: unknown): string {
   }
 }
 
+function formatOutput(blocks: Block[]): string {
+  return blocks
+    .map((block) => {
+      switch (block.type) {
+        case "text":
+        case "thinking":
+        case "code":
+          return block.type === "code" ? block.code : block.text;
+        case "diff":
+          return block.diff;
+        case "error":
+          return `${block.code}: ${block.message}`;
+        // Compatibility for persisted messages created before tool output became plain text.
+        case "file":
+          return block.path;
+        case "todo":
+          return block.items.map((item) => `- [${item.status}] ${item.text}`).join("\n");
+        case "tool_call":
+          return `${block.name}\n${formatArgs(block.args)}`;
+        case "tool_result":
+          return formatOutput(block.blocks);
+      }
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function truncateOutput(output: string): string {
+  if (output.length <= MAX_OUTPUT_CHARS) return output;
+  return `${output.slice(0, MAX_OUTPUT_CHARS)}\n\n… 已省略 ${output.length - MAX_OUTPUT_CHARS} 个字符`;
+}
+
 export function ToolBlock({
   call,
   result,
-  children,
 }: {
   call: ExtractBlock<"tool_call">;
   result?: ExtractBlock<"tool_result"> | undefined;
-  children?: ReactNode | undefined;
 }) {
   const status = result?.status ?? call.status;
   const open = call.status === "running" || result?.status === "error";
@@ -34,6 +66,7 @@ export function ToolBlock({
         : status === "cancelled"
           ? "text-slate-400"
           : "text-rose-500";
+  const output = result ? truncateOutput(formatOutput(result.blocks)) : "";
 
   return (
     <details
@@ -65,7 +98,11 @@ export function ToolBlock({
         <pre className="m-0 max-h-56 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300">
           {formatArgs(call.args)}
         </pre>
-        {children && <div className="grid gap-2 p-2.5">{children}</div>}
+        {output && (
+          <pre className="m-0 max-h-80 overflow-auto border-t border-white/10 bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300">
+            {output}
+          </pre>
+        )}
       </div>
     </details>
   );

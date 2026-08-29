@@ -43,10 +43,11 @@ export const RunnerDirectorySchema = z.object({
   root: z.string().min(1),
   path: z.string().min(1),
   parent: z.string().min(1).nullable(),
-  directories: z.array(
+  entries: z.array(
     z.object({
       name: z.string().min(1),
       path: z.string().min(1),
+      kind: z.enum(["file", "directory"]),
     }),
   ),
 });
@@ -212,6 +213,35 @@ export const SendMessageSchema = z
     message: "modelConfig and modelId cannot be used together",
   });
 export type SendMessage = z.infer<typeof SendMessageSchema>;
+
+export const CreateUploadSchema = z
+  .object({
+    name: z.string().trim().min(1).max(255),
+  })
+  .strict();
+export type CreateUpload = z.infer<typeof CreateUploadSchema>;
+
+export const UploadTicketSchema = z.object({
+  upload: z.url(),
+  download: z.url(),
+});
+export type UploadTicket = z.infer<typeof UploadTicketSchema>;
+
+export const UploadRunnerFileSchema = z
+  .object({
+    runnerId: z.string().trim().min(1).max(256),
+    path: z.string().trim().min(1).max(4_096),
+  })
+  .strict();
+export type UploadRunnerFile = z.infer<typeof UploadRunnerFileSchema>;
+
+export const UploadedFileSchema = z.object({
+  url: z.url(),
+  name: z.string().min(1),
+  size: z.number().int().nonnegative(),
+  mimeType: z.string().min(1),
+});
+export type UploadedFile = z.infer<typeof UploadedFileSchema>;
 
 export const ResolveDecisionSchema = DecisionResponseSchema;
 

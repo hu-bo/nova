@@ -133,7 +133,7 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
 
 function messageStatus(stopReason: StopReason): ProjectedMessage["status"] {
   if (stopReason === "aborted") return "aborted";
-  if (stopReason === "error") return "error";
+  if (stopReason === "error" || stopReason === "repetition_detected") return "error";
   return "done";
 }
 

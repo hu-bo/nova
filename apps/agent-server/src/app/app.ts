@@ -130,7 +130,7 @@ export async function registerApp(app: FastifyInstance, dependencies: AppDepende
         dependencies.credentialCipher,
       );
       decisionRoutes(api, dependencies.decisions);
-      if (dependencies.uploadStorage) await uploadRoutes(api, dependencies.uploadStorage);
+      if (dependencies.uploadStorage) await uploadRoutes(api, dependencies.uploadStorage, dependencies.runners);
       api.get(
         "/openapi.json",
         {

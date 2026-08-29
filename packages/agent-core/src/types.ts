@@ -191,7 +191,8 @@ export type AgentEvent =
   | { type: "run.end"; runId: string; stopReason: StopReason; usage: Usage }
   | { type: "error"; code: string; message: string };
 
-export type StopReason = "done" | "max_tokens" | "terminate" | "max_turns" | "aborted" | "error";
+export type StopReason =
+  "done" | "max_tokens" | "repetition_detected" | "terminate" | "max_turns" | "aborted" | "error";
 
 // §2 对外 API 面
 export interface PromptAsset {

@@ -8,6 +8,11 @@ import { useAuth } from "../auth/provider.js";
 import { useModelSettings } from "../model/provider.js";
 import { useConversationStore } from "./store.js";
 
+export interface RunnerAttachmentMetadata {
+  runnerId: string;
+  path: string;
+}
+
 export function useConversationMutations(conversationId: string, modelProfileId: string) {
   const { api } = useAuth();
   const models = useModelSettings();
@@ -24,13 +29,16 @@ export function useConversationMutations(conversationId: string, modelProfileId:
       queue,
       retryId,
     }: {
-      submission: ComposerSubmission;
+      submission: ComposerSubmission<RunnerAttachmentMetadata>;
       queue?: "steering" | "nextRun";
       retryId?: string;
     }) => {
       const model = models.modelSelection(modelProfileId);
       if (!model) throw new Error("当前模型不可用，请选择其他模型或补充 API Key");
-      const uploads = await Promise.all(submission.files.map((file) => api!.uploadFile(file)));
+      const uploads = await Promise.all([
+        ...submission.files.map((file) => api!.uploadFile(file)),
+        ...submission.attachments.map((attachment) => api!.uploadRunnerFile(attachment.metadata)),
+      ]);
       const attachmentText = uploads
         .map((file) => `[附件：${file.name.replaceAll("[", "\\[").replaceAll("]", "\\]")}](${file.url})`)
         .join("\n");
@@ -84,7 +92,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
   });
 
   return {
-    send: (submission: ComposerSubmission, queue?: "steering" | "nextRun") =>
+    send: (submission: ComposerSubmission<RunnerAttachmentMetadata>, queue?: "steering" | "nextRun") =>
       sendMutation.mutateAsync({ submission, ...(queue ? { queue } : {}) }),
     retry: (messageId: string) => {
       const index = state.messages.findIndex((item) => item.id === messageId);
@@ -99,7 +107,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
       const text = source?.blocks.find((block) => block.type === "text")?.text;
       if (!text) return Promise.reject(new Error("找不到可重试的消息内容"));
       return sendMutation.mutateAsync({
-        submission: { text, files: [] },
+        submission: { text, files: [], attachments: [] },
         ...(source?.id === messageId ? { retryId: messageId } : {}),
       });
     },

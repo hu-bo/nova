@@ -37,25 +37,6 @@ export function projectToolDetails(toolName: string, details: unknown): Block[] 
       if (blocks.length > 0) return blocks;
       break;
     }
-    case "list_dir": {
-      if (Array.isArray(data.entries)) {
-        return data.entries.flatMap((entry) => {
-          const item = object(entry);
-          if (typeof item.name !== "string" || (item.kind !== "file" && item.kind !== "dir")) return [];
-          return [{ type: "file", path: item.name, kind: item.kind } satisfies Block];
-        });
-      }
-      break;
-    }
-    case "grep": {
-      if (Array.isArray(data.matches)) {
-        return data.matches.flatMap((match) => {
-          const item = object(match);
-          return typeof item.file === "string" ? [{ type: "file", path: item.file, kind: "file" } satisfies Block] : [];
-        });
-      }
-      break;
-    }
     case "todo_write":
       if (Array.isArray(data.items)) return [{ type: "todo", items: data.items as never[] }];
       break;
