@@ -57,6 +57,23 @@ export function conversationRoutes(
     (request) => conversations.list(request.userId, request.query),
   );
 
+  server.delete(
+    "/conversations/:id",
+    {
+      schema: {
+        operationId: "deleteConversation",
+        tags: ["conversations"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: { 204: z.null(), 401: ApiErrorSchema, 404: ApiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      await conversations.remove(request.userId, request.params.id);
+      return reply.code(204).send(null);
+    },
+  );
+
   server.patch(
     "/conversations/:id/runner",
     {

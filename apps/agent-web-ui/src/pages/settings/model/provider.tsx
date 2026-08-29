@@ -1,8 +1,8 @@
 import type { ModelConfig } from "@nova/protocol";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "../auth/provider.js";
-import { LocalStore } from "../lib/storage.js";
+import { useAuth } from "../../../auth/provider.js";
+import { LocalStore } from "../../../lib/storage.js";
 import type { ModelProfileForm } from "./schemas.js";
 
 export interface ModelProfile extends ModelProfileForm {

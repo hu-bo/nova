@@ -116,6 +116,7 @@ export interface AgentStore {
     limit: number;
     cursor?: string;
   }): Promise<Page<ConversationRow>>;
+  deleteConversation(input: { userId: string; id: string }): Promise<void>;
   routeConversation(userId: string, id: string): Promise<EntryRoute>;
   updateConversationRunner(input: { userId: string; id: string; runnerId: string }): Promise<ConversationRow>;
   setConversationTitleIfUntitled(input: { userId: string; id: string; title: string }): Promise<void>;
@@ -326,6 +327,11 @@ export function createMemoryStore(): AgentStore {
         .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || right.id.localeCompare(left.id));
       const items = all.slice(offset, offset + input.limit);
       return { items, nextCursor: offset + items.length < all.length ? encodeOffset(offset + items.length) : null };
+    },
+    async deleteConversation(input) {
+      ownedConversation(input.userId, input.id);
+      state.conversations.delete(input.id);
+      state.messages = state.messages.filter((message) => message.conversationId !== input.id);
     },
     async routeConversation(userId, id) {
       const conversation = ownedConversation(userId, id);

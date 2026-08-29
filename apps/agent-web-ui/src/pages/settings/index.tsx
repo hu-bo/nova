@@ -2,14 +2,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Cpu, KeyRound, Pencil, Plus, Server, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useAuth } from "../auth/provider.js";
-import { Button } from "../components/ui/button.js";
-import { Card } from "../components/ui/card.js";
-import { Dialog } from "../components/ui/dialog.js";
-import { FieldLabel, Input, Select } from "../components/ui/form.js";
-import { useModelSettings, type ModelProfile } from "../model/provider.js";
-import { modelProfileSchema, type ModelProfileForm } from "../model/schemas.js";
-import { RunnerManagerDialog } from "../runner/runner-manager-dialog.js";
+import { useAuth } from "../../auth/provider.js";
+import { Button } from "../../components/ui/button.js";
+import { Card } from "../../components/ui/card.js";
+import { Dialog } from "../../components/ui/dialog.js";
+import { FieldLabel, Input, Select } from "../../components/ui/form.js";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table.js";
+import { useModelSettings, type ModelProfile } from "./model/provider.js";
+import { modelProfileSchema, type ModelProfileForm } from "./model/schemas.js";
+import { RunnerManager } from "./runner/runner-manager-dialog.js";
 
 const newProfile: ModelProfileForm = {
   providerName: "",
@@ -31,7 +32,7 @@ export function SettingsRoute() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [editing, setEditing] = useState<ModelProfile | null>(null);
   const [deleting, setDeleting] = useState<ModelProfile | null>(null);
-  const [runnerOpen, setRunnerOpen] = useState(false);
+  const [tab, setTab] = useState<"models" | "runners">("models");
   const form = useForm<ModelProfileForm>({ resolver: zodResolver(modelProfileSchema), defaultValues: newProfile });
 
   useEffect(() => {
@@ -80,122 +81,149 @@ export function SettingsRoute() {
         </p>
       </div>
 
-      <section className="mt-8" aria-labelledby="models-title">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <div>
-            <h2 id="models-title" className="text-lg font-semibold text-slate-900">
-              模型配置
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">创建会话和发送消息时下发完整配置</p>
-          </div>
-          <Button variant="primary" icon={<Plus className="size-4" aria-hidden="true" />} onClick={openCreate}>
-            添加配置
-          </Button>
-        </div>
-        {settings.profiles.length ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {settings.profiles.map((profile) => {
-              const isDefault = profile.id === settings.defaultProfileId;
-              return (
-                <Card key={profile.id} className={`p-5 ${isDefault ? "ring-indigo-200" : ""}`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <span className="grid size-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
-                      <Cpu className="size-5" aria-hidden="true" />
-                    </span>
-                    <div className="flex gap-1">
-                      {profile.source === "local" && (
-                        <>
-                          <button
-                            type="button"
-                            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                            aria-label={`编辑 ${profile.providerName}`}
-                            onClick={() => openEdit(profile)}
-                          >
-                            <Pencil className="size-4" aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                            aria-label={`删除 ${profile.providerName}`}
-                            onClick={() => setDeleting(profile)}
-                          >
-                            <Trash2 className="size-4" aria-hidden="true" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-5 flex items-center gap-2">
-                    <h3 className="font-semibold text-slate-900">{profile.providerName}</h3>
-                    {isDefault && (
-                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                        默认
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm text-slate-600">{profile.model}</p>
-                  <p
-                    className="mt-3 truncate text-xs text-slate-400"
-                    title={profile.source === "server" ? undefined : profile.endpoint}
-                  >
-                    {profile.source === "server" ? "服务端模型目录" : `${profile.provider} · ${profile.endpoint}`}
-                  </p>
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
-                    <span
-                      className={`flex items-center gap-1.5 text-xs font-medium ${profile.source === "server" || profile.credential ? "text-emerald-600" : "text-amber-600"}`}
-                    >
-                      <KeyRound className="size-3.5" aria-hidden="true" />
-                      {profile.source === "server"
-                        ? "密钥由服务端托管"
-                        : profile.credential
-                          ? "密钥已在会话中加载"
-                          : "需要填写 API Key"}
-                    </span>
-                    {!isDefault && (
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
-                        onClick={() => settings.setDefaultProfileId(profile.id)}
-                      >
-                        设为默认
-                      </button>
-                    )}
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <Card className="p-8 text-center">
-            <Cpu className="mx-auto size-7 text-slate-300" />
-            <p className="mt-3 font-medium text-slate-800">没有可用的模型配置</p>
-            <Button className="mt-4" variant="primary" onClick={openCreate}>
-              添加第一个配置
-            </Button>
-          </Card>
-        )}
-      </section>
+      <div className="mt-8 flex gap-2 border-b border-slate-200" role="tablist" aria-label="设置">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "models"}
+          onClick={() => setTab("models")}
+          className={`border-b-2 px-4 py-3 text-sm font-semibold ${tab === "models" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}
+        >
+          模型配置
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "runners"}
+          onClick={() => setTab("runners")}
+          className={`border-b-2 px-4 py-3 text-sm font-semibold ${tab === "runners" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}
+        >
+          Runner 管理
+        </button>
+      </div>
 
-      <section className="mt-8 grid gap-6 lg:grid-cols-2">
-        <Card className="p-6">
-          <div className="flex items-start gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-600">
-              <Server className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="font-semibold text-slate-900">默认 Runner</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-500">用于新建独立 Chat；Project 始终使用自己的绑定。</p>
+      {tab === "models" && (
+        <>
+          <section className="mt-8" aria-labelledby="models-title">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h2 id="models-title" className="text-lg font-semibold text-slate-900">
+                  模型配置
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">创建会话和发送消息时下发完整配置</p>
+              </div>
+              <Button variant="primary" icon={<Plus className="size-4" aria-hidden="true" />} onClick={openCreate}>
+                添加配置
+              </Button>
             </div>
-          </div>
-          <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <p className="text-xs font-medium text-slate-500">当前默认</p>
-            <p className="mt-1 truncate font-mono text-sm text-slate-900">{settings.defaultRunnerId || "尚未选择"}</p>
-          </div>
-          <Button className="mt-4" variant="primary" onClick={() => setRunnerOpen(true)}>
-            选择与管理 Runner
-          </Button>
-        </Card>
-      </section>
+            {settings.profiles.length ? (
+              <Card className="overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>配置</TableHead>
+                      <TableHead>模型</TableHead>
+                      <TableHead>Endpoint</TableHead>
+                      <TableHead>凭据</TableHead>
+                      <TableHead className="text-right">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {settings.profiles.map((profile) => {
+                      const isDefault = profile.id === settings.defaultProfileId;
+                      return (
+                        <TableRow key={profile.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Cpu className="size-4 text-indigo-600" />
+                              <strong>{profile.providerName}</strong>
+                              {isDefault && (
+                                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                  默认
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{profile.model}</TableCell>
+                          <TableCell>
+                            <span className="block max-w-64 truncate" title={profile.endpoint}>
+                              {profile.source === "server" ? "服务端模型目录" : profile.endpoint}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={
+                                profile.source === "server" || profile.credential
+                                  ? "text-emerald-600"
+                                  : "text-amber-600"
+                              }
+                            >
+                              {profile.source === "server"
+                                ? "服务端托管"
+                                : profile.credential
+                                  ? "已加载"
+                                  : "需 API Key"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              {profile.source === "local" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                    aria-label={`编辑 ${profile.providerName}`}
+                                    onClick={() => openEdit(profile)}
+                                  >
+                                    <Pencil className="size-4" aria-hidden="true" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                    aria-label={`删除 ${profile.providerName}`}
+                                    onClick={() => setDeleting(profile)}
+                                  >
+                                    <Trash2 className="size-4" aria-hidden="true" />
+                                  </button>
+                                </>
+                              )}
+                              {!isDefault && (
+                                <button
+                                  type="button"
+                                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                                  onClick={() => settings.setDefaultProfileId(profile.id)}
+                                >
+                                  设为默认
+                                </button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </Card>
+            ) : (
+              <Card className="p-8 text-center">
+                <Cpu className="mx-auto size-7 text-slate-300" />
+                <p className="mt-3 font-medium text-slate-800">没有可用的模型配置</p>
+                <Button className="mt-4" variant="primary" onClick={openCreate}>
+                  添加第一个配置
+                </Button>
+              </Card>
+            )}
+          </section>
+        </>
+      )}
+      {tab === "runners" && (
+        <section className="mt-8">
+          <RunnerManager
+            selectedRunnerId={settings.defaultRunnerId}
+            onSelect={(runnerId) => settings.setDefaultRunnerId(runnerId)}
+          />
+        </section>
+      )}
 
       <Dialog
         open={profileOpen}
@@ -316,12 +344,6 @@ export function SettingsRoute() {
           </Button>
         </div>
       </Dialog>
-      <RunnerManagerDialog
-        open={runnerOpen}
-        onClose={() => setRunnerOpen(false)}
-        selectedRunnerId={settings.defaultRunnerId}
-        onSelect={(runnerId) => settings.setDefaultRunnerId(runnerId)}
-      />
     </div>
   );
 }

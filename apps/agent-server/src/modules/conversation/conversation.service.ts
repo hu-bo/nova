@@ -38,6 +38,10 @@ export function createConversationService(
       const result = await store.listConversations({ userId, ...input });
       return { items: result.items.map(view), nextCursor: result.nextCursor };
     },
+    async remove(userId: string, id: string) {
+      await store.deleteConversation({ userId, id });
+      runtimes.invalidate(id);
+    },
     async changeRunner(userId: string, id: string, runnerId: string) {
       const route = await store.routeConversation(userId, id);
       if (route.project?.workspace) await runners.verifyWorkspace(userId, runnerId, route.project.workspace);

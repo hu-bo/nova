@@ -4,8 +4,8 @@ import { errorMessage } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
-import { useQuickConversationCreate } from "../project/new-conversation.js";
-import { useConversations, useProjects } from "../project/use-projects.js";
+import { useQuickConversationCreate } from "./project/new-conversation.js";
+import { useConversations, useProjects } from "./project/use-projects.js";
 
 export function HomeRoute() {
   const createConversation = useQuickConversationCreate();

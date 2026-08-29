@@ -1785,6 +1785,18 @@ export type ListConversations401 = {
   requestId?: string;
 };
 
+export type DeleteConversation401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type DeleteConversation404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
 export type UpdateConversationRunnerBody = {
   /** @minLength 1 */
   runnerId: string;
@@ -4485,6 +4497,71 @@ export function useListConversations<TData = Awaited<ReturnType<typeof listConve
 
 
 
+
+export const getDeleteConversationUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}`
+}
+
+export const deleteConversation = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<void> => {
+
+  return apiMutator<void>(getDeleteConversationUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteConversationMutationOptions = <TError = ErrorType<DeleteConversation401 | DeleteConversation404>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteConversation>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiMutator>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteConversation>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteConversation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteConversation>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteConversation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteConversationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteConversation>>>
+
+    export type DeleteConversationMutationError = ErrorType<DeleteConversation401 | DeleteConversation404>
+
+    export const useDeleteConversation = <TError = ErrorType<DeleteConversation401 | DeleteConversation404>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteConversation>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteConversation>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteConversationMutationOptions(options), queryClient);
+    }
 
 export const getUpdateConversationRunnerUrl = (id: string,) => {
 

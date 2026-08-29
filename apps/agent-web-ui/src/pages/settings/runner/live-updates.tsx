@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { queryKeys } from "../api/query-keys.js";
-import { useAuth } from "../auth/provider.js";
+import { queryKeys } from "../../../api/query-keys.js";
+import { useAuth } from "../../../auth/provider.js";
 
 export function RunnerLiveUpdates() {
   const { api } = useAuth();

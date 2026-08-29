@@ -5,7 +5,7 @@ import { useCallback } from "react";
 import { ApiClientError, errorMessage } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAuth } from "../auth/provider.js";
-import { useModelSettings } from "../model/provider.js";
+import { useModelSettings } from "../pages/settings/model/provider.js";
 import { useConversationStore } from "./store.js";
 
 export interface RunnerAttachmentMetadata {

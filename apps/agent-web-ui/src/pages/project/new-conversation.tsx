@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { queryKeys } from "../api/query-keys.js";
-import { useAuth } from "../auth/provider.js";
-import { useModelSettings } from "../model/provider.js";
+import { queryKeys } from "../../api/query-keys.js";
+import { useAuth } from "../../auth/provider.js";
+import { useModelSettings } from "../settings/model/provider.js";
 
 export function useQuickConversationCreate() {
   const { api } = useAuth();

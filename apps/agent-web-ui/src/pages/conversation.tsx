@@ -7,7 +7,7 @@ import {
   type ComposerAttachment,
   type ComposerSubmission,
 } from "@nova/chat-ui";
-import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle, Server, Wifi, WifiOff } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle, Server } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
@@ -17,11 +17,11 @@ import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.
 import { useConversationMutations, type RunnerAttachmentMetadata } from "../conversation/mutations.js";
 import { ConversationProvider, useConversationStore } from "../conversation/store.js";
 import { LocalStore } from "../lib/storage.js";
-import { useModelSettings } from "../model/provider.js";
-import { useConversations, useProject } from "../project/use-projects.js";
+import { useModelSettings } from "./settings/model/provider.js";
+import { useConversations, useProject } from "./project/use-projects.js";
 import { RunnerBadge } from "./home.js";
-import { RunnerManagerDialog } from "../runner/runner-manager-dialog.js";
-import { useRunnerDirectoryLoader } from "../runner/use-runners.js";
+import { RunnerManagerDialog } from "./settings/runner/runner-manager-dialog.js";
+import { useRunnerDirectoryLoader } from "./settings/runner/use-runners.js";
 
 const SELECTED_MODEL_STORE = new LocalStore("nova_selected_model_profile", "");
 
@@ -143,9 +143,7 @@ function ConversationView({
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-slate-900">{conversation.title || "未命名会话"}</h1>
             <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
-              <ConnectionBadge connection={store.state.connection} />
-              <span aria-hidden="true">·</span>
-              <span className="truncate">{project?.workspace ?? "独立 Chat"}</span>
+              <span className="truncate">{project ? project.name : "独立 Chat"}</span>
             </div>
           </div>
           {project && (
@@ -389,23 +387,5 @@ function ConversationView({
         </div>
       </Dialog>
     </div>
-  );
-}
-
-function ConnectionBadge({ connection }: { connection: "connecting" | "open" | "reconnecting" | "closed" }) {
-  const open = connection === "open";
-  return (
-    <span
-      className={`inline-flex items-center gap-1 ${open ? "text-emerald-600" : connection === "closed" ? "text-rose-600" : "text-amber-600"}`}
-    >
-      {open ? <Wifi className="size-3" aria-hidden="true" /> : <WifiOff className="size-3" aria-hidden="true" />}
-      {connection === "open"
-        ? "实时连接"
-        : connection === "connecting"
-          ? "正在连接"
-          : connection === "reconnecting"
-            ? "正在重连"
-            : "连接关闭"}
-    </span>
   );
 }

@@ -254,6 +254,13 @@ export function createPgStore(databaseUrl: string): PgStore {
         .limit(input.limit + 1);
       return page(rows, input.limit, (item) => encodeCursor({ updatedAt: item.updatedAt.toISOString(), id: item.id }));
     },
+    async deleteConversation(input) {
+      const deleted = await db
+        .delete(conversations)
+        .where(and(eq(conversations.id, input.id), eq(conversations.userId, input.userId)))
+        .returning({ id: conversations.id });
+      if (!deleted.length) throw notFound("Conversation");
+    },
     async routeConversation(userId, id) {
       const [conversation] = await db
         .select()

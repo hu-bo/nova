@@ -412,18 +412,20 @@ Runner 恢复后状态灯自动转绿（Registry 状态随 `GET /projects` 轮�
 ```text
 apps/agent-web-ui/src/
 ├── main.tsx
-├── app.tsx                   # Router、QueryClient、全局 provider 组合
+├── app.tsx                   # QueryClient、全局 provider 组合
+├── routers/
+│   └── index.tsx             # BrowserRouter、Routes 与页面懒加载
 ├── api/
 │   ├── generated/            # Orval 输出：禁止手改
 │   ├── query-keys.ts         # §1.2 的稳定 key 工厂
 │   └── client.ts             # token 注入、统一错误映射
-├── routes/
+├── pages/
 │   ├── home.tsx              # project 列表 + 最近会话
-│   ├── project.tsx           # 某 project 的会话列表
+│   ├── project/              # 某 project 的会话列表与创建表单
 │   ├── conversation.tsx      # 主战场，两种模式共用
-│   └── settings.tsx
-├── project/
-│   ├── use-projects.ts       # CRUD + runnerState 轮询
+│   └── settings/             # 设置页、模型配置与 Runner 管理
+├── pages/project/
+│   ├── use-projects.ts       # CRUD；Runner 状态由事件刷新
 │   ├── new-conversation.tsx  # §7.1 的模式选择
 │   └── schemas.ts            # Zod schema；由 RHF 表单复用
 ├── conversation/

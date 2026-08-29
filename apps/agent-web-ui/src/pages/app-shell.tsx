@@ -1,11 +1,11 @@
-import { FolderKanban, LayoutDashboard, LogOut, Menu, MessageCircle, Plus, Settings, Sparkles, X } from "lucide-react";
+import { LayoutDashboard, LogOut, Menu, MessageCircle, Plus, Settings, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/provider.js";
-import { useConversations, useProjects } from "../project/use-projects.js";
-import { RunnerLiveUpdates } from "../runner/live-updates.js";
-import { useQuickConversationCreate } from "../project/new-conversation.js";
-import { NewProjectDrawer } from "../project/new-project.js";
+import { useConversationListMutations, useConversations, useProjects } from "./project/use-projects.js";
+import { RunnerLiveUpdates } from "./settings/runner/live-updates.js";
+import { useQuickConversationCreate } from "./project/new-conversation.js";
+import { NewProjectDrawer } from "./project/new-project.js";
 import { errorMessage } from "../api/client.js";
 
 export function AppShell() {
@@ -18,6 +18,7 @@ export function AppShell() {
   const conversations = useConversations();
   const location = useLocation();
   const createChat = useQuickConversationCreate();
+  const conversationMutations = useConversationListMutations();
 
   function openCreator(kind: "chat" | "project") {
     setMobileOpen(false);
@@ -71,6 +72,10 @@ export function AppShell() {
           onNewProject={() => openCreator("project")}
           onNewChat={() => openCreator("chat")}
           onNewProjectChat={(project) => createChat.mutate(project)}
+          onDeleteConversation={(conversation) => {
+            if (window.confirm(`删除“${conversation.title || "未命名会话"}”？此操作无法撤销。`))
+              conversationMutations.remove.mutate(conversation.id);
+          }}
           onLogout={auth.logout}
         />
       </aside>
@@ -104,6 +109,10 @@ export function AppShell() {
               setMobileOpen(false);
               createChat.mutate(project);
             }}
+            onDeleteConversation={(conversation) => {
+              if (window.confirm(`删除“${conversation.title || "未命名会话"}”？此操作无法撤销。`))
+                conversationMutations.remove.mutate(conversation.id);
+            }}
             onNavigate={() => setMobileOpen(false)}
             onLogout={auth.logout}
           />
@@ -131,20 +140,22 @@ function SidebarContent({
   onNewProject,
   onNewChat,
   onNewProjectChat,
+  onDeleteConversation,
   onNavigate,
   onLogout,
 }: {
-  projects: { id: string; name: string; runnerId: string | null; runnerState: string }[];
+  projects: { id: string; name: string; workspace: string | null; runnerId: string | null; runnerState: string }[];
   conversations: { id: string; title: string; projectId: string | null }[];
   onNewProject: () => void;
   onNewChat: () => void;
   onNewProjectChat: (project: { id: string; runnerId: string | null }) => void;
+  onDeleteConversation: (conversation: { id: string; title: string }) => void;
   onNavigate?: () => void;
   onLogout: () => void;
 }) {
   return (
     <>
-      <div className="flex h-16 items-center gap-3 border-b border-slate-100 px-5">
+      <Link to="/" onClick={onNavigate} className="flex h-16 items-center gap-3 border-b border-slate-100 px-5">
         <span className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white shadow-sm">
           <Sparkles className="size-5" aria-hidden="true" />
         </span>
@@ -152,7 +163,7 @@ function SidebarContent({
           <strong className="block text-sm tracking-tight text-slate-950">Nova</strong>
           <span className="block text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Coding Agent</span>
         </div>
-      </div>
+      </Link>
       <nav className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-3 py-5" aria-label="主导航">
         <div className="space-y-1">
           <NavItem
@@ -184,17 +195,37 @@ function SidebarContent({
           <div className="space-y-1">
             {projects.slice(0, 12).map((project) => (
               <div key={project.id} className="group relative">
-                <NavItem
-                  to={`/p/${project.id}`}
-                  icon={
-                    <span
-                      className={`size-2 rounded-full ${runnerDot(project.runnerState)}`}
-                      aria-label={`Runner ${project.runnerState}`}
-                    />
-                  }
-                  label={project.name}
-                  onClick={onNavigate}
-                />
+                <div>
+                  <NavItem
+                    to={`/p/${project.id}`}
+                    icon={
+                      <span
+                        className={`size-2 rounded-full ${runnerDot(project.runnerState)}`}
+                        aria-label={`Runner ${project.runnerState}`}
+                      />
+                    }
+                    label={project.name}
+                    onClick={onNavigate}
+                  />
+                </div>
+                <div className="pointer-events-none absolute left-full top-1 z-50 ml-2 hidden w-64 rounded-xl bg-slate-900 p-3 text-xs text-white shadow-xl group-hover:block">
+                  <p className="font-semibold">{project.name}</p>
+                  <p className="mt-1 break-all text-slate-300">{project.workspace ?? "尚未绑定 workspace"}</p>
+                </div>
+                <div className="space-y-1 pl-3">
+                  {conversations
+                    .filter((conversation) => conversation.projectId === project.id)
+                    .slice(0, 12)
+                    .map((conversation) => (
+                      <ConversationNavItem
+                        key={conversation.id}
+                        conversation={conversation}
+                        to={`/p/${project.id}/c/${conversation.id}`}
+                        onClick={onNavigate}
+                        onDelete={onDeleteConversation}
+                      />
+                    ))}
+                </div>
                 <button
                   type="button"
                   className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-slate-400 opacity-0 transition hover:bg-white hover:text-indigo-600 group-hover:opacity-100 group-focus-within:opacity-100"
@@ -225,29 +256,18 @@ function SidebarContent({
             </button>
           </div>
           <div className="space-y-1">
-            {conversations.slice(0, 20).map((conversation) => {
-              const project = projects.find((item) => item.id === conversation.projectId);
-              const projectConversation = Boolean(project);
-              return (
-                <NavItem
+            {conversations
+              .filter((conversation) => !conversation.projectId)
+              .slice(0, 20)
+              .map((conversation) => (
+                <ConversationNavItem
                   key={conversation.id}
-                  to={
-                    conversation.projectId
-                      ? `/p/${conversation.projectId}/c/${conversation.id}`
-                      : `/c/${conversation.id}`
-                  }
-                  icon={
-                    projectConversation ? (
-                      <FolderKanban className="size-4" aria-hidden="true" />
-                    ) : (
-                      <MessageCircle className="size-4" aria-hidden="true" />
-                    )
-                  }
-                  label={`${project?.name ?? "独立 Chat"} · ${conversation.title || "未命名会话"}`}
+                  conversation={conversation}
+                  to={`/c/${conversation.id}`}
                   onClick={onNavigate}
+                  onDelete={onDeleteConversation}
                 />
-              );
-            })}
+              ))}
             {!conversations.length && (
               <p className="px-3 py-2 text-xs leading-5 text-slate-400">最近会话会显示在这里。</p>
             )}
@@ -265,6 +285,37 @@ function SidebarContent({
         </button>
       </div>
     </>
+  );
+}
+
+function ConversationNavItem({
+  conversation,
+  to,
+  onClick,
+  onDelete,
+}: {
+  conversation: { id: string; title: string };
+  to: string;
+  onClick?: (() => void) | undefined;
+  onDelete: (conversation: { id: string; title: string }) => void;
+}) {
+  return (
+    <div className="group relative">
+      <NavItem
+        to={to}
+        icon={<MessageCircle className="size-4" aria-hidden="true" />}
+        label={conversation.title || "未命名会话"}
+        onClick={onClick}
+      />
+      <button
+        type="button"
+        className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-slate-400 opacity-0 hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
+        aria-label={`删除 ${conversation.title || "未命名会话"}`}
+        onClick={() => onDelete(conversation)}
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </div>
   );
 }
 

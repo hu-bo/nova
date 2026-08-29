@@ -4,25 +4,20 @@ import { ArrowRight, Folder, FolderKanban, MessageCircle, Pencil, Plus, Server, 
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { errorMessage } from "../api/client.js";
-import { Button } from "../components/ui/button.js";
-import { Card } from "../components/ui/card.js";
-import { Dialog } from "../components/ui/dialog.js";
-import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
-import { FieldLabel, Input } from "../components/ui/form.js";
-import { useQuickConversationCreate } from "../project/new-conversation.js";
-import {
-  bindWorkspaceSchema,
-  renameProjectSchema,
-  type BindWorkspaceForm,
-  type RenameProjectForm,
-} from "../project/schemas.js";
-import { useConversations, useProject, useProjectMutations } from "../project/use-projects.js";
-import { RunnerBadge } from "./home.js";
-import { RunnerManagerDialog } from "../runner/runner-manager-dialog.js";
-import { RunnerSelect } from "../runner/runner-select.js";
-import { useRunnerDirectoryLoader } from "../runner/use-runners.js";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table.js";
+import { errorMessage } from "../../api/client.js";
+import { Button } from "../../components/ui/button.js";
+import { Card } from "../../components/ui/card.js";
+import { Dialog } from "../../components/ui/dialog.js";
+import { EmptyState, ErrorState, LoadingState } from "../../components/ui/feedback.js";
+import { FieldLabel, Input } from "../../components/ui/form.js";
+import { useQuickConversationCreate } from "./new-conversation.js";
+import { bindWorkspaceSchema, renameProjectSchema, type BindWorkspaceForm, type RenameProjectForm } from "./schemas.js";
+import { useConversations, useProject, useProjectMutations } from "./use-projects.js";
+import { RunnerBadge } from "../home.js";
+import { RunnerManagerDialog } from "../settings/runner/runner-manager-dialog.js";
+import { RunnerSelect } from "../settings/runner/runner-select.js";
+import { useRunnerDirectoryLoader } from "../settings/runner/use-runners.js";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table.js";
 
 export function ProjectRoute() {
   const { projectId } = useParams();

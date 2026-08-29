@@ -19,8 +19,8 @@ import { Link } from "react-router-dom";
 import type { RunnerToken } from "@nova/protocol";
 import { useAuth } from "../auth/provider.js";
 import { Button } from "../components/ui/button.js";
-import { installCommand, runnerCommand } from "../runner/commands.js";
-import { useRunnerConnection, useRunnerTokens } from "../runner/use-runners.js";
+import { installCommand, runnerCommand } from "./settings/runner/commands.js";
+import { useRunnerConnection, useRunnerTokens } from "./settings/runner/use-runners.js";
 
 export function LandingRoute() {
   const auth = useAuth();
@@ -117,7 +117,10 @@ export function LandingRoute() {
               <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
                 <span className="select-none text-indigo-400">$</span>
                 <div className="min-w-0 flex-1 space-y-2 text-sm text-slate-200">
-                  <code className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap" title={installCommand}>
+                  <code
+                    className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap"
+                    title={installCommand}
+                  >
                     {installCommand}
                   </code>
                   <code

@@ -2,8 +2,8 @@ import type { Runner } from "@nova/protocol";
 import type { RemoteExplorerListing } from "@nova/chat-ui";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { queryKeys } from "../api/query-keys.js";
-import { useAuth } from "../auth/provider.js";
+import { queryKeys } from "../../../api/query-keys.js";
+import { useAuth } from "../../../auth/provider.js";
 
 export function useRunnerCatalog(enabled = true) {
   const { api } = useAuth();

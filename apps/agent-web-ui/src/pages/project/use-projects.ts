@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../auth/provider.js";
-import { queryKeys } from "../api/query-keys.js";
+import { useAuth } from "../../auth/provider.js";
+import { queryKeys } from "../../api/query-keys.js";
 
 export function useProjects() {
   const { api } = useAuth();
@@ -9,7 +9,6 @@ export function useProjects() {
     queryFn: () => api!.listProjects(),
     enabled: Boolean(api),
     staleTime: 10_000,
-    refetchInterval: 15_000,
   });
 }
 
@@ -29,6 +28,17 @@ export function useConversations(projectId?: string) {
     enabled: Boolean(api),
     staleTime: 5_000,
   });
+}
+
+export function useConversationListMutations() {
+  const { api } = useAuth();
+  const queryClient = useQueryClient();
+  return {
+    remove: useMutation({
+      mutationFn: (id: string) => api!.deleteConversation(id),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists }),
+    }),
+  };
 }
 
 export function useProjectMutations() {

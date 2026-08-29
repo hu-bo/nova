@@ -1,4 +1,4 @@
-import { Select } from "../components/ui/form.js";
+import { Select } from "../../../components/ui/form.js";
 import { useRunnerCatalog } from "./use-runners.js";
 
 export function RunnerSelect({

@@ -5,14 +5,14 @@ import { Folder, FolderKanban, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import { errorMessage } from "../api/client.js";
-import { queryKeys } from "../api/query-keys.js";
-import { useAuth } from "../auth/provider.js";
-import { Button } from "../components/ui/button.js";
-import { Dialog } from "../components/ui/dialog.js";
-import { FieldLabel, Input } from "../components/ui/form.js";
-import { RunnerSelect } from "../runner/runner-select.js";
-import { useRunnerDirectoryLoader } from "../runner/use-runners.js";
+import { errorMessage } from "../../api/client.js";
+import { queryKeys } from "../../api/query-keys.js";
+import { useAuth } from "../../auth/provider.js";
+import { Button } from "../../components/ui/button.js";
+import { Dialog } from "../../components/ui/dialog.js";
+import { FieldLabel, Input } from "../../components/ui/form.js";
+import { RunnerSelect } from "../settings/runner/runner-select.js";
+import { useRunnerDirectoryLoader } from "../settings/runner/use-runners.js";
 import { newProjectSchema, type NewProjectForm } from "./schemas.js";
 
 export function NewProjectDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
