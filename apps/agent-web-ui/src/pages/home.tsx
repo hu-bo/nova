@@ -1,16 +1,21 @@
-import { Activity, ArrowRight, FolderKanban, MessageCircle, Plus, Server, WifiOff } from "lucide-react";
+import { Activity, ArrowRight, Check, FolderKanban, MessageCircle, Plus, Server } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { useQuickConversationCreate } from "./project/new-conversation.js";
+import { NewProjectDrawer } from "./project/new-project.js";
 import { useConversations, useProjects } from "./project/use-projects.js";
+import { useRunnerCatalog } from "./settings/runner/use-runners.js";
 
 export function HomeRoute() {
   const createConversation = useQuickConversationCreate();
   const projects = useProjects();
   const conversations = useConversations();
+  const runners = useRunnerCatalog();
+  const [projectCreatorOpen, setProjectCreatorOpen] = useState(false);
 
   if (projects.isLoading || conversations.isLoading)
     return (
@@ -34,9 +39,8 @@ export function HomeRoute() {
   const projectItems = projects.data ?? [];
   const conversationItems = conversations.data?.items ?? [];
   const createError = createConversation.error;
-  const online = projectItems.filter(
-    (project) => project.runnerState === "ready" || project.runnerState === "busy",
-  ).length;
+  const online = runners.runners.filter((runner) => runner.state === "ready" || runner.state === "busy").length;
+  const recentConversations = conversationItems.slice(0, 5);
 
   return (
     <div className="mx-auto max-w-[1500px] p-5 sm:p-6 lg:p-8">
@@ -81,9 +85,47 @@ export function HomeRoute() {
         <MetricCard
           icon={<Server className="size-5" aria-hidden="true" />}
           label="Runner 就绪"
-          value={`${online}/${projectItems.length}`}
+          value={`${online}/${runners.runners.length}`}
           meta={online ? "可以开始执行" : "需要连接设备"}
+          to="/settings/runners"
         />
+      </section>
+
+      <section className="mt-8 rounded-xl bg-white p-5 ring-1 ring-slate-200" aria-labelledby="getting-started-title">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <h2 id="getting-started-title" className="font-semibold text-slate-900">
+              快速开始
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">按这三步建立可执行的 coding 会话。</p>
+          </div>
+          <Link to="/settings/runners" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">
+            管理 Runner <ArrowRight className="inline size-3.5" />
+          </Link>
+        </div>
+        <ol className="mt-5 grid gap-3 md:grid-cols-3">
+          <StartStep
+            completed={runners.runners.length > 0}
+            number="1"
+            title="连接 Runner"
+            description="让 Nova 连接你的设备。"
+            to="/settings/runners"
+          />
+          <StartStep
+            completed={projectItems.length > 0}
+            number="2"
+            title="创建 Project"
+            description="为 workspace 固定执行边界。"
+            onClick={() => setProjectCreatorOpen(true)}
+          />
+          <StartStep
+            completed={conversationItems.length > 0}
+            number="3"
+            title="开始会话"
+            description="让 Agent 开始协作。"
+            onClick={() => createConversation.mutate(undefined)}
+          />
+        </ol>
       </section>
 
       <div className="mt-8 grid min-w-0 gap-8 xl:grid-cols-[1.2fr_0.8fr]">
@@ -124,11 +166,11 @@ export function HomeRoute() {
               action={
                 <Button
                   variant="primary"
-                  disabled={createConversation.isPending}
+                  disabled={projectCreatorOpen}
                   icon={<Plus className="size-4" />}
-                  onClick={() => createConversation.mutate(undefined)}
+                  onClick={() => setProjectCreatorOpen(true)}
                 >
-                  {createConversation.isPending ? "正在创建…" : "新建并开始"}
+                  新建 Project
                 </Button>
               }
             />
@@ -143,7 +185,7 @@ export function HomeRoute() {
           {conversationItems.length ? (
             <Card className="overflow-hidden">
               <div className="divide-y divide-slate-100">
-                {conversationItems.slice(0, 8).map((conversation) => {
+                {recentConversations.map((conversation) => {
                   const project = projectItems.find((item) => item.id === conversation.projectId);
                   return (
                     <Link
@@ -181,6 +223,10 @@ export function HomeRoute() {
           )}
         </section>
       </div>
+      <footer className="mt-10 border-t border-slate-200 pt-5 text-xs text-slate-400">
+        Nova Coding Agent · 连接你的设备，在明确的 workspace 边界内协作。
+      </footer>
+      <NewProjectDrawer open={projectCreatorOpen} onClose={() => setProjectCreatorOpen(false)} />
     </div>
   );
 }
@@ -190,13 +236,15 @@ function MetricCard({
   label,
   value,
   meta,
+  to,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
   meta: string;
+  to?: string;
 }) {
-  return (
+  const content = (
     <Card className="p-5">
       <div className="flex items-start justify-between">
         <div>
@@ -207,6 +255,58 @@ function MetricCard({
         <span className="grid size-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600">{icon}</span>
       </div>
     </Card>
+  );
+  return to ? (
+    <Link to={to} className="rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      {content}
+    </Link>
+  ) : (
+    content
+  );
+}
+
+function StartStep({
+  completed,
+  number,
+  title,
+  description,
+  to,
+  onClick,
+}: {
+  completed: boolean;
+  number: string;
+  title: string;
+  description: string;
+  to?: string;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <span
+        className={`grid size-7 place-items-center rounded-full text-xs font-bold ${completed ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"}`}
+      >
+        {completed ? <Check className="size-4" /> : number}
+      </span>
+      <span>
+        <strong className="block text-sm text-slate-800">{title}</strong>
+        <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+      </span>
+    </>
+  );
+  const className =
+    "flex items-center gap-3 rounded-xl bg-slate-50 p-3 text-left ring-1 ring-slate-100 transition hover:bg-indigo-50";
+  return (
+    <li>
+      {to ? (
+        <Link to={to} className={className}>
+          {content}
+        </Link>
+      ) : (
+        <button type="button" className={`w-full ${className}`} onClick={onClick}>
+          {content}
+        </button>
+      )}
+    </li>
   );
 }
 
