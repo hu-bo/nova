@@ -216,7 +216,7 @@ function ConversationView({
         <div
           className={`grid min-h-0 flex-1 overflow-hidden  bg-white ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}
         >
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white max-w-[950px] mx-auto ">
+          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white mx-auto ">
             <div className="relative min-h-0 flex-1 overflow-hidden px-3 py-3 sm:px-5">
               {store.state.messages.length ? (
                 <MessageList messages={store.state.messages} onRetry={(messageId) => void mutations.retry(messageId)} />
