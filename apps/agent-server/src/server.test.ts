@@ -177,6 +177,9 @@ it("runs the authenticated project and conversation flow with ownership isolatio
       async compact() {
         return { trigger: "manual", summarized: true, replacedFrom: "entry-1", replacedTo: "entry-2" };
       },
+      async clear() {
+        return { inputTokens: 32_000, contextWindow: 128_000 };
+      },
       invalidate() {},
     },
   });
@@ -385,6 +388,14 @@ it("runs the authenticated project and conversation flow with ownership isolatio
     context: { inputTokens: 32_000, contextWindow: 128_000 },
   });
 
+  const cleared = await app.inject({
+    method: "POST",
+    url: `/api/conversations/${conversationId}/clear`,
+    headers: { authorization: "Bearer alice-token" },
+  });
+  expect(cleared.statusCode).toBe(200);
+  expect(cleared.json()).toEqual({ context: { inputTokens: 32_000, contextWindow: 128_000 } });
+
   const origin = await app.listen({ host: "127.0.0.1", port: 0 });
   const eventController = new AbortController();
   const eventResponse = await fetch(`${origin}/api/conversations/${conversationId}/events`, {
@@ -464,6 +475,7 @@ it("runs the authenticated project and conversation flow with ownership isolatio
   expect(openapi.json().paths["/api/me"].get.operationId).toBe("getCurrentUser");
   expect(openapi.json().paths["/api/conversations/{id}/messages"].post.operationId).toBe("sendMessage");
   expect(openapi.json().paths["/api/conversations/{id}/compact"].post.operationId).toBe("compactConversation");
+  expect(openapi.json().paths["/api/conversations/{id}/clear"].post.operationId).toBe("clearConversationContext");
   expect(openapi.json().paths["/api/conversations/{id}/events"].get.security).toBeUndefined();
   expect(openapi.json().paths["/admin/model-config/providers"].get.operationId).toBe("listProviders");
 });

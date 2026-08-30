@@ -29,7 +29,7 @@ export function ComposerSkillMenu({
       id={listId}
       role="listbox"
       aria-label="可用技能"
-      className="absolute bottom-[calc(100%+0.5rem)] left-0 right-0 z-30 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-xl shadow-slate-950/10 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+      className="nova-scrollbar absolute bottom-[calc(100%+0.5rem)] left-0 right-0 z-30 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-xl shadow-slate-950/10 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
     >
       {skills.map((skill) => {
         const isSelected = skill === selected;

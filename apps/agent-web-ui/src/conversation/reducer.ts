@@ -44,16 +44,18 @@ export const initialConversationState: ConversationState = {
 
 export function conversationReducer(state: ConversationState, action: ConversationAction): ConversationState {
   switch (action.type) {
-    case "hydrate":
+    case "hydrate": {
+      const messages = mergeHydratedMessages(action.messages, state.messages);
       return {
         ...state,
-        messages: action.messages,
-        todos: latestTodos(action.messages),
+        messages,
+        todos: latestTodos(messages),
         pendingDecision: null,
-        isRunning: action.messages.some((message) => message.status === "streaming"),
+        isRunning: messages.some((message) => message.status === "streaming"),
         queueReady: false,
         error: null,
       };
+    }
     case "connection":
       return { ...state, connection: action.connection };
     case "context.set":
@@ -105,6 +107,16 @@ export function conversationReducer(state: ConversationState, action: Conversati
     case "event":
       return reduceEvent(state, action.event, action.conversationId);
   }
+}
+
+function mergeHydratedMessages(snapshot: ChatMessage[], current: ChatMessage[]): ChatMessage[] {
+  const currentById = new Map(current.map((message) => [message.id, message]));
+  const hydrated = snapshot.map((message) => {
+    const existing = currentById.get(message.id);
+    return existing?.status === "streaming" ? existing : message;
+  });
+  const hydratedIds = new Set(snapshot.map((message) => message.id));
+  return [...hydrated, ...current.filter((message) => !hydratedIds.has(message.id))];
 }
 
 function reduceEvent(state: ConversationState, event: UiEvent, conversationId: string): ConversationState {

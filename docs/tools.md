@@ -64,7 +64,7 @@ packages/tools
 | risk | 工具 | Chat 模式 | Project 模式 |
 |---|---|---|---|
 | `none` | `todo_write` | ✅ | ✅ |
-| `read` | `read_file` `grep` `list_dir` `git_diff` | ❌ | ✅ |
+| `read` | `read_file` `read_document` `grep` `list_dir` `git_diff` | ❌ | ✅ |
 | `write` | `write_file` `edit_file` | ❌ | ✅ |
 | `exec` | `bash` | ❌ | ✅ |
 
@@ -79,6 +79,19 @@ content: 带行号的文本；截断时标注 "... N lines omitted"
 details: { path, totalLines, offset, limit, truncated }
 risk:    "read"
 ```
+
+仅接受 UTF-8 文本。二进制文件（包括 PDF、Office 文档）返回 `BINARY_FILE`，调用方必须改用 `read_document`，不得把原始字节解码后返回给模型。
+
+### `read_document`
+
+```ts
+args:    { path: string }
+content: PDF / DOCX / XLSX / XLS / CSV 提取出的文本；Excel 以 Sheet 名分段
+details: { path, size, truncated }
+risk:    "read"
+```
+
+通过 `ToolContext.fs.readBytes` 读取受 Runner 路径约束的字节并解析；最大文件大小为 20 MB。
 
 ### `write_file`
 

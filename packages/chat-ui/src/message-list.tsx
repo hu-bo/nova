@@ -124,7 +124,7 @@ export function MessageList({ messages, renderers, onRetry, onOpenPath }: Messag
     <div
       ref={containerRef}
       onScroll={trackScroll}
-      className="nova-message-list flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-contain px-1 pb-2 [scrollbar-gutter:stable]"
+      className="nova-message-list nova-scrollbar flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-contain px-1 pb-2 [scrollbar-gutter:stable]"
       aria-live="polite"
     >
       {messages.map((message) => (

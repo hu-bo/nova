@@ -10,6 +10,7 @@ import { Card } from "../../components/ui/card.js";
 import { Dialog } from "../../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui/feedback.js";
 import { FieldLabel, Input } from "../../components/ui/form.js";
+import { displayWorkspacePath } from "../../lib/workspace-path.js";
 import { useQuickConversationCreate } from "./new-conversation.js";
 import { bindWorkspaceSchema, renameProjectSchema, type BindWorkspaceForm, type RenameProjectForm } from "./schemas.js";
 import { useConversations, useProject, useProjectMutations } from "./use-projects.js";
@@ -112,8 +113,11 @@ export function ProjectRoute() {
             </span>
             <div className="min-w-0">
               <h1 className="truncate text-2xl font-semibold tracking-tight text-slate-950">{project.name}</h1>
-              <p className="mt-1 max-w-3xl truncate text-sm text-slate-500" title={project.workspace ?? undefined}>
-                {project.workspace ?? "尚未绑定 workspace"}
+              <p
+                className="mt-1 max-w-3xl truncate text-sm text-slate-500"
+                title={project.workspace ? displayWorkspacePath(project.workspace) : undefined}
+              >
+                {project.workspace ? displayWorkspacePath(project.workspace) : "尚未绑定 workspace"}
               </p>
             </div>
             <RunnerBadge state={project.runnerState} />
@@ -163,27 +167,6 @@ export function ProjectRoute() {
           </div>
         </section>
       )}
-
-      <section className="mt-8 grid gap-4 sm:grid-cols-3" aria-label="Project 概览">
-        <Card className="p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Conversations</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-950">{conversationItems.length}</p>
-          <p className="mt-2 text-xs text-slate-500">共享同一个 Project 上下文</p>
-        </Card>
-        <Card className="p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Runner</p>
-          <p className="mt-2 truncate text-lg font-semibold text-slate-950">{project.runnerId ?? "未绑定"}</p>
-          <p className="mt-2 text-xs text-slate-500">设备级资源归属</p>
-        </Card>
-        <Card className="p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Workspace</p>
-          <p className="mt-2 truncate text-lg font-semibold text-slate-950" title={project.workspace ?? undefined}>
-            {project.workspace ?? "待选择"}
-          </p>
-          <p className="mt-2 text-xs text-slate-500">消息创建后不可切换模式</p>
-        </Card>
-      </section>
-
       <section className="mt-8">
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-slate-900">会话</h2>
@@ -329,7 +312,11 @@ export function ProjectRoute() {
               onClick={() => setWorkspaceOpen(true)}
             >
               <span className="truncate">
-                {bindWorkspace || (bindRunnerId ? "选择 workspace…" : "请先选择 Runner")}
+                {bindWorkspace
+                  ? displayWorkspacePath(bindWorkspace)
+                  : bindRunnerId
+                    ? "选择 workspace…"
+                    : "请先选择 Runner"}
               </span>
             </Button>
           </FieldLabel>

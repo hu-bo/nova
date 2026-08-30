@@ -11,6 +11,7 @@ import { useAuth } from "../../auth/provider.js";
 import { Button } from "../../components/ui/button.js";
 import { Dialog } from "../../components/ui/dialog.js";
 import { FieldLabel, Input } from "../../components/ui/form.js";
+import { displayWorkspacePath } from "../../lib/workspace-path.js";
 import { RunnerSelect } from "../settings/runner/runner-select.js";
 import { useRunnerDirectoryLoader } from "../settings/runner/use-runners.js";
 import { newProjectSchema, type NewProjectForm } from "./schemas.js";
@@ -77,7 +78,9 @@ export function NewProjectDrawer({ open, onClose }: { open: boolean; onClose: ()
               icon={<Folder className="size-4" aria-hidden="true" />}
               onClick={() => setWorkspaceOpen(true)}
             >
-              <span className="truncate">{workspace || (runnerId ? "选择 workspace…" : "请先选择 Runner")}</span>
+              <span className="truncate">
+                {workspace ? displayWorkspacePath(workspace) : runnerId ? "选择 workspace…" : "请先选择 Runner"}
+              </span>
             </Button>
           </FieldLabel>
           {create.error && (

@@ -31,12 +31,14 @@ export function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <ModelSettingsProvider>
-          <AppRouter />
-        </ModelSettingsProvider>
-      </QueryClientProvider>
-    </AuthProvider>
+    <div className="agent-web-ui">
+      <AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <ModelSettingsProvider>
+            <AppRouter />
+          </ModelSettingsProvider>
+        </QueryClientProvider>
+      </AuthProvider>
+    </div>
   );
 }

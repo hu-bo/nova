@@ -24,8 +24,9 @@ import { Button } from "../components/ui/button.js";
 import { Dialog } from "../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { useConversationMutations, type RunnerAttachmentMetadata } from "../conversation/mutations.js";
-import { ConversationProvider, useConversationStore } from "../conversation/store.js";
+import { useConversationSession, useConversationStore } from "../conversation/store.js";
 import { LocalStore } from "../lib/storage.js";
+import { displayWorkspacePath } from "../lib/workspace-path.js";
 import { useModelSettings } from "./settings/model/provider.js";
 import { useConversations, useProject } from "./project/use-projects.js";
 import { RunnerBadge } from "./home.js";
@@ -65,11 +66,7 @@ export function ConversationRoute() {
       </div>
     );
 
-  return (
-    <ConversationProvider key={conversationId} conversationId={conversationId}>
-      <ConversationView conversation={conversation} project={projectQuery.project} />
-    </ConversationProvider>
-  );
+  return <ConversationView key={conversationId} conversation={conversation} project={projectQuery.project} />;
 }
 
 function ConversationView({
@@ -91,9 +88,11 @@ function ConversationView({
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [compactNotice, setCompactNotice] = useState<string | null>(null);
+  const [clearNotice, setClearNotice] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<ComposerAttachment<RunnerAttachmentMetadata>[]>([]);
-  const store = useConversationStore();
-  const mutations = useConversationMutations(conversation.id, modelProfileId);
+  const session = useConversationSession(conversation.id);
+  const store = useConversationStore(conversation.id);
+  const mutations = useConversationMutations(conversation.id, modelProfileId, session.ensureStreamConnected);
   const runnerId = conversation.runnerId ?? project?.runnerId ?? "";
   const loadDirectory = useRunnerDirectoryLoader(runnerId);
   const selectedRunnerAttachmentPaths = useMemo(
@@ -117,8 +116,14 @@ function ConversationView({
         label: "压缩上下文",
         disabled: store.state.isRunning || mutations.compactMutation.isPending,
       },
+      {
+        id: "clear",
+        command: "clear",
+        label: "清除上下文",
+        disabled: store.state.isRunning || mutations.clearMutation.isPending,
+      },
     ],
-    [mutations.compactMutation.isPending, store.state.isRunning],
+    [mutations.clearMutation.isPending, mutations.compactMutation.isPending, store.state.isRunning],
   );
 
   const modelOptions = useMemo(
@@ -130,16 +135,16 @@ function ConversationView({
     [models.profiles],
   );
 
-  if (store.isLoading)
+  if (session.isLoading)
     return (
       <div className="p-6">
         <LoadingState label="正在同步历史消息" />
       </div>
     );
-  if (store.historyError)
+  if (session.historyError)
     return (
       <div className="p-6">
-        <ErrorState message={errorMessage(store.historyError)} onRetry={store.retryHistory} />
+        <ErrorState message={errorMessage(session.historyError)} onRetry={session.retryHistory} />
       </div>
     );
 
@@ -152,7 +157,7 @@ function ConversationView({
   }
 
   return (
-    <div className="nova-conversation-viewport flex min-h-0 overflow-hidden bg-slate-50">
+    <div className="nova-chat nova-conversation-viewport flex min-h-0 overflow-hidden bg-slate-50">
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex min-h-14 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-5">
           <Link
@@ -196,7 +201,7 @@ function ConversationView({
         <div
           className={`grid min-h-0 flex-1 overflow-hidden ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}
         >
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
             <div className="relative min-h-0 flex-1 overflow-hidden px-3 py-3 sm:px-5">
               {store.state.messages.length ? (
                 <MessageList messages={store.state.messages} onRetry={(messageId) => void mutations.retry(messageId)} />
@@ -207,7 +212,7 @@ function ConversationView({
                     title={project ? "告诉 Agent 想完成的目标" : "从一个问题开始"}
                     description={
                       project
-                        ? `Agent 将在 ${project.workspace ?? "当前 workspace"} 中工作，过程会实时显示在这里。`
+                        ? `Agent 将在 ${project.workspace ? displayWorkspacePath(project.workspace) : "当前 workspace"} 中工作，过程会实时显示在这里。`
                         : "可以讨论方案、分析代码或制定多步计划。"
                     }
                   />
@@ -215,7 +220,7 @@ function ConversationView({
               )}
             </div>
 
-            <div className="min-w-0 shrink-0 overflow-visible border-t border-slate-200 bg-white px-3 pb-2 pt-2 sm:px-4">
+            <div className="min-w-0 shrink-0 overflow-visible  border-slate-200 bg-white px-3 pb-2 pt-2 sm:px-4">
               {incompleteTodos > 0 && (
                 <div className="mb-2 xl:hidden">
                   <TodoPanel items={store.state.todos} collapsed />
@@ -260,6 +265,14 @@ function ConversationView({
                   压缩失败：{errorMessage(mutations.compactMutation.error)}
                 </div>
               )}
+              {mutations.clearMutation.error && (
+                <div
+                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
+                  role="alert"
+                >
+                  清除上下文失败：{errorMessage(mutations.clearMutation.error)}
+                </div>
+              )}
               {compactNotice && (
                 <div
                   className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm text-indigo-800 ring-1 ring-indigo-200"
@@ -267,6 +280,17 @@ function ConversationView({
                 >
                   <span>{compactNotice}</span>
                   <button type="button" className="font-semibold" onClick={() => setCompactNotice(null)}>
+                    关闭
+                  </button>
+                </div>
+              )}
+              {clearNotice && (
+                <div
+                  className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm text-indigo-800 ring-1 ring-indigo-200"
+                  role="status"
+                >
+                  <span>{clearNotice}</span>
+                  <button type="button" className="font-semibold" onClick={() => setClearNotice(null)}>
                     关闭
                   </button>
                 </div>
@@ -325,7 +349,7 @@ function ConversationView({
               )}
               {store.state.queuedMessages.length > 0 && (
                 <div className="relative z-0 mx-4 -mb-3 overflow-hidden rounded-t-2xl border border-b-0 border-slate-200 bg-white pb-3 shadow-sm sm:mx-5">
-                  <div className="max-h-44 overflow-x-hidden overflow-y-auto overscroll-contain">
+                  <div className="agent-scrollbar max-h-44 overflow-x-hidden overflow-y-auto overscroll-contain">
                     {store.state.queuedMessages.map((queued) => {
                       const { message } = queued;
                       const text = message.blocks.find((block) => block.type === "text")?.text ?? "待处理消息";
@@ -365,7 +389,9 @@ function ConversationView({
               )}
               <div className="relative z-10">
                 <Composer
-                  disabled={mutations.sendMutation.isPending || mutations.compactMutation.isPending}
+                  disabled={
+                    mutations.sendMutation.isPending || mutations.compactMutation.isPending || mutations.clearMutation.isPending
+                  }
                   isRunning={store.state.isRunning}
                   isAborting={mutations.abortMutation.isPending}
                   onAbort={() => mutations.abort()}
@@ -388,12 +414,19 @@ function ConversationView({
                   skills={composerSkills}
                   contextUsage={contextUsage}
                   onSkillInvoke={async (skill) => {
-                    if (skill.id !== "compact") return;
-                    setCompactNotice(null);
-                    const result = await mutations.compact();
-                    setCompactNotice(
-                      result.compacted ? "上下文已压缩，占用将在下一次模型请求后更新。" : "当前没有可压缩的上下文。",
-                    );
+                    if (skill.id === "compact") {
+                      setCompactNotice(null);
+                      const result = await mutations.compact();
+                      setCompactNotice(
+                        result.compacted ? "上下文已压缩，占用将在下一次模型请求后更新。" : "当前没有可压缩的上下文。",
+                      );
+                      return;
+                    }
+                    if (skill.id === "clear") {
+                      setClearNotice(null);
+                      await mutations.clear();
+                      setClearNotice("上下文已清除；历史消息仍保留在当前会话中。");
+                    }
                   }}
                   onModelChange={(id) => {
                     SELECTED_MODEL_STORE.set(id);
@@ -406,7 +439,7 @@ function ConversationView({
           </div>
 
           {incompleteTodos > 0 && (
-            <aside className="hidden min-h-0 overflow-x-hidden overflow-y-auto border-l border-slate-200 bg-white p-3 xl:block">
+            <aside className="agent-scrollbar hidden min-h-0 overflow-x-hidden overflow-y-auto border-l border-slate-200 bg-white p-3 xl:block">
               <div className="sticky top-3">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">当前计划</p>
                 <TodoPanel items={store.state.todos} />

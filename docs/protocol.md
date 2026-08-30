@@ -13,12 +13,12 @@
 
 **硬约束**
 
-| 约束 | 检验方式 |
-|---|---|
-| 零运行时依赖（schema 校验库除外） | `package.json` 的 `dependencies` 只允许 `zod` |
-| 浏览器可直接 import | 无 `node:` import |
-| 不 re-export `proto/` 类型 | 两个契约面独立演进（`repo-layout.md` §3.2） |
-| 不被 `agent-core` / `taskflow` / `tools` import | UI 契约不得渗入运行时 |
+| 约束                                            | 检验方式                                      |
+| ----------------------------------------------- | --------------------------------------------- |
+| 零运行时依赖（schema 校验库除外）               | `package.json` 的 `dependencies` 只允许 `zod` |
+| 浏览器可直接 import                             | 无 `node:` import                             |
+| 不 re-export `proto/` 类型                      | 两个契约面独立演进（`repo-layout.md` §3.2）   |
+| 不被 `agent-core` / `taskflow` / `tools` import | UI 契约不得渗入运行时                         |
 
 **为什么不复用 agent-core 的 `Message`**：两者演进节奏不同。UI 需要 `code` / `diff` / `file`
 这些**渲染类型**，模型上下文不需要；模型需要 `content` 的截断版本，UI 需要完整 `details`。
@@ -30,23 +30,23 @@
 
 ```ts
 type Block =
-  | { type: "text";     text: string }
+  | { type: "text"; text: string }
   | { type: "thinking"; text: string }
-  | { type: "code";     language: string; code: string; path?: string; startLine?: number }
-  | { type: "diff";     path: string; diff: string; added: number; removed: number }
-  | { type: "file";     path: string; kind: "file" | "dir"; size?: number }
-  | { type: "tool_call";   callId: string; name: string; args: unknown; status: ToolStatus }
+  | { type: "code"; language: string; code: string; path?: string; startLine?: number }
+  | { type: "diff"; path: string; diff: string; added: number; removed: number }
+  | { type: "file"; path: string; kind: "file" | "dir"; size?: number }
+  | { type: "tool_call"; callId: string; name: string; args: unknown; status: ToolStatus }
   | { type: "tool_result"; callId: string; status: "ok" | "error"; blocks: Block[] }
-  | { type: "todo";     items: Todo[] }
-  | { type: "error";    code: string; message: string }
+  | { type: "todo"; items: Todo[] }
+  | { type: "error"; code: string; message: string };
 
-type ToolStatus = "running" | "ok" | "error" | "cancelled"
+type ToolStatus = "running" | "ok" | "error" | "cancelled";
 
 interface Todo {
-  id: string
-  text: string
-  status: "pending" | "in_progress" | "completed" | "blocked"
-  note?: string
+  id: string;
+  text: string;
+  status: "pending" | "in_progress" | "completed" | "blocked";
+  note?: string;
 }
 ```
 
@@ -71,24 +71,25 @@ interface Todo {
 所有路径前缀 `/api`。除只读的 `GET /conversations/:id/events` 外，REST 端点都要 Bearer token；
 事件流以高熵 Conversation UUID 作为只读订阅能力标识，不接受 token query 参数。
 
-| Method | Path | Body / Query | Response |
-|---|---|---|---|
-| `GET` | `/projects` | — | `Project[]` |
-| `POST` | `/projects` | `{ name, workspace }` | `Project` |
-| `PATCH` | `/projects/:id` | `{ name }` | `Project` |
-| `DELETE` | `/projects/:id` | — | `204` |
-| `POST` | `/conversations` | `{ title?, projectId? }` | `Conversation` |
-| `GET` | `/conversations` | `?projectId&limit&cursor` | `Page<Conversation>` |
-| `GET` | `/conversations/:id/messages` | `?before&limit` | `Page<ChatMessage>` |
-| `POST` | `/conversations/:id/messages` | `SendMessage` | `202` |
-| `GET` | `/conversations/:id/context` | — | `ContextUsage` |
-| `POST` | `/conversations/:id/compact` | — | `CompactConversationResult` |
-| `GET` | `/runners/directories` | `?runnerId&path?` | `RunnerDirectory` |
-| `POST` | `/uploads` | `CreateUpload` | `UploadTicket` |
-| `POST` | `/uploads/runner` | `{ runnerId, path }` | `UploadedFile` |
-| `POST` | `/conversations/:id/abort` | — | `204` |
-| `POST` | `/decisions/:decisionId` | `DecisionResponse` | `204` |
-| `GET` | `/conversations/:id/events` | `Last-Event-ID` header（可选） | **SSE 流** |
+| Method   | Path                          | Body / Query                                      | Response                    |
+| -------- | ----------------------------- | ------------------------------------------------- | --------------------------- |
+| `GET`    | `/projects`                   | —                                                 | `Project[]`                 |
+| `POST`   | `/projects`                   | `{ name, workspace }`                             | `Project`                   |
+| `PATCH`  | `/projects/:id`               | `{ name }`                                        | `Project`                   |
+| `DELETE` | `/projects/:id`               | —                                                 | `204`                       |
+| `POST`   | `/conversations`              | `{ title?, projectId? }`                          | `Conversation`              |
+| `GET`    | `/conversations`              | `?projectId&limit&cursor`                         | `Page<Conversation>`        |
+| `GET`    | `/conversations/:id/messages` | `?before&limit`                                   | `Page<ChatMessage>`         |
+| `POST`   | `/conversations/:id/messages` | `SendMessage`                                     | `202`                       |
+| `GET`    | `/conversations/:id/context`  | —                                                 | `ContextUsage`              |
+| `POST`   | `/conversations/:id/compact`  | —                                                 | `CompactConversationResult` |
+| `POST`   | `/conversations/:id/clear`    | —                                                 | `ClearConversationContextResult` |
+| `GET`    | `/runners/directories`        | `?runnerId&path?`                                 | `RunnerDirectory`           |
+| `POST`   | `/uploads`                    | `CreateUpload`                                    | `UploadTicket`              |
+| `POST`   | `/uploads/runner`             | `{ runnerId, path }`                              | `UploadedFile`              |
+| `POST`   | `/conversations/:id/abort`    | —                                                 | `204`                       |
+| `POST`   | `/decisions/:decisionId`      | `DecisionResponse`                                | `204`                       |
+| `GET`    | `/conversations/:id/events`   | `Last-Event-ID` header 或 `after` query（均可选） | **SSE 流**                  |
 
 浏览器拖入的附件采用直传对象存储：`POST /uploads` 接收文件名并返回 MinIO 的
 `upload`、`download` 两个签名地址，浏览器直接 `PUT upload`。从 Runner 选择的附件走
@@ -101,19 +102,19 @@ server 必须拒绝 Runner root 外的路径，目录排在文件前且各自按
 
 ```ts
 interface Project {
-  id: string
-  name: string
-  workspace: string          // 创建后不可改
-  runnerState: "ready" | "busy" | "draining" | "disconnected" // 派生自 Registry，非存储字段
-  createdAt: number
+  id: string;
+  name: string;
+  workspace: string; // 创建后不可改
+  runnerState: "ready" | "busy" | "draining" | "disconnected"; // 派生自 Registry，非存储字段
+  createdAt: number;
 }
 
 interface Conversation {
-  id: string
-  projectId: string | null   // null = 独立 Chat 模式
-  title: string
-  createdAt: number
-  updatedAt: number
+  id: string;
+  projectId: string | null; // null = 独立 Chat 模式
+  title: string;
+  createdAt: number;
+  updatedAt: number;
 }
 ```
 
@@ -133,32 +134,42 @@ interface Conversation {
 
 ```ts
 interface ChatMessage {
-  id: string
-  conversationId: string
-  role: "user" | "assistant"
-  blocks: Block[]
-  status: "streaming" | "done" | "error" | "aborted"
-  createdAt: number
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant";
+  blocks: Block[];
+  status: "streaming" | "done" | "error" | "aborted";
+  createdAt: number;
 }
 
 interface SendMessage {
-  text: string
-  queue?: "steering" | "followUp" | "nextRun"   // 缺省：无运行时新开 run，运行中入 steering
+  text: string;
+  queue?: "steering" | "followUp" | "nextRun"; // 缺省：无运行时新开 run，运行中入 steering
 }
 
 interface ContextUsage {
-  inputTokens: number | null // 最近一次真实模型输入；无数据或刚压缩后为 null
-  contextWindow: number
+  inputTokens: number | null; // 最近一次真实模型输入；无数据或刚压缩后为 null
+  contextWindow: number;
 }
 
 interface CompactConversationResult {
-  compacted: boolean
-  summarized: boolean
-  context: ContextUsage
+  compacted: boolean;
+  summarized: boolean;
+  context: ContextUsage;
 }
 
-interface Page<T> { items: T[]; nextCursor: string | null }
-interface ApiError { code: string; message: string }     // 非 2xx 一律这个形状
+interface ClearConversationContextResult {
+  context: ContextUsage;
+}
+
+interface Page<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+interface ApiError {
+  code: string;
+  message: string;
+} // 非 2xx 一律这个形状
 ```
 
 所有 cursor 都是不透明字符串。Conversation cursor 编码 `(updated_at, id)`，Message cursor
@@ -188,38 +199,38 @@ Authorization。页面挂载不订阅；第一次发送事务必须先懒创建�
 
 ```ts
 type UiEvent =
-  | { type: "message.start";  messageId: string; role: "assistant" }
-  | { type: "block.start";    messageId: string; index: number; block: Block }   // 骨架
-  | { type: "block.delta";    messageId: string; index: number; delta: string }
-  | { type: "block.end";      messageId: string; index: number; block: Block }   // 完整
-  | { type: "message.end";    messageId: string; status: ChatMessage["status"] }
-  | { type: "tool.output";    callId: string; stream: "stdout" | "stderr"; text: string }
+  | { type: "message.start"; messageId: string; role: "assistant" }
+  | { type: "block.start"; messageId: string; index: number; block: Block } // 骨架
+  | { type: "block.delta"; messageId: string; index: number; delta: string }
+  | { type: "block.end"; messageId: string; index: number; block: Block } // 完整
+  | { type: "message.end"; messageId: string; status: ChatMessage["status"] }
+  | { type: "tool.output"; callId: string; stream: "stdout" | "stderr"; text: string }
   | { type: "decision.requested"; request: DecisionRequest }
-  | { type: "decision.resolved";  decisionId: string }
-  | { type: "todo.updated";   items: Todo[] }
+  | { type: "decision.resolved"; decisionId: string }
+  | { type: "todo.updated"; items: Todo[] }
   | { type: "context.updated"; inputTokens: number | null; contextWindow: number }
-  | { type: "run.end";        runId: string; stopReason: string }
-  | { type: "error";          code: string; message: string }
+  | { type: "run.end"; runId: string; stopReason: string }
+  | { type: "error"; code: string; message: string };
 ```
 
-每条 SSE 消息带 `id:`（单调递增），断线重连时客户端发 `Last-Event-ID` header，
-server 从该点之后重放（缓冲区见 `agent-server.md` §6）。
-不接受 query 参数形式的 event ID，避免同一语义出现两个输入来源。
+每条 SSE 消息带 `id:`（单调递增）。原生重连时客户端发 `Last-Event-ID` header；
+因路由卸载而新建 EventSource 时，客户端可带 `after` query。server 从该点之后重放
+（缓冲区见 `agent-server.md` §6），header 优先于 query。
 
 ### Projection 映射
 
 agent-server 负责这层翻译。**UI 消费 Projection，不是内部运行时状态**（idea.md §26）。
 
-| 内部 | UI |
-|---|---|
-| `AgentEvent.block.*` (text/thinking) | 同名 UiEvent，block 类型直传 |
-| `AgentEvent.tool.start` | `block.start` + `{type:"tool_call", status:"running"}` |
-| `AgentEvent.tool.end` | `block.end`，由 `details` 派生 `code`/`diff`/`file` 子 block |
-| `ExecutionEvent.Output`（经 tool 的 `onOutput`） | `tool.output` |
-| `AgentEvent.todo.updated` | `todo.updated` **且** 消息流里保留一个 `todo` block |
-| `AgentEvent.context.updated` | 同名事件；前端据此计算并展示上下文占用百分比 |
-| `TaskEvent.*` | **不外发**。taskflow 是内部编排细节 |
-| `AgentEvent.decision.*` | 同名 UiEvent |
+| 内部                                             | UI                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------ |
+| `AgentEvent.block.*` (text/thinking)             | 同名 UiEvent，block 类型直传                                 |
+| `AgentEvent.tool.start`                          | `block.start` + `{type:"tool_call", status:"running"}`       |
+| `AgentEvent.tool.end`                            | `block.end`，由 `details` 派生 `code`/`diff`/`file` 子 block |
+| `ExecutionEvent.Output`（经 tool 的 `onOutput`） | `tool.output`                                                |
+| `AgentEvent.todo.updated`                        | `todo.updated` **且** 消息流里保留一个 `todo` block          |
+| `AgentEvent.context.updated`                     | 同名事件；前端据此计算并展示上下文占用百分比                 |
+| `TaskEvent.*`                                    | **不外发**。taskflow 是内部编排细节                          |
+| `AgentEvent.decision.*`                          | 同名 UiEvent                                                 |
 
 **`tool.end` 的 details → Block 转换是 Projection 的主要工作量**，
 每个 tool 一个转换函数（`agent-server.md` §7）。这是"UI 不解析 Markdown"的实现处。
@@ -229,10 +240,10 @@ agent-server 负责这层翻译。**UI 消费 Projection，不是内部运行时
 
 **TODO 是唯一一个双通道外发的东西**，两条通道语义不同：
 
-| 通道 | 语义 | UI 用途 |
-|---|---|---|
+| 通道                       | 语义                  | UI 用途                        |
+| -------------------------- | --------------------- | ------------------------------ |
 | `todo` block（在消息流里） | "第 N 轮时计划长这样" | 历史记录，可回看计划怎么演变的 |
-| `todo.updated` 事件 | "现在的计划是这样" | 常驻面板 |
+| `todo.updated` 事件        | "现在的计划是这样"    | 常驻面板                       |
 
 只有 block 的话，面板得翻历史找最后一次调用；只有事件的话，刷新页面就丢了。
 两者都要，且**面板永远以事件为准**。
@@ -246,11 +257,11 @@ agent-server 负责这层翻译。**UI 消费 Projection，不是内部运行时
 ```ts
 type DecisionRequest =
   | { kind: "approval"; decisionId: string; toolName: string; args: unknown; risk: "read" | "write" | "exec" }
-  | { kind: "question"; decisionId: string; question: string; options: string[]; multiSelect: boolean }
+  | { kind: "question"; decisionId: string; question: string; options: string[]; multiSelect: boolean };
 
 type DecisionResponse =
   | { kind: "approval"; decision: "allow" | "deny" | "allow_always"; reason?: string }
-  | { kind: "question"; answers: string[] }
+  | { kind: "question"; answers: string[] };
 ```
 
 相比 agent-core 的定义少了 `callId`（前端不需要），其余一致。

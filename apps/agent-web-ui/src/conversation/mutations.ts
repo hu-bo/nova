@@ -14,11 +14,15 @@ export interface RunnerAttachmentMetadata {
   path: string;
 }
 
-export function useConversationMutations(conversationId: string, modelProfileId: string) {
+export function useConversationMutations(
+  conversationId: string,
+  modelProfileId: string,
+  ensureStreamConnected: () => Promise<void>,
+) {
   const { api } = useAuth();
   const models = useModelSettings();
   const queryClient = useQueryClient();
-  const { state, dispatch, ensureStreamConnected } = useConversationStore();
+  const { state, dispatch } = useConversationStore(conversationId);
 
   const refreshLists = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists, refetchType: "none" });
@@ -80,6 +84,11 @@ export function useConversationMutations(conversationId: string, modelProfileId:
 
   const compactMutation = useMutation({
     mutationFn: () => api!.compactConversation(conversationId),
+    onSuccess: (result) => dispatch({ type: "context.set", usage: result.context }),
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: () => api!.clearConversationContext(conversationId),
     onSuccess: (result) => dispatch({ type: "context.set", usage: result.context }),
   });
 
@@ -171,6 +180,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
     },
     abort: () => abortMutation.mutateAsync(),
     compact: () => compactMutation.mutateAsync(),
+    clear: () => clearMutation.mutateAsync(),
     steerQueued: (messageId: string) => {
       const queued = state.queuedMessages.find((item) => item.message.id === messageId);
       if (!queued) return Promise.resolve();
@@ -191,6 +201,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
     sendMutation,
     abortMutation,
     compactMutation,
+    clearMutation,
     steerMutation,
     queuedRunMutation,
     decisionMutation,

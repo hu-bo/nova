@@ -66,7 +66,7 @@ export function CodeBlock({ language, code, path, startLine = 1, onOpenPath }: C
       <Highlight theme={themes.nightOwl} code={code} language={(language || "plain") as Language}>
         {({ className, style, tokens, getLineProps, getTokenProps }) => (
           <pre
-            className={`${className} m-0 overflow-x-auto p-3 font-mono text-xs leading-5`}
+            className={`${className} nova-scrollbar m-0 overflow-x-auto p-3 font-mono text-xs leading-5`}
             style={{ ...style, background: "transparent" }}
           >
             {tokens.map((line, lineIndex) => (

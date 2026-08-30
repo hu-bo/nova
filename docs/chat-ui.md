@@ -244,8 +244,24 @@ packages/chat-ui/src/
 └── chat-ui.test.tsx
 ```
 
-**没有 `theme/` / `hooks/` / `utils/` / `context/`。** 样式用 CSS 变量暴露给宿主覆盖，
+**没有 `theme/` / `hooks/` / `utils/` / `context/`。** 样式通过 `.nova-chat` 边界隔离，
 不做主题系统 —— 只有一个消费者时那是纯成本。
+
+宿主必须用 `.nova-chat` 包住聊天组件树；`RemoteExplorer` 因为使用 Portal，会自行带上该类。
+宿主如需定制外观，只覆盖边界上的专属变量，不能依赖或改写通用的 Tailwind / shadcn token：
+
+```css
+.nova-chat {
+  --nova-chat-accent-rgb: 79 70 229;
+  --nova-chat-accent-alt-rgb: 6 182 212;
+  --nova-chat-shadow-rgb: 15 23 42;
+  --nova-chat-surface-rgb: 255 255 255;
+  --nova-chat-subtle-surface-rgb: 248 250 252;
+  --nova-chat-border-rgb: 148 163 184;
+}
+```
+
+应用的 reset 必须限制在自己的应用壳（例如 `.agent-web-ui`），不得使用 `*`、`button` 等无边界选择器影响该组件树。
 
 ---
 

@@ -6,6 +6,7 @@ it("owns the single Coding prompt and the Coding tools", () => {
   expect(codingAgentModule.prompts?.map((prompt) => prompt.name)).toEqual(["coding-workflow"]);
   expect(codingAgentModule.tools?.map((tool) => tool.name)).toEqual([
     "read_file",
+    "read_document",
     "read_url",
     "grep",
     "list_dir",
@@ -15,5 +16,5 @@ it("owns the single Coding prompt and the Coding tools", () => {
     "bash",
     "todo_write",
   ]);
-  expect(new Set(codingAgentModule.tools?.map((tool) => tool.name)).size).toBe(9);
+  expect(new Set(codingAgentModule.tools?.map((tool) => tool.name)).size).toBe(10);
 });

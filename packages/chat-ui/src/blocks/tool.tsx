@@ -95,11 +95,11 @@ export function ToolBlock({
         </span>
       </summary>
       <div className="border-t border-slate-200/70 dark:border-slate-800">
-        <pre className="m-0 max-h-56 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300">
+        <pre className="nova-scrollbar m-0 max-h-56 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300">
           {formatArgs(call.args)}
         </pre>
         {output && (
-          <pre className="m-0 max-h-80 overflow-auto border-t border-white/10 bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300">
+          <pre className="m-0 max-h-80 overflow-auto border-t border-white/10 bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300 nova-scrollbar">
             {output}
           </pre>
         )}

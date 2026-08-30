@@ -195,6 +195,10 @@ export type CreateAuthorizeUrl503 = {
   requestId?: string;
 };
 
+export type SubscribeConversationEventsParams = {
+after?: string;
+};
+
 export type ListProviders200ItemProtocol = typeof ListProviders200ItemProtocol[keyof typeof ListProviders200ItemProtocol];
 
 
@@ -2113,6 +2117,42 @@ export type CompactConversation409 = {
   requestId?: string;
 };
 
+export type ClearConversationContext200Context = {
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     * @nullable
+     */
+  inputTokens: number | null;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  contextWindow: number;
+};
+
+export type ClearConversationContext200 = {
+  context: ClearConversationContext200Context;
+};
+
+export type ClearConversationContext401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type ClearConversationContext404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type ClearConversationContext409 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
 export type ResolveDecisionBody = {
   kind: 'approval';
   decision: 'allow' | 'deny' | 'allow_always';
@@ -2307,17 +2347,26 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateAuthorizeUrlMutationOptions(options), queryClient);
     }
 
-export const getSubscribeConversationEventsUrl = (id: string,) => {
+export const getSubscribeConversationEventsUrl = (id: string,
+    params?: SubscribeConversationEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/conversations/${id}/events`
+  return stringifiedParams.length > 0 ? `/api/conversations/${id}/events?${stringifiedParams}` : `/api/conversations/${id}/events`
 }
 
-export const subscribeConversationEvents = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<void> => {
+export const subscribeConversationEvents = async (id: string,
+    params?: SubscribeConversationEventsParams, options?: Parameters<typeof apiMutator>[1]): Promise<void> => {
 
-  return apiMutator<void>(getSubscribeConversationEventsUrl(id),
+  return apiMutator<void>(getSubscribeConversationEventsUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -2330,23 +2379,25 @@ export const subscribeConversationEvents = async (id: string, options?: Paramete
 
 
 
-export const getSubscribeConversationEventsQueryKey = (id: string,) => {
+export const getSubscribeConversationEventsQueryKey = (id: string,
+    params?: SubscribeConversationEventsParams,) => {
     return [
-    `/api/conversations/${id}/events`
+    `/api/conversations/${id}/events`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getSubscribeConversationEventsQueryOptions = <TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+export const getSubscribeConversationEventsQueryOptions = <TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(id: string,
+    params?: SubscribeConversationEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getSubscribeConversationEventsQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getSubscribeConversationEventsQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof subscribeConversationEvents>>> = ({ signal }) => subscribeConversationEvents(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof subscribeConversationEvents>>> = ({ signal }) => subscribeConversationEvents(id,params, { signal, ...requestOptions });
 
 
 
@@ -2360,7 +2411,8 @@ export type SubscribeConversationEventsQueryError = ErrorType<unknown>
 
 
 export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(
- id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>> & Pick<
+ id: string,
+    params: undefined |  SubscribeConversationEventsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof subscribeConversationEvents>>,
           TError,
@@ -2370,7 +2422,8 @@ export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>> & Pick<
+ id: string,
+    params?: SubscribeConversationEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof subscribeConversationEvents>>,
           TError,
@@ -2380,16 +2433,18 @@ export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ id: string,
+    params?: SubscribeConversationEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
 export function useSubscribeConversationEvents<TData = Awaited<ReturnType<typeof subscribeConversationEvents>>, TError = ErrorType<unknown>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ id: string,
+    params?: SubscribeConversationEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subscribeConversationEvents>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getSubscribeConversationEventsQueryOptions(id,options)
+  const queryOptions = getSubscribeConversationEventsQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -5175,6 +5230,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCompactConversationMutationOptions(options), queryClient);
+    }
+
+export const getClearConversationContextUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/clear`
+}
+
+export const clearConversationContext = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<ClearConversationContext200> => {
+
+  return apiMutator<ClearConversationContext200>(getClearConversationContextUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getClearConversationContextMutationOptions = <TError = ErrorType<ClearConversationContext401 | ClearConversationContext404 | ClearConversationContext409>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearConversationContext>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiMutator>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearConversationContext>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['clearConversationContext'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearConversationContext>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  clearConversationContext(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearConversationContextMutationResult = NonNullable<Awaited<ReturnType<typeof clearConversationContext>>>
+
+    export type ClearConversationContextMutationError = ErrorType<ClearConversationContext401 | ClearConversationContext404 | ClearConversationContext409>
+
+    export const useClearConversationContext = <TError = ErrorType<ClearConversationContext401 | ClearConversationContext404 | ClearConversationContext409>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearConversationContext>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof clearConversationContext>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getClearConversationContextMutationOptions(options), queryClient);
     }
 
 export const getResolveDecisionUrl = (decisionId: string,) => {

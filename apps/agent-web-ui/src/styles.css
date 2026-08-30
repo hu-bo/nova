@@ -56,55 +56,84 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-* {
+/* Document-level layout only. Component resets stay inside .agent-web-ui below. */
+body {
+  margin: 0;
+}
+
+.agent-web-ui *:not(.nova-chat):not(.nova-chat *) {
   box-sizing: border-box;
 }
 
-html {
+.agent-web-ui {
   min-width: 320px;
   background: #f8fafc;
   scroll-behavior: smooth;
 }
 
-body {
+.agent-web-ui {
   min-width: 320px;
   min-height: 100vh;
-  margin: 0;
   background: #f8fafc;
 }
 
-button,
-input,
-textarea,
-select {
+.agent-web-ui button:not(.nova-chat *),
+.agent-web-ui input:not(.nova-chat *),
+.agent-web-ui textarea:not(.nova-chat *),
+.agent-web-ui select:not(.nova-chat *) {
   font: inherit;
 }
 
-button,
-a,
-select,
-input,
-textarea,
-summary {
+.agent-web-ui button:not(.nova-chat *),
+.agent-web-ui a:not(.nova-chat *),
+.agent-web-ui select:not(.nova-chat *),
+.agent-web-ui input:not(.nova-chat *),
+.agent-web-ui textarea:not(.nova-chat *),
+.agent-web-ui summary:not(.nova-chat *) {
   outline-offset: 3px;
 }
 
-button:focus-visible,
-a:focus-visible,
-select:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-summary:focus-visible {
+.agent-web-ui button:not(.nova-chat *):focus-visible,
+.agent-web-ui a:not(.nova-chat *):focus-visible,
+.agent-web-ui select:not(.nova-chat *):focus-visible,
+.agent-web-ui input:not(.nova-chat *):focus-visible,
+.agent-web-ui textarea:not(.nova-chat *):focus-visible,
+.agent-web-ui summary:not(.nova-chat *):focus-visible {
   outline: 2px solid #4f46e5;
 }
 
-::selection {
+.agent-web-ui ::selection {
   color: #312e81;
   background: #c7d2fe;
 }
 
 .nova-conversation-viewport {
   height: calc(100vh - 4rem);
+}
+
+.agent-scrollbar {
+  scrollbar-color: rgb(148 163 184 / 0.45) transparent;
+  scrollbar-width: thin;
+}
+
+.agent-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.agent-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-scrollbar::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgb(148 163 184 / 0.45);
+  background-clip: content-box;
+}
+
+.agent-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(100 116 139 / 0.7);
 }
 
 @supports (height: 100dvh) {
@@ -121,13 +150,13 @@ summary:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
+  .agent-web-ui {
     scroll-behavior: auto;
   }
 
-  *,
-  *::before,
-  *::after {
+  .agent-web-ui *:not(.nova-chat):not(.nova-chat *),
+  .agent-web-ui *:not(.nova-chat):not(.nova-chat *)::before,
+  .agent-web-ui *:not(.nova-chat):not(.nova-chat *)::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
@@ -213,13 +242,13 @@ summary:focus-visible {
 }
 
 @layer base {
-  * {
+  .agent-web-ui *:not(.nova-chat):not(.nova-chat *) {
     @apply border-border outline-ring/50;
   }
-  body {
+  .agent-web-ui {
     @apply bg-background text-foreground;
   }
-  html {
+  .agent-web-ui {
     @apply font-sans;
   }
 }

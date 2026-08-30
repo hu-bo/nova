@@ -101,7 +101,7 @@ function Demo() {
         <div className="demo-status">DEV · 4175</div>
       </header>
       <div className="demo-grid">
-        <section className="demo-chat">
+        <section className="nova-chat demo-chat">
           <div className="demo-section-title">
             <div>
               <h2>Conversation</h2>

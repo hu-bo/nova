@@ -269,10 +269,10 @@ export function RemoteExplorer({
     <Dialog.Root open={open} onOpenChange={close}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 motion-reduce:transition-none" />
-        <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-3 sm:p-6">
+        <Dialog.Viewport className="nova-scrollbar fixed inset-0 z-50 grid place-items-center overflow-y-auto p-3 sm:p-6">
           <Dialog.Popup
             initialFocus={listRef}
-            className="nova-remote-explorer flex h-[min(44rem,calc(100dvh-1.5rem))] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl ring-1 ring-slate-950/10 transition-[transform,scale,opacity] duration-150 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 dark:bg-slate-950 dark:text-slate-100 dark:ring-white/10 motion-reduce:transition-none"
+            className="nova-chat nova-remote-explorer flex h-[min(44rem,calc(100dvh-1.5rem))] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl ring-1 ring-slate-950/10 transition-[transform,scale,opacity] duration-150 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 dark:bg-slate-950 dark:text-slate-100 dark:ring-white/10 motion-reduce:transition-none"
           >
             <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
               <FolderOpen className="size-5 shrink-0 text-indigo-500" aria-hidden="true" />
@@ -328,7 +328,7 @@ export function RemoteExplorer({
 
               <nav
                 aria-label="当前路径"
-                className="ml-1 flex min-w-0 flex-1 items-center overflow-x-auto rounded-lg bg-slate-50 px-1 py-0.5 dark:bg-slate-900"
+                className="nova-scrollbar ml-1 flex min-w-0 flex-1 items-center overflow-x-auto rounded-lg bg-slate-50 px-1 py-0.5 dark:bg-slate-900"
               >
                 {crumbs.map((crumb, index) => (
                   <span key={crumb.path} className="flex shrink-0 items-center">
@@ -373,7 +373,7 @@ export function RemoteExplorer({
                   aria-multiselectable={multiple || undefined}
                   aria-activedescendant={activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
                   onKeyDown={keyDown}
-                  className="h-full min-h-44 overflow-y-auto p-2 outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-indigo-500/20 sm:min-h-72"
+                  className="nova-scrollbar h-full min-h-44 overflow-y-auto p-2 outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-indigo-500/20 sm:min-h-72"
                 >
                   {!loading && entries.length === 0 && (
                     <div className="grid min-h-64 place-items-center text-center text-sm text-slate-500 dark:text-slate-400">

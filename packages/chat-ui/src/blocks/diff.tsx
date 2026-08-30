@@ -106,7 +106,7 @@ export function DiffBlock({
           </button>
         )}
       </header>
-      <pre className="m-0 overflow-x-auto py-1.5 font-mono text-xs leading-5">{content}</pre>
+      <pre className="nova-scrollbar m-0 overflow-x-auto py-1.5 font-mono text-xs leading-5">{content}</pre>
     </section>
   );
 }

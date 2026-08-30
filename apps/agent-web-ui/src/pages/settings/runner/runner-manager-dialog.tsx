@@ -5,6 +5,7 @@ import { useState } from "react";
 import { errorMessage } from "../../../api/client.js";
 import { queryKeys } from "../../../api/query-keys.js";
 import { useAuth } from "../../../auth/provider.js";
+import { displayWorkspacePath } from "../../../lib/workspace-path.js";
 import { Badge } from "../../../components/ui/badge.js";
 import { Button } from "../../../components/ui/button.js";
 import { Card } from "../../../components/ui/card.js";
@@ -219,7 +220,7 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
                           <RunnerStateBadge state={runner.state} running={runner.running} />
                         </TableCell>
                         <TableCell>
-                          <span className="block max-w-64 truncate" title={runner.rootWorkspace}>
+                          <span className="block max-w-64 truncate" title={displayWorkspacePath(runner.rootWorkspace)}>
                             {displayWorkspacePath(runner.rootWorkspace)}
                           </span>
                         </TableCell>
@@ -390,10 +391,4 @@ function CopyButton({ value, label, compact = false }: { value: string | null; l
       {copied ? "已复制" : label}
     </Button>
   );
-}
-
-function displayWorkspacePath(path: string) {
-  if (path.startsWith("\\\\?\\UNC\\")) return `\\\\${path.slice("\\\\?\\UNC\\".length)}`;
-  if (path.startsWith("\\\\?\\")) return path.slice("\\\\?\\".length);
-  return path;
 }

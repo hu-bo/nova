@@ -1,4 +1,5 @@
 import { Select } from "../../../components/ui/form.js";
+import { displayWorkspacePath } from "../../../lib/workspace-path.js";
 import { useRunnerCatalog } from "./use-runners.js";
 
 export function RunnerSelect({
@@ -20,7 +21,7 @@ export function RunnerSelect({
       <option value="">{catalog.isLoading ? "正在加载 Runner…" : "选择 Runner"}</option>
       {catalog.runners.map((runner) => (
         <option key={runner.id} value={runner.id}>
-          {runner.id} · {stateLabel(runner.state)} · {runner.rootWorkspace}
+          {runner.id} · {stateLabel(runner.state)} · {displayWorkspacePath(runner.rootWorkspace)}
         </option>
       ))}
     </Select>

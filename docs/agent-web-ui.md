@@ -43,17 +43,17 @@ Fastify → OpenAPI → Orval → React Router → TanStack Query
                            （SSE 实时增量状态）
 ```
 
-| 层 | 选型 | 在本 app 中的职责 | 不承担的职责 |
-|---|---|---|---|
-| HTTP 服务 | Fastify | 提供 REST、SSE 与 OpenAPI 描述；真实 API 语义以 `agent-server.md` 为准 | 不向前端泄漏数据库或 Runner 内部模型 |
-| 契约与客户端 | OpenAPI + Orval | 从 OpenAPI 生成请求函数、请求/响应类型与 TanStack Query hooks | 不手写与 schema 重复的 DTO 或 fetch 封装 |
-| 路由 | React Router | URL、嵌套路由、页面级 loader / error boundary 与参数校验 | 不保存对话流状态 |
-| 服务端状态 | TanStack Query | project、会话列表、历史消息、设置等可重新获取的资源；失效、预取与轮询 | 不缓存逐 token 的 SSE 增量 |
-| 实时 UI 状态 | `useReducer` + Context（或 zustand 量级 store） | §3 的 `ConversationState`、SSE 生命周期与去重 | 不替代 HTTP 缓存 |
-| 组件基础 | shadcn/ui + Base UI | 可访问的基础控件与组合式对话框、菜单、Popover 等 | 不把聊天 Block 的渲染从 `chat-ui` 复制过来 |
-| 样式 | Tailwind CSS v4 | token 化样式、响应式布局、暗色模式和状态样式 | 不创建第二套 CSS 设计系统 |
-| 表单 | React Hook Form + Zod | 新建 project / conversation、设置、Decision 的输入收集与客户端校验 | 不替代服务端校验 |
-| 视觉反馈 | Lucide + Motion | 图标、微交互、折叠/展开和非阻塞反馈 | 不用动画掩盖网络或 Runner 失败 |
+| 层           | 选型                  | 在本 app 中的职责                                                      | 不承担的职责                               |
+| ------------ | --------------------- | ---------------------------------------------------------------------- | ------------------------------------------ |
+| HTTP 服务    | Fastify               | 提供 REST、SSE 与 OpenAPI 描述；真实 API 语义以 `agent-server.md` 为准 | 不向前端泄漏数据库或 Runner 内部模型       |
+| 契约与客户端 | OpenAPI + Orval       | 从 OpenAPI 生成请求函数、请求/响应类型与 TanStack Query hooks          | 不手写与 schema 重复的 DTO 或 fetch 封装   |
+| 路由         | React Router          | URL、嵌套路由、页面级 loader / error boundary 与参数校验               | 不保存对话流状态                           |
+| 服务端状态   | TanStack Query        | project、会话列表、历史消息、设置等可重新获取的资源；失效、预取与轮询  | 不缓存逐 token 的 SSE 增量                 |
+| 实时 UI 状态 | Zustand               | §3 的 `ConversationState`、每个会话的 SSE 生命周期与去重               | 不替代 HTTP 缓存                           |
+| 组件基础     | shadcn/ui + Base UI   | 可访问的基础控件与组合式对话框、菜单、Popover 等                       | 不把聊天 Block 的渲染从 `chat-ui` 复制过来 |
+| 样式         | Tailwind CSS v4       | token 化样式、响应式布局、暗色模式和状态样式                           | 不创建第二套 CSS 设计系统                  |
+| 表单         | React Hook Form + Zod | 新建 project / conversation、设置、Decision 的输入收集与客户端校验     | 不替代服务端校验                           |
+| 视觉反馈     | Lucide + Motion       | 图标、微交互、折叠/展开和非阻塞反馈                                    | 不用动画掩盖网络或 Runner 失败             |
 
 **状态分界必须明确。** `useQuery` 的数据可以被 `invalidateQueries` 后重新取得；
 `ConversationState` 则是当前 SSE 流的局部、可变投影。发送消息、Decision 成功、
@@ -73,12 +73,10 @@ Runner 状态改变后，应失效相关 query；`block.delta`、`tool.output` �
 const queryKeys = {
   projects: ["projects"] as const,
   project: (projectId: string) => ["projects", projectId] as const,
-  conversations: (projectId?: string) =>
-    ["conversations", { projectId: projectId ?? null }] as const,
-  messages: (conversationId: string) =>
-    ["conversations", conversationId, "messages"] as const,
+  conversations: (projectId?: string) => ["conversations", { projectId: projectId ?? null }] as const,
+  messages: (conversationId: string) => ["conversations", conversationId, "messages"] as const,
   settings: ["settings"] as const,
-}
+};
 ```
 
 不要把 token、`AbortController`、SSE event id 或乐观消息对象放进 query key 或 query cache；
@@ -141,12 +139,12 @@ TODO 面板**常驻右侧，不在消息流里滚走**。它是"现在的计划"
 
 ```ts
 interface ConversationState {
-  messages: ChatMessage[]
-  todos: Todo[]
-  pendingDecision: DecisionRequest | null
-  connection: "connecting" | "open" | "reconnecting" | "closed"
-  isRunning: boolean
-  error: string | null
+  messages: ChatMessage[];
+  todos: Todo[];
+  pendingDecision: DecisionRequest | null;
+  connection: "connecting" | "open" | "reconnecting" | "closed";
+  isRunning: boolean;
+  error: string | null;
 }
 ```
 
@@ -155,9 +153,8 @@ interface ConversationState {
 `project` **不在这里** —— 它是路由参数派生的，属于上层的 project 上下文，
 不随对话变化。放进来就会出现"切会话时 project 短暂为 null"的闪烁。
 
-**技术选型**：一个 `useReducer` + Context，或一个轻量 store（zustand 量级）。
-**不上 Redux / RTK / Saga** —— 状态只有一个 conversation 的消息流，
-中间件与 devtools 的成本高于收益。
+**技术选型**：Zustand 维护按 conversation id 隔离的会话状态。路由只选择当前会话，
+不拥有流状态；切换路由时，运行中的会话 SSE 必须继续接收事件。不上 Redux / RTK / Saga。
 
 `messages` 是唯一真相，`chat-ui` 是它的纯函数投影。
 
@@ -215,18 +212,18 @@ npm install / docker run / nova-runner 安装命令                 [复制]
 所有权校验；只读事件流不再重复携带 token，也不把 token 放进 query string。
 
 ```ts
-await stream.ensureConnected() // 内部等待 EventSource.open
-await api.sendMessage(id, input)
+await stream.ensureConnected(); // 内部等待 EventSource.open
+await api.sendMessage(id, input);
 ```
 
-| 关注点 | 做法 |
-|---|---|
-| 建连 owner | 页面挂载不建流。第一次发送事务调用 `ensureConnected()`，等待 `EventSource.open` 后才 POST；运行中的后续发送复用同一连接 |
-| 生命周期 | 首次发送建流后跨 run 复用，`run.end` 不关闭，避免 `nextRun` 紧接当前 run 时丢事件。React effect 只负责页面卸载时 cleanup，不负责建连 |
-| 重连 | 交给 `EventSource`；浏览器自动携带最后收到的 SSE `id` |
-| `error{code:"RESYNC"}` | 关闭旧 `EventSource`，重新 `GET /messages` 全量对齐，再创建一个没有旧 event id 的新连接 |
-| 并发发送 | `ensureConnected()` 共享同一个 pending-open Promise，不得创建第二个 EventSource |
-| 幂等 | 按 `messageId + index` 更新，重放不会产生重复块 |
+| 关注点                 | 做法                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 建连 owner             | Zustand 会话注册表是唯一 owner。页面进入会话即确保连接；首次发送仍等待 `EventSource.open` 后才 POST                               |
+| 生命周期               | 运行中的会话跨路由切换保持 SSE 与投影状态；`run.end` 不关闭，避免 `nextRun` 紧接当前 run 时丢事件。无运行且无页面订阅的会话才关闭 |
+| 重连                   | 浏览器重连使用标准 `Last-Event-ID`；新建 EventSource 则以 `after` 查询参数带回注册表保存的最后 SSE id                             |
+| `error{code:"RESYNC"}` | 关闭旧 `EventSource`，重新 `GET /messages` 全量对齐，再创建一个没有旧 event id 的新连接                                           |
+| 并发发送               | `ensureConnected()` 共享同一个 pending-open Promise，不得创建第二个 EventSource                                                   |
+| 幂等                   | 按 `messageId + index` 更新，重放不会产生重复块                                                                                   |
 
 **幂等这条是重连正确性的全部依赖。** reducer 必须写成"设置成这个值"而不是"追加这段" ——
 除了 `block.delta` 和 `tool.output`，那两个用 `lastEventId` 去重。
@@ -285,9 +282,10 @@ Composer 接受两种附件来源。浏览器拖入 / 粘贴的本地 `File` 先
 Project workspace 绑定也复用同一个 `RemoteExplorer`，但使用 `mode="directory"` 和单选。
 Runner id、目录请求、已选路径和上传 mutation 全部由 `agent-web-ui` 持有；`chat-ui` 不知道 Runner。
 
-Composer 的 Skill 菜单第一版只提供 `/compact`。只有输入首字符是 `/` 才展示候选，正文里的
-斜杠按普通文本处理。选择后调用 `POST /conversations/:id/compact`，不把 `/compact` 当用户消息
-写入会话。运行中禁用压缩，避免与 Agent Loop 同时改 Entry 分支。
+Composer 的 Skill 菜单提供 `/compact` 与 `/clear`。只有输入首字符是 `/` 才展示候选，正文里的
+斜杠按普通文本处理。选择后分别调用 `POST /conversations/:id/compact` 和
+`POST /conversations/:id/clear`，不会把命令当用户消息写入会话。运行中禁用两个操作，避免与 Agent
+Loop 同时改 Entry 分支。`/clear` 清空后续模型上下文，但保留 UI 可见的消息历史。
 
 页面通过 `GET /conversations/:id/context` 获取初始 `ContextUsage`，之后由 SSE
 `context.updated` 覆盖。Composer 底部与模型选择并列展示 `inputTokens / contextWindow` 的整数
@@ -295,11 +293,11 @@ Composer 的 Skill 菜单第一版只提供 `/compact`。只有输入首字符�
 
 `queue` 的选择规则（对应 `agent-core.md` §7 的三条队列）：
 
-| 情况 | queue |
-|---|---|
-| 没在运行 | 不传，新开一个 run |
-| 运行中，默认发送 | 前端暂存，不立即请求 server；当前 run 结束后逐条发送 |
-| 运行中，用户点击待处理项的“调整方向” | 立即以 `steering` 发送该本地待处理项 |
+| 情况                                 | queue                                                |
+| ------------------------------------ | ---------------------------------------------------- |
+| 没在运行                             | 不传，新开一个 run                                   |
+| 运行中，默认发送                     | 前端暂存，不立即请求 server；当前 run 结束后逐条发送 |
+| 运行中，用户点击待处理项的“调整方向” | 立即以 `steering` 发送该本地待处理项                 |
 
 运行中但 Composer 为空时，发送位保留中断按钮；用户开始输入下一条消息后，按钮切回发送。
 普通发送立即清空草稿并展示在 Composer 上方的紧凑本地待处理列表中，不在输入框里提前展示
@@ -318,9 +316,10 @@ queue 选项，也不立即请求 server。每个待处理项提供“调整方�
 ### Decision
 
 ```tsx
-<DecisionPrompt request={pendingDecision} onResolve={r =>
-  fetch(`/api/decisions/${r.decisionId}`, { method: "POST", body: JSON.stringify(r) })
-} />
+<DecisionPrompt
+  request={pendingDecision}
+  onResolve={(r) => fetch(`/api/decisions/${r.decisionId}`, { method: "POST", body: JSON.stringify(r) })}
+/>
 ```
 
 404 → 提示"该请求已失效"（server 重启导致，见 `agent-server.md` §6）。
@@ -349,12 +348,12 @@ queue 选项，也不立即请求 server。每个待处理项提供“调整方�
 
 ### 7.2 界面上的差别
 
-| | Chat 模式 | Project 模式 |
-|---|---|---|
-| 侧栏 | 只有会话标题 | project 名 + workspace 路径 + Runner 状态灯 |
-| Composer 占位符 | "问点什么" | "让 agent 做点什么" |
-| TODO 面板 | 有 | 有 |
-| 审批卡片 | 不会出现（无 `write`/`exec` 工具） | 会出现 |
+|                 | Chat 模式                          | Project 模式                                |
+| --------------- | ---------------------------------- | ------------------------------------------- |
+| 侧栏            | 只有会话标题                       | project 名 + workspace 路径 + Runner 状态灯 |
+| Composer 占位符 | "问点什么"                         | "让 agent 做点什么"                         |
+| TODO 面板       | 有                                 | 有                                          |
+| 审批卡片        | 不会出现（无 `write`/`exec` 工具） | 会出现                                      |
 
 差别只有这些。**不做两套页面、两套 store、两套路由守卫。**
 
@@ -367,8 +366,12 @@ queue 选项，也不立即请求 server。每个待处理项提供“调整方�
 - token 只绑定当前登录用户和设备 Runner，不绑定 Project 或 workspace；谁使用该命令启动 Runner，设备 Runner 就归谁所有
 - Composer **不禁用**，但发送前弹提示，附上启动命令：
   ```
-nova-runner --server https://<agent-server>/runner-connect --token <runner-token> --root /home/user
+
   ```
+
+nova-runner --server https://<agent-server>/runner-connect --token <runner-token> --root /home/user
+
+````
 - 若用户仍要发，请求会返回明确错误（`agent-server.md` §8），展示为 `error` block
 
 **不静默降级成 Chat 模式。** 用户以为 agent 能改代码、实际它只会空谈，
@@ -383,22 +386,22 @@ Runner 恢复后状态灯自动转绿（Registry 状态随 `GET /projects` 轮�
 ```tsx
 // @nova/casdoor/client/react
 <CasdoorProvider
-  config={{
-    appName: import.meta.env.VITE_CASDOOR_APP_NAME || 'nova',
-    authApiBase: '/api',
-    redirectUri: `${window.location.origin}/callback`,
-    logoutRedirectUri: window.location.origin,
-    storage: {
-      type: 'localStorage',
-      prefix: 'nova_webui_',
-      accessTokenKey: 'access_token',
-    },
-    silentRefresh: true,
-  }}
+config={{
+  appName: import.meta.env.VITE_CASDOOR_APP_NAME || 'nova',
+  authApiBase: '/api',
+  redirectUri: `${window.location.origin}/callback`,
+  logoutRedirectUri: window.location.origin,
+  storage: {
+    type: 'localStorage',
+    prefix: 'nova_webui_',
+    accessTokenKey: 'access_token',
+  },
+  silentRefresh: true,
+}}
 >
-  <App />
+<App />
 </CasdoorProvider>
-```
+````
 
 登录只做身份认证，不在浏览器判断角色、团队或 ACL。完整流程是：
 
@@ -469,7 +472,7 @@ React Hook Form 管理，Zod schema 同时提供字段校验和提交前解析�
 const newProjectSchema = z.object({
   name: z.string().trim().min(1, "请输入项目名称").max(80),
   workspace: z.string().trim().min(1, "请输入 workspace 路径"),
-})
+});
 ```
 
 - 表单错误显示在字段旁，并把焦点移到第一个无效字段；服务端返回的字段错误映射到对应字段，其余错误显示为可关闭的表单级提示。
@@ -480,14 +483,14 @@ const newProjectSchema = z.object({
 
 ### 9.2 Query、Mutation 与 SSE 协作
 
-| 事件 | 立即更新 | 同步 / 失效策略 |
-|---|---|---|
-| 进入会话 | `GET /messages` 作为 reducer 的初始快照 | 不创建 SSE；空闲连接状态为 `closed`，Composer 可立即输入和提交 |
-| 发送消息 | reducer 乐观插入用户消息；controller 首次建流并等待 `open` | `open` 后才 POST；后续发送复用该流；成功后只把会话列表标记 stale，不立即 GET；失败按 §6 标红 |
-| 收到 `message.end` / `run.end` | reducer 结束当前 run 状态 | SSE 跨 run 保持连接，避免紧接的 `nextRun` 丢事件；只把会话列表与 project runner 状态标记 stale，不立即 GET |
-| 提交 Decision / 中断 | mutation pending 驱动按钮状态 | 成功后失效当前会话与相关列表；SSE 仍是进行中界面的即时来源 |
-| Runner 状态轮询或推送改变 | project query 更新 | 只刷新 project / conversations 范围，不清空对话 reducer |
-| `RESYNC` | 停止应用后续增量 | 按 §4 全量拉取、重建 reducer 基线后再恢复订阅 |
+| 事件                           | 立即更新                                                   | 同步 / 失效策略                                                                                            |
+| ------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 进入会话                       | `GET /messages` 作为 reducer 的初始快照                    | 不创建 SSE；空闲连接状态为 `closed`，Composer 可立即输入和提交                                             |
+| 发送消息                       | reducer 乐观插入用户消息；controller 首次建流并等待 `open` | `open` 后才 POST；后续发送复用该流；成功后只把会话列表标记 stale，不立即 GET；失败按 §6 标红               |
+| 收到 `message.end` / `run.end` | reducer 结束当前 run 状态                                  | SSE 跨 run 保持连接，避免紧接的 `nextRun` 丢事件；只把会话列表与 project runner 状态标记 stale，不立即 GET |
+| 提交 Decision / 中断           | mutation pending 驱动按钮状态                              | 成功后失效当前会话与相关列表；SSE 仍是进行中界面的即时来源                                                 |
+| Runner 状态轮询或推送改变      | project query 更新                                         | 只刷新 project / conversations 范围，不清空对话 reducer                                                    |
+| `RESYNC`                       | 停止应用后续增量                                           | 按 §4 全量拉取、重建 reducer 基线后再恢复订阅                                                              |
 
 `QueryClient` 应在应用根部只创建一次。默认缓存时间、重试次数和窗口聚焦刷新需按
 资源区分：会话/项目列表可刷新；SSE 只能由发送事务创建，不得因 mount、focus、token 刷新或 query 刷新建流。

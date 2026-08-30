@@ -1,41 +1,65 @@
 import type { ChatMessage } from "@nova/protocol";
-import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
-import type { ConversationAction } from "./reducer.js";
+import { useCallback, useEffect, useRef } from "react";
 import { ConversationStream } from "./conversation-stream.js";
+import { conversationStore } from "./store.js";
 
 interface UseConversationStreamOptions {
   conversationId: string;
-  dispatch: Dispatch<ConversationAction>;
   loadSnapshot: () => Promise<ChatMessage[]>;
   onRunEnd: () => void;
 }
 
-export function useConversationStream({
-  conversationId,
-  dispatch,
-  loadSnapshot,
-  onRunEnd,
-}: UseConversationStreamOptions) {
-  const callbacks = useRef({ dispatch, loadSnapshot, onRunEnd });
-  callbacks.current = { dispatch, loadSnapshot, onRunEnd };
+interface StreamEntry {
+  stream: ConversationStream;
+  mounted: number;
+}
 
-  const stream = useMemo(
-    () =>
-      new ConversationStream(conversationId, {
-        onConnection: (connection) => callbacks.current.dispatch({ type: "connection", connection }),
-        onEvent: (event) => callbacks.current.dispatch({ type: "event", event, conversationId }),
-        onOpen: () => callbacks.current.dispatch({ type: "clear-error" }),
-        onResync: async () => {
-          const messages = await callbacks.current.loadSnapshot();
-          callbacks.current.dispatch({ type: "hydrate", messages });
-        },
-        onRunEnd: () => callbacks.current.onRunEnd(),
-      }),
-    [conversationId],
-  );
+const streams = new Map<string, StreamEntry>();
 
-  useEffect(() => () => stream.close(), [stream]);
+function streamFor(conversationId: string, options: UseConversationStreamOptions): StreamEntry {
+  const existing = streams.get(conversationId);
+  if (existing) return existing;
+  let entry!: StreamEntry;
+  const stream = new ConversationStream(conversationId, {
+    onConnection: (connection) => conversationStore.dispatch(conversationId, { type: "connection", connection }),
+    onEvent: (event) => conversationStore.dispatch(conversationId, { type: "event", event, conversationId }),
+    onOpen: () => conversationStore.dispatch(conversationId, { type: "clear-error" }),
+    onResync: async () => {
+      const messages = await options.loadSnapshot();
+      conversationStore.dispatch(conversationId, { type: "hydrate", messages });
+    },
+    onRunEnd: () => {
+      options.onRunEnd();
+      if (entry.mounted) return;
+      stream.close();
+      streams.delete(conversationId);
+    },
+  });
+  entry = { stream, mounted: 0 };
+  streams.set(conversationId, entry);
+  return entry;
+}
 
-  const ensureConnected = useCallback(() => stream.ensureConnected(), [stream]);
-  return { ensureConnected };
+export function useConversationStream(options: UseConversationStreamOptions) {
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  useEffect(() => {
+    const entry = streamFor(options.conversationId, optionsRef.current);
+    entry.mounted += 1;
+    void entry.stream.ensureConnected().catch(() => undefined);
+    return () => {
+      entry.mounted -= 1;
+      if (entry.mounted || conversationStore.state(options.conversationId).isRunning) return;
+      entry.stream.close();
+      streams.delete(options.conversationId);
+    };
+  }, [options.conversationId]);
+
+  return {
+    ensureConnected: useCallback(
+      () => streamFor(options.conversationId, optionsRef.current).stream.ensureConnected(),
+      [options.conversationId],
+    ),
+  };
 }

@@ -126,9 +126,10 @@ describe("chat-ui", () => {
     );
     const todo = renderToStaticMarkup(<TodoPanel items={[{ id: "1", text: "verify", status: "in_progress" }]} />);
     expect(decision).toContain("rm build/output");
-    expect(decision).toContain("需要确认");
+    expect(decision).toContain("需要授权");
+    expect(decision).toContain("允许执行");
     expect(decision).toContain('data-slot="card"');
-    expect(decision).toContain('data-slot="badge"');
+    expect(decision).toContain("总是允许");
     expect(todo).not.toContain("checkbox");
     expect(todo).toContain("verify");
     expect(todo).toContain('data-slot="card"');

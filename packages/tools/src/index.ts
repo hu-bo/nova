@@ -1,5 +1,6 @@
 export { bash } from "./bash.js";
 export { readFile } from "./read-file.js";
+export { readDocument } from "./read-document.js";
 export { writeFile } from "./write-file.js";
 export { editFile } from "./edit-file.js";
 export { grep } from "./grep.js";

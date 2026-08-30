@@ -35,6 +35,7 @@ export class ConversationStream {
   private openWaiter: OpenWaiter | null = null;
   private resyncTask: Promise<void> | null = null;
   private generation = 0;
+  private lastEventId: string | null = null;
 
   constructor(
     private readonly conversationId: string,
@@ -68,7 +69,10 @@ export class ConversationStream {
 
   private openSource(connection: Extract<StreamConnection, "connecting" | "reconnecting">): void {
     this.callbacks.onConnection(connection);
-    const source = this.createEventSource(`/api/conversations/${encodeURIComponent(this.conversationId)}/events`);
+    const query = this.lastEventId ? `?after=${encodeURIComponent(this.lastEventId)}` : "";
+    const source = this.createEventSource(
+      `/api/conversations/${encodeURIComponent(this.conversationId)}/events${query}`,
+    );
     this.source = source;
 
     source.onopen = () => {
@@ -79,7 +83,7 @@ export class ConversationStream {
     };
     source.onmessage = (message) => {
       if (this.source !== source) return;
-      this.handleMessage(source, message.data);
+      this.handleMessage(source, message);
     };
     source.onerror = () => {
       if (this.source !== source) return;
@@ -106,10 +110,10 @@ export class ConversationStream {
     return promise;
   }
 
-  private handleMessage(source: EventSourceLike, data: string): void {
+  private handleMessage(source: EventSourceLike, message: MessageEvent<string>): void {
     let event: UiEvent;
     try {
-      event = UiEventSchema.parse(JSON.parse(data));
+      event = UiEventSchema.parse(JSON.parse(message.data));
     } catch (error) {
       this.callbacks.onEvent({
         type: "error",
@@ -119,6 +123,8 @@ export class ConversationStream {
       this.close(error instanceof Error ? error : undefined);
       return;
     }
+
+    if (message.lastEventId) this.lastEventId = message.lastEventId;
 
     if (event.type === "error" && event.code === "RESYNC") {
       const task = this.resync(source);

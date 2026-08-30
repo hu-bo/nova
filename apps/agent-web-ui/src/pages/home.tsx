@@ -14,6 +14,7 @@ import { errorMessage } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
+import { displayWorkspacePath } from "../lib/workspace-path.js";
 import { useQuickConversationCreate } from "./project/new-conversation.js";
 import { useConversations, useProjects } from "./project/use-projects.js";
 import { useRunnerCatalog } from "./settings/runner/use-runners.js";
@@ -101,7 +102,6 @@ export function HomeRoute() {
         />
       </section>
 
-
       <div className="mt-8 grid min-w-0 gap-8 xl:grid-cols-[1.2fr_0.8fr]">
         <section id="projects-section" className="min-w-0">
           <div className="mb-4 flex items-center justify-between">
@@ -111,27 +111,30 @@ export function HomeRoute() {
             </div>
           </div>
           {projectItems.length ? (
-            <div className="grid gap-4 md:grid-cols-2">
+            <Card className="divide-y divide-slate-100 overflow-hidden">
               {projectItems.map((project) => (
                 <Link
                   key={project.id}
                   to={`/p/${project.id}`}
-                  className="group rounded-xl bg-white p-5 ring-1 ring-slate-200 transition duration-200 hover:-translate-y-0.5 hover:ring-indigo-200 hover:shadow-soft"
+                  className="group flex min-w-0 items-center gap-4 px-4 py-3.5 transition hover:bg-slate-50 sm:px-5"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600">
-                      <FolderKanban className="size-5" aria-hidden="true" />
-                    </span>
-                    <RunnerBadge state={project.runnerState} />
-                  </div>
-                  <h3 className="mt-5 truncate font-semibold text-slate-900">{project.name}</h3>
-                  <p className="mt-1 truncate text-xs text-slate-500">{project.workspace ?? "尚未绑定 workspace"}</p>
-                  <span className="mt-5 flex items-center gap-1 text-xs font-semibold text-indigo-600">
-                    打开项目 <ArrowRight className="size-3.5 transition group-hover:translate-x-1" aria-hidden="true" />
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600 transition group-hover:bg-indigo-50 group-hover:text-indigo-600">
+                    <FolderKanban className="size-5" aria-hidden="true" />
                   </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-semibold text-slate-900">{project.name}</h3>
+                    <p className="mt-1 truncate text-xs text-slate-500">
+                      {project.workspace ? displayWorkspacePath(project.workspace) : "尚未绑定 workspace"}
+                    </p>
+                  </div>
+                  <RunnerBadge state={project.runnerState} />
+                  <ArrowRight
+                    className="size-4 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-indigo-600"
+                    aria-hidden="true"
+                  />
                 </Link>
               ))}
-            </div>
+            </Card>
           ) : (
             <EmptyState
               icon={<FolderKanban className="size-5" aria-hidden="true" />}
@@ -196,7 +199,6 @@ export function HomeRoute() {
           )}
         </section>
       </div>
-
     </div>
   );
 }

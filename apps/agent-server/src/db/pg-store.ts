@@ -4,7 +4,7 @@ import postgres from "postgres";
 import type { Page } from "@nova/protocol";
 import { conflict, invalidInput, notFound } from "../errors.js";
 import type { AgentStore } from "../store.js";
-import { conversations, messages, projects, runners as runnerRecords, runnerTokens, users } from "./schema.js";
+import { conversations, entries, messages, projects, records, runners as runnerRecords, runnerTokens, users } from "./schema.js";
 
 export interface PgStore {
   store: AgentStore;
@@ -260,6 +260,18 @@ export function createPgStore(databaseUrl: string): PgStore {
         .where(and(eq(conversations.id, input.id), eq(conversations.userId, input.userId)))
         .returning({ id: conversations.id });
       if (!deleted.length) throw notFound("Conversation");
+    },
+    async clearConversationContext(input) {
+      await db.transaction(async (tx) => {
+        const [conversation] = await tx
+          .select({ id: conversations.id })
+          .from(conversations)
+          .where(and(eq(conversations.id, input.id), eq(conversations.userId, input.userId)))
+          .limit(1);
+        if (!conversation) throw notFound("Conversation");
+        await tx.delete(records).where(eq(records.conversationId, input.id));
+        await tx.delete(entries).where(eq(entries.conversationId, input.id));
+      });
     },
     async routeConversation(userId, id) {
       const [conversation] = await db

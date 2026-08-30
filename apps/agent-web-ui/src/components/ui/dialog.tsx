@@ -49,7 +49,7 @@ export function Dialog({
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-[2px] transition-opacity data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
         <DialogPrimitive.Viewport
           className={cn(
-            "fixed inset-0 z-50 flex overflow-y-auto",
+            "agent-scrollbar fixed inset-0 z-50 flex overflow-y-auto",
             placement === "left" ? "items-stretch justify-start p-0" : "items-center justify-center p-4",
           )}
         >
@@ -86,7 +86,7 @@ export function Dialog({
             </header>
             <div
               className={cn(
-                "overflow-y-auto px-6 py-5",
+                "agent-scrollbar overflow-y-auto px-6 py-5",
                 placement === "left" ? "min-h-0 flex-1" : "max-h-[min(80vh,900px)]",
               )}
             >

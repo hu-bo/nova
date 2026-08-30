@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   ApiErrorSchema,
   ChatMessageSchema,
+  ClearConversationContextResultSchema,
   CompactConversationResultSchema,
   ContextUsageSchema,
   MessageQuerySchema,
@@ -19,6 +20,7 @@ import type { CredentialCipher } from "../model-config/credential.js";
 
 const IdParams = z.object({ id: z.uuid() });
 const EventHeaders = z.object({ "last-event-id": z.string().optional() });
+const EventQuery = z.object({ after: z.string().optional() });
 
 export function messageRoutes(
   app: FastifyInstance,
@@ -119,6 +121,25 @@ export function messageRoutes(
     },
     (request) => messages.compact(request.userId, request.params.id),
   );
+
+  server.post(
+    "/conversations/:id/clear",
+    {
+      schema: {
+        operationId: "clearConversationContext",
+        tags: ["messages"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: {
+          200: ClearConversationContextResultSchema,
+          401: ApiErrorSchema,
+          404: ApiErrorSchema,
+          409: ApiErrorSchema,
+        },
+      },
+    },
+    (request) => messages.clear(request.userId, request.params.id),
+  );
 }
 
 export function conversationEventRoutes(app: FastifyInstance, events: EventHub): void {
@@ -132,10 +153,11 @@ export function conversationEventRoutes(app: FastifyInstance, events: EventHub):
         tags: ["events"],
         params: IdParams,
         headers: EventHeaders,
+        querystring: EventQuery,
       },
     },
     async (request, reply) => {
-      const replay = events.replay(request.params.id, request.headers["last-event-id"]);
+      const replay = events.replay(request.params.id, request.headers["last-event-id"] ?? request.query.after);
       reply.hijack();
       reply.raw.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",

@@ -160,7 +160,7 @@ export function Composer<TMetadata = unknown>({
               onSelect={onSkillInvoke ? invokeSkill : undefined}
             />
 
-            <div className="nova-composer-input-row flex min-w-0 items-center justify-between gap-2 border-t border-slate-100 pt-1.5 dark:border-slate-800/80">
+            <div className="nova-composer-input-row flex min-w-0 items-center justify-between gap-2  border-slate-100 pt-1.5 dark:border-slate-800/80">
               <div className="nova-composer-options flex min-w-0 flex-wrap items-center gap-1">
                 {trigger}
                 {models.length > 0 && (

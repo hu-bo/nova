@@ -100,4 +100,34 @@ describe("conversationReducer", () => {
     });
     expect(compacted.contextUsage).toEqual({ inputTokens: null, contextWindow: 128_000 });
   });
+
+  it("keeps an in-memory streaming message when a returning route hydrates persisted history", () => {
+    const streaming = conversationReducer(initialConversationState, {
+      type: "event",
+      conversationId: "conversation-1",
+      event: { type: "message.start", messageId: "assistant-1", role: "assistant" },
+    });
+    const withDelta = conversationReducer(streaming, {
+      type: "event",
+      conversationId: "conversation-1",
+      event: { type: "block.start", messageId: "assistant-1", index: 0, block: { type: "text", text: "仍在生成" } },
+    });
+    const hydrated = conversationReducer(withDelta, {
+      type: "hydrate",
+      messages: [
+        {
+          id: "user-1",
+          conversationId: "conversation-1",
+          role: "user",
+          blocks: [{ type: "text", text: "hello" }],
+          status: "done",
+          createdAt: 1,
+        },
+      ],
+    });
+
+    expect(hydrated.messages.map((message) => message.id)).toEqual(["user-1", "assistant-1"]);
+    expect(hydrated.messages[1]?.status).toBe("streaming");
+    expect(hydrated.messages[1]?.blocks).toEqual([{ type: "text", text: "仍在生成" }]);
+  });
 });

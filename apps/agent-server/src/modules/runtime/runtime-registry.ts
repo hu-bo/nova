@@ -10,6 +10,7 @@ export interface ConversationRuntimes {
   abort(conversationId: string): Promise<void>;
   context(route: EntryRoute): Promise<ContextUsage>;
   compact(route: EntryRoute): Promise<CompactionResult>;
+  clear(route: EntryRoute, clearStorage: () => Promise<void>): Promise<ContextUsage>;
   invalidate(conversationId: string): void;
 }
 
@@ -34,6 +35,7 @@ export function createRuntimeRegistry(
   idleMs = 30 * 60 * 1000,
 ): ConversationRuntimes {
   const entries = new Map<string, RuntimeEntry>();
+  const clearing = new Set<string>();
 
   const get = (route: EntryRoute): RuntimeEntry => {
     const id = route.conversation.id;
@@ -65,6 +67,7 @@ export function createRuntimeRegistry(
 
   return {
     async send(route, text, queue) {
+      if (clearing.has(route.conversation.id)) throw conflict("Conversation context is being cleared");
       const { agent } = get(route);
       if (agent.state.isStreaming) {
         logger.debug(
@@ -140,6 +143,20 @@ export function createRuntimeRegistry(
           throw conflict("Conversation is running");
         }
         throw error;
+      }
+    },
+    async clear(route, clearStorage) {
+      const conversationId = route.conversation.id;
+      if (clearing.has(conversationId)) throw conflict("Conversation context is being cleared");
+      const entry = entries.get(conversationId);
+      if (entry?.agent.state.isStreaming) throw conflict("Conversation is running");
+      clearing.add(conversationId);
+      entries.delete(conversationId);
+      try {
+        await clearStorage();
+        return get(route).agent.contextUsage();
+      } finally {
+        clearing.delete(conversationId);
       }
     },
     invalidate(conversationId) {

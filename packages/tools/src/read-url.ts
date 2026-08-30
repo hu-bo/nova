@@ -1,11 +1,8 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
-import * as XLSX from "xlsx";
+import { extractDocumentText, MAX_DOCUMENT_BYTES } from "./document-text.js";
 import { errorResult, text, type Tool, z } from "./shared.js";
 
-const MAX_BYTES = 20 * 1024 * 1024;
 const MAX_TEXT = 250_000;
 const schema = z.object({ url: z.url().describe("Public HTTP(S) URL returned by the upload service") });
 
@@ -20,7 +17,7 @@ export const readUrl: Tool<z.output<typeof schema>> = {
     try {
       const response = await safeFetch(url, ctx?.signal);
       const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength > MAX_BYTES) return errorResult({ code: "TOO_LARGE" }, "URL content exceeds 20 MB");
+      if (bytes.byteLength > MAX_DOCUMENT_BYTES) return errorResult({ code: "TOO_LARGE" }, "URL content exceeds 20 MB");
       const contentType =
         response.headers.get("content-type")?.split(";", 1)[0]?.toLowerCase() ?? "application/octet-stream";
       if (contentType.startsWith("image/")) {
@@ -30,7 +27,7 @@ export const readUrl: Tool<z.output<typeof schema>> = {
           details: { url, contentType, size: bytes.byteLength },
         };
       }
-      const extracted = await extractText(bytes, contentType, new URL(response.url).pathname);
+      const extracted = await extractDocumentText(bytes, contentType, new URL(response.url).pathname);
       const truncated = extracted.length > MAX_TEXT;
       return {
         status: "ok",
@@ -55,7 +52,7 @@ async function safeFetch(input: string, signal?: AbortSignal): Promise<Response>
     if (response.status < 300 || response.status >= 400) {
       if (!response.ok) throw new Error(`URL returned HTTP ${response.status}`);
       const length = Number(response.headers.get("content-length"));
-      if (Number.isFinite(length) && length > MAX_BYTES) throw new Error("URL content exceeds 20 MB");
+      if (Number.isFinite(length) && length > MAX_DOCUMENT_BYTES) throw new Error("URL content exceeds 20 MB");
       return response;
     }
     const location = response.headers.get("location");
@@ -93,37 +90,4 @@ function isPrivateAddress(address: string): boolean {
     (parts[0] === 192 && parts[1] === 168) ||
     (parts[0] === 172 && parts[1]! >= 16 && parts[1]! <= 31)
   );
-}
-
-async function extractText(bytes: Uint8Array, contentType: string, pathname: string): Promise<string> {
-  const extension = pathname.toLowerCase().split(".").pop();
-  const buffer = Buffer.from(bytes);
-  if (contentType === "application/pdf" || extension === "pdf") {
-    const parser = new PDFParse({ data: bytes });
-    try {
-      return (await parser.getText()).text;
-    } finally {
-      await parser.destroy();
-    }
-  }
-  if (contentType.includes("wordprocessingml") || extension === "docx")
-    return (await mammoth.extractRawText({ buffer })).value;
-  if (
-    contentType.includes("spreadsheetml") ||
-    contentType.includes("excel") ||
-    extension === "xlsx" ||
-    extension === "xls"
-  ) {
-    const workbook = XLSX.read(buffer);
-    return workbook.SheetNames.map((name) => `# ${name}\n${XLSX.utils.sheet_to_csv(workbook.Sheets[name]!)}`).join(
-      "\n\n",
-    );
-  }
-  if (
-    contentType.startsWith("text/") ||
-    contentType.includes("json") ||
-    ["md", "txt", "csv", "tsv", "json", "xml", "yaml", "yml"].includes(extension ?? "")
-  )
-    return buffer.toString("utf8");
-  throw new Error(`Unsupported uploaded content type: ${contentType}`);
 }

@@ -7,6 +7,7 @@ import { RunnerLiveUpdates } from "./settings/runner/live-updates.js";
 import { useQuickConversationCreate } from "./project/new-conversation.js";
 import { NewProjectDrawer } from "./project/new-project.js";
 import { errorMessage } from "../api/client.js";
+import { ProjectDetailsPopover } from "../components/project-details-popover.js";
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -88,6 +89,7 @@ export function AppShell() {
           onNewProject={() => openCreator("project")}
           onNewChat={() => openCreator("chat")}
           onNewProjectChat={(project) => createChat.mutate(project)}
+          onEditProject={(project) => navigate(`/p/${project.id}`)}
           onDeleteConversation={(conversation) => {
             if (window.confirm(`删除“${conversation.title || "未命名会话"}”？此操作无法撤销。`))
               conversationMutations.remove.mutate(conversation.id);
@@ -125,6 +127,10 @@ export function AppShell() {
               setMobileOpen(false);
               createChat.mutate(project);
             }}
+            onEditProject={(project) => {
+              setMobileOpen(false);
+              navigate(`/p/${project.id}`);
+            }}
             onDeleteConversation={(conversation) => {
               if (window.confirm(`删除“${conversation.title || "未命名会话"}”？此操作无法撤销。`))
                 conversationMutations.remove.mutate(conversation.id);
@@ -156,6 +162,7 @@ function SidebarContent({
   onNewProject,
   onNewChat,
   onNewProjectChat,
+  onEditProject,
   onDeleteConversation,
   onNavigate,
   onLogout,
@@ -165,10 +172,13 @@ function SidebarContent({
   onNewProject: () => void;
   onNewChat: () => void;
   onNewProjectChat: (project: { id: string; runnerId: string | null }) => void;
+  onEditProject: (project: { id: string }) => void;
   onDeleteConversation: (conversation: { id: string; title: string }) => void;
   onNavigate?: () => void;
   onLogout: () => void;
 }) {
+  const location = useLocation();
+
   return (
     <>
       <Link to="/" onClick={onNavigate} className="flex h-16 items-center gap-3 border-b border-slate-100 px-5">
@@ -180,7 +190,7 @@ function SidebarContent({
           <span className="block text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Coding Agent</span>
         </div>
       </Link>
-      <nav className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-3 py-5" aria-label="主导航">
+      <nav className="agent-scrollbar flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-3 py-5" aria-label="主导航">
         <div className="space-y-1">
           <NavItem
             to="/app"
@@ -210,25 +220,41 @@ function SidebarContent({
           </div>
           <div className="space-y-1">
             {projects.slice(0, 12).map((project) => (
-              <div key={project.id} className="group relative">
-                <div>
-                  <NavItem
-                    to={`/p/${project.id}`}
-                    icon={
-                      <span
-                        className={`size-2 rounded-full ${runnerDot(project.runnerState)}`}
-                        aria-label={`Runner ${project.runnerState}`}
-                      />
-                    }
-                    label={project.name}
-                    onClick={onNavigate}
-                  />
+              <div key={project.id}>
+                <div className="group/project-row relative">
+                  <ProjectDetailsPopover
+                    project={project}
+                    taskCount={conversations.filter((conversation) => conversation.projectId === project.id).length}
+                    onEdit={() => {
+                      onEditProject(project);
+                    }}
+                  >
+                    <NavItem
+                      to={`/p/${project.id}`}
+                      icon={
+                        <span
+                          className={`size-2 rounded-full ${runnerDot(project.runnerState)}`}
+                          aria-label={`Runner ${project.runnerState}`}
+                        />
+                      }
+                      label={project.name}
+                      onClick={onNavigate}
+                      className="pr-11"
+                      end
+                      contextActive={location.pathname.startsWith(`/p/${project.id}/c/`)}
+                    />
+                  </ProjectDetailsPopover>
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-slate-400 opacity-0 transition hover:bg-white hover:text-indigo-600 group-hover/project-row:opacity-100 group-focus-within/project-row:opacity-100"
+                    aria-label={`在 ${project.name} 中新建会话`}
+                    title="新建项目会话"
+                    onClick={() => onNewProjectChat(project)}
+                  >
+                    <Plus className="size-4" aria-hidden="true" />
+                  </button>
                 </div>
-                <div className="pointer-events-none absolute left-full top-1 z-50 ml-2 hidden w-64 rounded-xl bg-slate-900 p-3 text-xs text-white shadow-xl group-hover:block">
-                  <p className="font-semibold">{project.name}</p>
-                  <p className="mt-1 break-all text-slate-300">{project.workspace ?? "尚未绑定 workspace"}</p>
-                </div>
-                <div className="space-y-1 pl-3">
+                <div className="space-y-1 pl-3 pt-1">
                   {conversations
                     .filter((conversation) => conversation.projectId === project.id)
                     .slice(0, 12)
@@ -242,15 +268,6 @@ function SidebarContent({
                       />
                     ))}
                 </div>
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-slate-400 opacity-0 transition hover:bg-white hover:text-indigo-600 group-hover:opacity-100 group-focus-within:opacity-100"
-                  aria-label={`在 ${project.name} 中新建会话`}
-                  title="新建项目会话"
-                  onClick={() => onNewProjectChat(project)}
-                >
-                  <Plus className="size-4" aria-hidden="true" />
-                </button>
               </div>
             ))}
             {!projects.length && (
@@ -322,6 +339,7 @@ function ConversationNavItem({
         icon={<MessageCircle className="size-4" aria-hidden="true" />}
         label={conversation.title || "未命名会话"}
         onClick={onClick}
+        className="pr-11"
       />
       <button
         type="button"
@@ -340,18 +358,31 @@ function NavItem({
   icon,
   label,
   onClick,
+  className,
+  end = false,
+  contextActive = false,
 }: {
   to: string;
   icon: React.ReactNode;
   label: string;
   onClick?: (() => void) | undefined;
+  className?: string | undefined;
+  end?: boolean | undefined;
+  contextActive?: boolean | undefined;
 }) {
   return (
     <NavLink
       to={to}
+      end={end}
       onClick={onClick}
       className={({ isActive }) =>
-        `flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${isActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`
+        `flex min-w-0 items-center gap-1 rounded-xl px-3 py-1.5 text-sm transition ${
+          isActive
+            ? "bg-indigo-100 font-semibold text-indigo-800"
+            : contextActive
+              ? "bg-indigo-50/70 font-medium text-indigo-600"
+              : "font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        } ${className ?? ""}`
       }
     >
       <span className="shrink-0">{icon}</span>

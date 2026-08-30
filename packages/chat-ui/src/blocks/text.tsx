@@ -13,12 +13,12 @@ export function TextBlock({ text }: { text: string }) {
             </a>
           ),
           pre: ({ children }) => (
-            <pre className="overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-200">
+            <pre className="nova-scrollbar overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-200">
               {children}
             </pre>
           ),
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-800">
+            <div className="nova-scrollbar my-3 overflow-x-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-800">
               <table className="w-full border-collapse text-left text-sm [&_td]:border-t [&_td]:border-slate-200 [&_td]:px-3 [&_td]:py-1.5 [&_th]:bg-slate-50 [&_th]:px-3 [&_th]:py-1.5 [&_th]:font-semibold dark:[&_td]:border-slate-800 dark:[&_th]:bg-slate-900">
                 {children}
               </table>

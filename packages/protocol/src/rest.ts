@@ -231,6 +231,13 @@ export const CompactConversationResultSchema = z
   .strict();
 export type CompactConversationResult = z.infer<typeof CompactConversationResultSchema>;
 
+export const ClearConversationContextResultSchema = z
+  .object({
+    context: ContextUsageSchema,
+  })
+  .strict();
+export type ClearConversationContextResult = z.infer<typeof ClearConversationContextResultSchema>;
+
 export const CreateUploadSchema = z
   .object({
     name: z.string().trim().min(1).max(255),

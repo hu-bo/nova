@@ -10,7 +10,7 @@
 **负责**
 
 - HTTP API + SSE 端点（契约见 `protocol.md`）
- - 登录鉴权（调用独立 auth-service）
+- 登录鉴权（调用独立 auth-service）
 - 托管 agent-core 运行时
 - 保存和校验会话的模型配置，并将配置组装为 `ModelRef`
 - **组装依赖**：注入 `ToolContext` / `Decide` / `SessionStorage`，选择 Runner
@@ -65,7 +65,7 @@ Entry Router 的输出应是明确的路由结果，而不是把判断隐含在�
 ```ts
 type EntryRoute =
   | { mode: "chat"; conversation: Conversation; userId: string }
-  | { mode: "project"; conversation: Conversation; project: Project; userId: string }
+  | { mode: "project"; conversation: Conversation; project: Project; userId: string };
 ```
 
 `mode` 是 `project_id` 的类型化结果，不是第二份可独立修改的状态。Harness 选择只发生在
@@ -91,14 +91,14 @@ Project                        独立 Chat
       三个会话共享 workspace 与 Runner，各自独立的上下文与 TODO
 ```
 
-| | 独立 Chat | Project 下的 Chat |
-|---|---|---|
-| `conversations.project_id` | `null` | project 的 id |
-| workspace | 未绑定 Runner 时无；绑定后为 Runner 的 `root_workspace` | `projects.workspace` |
-| Runner | 不要求绑定；绑定后仅使用该 Runner 的 root | 优先使用 conversation 的 `runner_id`，否则使用 Project 的绑定，并校验 workspace（§8） |
-| 注入的 `ctx` | 未绑定时 `undefined`；绑定且 READY 时 `toToolContext(runner, { cwd: root_workspace })` | `toToolContext(runner, ...)` |
-| 工具集 | 未绑定时 `risk === "none"`；绑定且 READY 时全部 | 全部 |
-| TODO | 有，属于该 conversation | 有，属于该 conversation（**不跨会话共享**） |
+|                            | 独立 Chat                                                                              | Project 下的 Chat                                                                     |
+| -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `conversations.project_id` | `null`                                                                                 | project 的 id                                                                         |
+| workspace                  | 未绑定 Runner 时无；绑定后为 Runner 的 `root_workspace`                                | `projects.workspace`                                                                  |
+| Runner                     | 不要求绑定；绑定后仅使用该 Runner 的 root                                              | 优先使用 conversation 的 `runner_id`，否则使用 Project 的绑定，并校验 workspace（§8） |
+| 注入的 `ctx`               | 未绑定时 `undefined`；绑定且 READY 时 `toToolContext(runner, { cwd: root_workspace })` | `toToolContext(runner, ...)`                                                          |
+| 工具集                     | 未绑定时 `risk === "none"`；绑定且 READY 时全部                                        | 全部                                                                                  |
+| TODO                       | 有，属于该 conversation                                                                | 有，属于该 conversation（**不跨会话共享**）                                           |
 
 **Project 是 workspace 的容器，不是会话的容器。** 创建 Project 时不立即绑定 Runner；
 用户必须从自己已连接设备的根目录中选择工作目录，绑定完成后才能开始 coding。
@@ -143,11 +143,11 @@ React TS API Client         发布型 TS SDK
 + TanStack Query hooks      （非 React 消费者）
 ```
 
-| 消费者 | 生成器 | 产物 | 使用规则 |
-|---|---|---|---|
-| `apps/agent-web-ui` | Orval | 请求函数、类型与 TanStack Query hooks | 供 React 页面管理 REST 资源；详见 `agent-web-ui.md` §1.2 |
-| `apps/model-gateway-client` | Orval（消费自身 gateway 的 OpenAPI） | 请求函数、类型与 TanStack Query hooks | 不经 agent-server；详见 `model-gateway.md` §7.2 |
-| 外部 TS 调用方 | Hey API | 与 React 无关的 TS SDK | 仅在有 CLI、集成方或其他非 React 消费者时发布；不能替代或再包装 Orval 产物 |
+| 消费者                      | 生成器                               | 产物                                  | 使用规则                                                                   |
+| --------------------------- | ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------- |
+| `apps/agent-web-ui`         | Orval                                | 请求函数、类型与 TanStack Query hooks | 供 React 页面管理 REST 资源；详见 `agent-web-ui.md` §1.2                   |
+| `apps/model-gateway-client` | Orval（消费自身 gateway 的 OpenAPI） | 请求函数、类型与 TanStack Query hooks | 不经 agent-server；详见 `model-gateway.md` §7.2                            |
+| 外部 TS 调用方              | Hey API                              | 与 React 无关的 TS SDK                | 仅在有 CLI、集成方或其他非 React 消费者时发布；不能替代或再包装 Orval 产物 |
 
 **这不是两套服务端 API。** Orval 和 Hey API 读取同一份 OpenAPI，只是分别面向 React 应用
 与可发布 SDK。没有外部 SDK 消费者时，不提前生成或维护空的 Hey API 包；已经存在的 React
@@ -186,29 +186,28 @@ Registry 是 root 边界与在线状态的 owner；HTTP handler 不自行拼接�
 这是本 app **唯一不可替代**的职责。其余都是围绕它的传输层。
 
 ```ts
-const codingHarness = createHarness({ modules: [codingAgentModule] })
+const codingHarness = createHarness({ modules: [codingAgentModule] });
 const chatHarness = createHarness({
   modules: [{ id: "nova.chat", tools: [todoWrite] }],
-})
+});
 
 // src/modules/runtime/create-agent-runtime.ts
 function createAgentRuntime(conv: Conversation, project: Project | null, userId: string): Agent {
   // Chat 模式：project 为 null → 不连 Runner，不注入 ctx
   const ctx = project
-    ? toToolContext(registry.pick(userId, project.runnerId, project.workspace),
-                    { cwd: project.workspace })
-    : undefined
+    ? toToolContext(registry.pick(userId, project.runnerId, project.workspace), { cwd: project.workspace })
+    : undefined;
 
-  const ref = resolveModelRef(conv.modelConfig)
-  const model = createModel(ref)
+  const ref = resolveModelRef(conv.modelConfig);
+  const model = createModel(ref);
   return (project ? codingHarness : chatHarness).createAgent({
-    model:   ref,
-    stream:  model.stream,
+    model: ref,
+    stream: model.stream,
     ctx,
     storage: pgSessionStorage(db, conv.id),
-    decide:  sseDecide(conv.id),          // §6
+    decide: sseDecide(conv.id), // §6
     userId,
-  })
+  });
 }
 ```
 
@@ -461,17 +460,21 @@ Projection，且 tool 的 `details` 已经不在 entries 里了（`agent-core.md
 `agent.compact()`。压缩与 run 都修改同一 Entry 分支，所以 runtime registry 是唯一并发 owner，
 运行中请求压缩返回 409。压缩成功后 Agent 清空旧 usage，并通过 SSE 发布 `context.updated`。
 
+`POST /conversations/:id/clear` 也由 runtime registry 串行管理：运行中返回 409；空闲时先销毁内存
+runtime，再在同一数据库事务中删除该 Conversation 的 `entries` 与 `records`。`messages` 和 Conversation
+元数据保留，因此它是清空后续模型上下文而不是删除聊天历史。
+
 Message 与 Entry 是两个写模型，不追求跨越整个模型运行的大事务。用户 Message 表示“server 已接受
 这次输入”；若 Agent 启动失败，它仍应保留，并由错误事件解释失败。
 
 ### 不建的表
 
-| 表 | 理由 |
-|---|---|
-| `tasks` / `executions` | taskflow 有退出条件（`taskflow.md` §8）；Execution 的事实已在 `records` 里 |
-| `todos` | TodoState 由 `records` 里最后一条 `todo-updated` 重建（`agent-core.md` §9.4）。单独建表要处理"两处状态谁为准"，而 records 本来就必须写 |
-| `artifacts` | Phase 1/2 无 artifact 存储（`proto.md` §7） |
-| `sessions` | token 无状态校验，不存会话 |
+| 表                     | 理由                                                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks` / `executions` | taskflow 有退出条件（`taskflow.md` §8）；Execution 的事实已在 `records` 里                                                             |
+| `todos`                | TodoState 由 `records` 里最后一条 `todo-updated` 重建（`agent-core.md` §9.4）。单独建表要处理"两处状态谁为准"，而 records 本来就必须写 |
+| `artifacts`            | Phase 1/2 无 artifact 存储（`proto.md` §7）                                                                                            |
+| `sessions`             | token 无状态校验，不存会话                                                                                                             |
 
 `repo-layout.md` §4.9 列了 Task / Execution / Artifact 持久化 —— 上述三条是相对它的收敛。
 
@@ -510,12 +513,12 @@ REST 操作上校验；`GET /api/conversations/:id/events` 是只读订阅端点
 
 **边界**
 
-| | |
-|---|---|
-| 鉴权（你是谁） | 这里，Casdoor |
-| 所有权授权 | 所有 Project / Conversation 查询和变更都带 `user_id`；找不到与无权访问统一返回 404 |
-| 角色 / 团队 / ACL | 第一版不做 |
-| 工具审批（这次执行放不放行） | agent-core 的 Decision（`agent-core.md` §6），与登录无关 |
+|                              |                                                                                    |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| 鉴权（你是谁）               | 这里，Casdoor                                                                      |
+| 所有权授权                   | 所有 Project / Conversation 查询和变更都带 `user_id`；找不到与无权访问统一返回 404 |
+| 角色 / 团队 / ACL            | 第一版不做                                                                         |
+| 工具审批（这次执行放不放行） | agent-core 的 Decision（`agent-core.md` §6），与登录无关                           |
 
 **agent-core 永远不认识 User**，只持有 `userId: string`。脱离 server 时该值为 `"local"`。
 
@@ -529,21 +532,21 @@ REST 操作上校验；`GET /api/conversations/:id/events` 是只读订阅端点
 
 该路由注册在 Bearer 认证插件之外，响应必须立即 flush `200` 与
 `Content-Type: text/event-stream`。前端发送事务先懒创建 EventSource，等待 `open` 后才 POST，
-使订阅成功成为启动 run 的建连屏障。首次发送建立的流在会话页面存续期间跨 run 复用；
-`run.end` 不关闭流，因为 `nextRun` 可能紧接着产生下一组事件。
+使订阅成功成为启动 run 的建连屏障。前端会话注册表拥有流，运行中的流跨路由切换复用；
+`run.end` 不关闭当前页面的流，因为 `nextRun` 可能紧接着产生下一组事件。
 
 flush headers 后必须立即写入 SSE 注释帧 `:connected\n\n`。不能等待业务事件或 15s 心跳才写
 首个 body chunk；开发代理和部分反向代理会在首个 chunk 前缓冲响应，导致浏览器收不到
 `EventSource.open`。
 
-| 关注点 | 做法 |
-|---|---|
-| 事件 id | 进程内每 conversation 一个单调递增计数器，写进 SSE `id:` 字段 |
-| 重连 | 原生 `EventSource` 自动带 `Last-Event-ID` header，server 从环形缓冲（每 conversation 最近 500 条）重放 |
-| 缓冲区外 | 返回一次 `error{code:"RESYNC"}`，客户端重新拉 `GET /messages` 全量对齐 |
-| 建连帧 | headers 后立即发送 `:connected` 注释，强制代理转发并完成 `EventSource.open` |
-| 心跳 | 每 15s 发注释行 `:ka`，防代理断连 |
-| 多标签页 | 同一 conversation 多个订阅者，广播 |
+| 关注点   | 做法                                                                                                                                            |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 事件 id  | 进程内每 conversation 一个单调递增计数器，写进 SSE `id:` 字段                                                                                   |
+| 重连     | 原生 `EventSource` 自动带 `Last-Event-ID` header；新建连接可传 `after` query，server 从环形缓冲（每 conversation 最近 500 条）重放，header 优先 |
+| 缓冲区外 | 返回一次 `error{code:"RESYNC"}`，客户端重新拉 `GET /messages` 全量对齐                                                                          |
+| 建连帧   | headers 后立即发送 `:connected` 注释，强制代理转发并完成 `EventSource.open`                                                                     |
+| 心跳     | 每 15s 发注释行 `:ka`，防代理断连                                                                                                               |
+| 多标签页 | 同一 conversation 多个订阅者，广播                                                                                                              |
 
 **事件不持久化。** 环形缓冲只在内存里，进程重启后客户端走 RESYNC 全量对齐。
 Event Store 是 Phase 3（`proto.md` §7）。
@@ -568,14 +571,19 @@ agent-core 写 decision-requested Record
 ```ts
 // runtime/sse-decide.ts —— 整个文件大约 40 行
 function sseDecide(conversationId: string): Decide {
-  return (req, signal) => new Promise((resolve, reject) => {
-    pending.set(req.decisionId, { conversationId, resolve, reject })
-    broadcast(conversationId, { type: "decision.requested", request: req })
-    signal.addEventListener("abort", () => {
-      pending.delete(req.decisionId)
-      reject(signal.reason)
-    }, { once: true })
-  })
+  return (req, signal) =>
+    new Promise((resolve, reject) => {
+      pending.set(req.decisionId, { conversationId, resolve, reject });
+      broadcast(conversationId, { type: "decision.requested", request: req });
+      signal.addEventListener(
+        "abort",
+        () => {
+          pending.delete(req.decisionId);
+          reject(signal.reason);
+        },
+        { once: true },
+      );
+    });
 }
 ```
 
@@ -660,19 +668,19 @@ path 位于该 Runner 的 root 内且目录存在，然后原子写入 `projects
 
 ```ts
 interface Registry {
-  register(ownerId: string, session: RunnerSession): void
-  pick(userId: string, runnerId: string, workspace: string): RunnerSession
-  markDisconnected(id: string): void
+  register(ownerId: string, session: RunnerSession): void;
+  pick(userId: string, runnerId: string, workspace: string): RunnerSession;
+  markDisconnected(id: string): void;
 }
 ```
 
 心跳事实已经由 `RunnerSession.lastHeartbeatAt/state` 维护，Registry 读取它们并推导在线状态，
 不再提供一个让别处重复写状态的 `heartbeat()` 入口。
 
-| 状态 | 来源 |
-|---|---|
-| `READY` / `BUSY` / `DRAINING` | Runner 上报；同步为 `runners.reported_state` 的最近观测值 |
-| `DISCONNECTED` | **server 推导**：超过 3 个心跳周期未收到。Runner 自己永远不上报它（`proto.md` §5） |
+| 状态                          | 来源                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `READY` / `BUSY` / `DRAINING` | Runner 上报；同步为 `runners.reported_state` 的最近观测值                          |
+| `DISCONNECTED`                | **server 推导**：超过 3 个心跳周期未收到。Runner 自己永远不上报它（`proto.md` §5） |
 
 `DISCONNECTED` 不写进 `runners.reported_state`；连接接纳后、首次心跳前该列为 null，UI 同样
 视为 disconnected。server 重启时数据库里的所有 runner 都先视为
@@ -760,17 +768,17 @@ agent-core → model-adapters ──HTTP/SSE 直连──► 官方或中转商
 
 ```ts
 type ModelConfig = {
-  provider: "openai" | "anthropic"
-  endpoint: string          // 官方或中转商 endpoint，不是 agent-server 地址
-  model: string
-  credential: string       // 由配置模块按部署安全策略保护；不写日志
-  contextWindow: number
-  maxOutput: number
-  thinkingLevels: string[]
-  parallelToolCalls: boolean
-  reasoningFormat: string
-  inputModalities: string[]
-}
+  provider: "openai" | "anthropic";
+  endpoint: string; // 官方或中转商 endpoint，不是 agent-server 地址
+  model: string;
+  credential: string; // 由配置模块按部署安全策略保护；不写日志
+  contextWindow: number;
+  maxOutput: number;
+  thinkingLevels: string[];
+  parallelToolCalls: boolean;
+  reasoningFormat: string;
+  inputModalities: string[];
+};
 ```
 
 `provider` 表示 wire protocol；`reasoningFormat` 表示同一协议内的供应商差异。
@@ -788,13 +796,13 @@ Agent。
 管理 API 统一位于 `/admin/model-config`，使用 Casdoor `admin` 角色；推理请求不经过
 这些路由。接口范围为：
 
-| Path | 用途 |
-|---|---|
+| Path         | 用途                              |
+| ------------ | --------------------------------- |
 | `/providers` | 官方 / 中转商 endpoint 与凭据配置 |
-| `/models` | 公开模型名、上游模型名与能力目录 |
-| `/api-keys` | 配置模块管理凭据 |
-| `/usage` | 配置模块产生的用量报表 |
-| `/quotas` | 配额与限流配置 |
+| `/models`    | 公开模型名、上游模型名与能力目录  |
+| `/api-keys`  | 配置模块管理凭据                  |
+| `/usage`     | 配置模块产生的用量报表            |
+| `/quotas`    | 配额与限流配置                    |
 
 管理前端可以继续作为独立 `model-gateway-client` 应用存在；它只调用上述管理 API，
 不进入模型推理路径。若未来拆分服务端，优先整体迁移 `modules/model-config` 与这些
@@ -806,9 +814,9 @@ Agent。
 
 **推迟**
 
-| 项 | 理由 |
-|---|---|
-| 多实例部署 | 需要 conversation 亲和路由，见 §2 |
-| Event Store / Replay | 见 §6 |
-| 角色 / 团队 / ACL | 见 §5 |
-| Task / Execution 的运维视图 | 没有消费者 |
+| 项                          | 理由                              |
+| --------------------------- | --------------------------------- |
+| 多实例部署                  | 需要 conversation 亲和路由，见 §2 |
+| Event Store / Replay        | 见 §6                             |
+| 角色 / 团队 / ACL           | 见 §5                             |
+| Task / Execution 的运维视图 | 没有消费者                        |

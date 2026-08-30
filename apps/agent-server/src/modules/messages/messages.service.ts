@@ -64,6 +64,12 @@ export function createMessagesService(
         context: await runtimes.context(route),
       };
     },
+    async clear(userId: string, conversationId: string) {
+      const route = await store.routeConversation(userId, conversationId);
+      return {
+        context: await runtimes.clear(route, () => store.clearConversationContext({ userId, id: conversationId })),
+      };
+    },
   };
 }
 

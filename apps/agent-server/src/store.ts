@@ -117,6 +117,7 @@ export interface AgentStore {
     cursor?: string;
   }): Promise<Page<ConversationRow>>;
   deleteConversation(input: { userId: string; id: string }): Promise<void>;
+  clearConversationContext(input: { userId: string; id: string }): Promise<void>;
   routeConversation(userId: string, id: string): Promise<EntryRoute>;
   updateConversationRunner(input: { userId: string; id: string; runnerId: string }): Promise<ConversationRow>;
   setConversationTitleIfUntitled(input: { userId: string; id: string; title: string }): Promise<void>;
@@ -332,6 +333,9 @@ export function createMemoryStore(): AgentStore {
       ownedConversation(input.userId, input.id);
       state.conversations.delete(input.id);
       state.messages = state.messages.filter((message) => message.conversationId !== input.id);
+    },
+    async clearConversationContext(input) {
+      ownedConversation(input.userId, input.id);
     },
     async routeConversation(userId, id) {
       const conversation = ownedConversation(userId, id);

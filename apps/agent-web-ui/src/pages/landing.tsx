@@ -11,8 +11,11 @@ import {
   MessageCircle,
   Server,
   Settings,
+  ShieldCheck,
   Sparkles,
   TerminalSquare,
+  TimerReset,
+  ListTodo,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -87,6 +90,12 @@ export function LandingRoute() {
           >
             安装
           </a>
+          <a
+            className="hidden rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white sm:block"
+            href="#principles"
+          >
+            优势
+          </a>
           <Link
             className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/15 transition hover:bg-white/15"
             to="/app"
@@ -123,13 +132,13 @@ export function LandingRoute() {
               >
                 快速开始
               </Button>
-              <a
+              {/* <a
                 href={import.meta.env.VITE_SOURCE_URL || "#install"}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white/5 px-6 text-sm font-semibold text-white ring-1 ring-white/15 transition hover:scale-[1.02] hover:bg-white/10"
               >
                 <Github className="size-4" aria-hidden="true" />
                 View Source
-              </a>
+              </a> */}
             </div>
 
             <div id="install" className="mt-10 max-w-xl rounded-2xl bg-black/30 p-2 ring-1 ring-white/10 backdrop-blur">
@@ -194,7 +203,7 @@ export function LandingRoute() {
               <p className="text-sm font-semibold text-indigo-600">从设备到结果</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">三步开始一次可控的 coding 会话</h2>
               <p className="mt-4 text-base leading-7 text-slate-500">
-                Runner 只访问你明确选择的根目录，Project 固定绑定 workspace，Agent 不会悄悄切换执行环境。
+                一个 web-ui 可以同时控不同平台Runner工作
               </p>
             </div>
             <div className="mt-12 grid gap-6 md:grid-cols-3">
@@ -231,7 +240,50 @@ export function LandingRoute() {
             )}
           </div>
         </section>
+
+   
       </main>
+
+      <footer className="border-t border-white/10 bg-slate-950">
+        <div className="mx-auto flex max-w-7xl flex-col gap-8 px-5 py-10 sm:px-8 md:flex-row md:items-start md:justify-between">
+          <div className="max-w-sm">
+            <Link to="/" className="flex items-center gap-3" aria-label="Nova 首页">
+              <span className="grid size-8 place-items-center rounded-lg bg-indigo-500 text-white">
+                <Sparkles className="size-4" aria-hidden="true" />
+              </span>
+              <span className="font-semibold tracking-tight text-white">Nova</span>
+            </Link>
+            <p className="mt-4 text-sm leading-6 text-slate-400">
+              让 AI 在你明确授权的真实 workspace 中可靠地完成工作。
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm sm:flex sm:gap-7">
+            <a className="text-slate-400 transition hover:text-white" href="#workflow">
+              工作方式
+            </a>
+            <a className="text-slate-400 transition hover:text-white" href="#install">
+              安装 Runner
+            </a>
+            <Link className="text-slate-400 transition hover:text-white" to="/app">
+              进入工作台
+            </Link>
+            {import.meta.env.VITE_SOURCE_URL && (
+              <a
+                className="inline-flex items-center gap-1.5 text-slate-400 transition hover:text-white"
+                href={import.meta.env.VITE_SOURCE_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Github className="size-4" aria-hidden="true" />
+                源码
+              </a>
+            )}
+          </div>
+        </div>
+        <div className="mx-auto max-w-7xl border-t border-white/10 px-5 py-5 text-xs text-slate-500 sm:px-8">
+          © {new Date().getFullYear()} Nova. Built for your workspace.
+        </div>
+      </footer>
     </div>
   );
 }
@@ -364,5 +416,15 @@ function Feature({
         {action} <ArrowRight className="size-3.5 transition group-hover:translate-x-1" aria-hidden="true" />
       </span>
     </button>
+  );
+}
+
+function Benefit({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+  return (
+    <article className="rounded-2xl bg-white/[0.04] p-6 ring-1 ring-white/10">
+      <span className="grid size-10 place-items-center rounded-xl bg-indigo-400/10 text-indigo-200">{icon}</span>
+      <h3 className="mt-5 font-semibold text-white">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
+    </article>
   );
 }

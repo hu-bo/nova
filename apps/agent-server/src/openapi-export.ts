@@ -39,6 +39,9 @@ const app = await buildApp(
       async compact() {
         return { trigger: "manual", summarized: false, replacedFrom: null, replacedTo: null };
       },
+      async clear() {
+        return { inputTokens: null, contextWindow: 128_000 };
+      },
       invalidate() {},
     },
     authService: {

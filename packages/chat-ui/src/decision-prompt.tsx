@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, CheckCircle2, Circle, FileCode, HelpCircle, LoaderCircle, ShieldCheck, X } from "lucide-react";
+import { Check, CheckCircle2, Circle, FileCode, HelpCircle, LoaderCircle, ShieldCheck, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { diffLines, type Change } from "diff";
 import type { CodeChange, DecisionRequest, DecisionResponse } from "@nova/protocol";
@@ -39,7 +39,7 @@ function DiffFile({ change }: { change: CodeChange }) {
           </Badge>
         )}
       </div>
-      <pre className="m-0 overflow-auto rounded-md bg-slate-950 px-2 py-1.5 font-mono text-xs leading-4 text-slate-200">
+      <pre className="nova-scrollbar m-0 overflow-auto rounded-md bg-slate-950 px-2 py-1.5 font-mono text-xs leading-4 text-slate-200">
         {diff.map((part, i) => (
           <DiffLine key={i} part={part} />
         ))}
@@ -122,37 +122,48 @@ export function DecisionPrompt({ request, onResolve, disabled = false, resolved 
     return (
       <Card
         data-kind="approval"
-        className="nova-decision-prompt overflow-hidden bg-amber-50/70 ring-amber-300/80 dark:bg-amber-950/20 dark:ring-amber-800/80"
+        className="nova-decision-prompt nova-approval-prompt overflow-hidden bg-indigo-50/80 text-indigo-950 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-50 dark:ring-indigo-800"
         role="region"
         aria-labelledby={`${request.decisionId}-title`}
       >
-        <CardHeader className="flex flex-row items-start gap-2.5 pb-2">
-          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/50 dark:text-amber-300 dark:ring-amber-800">
-            <AlertTriangle className="size-4" aria-hidden="true" />
+        <CardHeader className="flex flex-row items-start gap-3 px-3 py-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/60 dark:text-indigo-300">
+            <Zap className="size-5" strokeWidth={2.5} aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <CardTitle id={`${request.decisionId}-title`} className="text-sm text-amber-950 dark:text-amber-100">
-              需要确认
+            <CardTitle id={`${request.decisionId}-title`} className="text-base text-indigo-950 dark:text-indigo-100">
+              需要授权
             </CardTitle>
-            <p className="mt-1 text-xs leading-5 text-amber-800/80 dark:text-amber-300/70">
+            <p className="mt-1 text-xs leading-5 text-indigo-700/85 dark:text-indigo-200/80">
               {request.toolName} 请求执行一项{" "}
               {request.risk === "exec" ? "命令" : request.risk === "write" ? "写入操作" : "读取操作"}
             </p>
           </div>
-          <Badge variant="warning" className="bg-white/70 font-mono dark:bg-amber-950">
-            {request.risk}
-          </Badge>
         </CardHeader>
         {request.codeChanges && request.codeChanges.length > 0 ? (
-          <div className="max-h-80 overflow-auto border-y border-amber-200/70 bg-slate-950 px-3 py-2 dark:border-amber-900">
+          <div className="nova-scrollbar mx-3 max-h-80 overflow-auto rounded-md bg-slate-950 px-2.5 py-2">
             <CodeDiffView codeChanges={request.codeChanges} />
           </div>
         ) : (
-          <pre className="m-0 max-h-56 overflow-auto border-y border-amber-200/70 bg-slate-950 px-3 py-2 font-mono text-xs leading-5 text-slate-200 dark:border-amber-900">
+          <pre className="nova-scrollbar mx-3 my-0 max-h-56 overflow-auto rounded-md bg-slate-950 px-2.5 py-2 font-mono text-xs leading-5 text-slate-200">
             {approvalDetails(request)}
           </pre>
         )}
-        <CardFooter className="flex-wrap justify-end gap-2 pt-2">
+        <CardFooter className="flex-wrap gap-2 px-3 pb-3 pt-2.5">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            disabled={locked}
+            onClick={() => void resolve({ kind: "approval", decision: "allow" })}
+          >
+            {submitted ? (
+              <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            ) : (
+              <Check className="size-3.5" aria-hidden="true" />
+            )}
+            允许执行
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -165,27 +176,13 @@ export function DecisionPrompt({ request, onResolve, disabled = false, resolved 
           </Button>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="xs"
             disabled={locked}
             onClick={() => void resolve({ kind: "approval", decision: "allow_always" })}
           >
             <ShieldCheck aria-hidden="true" />
             总是允许
-          </Button>
-          <Button
-            type="button"
-            variant="warning"
-            size="sm"
-            disabled={locked}
-            onClick={() => void resolve({ kind: "approval", decision: "allow" })}
-          >
-            {submitted ? (
-              <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-            ) : (
-              <Check className="size-3.5" aria-hidden="true" />
-            )}
-            允许
           </Button>
         </CardFooter>
       </Card>

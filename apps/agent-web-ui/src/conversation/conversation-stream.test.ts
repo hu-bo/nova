@@ -14,8 +14,8 @@ class FakeEventSource implements EventSourceLike {
     this.onopen?.({} as Event);
   }
 
-  message(event: UiEvent) {
-    this.onmessage?.({ data: JSON.stringify(event) } as MessageEvent<string>);
+  message(event: UiEvent, lastEventId = "") {
+    this.onmessage?.({ data: JSON.stringify(event), lastEventId } as MessageEvent<string>);
   }
 
   fail() {
@@ -141,6 +141,39 @@ describe("ConversationStream", () => {
     expect(onResync).toHaveBeenCalledOnce();
     expect(sources[0]!.closeCount).toBe(1);
     sources[1]!.open();
+    stream.close();
+  });
+
+  it("replays from the last received event when a new EventSource is created", async () => {
+    const urls: string[] = [];
+    const sources: FakeEventSource[] = [];
+    const stream = new ConversationStream(
+      "conversation-1",
+      {
+        onConnection: () => {},
+        onEvent: () => {},
+        onOpen: () => {},
+        onResync: async () => {},
+        onRunEnd: () => {},
+      },
+      (url) => {
+        urls.push(url);
+        const source = new FakeEventSource();
+        sources.push(source);
+        return source;
+      },
+    );
+
+    const first = stream.ensureConnected();
+    sources[0]!.open();
+    await first;
+    sources[0]!.message({ type: "context.updated", inputTokens: 1, contextWindow: 2 }, "42");
+    stream.close();
+
+    const second = stream.ensureConnected();
+    expect(urls[1]).toBe("/api/conversations/conversation-1/events?after=42");
+    sources[1]!.open();
+    await second;
     stream.close();
   });
 });

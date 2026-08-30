@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 export function Table({ className, ...props }: ComponentProps<"table">) {
   return (
-    <div data-slot="table-container" className="overflow-x-auto">
+    <div data-slot="table-container" className="agent-scrollbar overflow-x-auto">
       <table className={cn("w-full text-left text-sm", className)} {...props} />
     </div>
   );

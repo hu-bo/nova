@@ -37,7 +37,11 @@ import { MessageList } from "@nova/chat-ui";
 import type { ChatMessage } from "@nova/protocol";
 
 export function Conversation({ messages }: { messages: ChatMessage[] }) {
-  return <MessageList messages={messages} />;
+  return (
+    <div className="nova-chat">
+      <MessageList messages={messages} />
+    </div>
+  );
 }
 ```
 
