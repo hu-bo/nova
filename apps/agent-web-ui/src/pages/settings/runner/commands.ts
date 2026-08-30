@@ -1,4 +1,4 @@
-export const installCommand = import.meta.env.DEV ? "cargo install nova-runner" : "npm install @nnova/runner";
+export const installCommand = import.meta.env.DEV ? "cargo install nova-runner" : "npm install @nnova/runner -g";
 
 export const runCommand = import.meta.env.DEV
   ? "cargo run -p nova-runner --"

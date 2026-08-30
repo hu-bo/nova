@@ -824,6 +824,62 @@ describe("TODO", () => {
 // —— 预算与压缩（§8）——
 
 describe("上下文预算与压缩", () => {
+  it("does not let manual compaction race a run that is still loading its session", async () => {
+    let releaseLoad!: () => void;
+    const loading = new Promise<void>((resolve) => {
+      releaseLoad = resolve;
+    });
+    const base = memoryStorage();
+    const storage: SessionStorage = {
+      ...base,
+      async loadEntries(sessionId, leafId) {
+        await loading;
+        return base.loadEntries(sessionId, leafId);
+      },
+    };
+    const { stream } = scripted([textEvents("done")]);
+    const { agent } = setup(stream, { storage });
+
+    const running = agent.prompt("start");
+    await expect(agent.compact()).rejects.toThrow("agent is running");
+    releaseLoad();
+    await expect(running).resolves.toMatchObject({ stopReason: "done" });
+  });
+
+  it("reports measured usage, clears it after compaction, and restores the cleared state", async () => {
+    const { stream } = scripted([
+      textEvents("first", { input: 300, output: 10 }),
+      textEvents("second", { input: 800, output: 10 }),
+      [
+        { type: "block.end", index: 0, block: { type: "text", text: "SUMMARY" } },
+        { type: "finish", stopReason: "stop" },
+      ],
+    ]);
+    const storage = memoryStorage();
+    const { agent } = setup(stream, { storage, sessionId: "s-context", contextWindow: 1_000 });
+    const events = recordEvents(agent);
+
+    await agent.prompt("first");
+    await agent.prompt("second");
+    expect(await agent.contextUsage()).toEqual({ inputTokens: 800, contextWindow: 1_000 });
+
+    const compacted = await agent.compact();
+    expect(compacted.summarized).toBe(true);
+    expect(await agent.contextUsage()).toEqual({ inputTokens: null, contextWindow: 1_000 });
+    expect(events).toContainEqual({
+      type: "context.updated",
+      usage: { inputTokens: null, contextWindow: 1_000 },
+    });
+    expect((await storage.loadRecords(agent.sessionId)).at(-1)?.kind).toBe("context-compacted");
+
+    const restored = setup(async function* () {}, {
+      storage,
+      sessionId: "s-context",
+      contextWindow: 1_000,
+    }).agent;
+    expect(await restored.contextUsage()).toEqual({ inputTokens: null, contextWindow: 1_000 });
+  });
+
   it("usage 超过 contextWindow * 0.8 → 下一 turn 前先压缩，摘要进入后续请求", async () => {
     const turns: ModelEvent[][] = [
       toolEvents([{ name: "ping" }], { input: 100, output: 1 }),

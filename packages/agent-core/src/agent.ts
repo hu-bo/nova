@@ -3,6 +3,7 @@ import type { ModelRef, ThinkingLevel, Usage } from "@nova/model-adapters";
 import type {
   Agent,
   AgentConfig,
+  ContextUsage,
   AgentEvent,
   AgentState,
   AgentTool,
@@ -225,6 +226,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     lastUsage: () => lastUsage,
     setLastUsage: (usage) => {
       lastUsage = usage;
+      emit({ type: "context.updated", usage: currentContextUsage() });
     },
     addUsage: (usage) => {
       runUsage = mergeUsage(runUsage, usage);
@@ -249,6 +251,11 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     const lastTodo = await config.storage.loadRecords(sessionId, { kind: "todo-updated", limit: 1, desc: true });
     const todoRecord = lastTodo[0];
     if (todoRecord && todoRecord.kind === "todo-updated") todos = toTodoState(todoRecord.items);
+    const contextRecords = await config.storage.loadRecords(sessionId);
+    const lastContextRecord = [...contextRecords]
+      .reverse()
+      .find((item) => item.kind === "usage" || item.kind === "context-compacted");
+    lastUsage = lastContextRecord?.kind === "usage" ? lastContextRecord.usage : null;
     // 模型配置从 Entry 恢复（§4.3 变更落 Entry 的原因）
     for (const item of view) {
       if (item.kind === "model") {
@@ -261,27 +268,33 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
 
   async function prompt(input: string | ContentPart[]): Promise<RunResult> {
     if (busy) throw new Error("agent is running");
-    await ensureLoaded();
     busy = true;
-    runId = newRunId();
-    runController = new AbortController();
-    runUsage = { input: 0, output: 0 };
-    state.errorMessage = null;
-    await rec({ kind: "run-started", input: typeof input === "string" ? input : "[multimodal input]" });
-    const run = runTurnLoop(host, input).finally(() => {
+    try {
+      await ensureLoaded();
+      runId = newRunId();
+      runController = new AbortController();
+      runUsage = { input: 0, output: 0 };
+      state.errorMessage = null;
+      await rec({ kind: "run-started", input: typeof input === "string" ? input : "[multimodal input]" });
+      const run = runTurnLoop(host, input).finally(() => {
+        busy = false;
+        activeRun = null;
+      });
+      activeRun = run;
+      const result = await run;
+      // §7 nextRun：当前 run 结束后触发一个新的独立 run
+      const queued = queues.drain("nextRun");
+      if (queued.length > 0) {
+        void prompt(queued.join("\n\n")).catch((error) => {
+          emit({ type: "error", code: "run_failed", message: error instanceof Error ? error.message : String(error) });
+        });
+      }
+      return result;
+    } catch (error) {
       busy = false;
       activeRun = null;
-    });
-    activeRun = run;
-    const result = await run;
-    // §7 nextRun：当前 run 结束后触发一个新的独立 run
-    const queued = queues.drain("nextRun");
-    if (queued.length > 0) {
-      void prompt(queued.join("\n\n")).catch((error) => {
-        emit({ type: "error", code: "run_failed", message: error instanceof Error ? error.message : String(error) });
-      });
+      throw error;
     }
-    return result;
   }
 
   async function abort(): Promise<void> {
@@ -295,8 +308,22 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
 
   async function compact(opts?: { instruction?: string }): Promise<CompactionResult> {
     if (busy) throw new Error("agent is running");
+    busy = true;
+    try {
+      await ensureLoaded();
+      return await compactNow(host, "manual", new AbortController().signal, opts?.instruction);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function currentContextUsage(): ContextUsage {
+    return { inputTokens: lastUsage?.input ?? null, contextWindow: host.contextWindow() };
+  }
+
+  async function contextUsage(): Promise<ContextUsage> {
     await ensureLoaded();
-    return compactNow(host, "manual", new AbortController().signal, opts?.instruction);
+    return currentContextUsage();
   }
 
   async function fork(entryId: EntryId): Promise<Agent> {
@@ -449,6 +476,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     },
     abort,
     compact,
+    contextUsage,
     fork,
     resume,
     get state(): AgentState {

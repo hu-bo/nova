@@ -33,6 +33,12 @@ const app = await buildApp(
     runtimes: {
       async send() {},
       async abort() {},
+      async context() {
+        return { inputTokens: null, contextWindow: 128_000 };
+      },
+      async compact() {
+        return { trigger: "manual", summarized: false, replacedFrom: null, replacedTo: null };
+      },
       invalidate() {},
     },
     authService: {

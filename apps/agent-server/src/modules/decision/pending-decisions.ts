@@ -58,5 +58,6 @@ function toUiRequest(request: CoreDecisionRequest): DecisionRequest {
     toolName: request.toolName,
     args: request.args,
     risk: request.risk,
+    codeChanges: request.codeChanges,
   };
 }

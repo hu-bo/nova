@@ -65,6 +65,11 @@ export interface Usage {
   cacheWrite?: number;
 }
 
+export interface ContextUsage {
+  inputTokens: number | null;
+  contextWindow: number;
+}
+
 export type AgentTaskResult<T = unknown> =
   | { ok: true; summary: string; data?: T }
   | {
@@ -147,8 +152,21 @@ export type FsError = { code: FsErrorCode; message: string; path?: string };
 export type ExecError = { code: ExecErrorCode; message: string; exitCode?: number };
 
 // §6 Decision —— 审批与反问共用一套挂起 → 发请求 → 等人类 → 恢复
+export type CodeChange = {
+  path: string;
+  oldText: string;
+  newText: string;
+};
 export type DecisionRequest =
-  | { kind: "approval"; decisionId: string; callId: string; toolName: string; args: unknown; risk: Risk }
+  | {
+      kind: "approval";
+      decisionId: string;
+      callId: string;
+      toolName: string;
+      args: unknown;
+      risk: Risk;
+      codeChanges?: CodeChange[];
+    }
   | { kind: "question"; decisionId: string; question: string; options: string[]; multiSelect: boolean };
 export type DecisionResponse =
   | { kind: "approval"; decision: "allow" | "deny" | "allow_always"; reason?: string }
@@ -188,6 +206,7 @@ export type AgentEvent =
   | { type: "decision.requested"; request: DecisionRequest }
   | { type: "decision.resolved"; decisionId: string }
   | { type: "todo.updated"; items: Todo[] }
+  | { type: "context.updated"; usage: ContextUsage }
   | { type: "run.end"; runId: string; stopReason: StopReason; usage: Usage }
   | { type: "error"; code: string; message: string };
 
@@ -246,6 +265,7 @@ export interface Agent {
   nextRun(msg: string): void; // 排到下一个独立 run
   abort(): Promise<void>;
   compact(opts?: { instruction?: string }): Promise<CompactionResult>;
+  contextUsage(): Promise<ContextUsage>;
   fork(entryId: EntryId): Promise<Agent>;
   resume(): Promise<void>; // 崩溃 / 重启后依据 Record 续跑
   readonly state: AgentState;

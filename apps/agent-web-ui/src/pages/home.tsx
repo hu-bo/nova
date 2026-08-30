@@ -1,21 +1,29 @@
-import { Activity, ArrowRight, Check, FolderKanban, MessageCircle, Plus, Server } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import {
+  Activity,
+  ArrowRight,
+  Check,
+  Code2,
+  FolderKanban,
+  MessageCircle,
+  MonitorCog,
+  Plus,
+  Server,
+} from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { useQuickConversationCreate } from "./project/new-conversation.js";
-import { NewProjectDrawer } from "./project/new-project.js";
 import { useConversations, useProjects } from "./project/use-projects.js";
 import { useRunnerCatalog } from "./settings/runner/use-runners.js";
 
 export function HomeRoute() {
+  const navigate = useNavigate();
   const createConversation = useQuickConversationCreate();
   const projects = useProjects();
   const conversations = useConversations();
   const runners = useRunnerCatalog();
-  const [projectCreatorOpen, setProjectCreatorOpen] = useState(false);
 
   if (projects.isLoading || conversations.isLoading)
     return (
@@ -75,12 +83,14 @@ export function HomeRoute() {
           label="Projects"
           value={projectItems.length}
           meta="固定 workspace 边界"
+          onClick={() => document.querySelector("#projects-section")?.scrollIntoView({ behavior: "smooth" })}
         />
         <MetricCard
           icon={<MessageCircle className="size-5" aria-hidden="true" />}
           label="最近会话"
           value={conversationItems.length}
           meta="最多显示 100 条"
+          onClick={() => document.querySelector("#recent-activity-section")?.scrollIntoView({ behavior: "smooth" })}
         />
         <MetricCard
           icon={<Server className="size-5" aria-hidden="true" />}
@@ -91,45 +101,9 @@ export function HomeRoute() {
         />
       </section>
 
-      <section className="mt-8 rounded-xl bg-white p-5 ring-1 ring-slate-200" aria-labelledby="getting-started-title">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-          <div>
-            <h2 id="getting-started-title" className="font-semibold text-slate-900">
-              快速开始
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">按这三步建立可执行的 coding 会话。</p>
-          </div>
-          <Link to="/settings/runners" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">
-            管理 Runner <ArrowRight className="inline size-3.5" />
-          </Link>
-        </div>
-        <ol className="mt-5 grid gap-3 md:grid-cols-3">
-          <StartStep
-            completed={runners.runners.length > 0}
-            number="1"
-            title="连接 Runner"
-            description="让 Nova 连接你的设备。"
-            to="/settings/runners"
-          />
-          <StartStep
-            completed={projectItems.length > 0}
-            number="2"
-            title="创建 Project"
-            description="为 workspace 固定执行边界。"
-            onClick={() => setProjectCreatorOpen(true)}
-          />
-          <StartStep
-            completed={conversationItems.length > 0}
-            number="3"
-            title="开始会话"
-            description="让 Agent 开始协作。"
-            onClick={() => createConversation.mutate(undefined)}
-          />
-        </ol>
-      </section>
 
       <div className="mt-8 grid min-w-0 gap-8 xl:grid-cols-[1.2fr_0.8fr]">
-        <section className="min-w-0">
+        <section id="projects-section" className="min-w-0">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Projects</h2>
@@ -166,9 +140,8 @@ export function HomeRoute() {
               action={
                 <Button
                   variant="primary"
-                  disabled={projectCreatorOpen}
                   icon={<Plus className="size-4" />}
-                  onClick={() => setProjectCreatorOpen(true)}
+                  onClick={() => navigate("/app?createProject=1")}
                 >
                   新建 Project
                 </Button>
@@ -177,7 +150,7 @@ export function HomeRoute() {
           )}
         </section>
 
-        <section className="min-w-0">
+        <section id="recent-activity-section" className="min-w-0">
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-slate-900">近期活动</h2>
             <p className="mt-1 text-sm text-slate-500">从最近的上下文继续</p>
@@ -223,10 +196,7 @@ export function HomeRoute() {
           )}
         </section>
       </div>
-      <footer className="mt-10 border-t border-slate-200 pt-5 text-xs text-slate-400">
-        Nova Coding Agent · 连接你的设备，在明确的 workspace 边界内协作。
-      </footer>
-      <NewProjectDrawer open={projectCreatorOpen} onClose={() => setProjectCreatorOpen(false)} />
+
     </div>
   );
 }
@@ -237,12 +207,14 @@ function MetricCard({
   value,
   meta,
   to,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
   meta: string;
   to?: string;
+  onClick?: () => void;
 }) {
   const content = (
     <Card className="p-5">
@@ -256,56 +228,74 @@ function MetricCard({
       </div>
     </Card>
   );
-  return to ? (
-    <Link to={to} className="rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      {content}
-    </Link>
-  ) : (
-    content
-  );
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className="rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        style={{ position: "relative", zIndex: 10 }}
+      >
+        {content}
+      </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      >
+        {content}
+      </button>
+    );
+  }
+  return content;
 }
 
-function StartStep({
+function WorkflowCard({
   completed,
   number,
   title,
   description,
-  to,
+  icon,
+  action,
   onClick,
+  disabled = false,
 }: {
   completed: boolean;
   number: string;
   title: string;
   description: string;
-  to?: string;
-  onClick?: () => void;
+  icon: React.ReactNode;
+  action: string;
+  onClick: () => void;
+  disabled?: boolean;
 }) {
   const content = (
-    <>
-      <span
-        className={`grid size-7 place-items-center rounded-full text-xs font-bold ${completed ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"}`}
-      >
-        {completed ? <Check className="size-4" /> : number}
+    <div className="flex h-full flex-col">
+      <div className="flex items-start justify-between gap-4">
+        <span className="grid size-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600">{icon}</span>
+        <span
+          className={`grid size-7 place-items-center rounded-full text-xs font-bold ${completed ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"}`}
+        >
+          {completed ? <Check className="size-4" /> : number}
+        </span>
+      </div>
+      <strong className="mt-5 block text-sm text-slate-800">{title}</strong>
+      <span className="mt-1 block text-sm leading-6 text-slate-500">{description}</span>
+      <span className="mt-5 flex items-center gap-1 text-xs font-semibold text-indigo-600">
+        {action} <ArrowRight className="size-3.5 transition group-hover:translate-x-1" aria-hidden="true" />
       </span>
-      <span>
-        <strong className="block text-sm text-slate-800">{title}</strong>
-        <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
-      </span>
-    </>
+    </div>
   );
   const className =
-    "flex items-center gap-3 rounded-xl bg-slate-50 p-3 text-left ring-1 ring-slate-100 transition hover:bg-indigo-50";
+    "group block h-full rounded-xl bg-slate-50 p-5 text-left ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:bg-indigo-50 hover:ring-indigo-100";
   return (
     <li>
-      {to ? (
-        <Link to={to} className={className}>
-          {content}
-        </Link>
-      ) : (
-        <button type="button" className={`w-full ${className}`} onClick={onClick}>
-          {content}
-        </button>
-      )}
+      <button type="button" className={`w-full ${className}`} onClick={onClick} disabled={disabled}>
+        {content}
+      </button>
     </li>
   );
 }

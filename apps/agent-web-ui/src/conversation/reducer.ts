@@ -1,4 +1,4 @@
-import type { Block, ChatMessage, SendMessage, Todo, UiEvent } from "@nova/protocol";
+import type { Block, ChatMessage, ContextUsage, SendMessage, Todo, UiEvent } from "@nova/protocol";
 
 export interface QueuedMessage {
   message: ChatMessage;
@@ -9,6 +9,7 @@ export interface ConversationState {
   messages: ChatMessage[];
   queuedMessages: QueuedMessage[];
   todos: Todo[];
+  contextUsage: ContextUsage | null;
   pendingDecision: Extract<UiEvent, { type: "decision.requested" }>["request"] | null;
   connection: "connecting" | "open" | "reconnecting" | "closed";
   isRunning: boolean;
@@ -19,6 +20,7 @@ export interface ConversationState {
 export type ConversationAction =
   | { type: "hydrate"; messages: ChatMessage[] }
   | { type: "connection"; connection: ConversationState["connection"] }
+  | { type: "context.set"; usage: ContextUsage }
   | { type: "event"; event: UiEvent; conversationId: string }
   | { type: "optimistic.add"; message: ChatMessage }
   | { type: "optimistic.queue"; queued: QueuedMessage }
@@ -32,6 +34,7 @@ export const initialConversationState: ConversationState = {
   messages: [],
   queuedMessages: [],
   todos: [],
+  contextUsage: null,
   pendingDecision: null,
   connection: "closed",
   isRunning: false,
@@ -53,6 +56,8 @@ export function conversationReducer(state: ConversationState, action: Conversati
       };
     case "connection":
       return { ...state, connection: action.connection };
+    case "context.set":
+      return { ...state, contextUsage: action.usage };
     case "optimistic.add":
       return state.messages.some((message) => message.id === action.message.id)
         ? state
@@ -137,6 +142,11 @@ function reduceEvent(state: ConversationState, event: UiEvent, conversationId: s
       return state.pendingDecision?.decisionId === event.decisionId ? { ...state, pendingDecision: null } : state;
     case "todo.updated":
       return { ...state, todos: event.items };
+    case "context.updated":
+      return {
+        ...state,
+        contextUsage: { inputTokens: event.inputTokens, contextWindow: event.contextWindow },
+      };
     case "run.end":
       return {
         ...state,

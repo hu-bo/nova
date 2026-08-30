@@ -1,10 +1,68 @@
-import { AlertTriangle, Check, CheckCircle2, Circle, HelpCircle, LoaderCircle, ShieldCheck, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { DecisionRequest, DecisionResponse } from "@nova/protocol";
+import { AlertTriangle, Check, CheckCircle2, Circle, FileCode, HelpCircle, LoaderCircle, ShieldCheck, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { diffLines, type Change } from "diff";
+import type { CodeChange, DecisionRequest, DecisionResponse } from "@nova/protocol";
 import { Badge } from "./components/ui/badge.js";
 import { Button } from "./components/ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./components/ui/card.js";
 import { Checkbox } from "./components/ui/checkbox.js";
+
+function CodeDiffView({ codeChanges }: { codeChanges: CodeChange[] }) {
+  return (
+    <div className="flex flex-col divide-y divide-slate-700/50">
+      {codeChanges.map((change, index) => (
+        <DiffFile key={index} change={change} />
+      ))}
+    </div>
+  );
+}
+
+function DiffFile({ change }: { change: CodeChange }) {
+  const diff = useMemo(() => diffLines(change.oldText, change.newText), [change.oldText, change.newText]);
+
+  const addedCount = diff.filter((d) => d.added).reduce((sum, d) => sum + d.count, 0);
+  const removedCount = diff.filter((d) => d.removed).reduce((sum, d) => sum + d.count, 0);
+
+  return (
+    <div className="py-2">
+      <div className="mb-1.5 flex items-center gap-2 px-1">
+        <FileCode className="size-3.5 text-slate-400" aria-hidden="true" />
+        <span className="text-xs font-medium text-slate-300">{change.path}</span>
+        {addedCount > 0 && (
+          <Badge variant="success" className="bg-emerald-500/20 text-emerald-400">
+            +{addedCount}
+          </Badge>
+        )}
+        {removedCount > 0 && (
+          <Badge variant="danger" className="bg-red-500/20 text-red-400">
+            -{removedCount}
+          </Badge>
+        )}
+      </div>
+      <pre className="m-0 overflow-auto rounded-md bg-slate-950 px-2 py-1.5 font-mono text-xs leading-4 text-slate-200">
+        {diff.map((part, i) => (
+          <DiffLine key={i} part={part} />
+        ))}
+      </pre>
+    </div>
+  );
+}
+
+function DiffLine({ part }: { part: Change }) {
+  const prefix = part.added ? "+ " : part.removed ? "- " : "  ";
+  const className = part.added
+    ? "text-emerald-400 bg-emerald-500/10"
+    : part.removed
+      ? "text-red-400 bg-red-500/10"
+      : "text-slate-500";
+
+  return (
+    <div className={className}>
+      <span className="select-none text-slate-600">{prefix}</span>
+      {part.lines?.join("\n") || part.value}
+    </div>
+  );
+}
 
 export interface DecisionPromptProps {
   request: DecisionRequest;
@@ -85,9 +143,15 @@ export function DecisionPrompt({ request, onResolve, disabled = false, resolved 
             {request.risk}
           </Badge>
         </CardHeader>
-        <pre className="m-0 max-h-56 overflow-auto border-y border-amber-200/70 bg-slate-950 px-3 py-2 font-mono text-xs leading-5 text-slate-200 dark:border-amber-900">
-          {approvalDetails(request)}
-        </pre>
+        {request.codeChanges && request.codeChanges.length > 0 ? (
+          <div className="max-h-80 overflow-auto border-y border-amber-200/70 bg-slate-950 px-3 py-2 dark:border-amber-900">
+            <CodeDiffView codeChanges={request.codeChanges} />
+          </div>
+        ) : (
+          <pre className="m-0 max-h-56 overflow-auto border-y border-amber-200/70 bg-slate-950 px-3 py-2 font-mono text-xs leading-5 text-slate-200 dark:border-amber-900">
+            {approvalDetails(request)}
+          </pre>
+        )}
         <CardFooter className="flex-wrap justify-end gap-2 pt-2">
           <Button
             type="button"

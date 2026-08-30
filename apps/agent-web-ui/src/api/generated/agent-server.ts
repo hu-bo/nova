@@ -2049,6 +2049,70 @@ export type AbortConversation409 = {
   requestId?: string;
 };
 
+export type GetConversationContext200 = {
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     * @nullable
+     */
+  inputTokens: number | null;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  contextWindow: number;
+};
+
+export type GetConversationContext401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type GetConversationContext404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type CompactConversation200Context = {
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     * @nullable
+     */
+  inputTokens: number | null;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  contextWindow: number;
+};
+
+export type CompactConversation200 = {
+  compacted: boolean;
+  summarized: boolean;
+  context: CompactConversation200Context;
+};
+
+export type CompactConversation401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type CompactConversation404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type CompactConversation409 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
 export type ResolveDecisionBody = {
   kind: 'approval';
   decision: 'allow' | 'deny' | 'allow_always';
@@ -4951,6 +5015,166 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getAbortConversationMutationOptions(options), queryClient);
+    }
+
+export const getGetConversationContextUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/context`
+}
+
+export const getConversationContext = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<GetConversationContext200> => {
+
+  return apiMutator<GetConversationContext200>(getGetConversationContextUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetConversationContextQueryKey = (id: string,) => {
+    return [
+    `/api/conversations/${id}/context`
+    ] as const;
+    }
+
+
+export const getGetConversationContextQueryOptions = <TData = Awaited<ReturnType<typeof getConversationContext>>, TError = ErrorType<GetConversationContext401 | GetConversationContext404>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationContext>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetConversationContextQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getConversationContext>>> = ({ signal }) => getConversationContext(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getConversationContext>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetConversationContextQueryResult = NonNullable<Awaited<ReturnType<typeof getConversationContext>>>
+export type GetConversationContextQueryError = ErrorType<GetConversationContext401 | GetConversationContext404>
+
+
+export function useGetConversationContext<TData = Awaited<ReturnType<typeof getConversationContext>>, TError = ErrorType<GetConversationContext401 | GetConversationContext404>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationContext>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getConversationContext>>,
+          TError,
+          Awaited<ReturnType<typeof getConversationContext>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetConversationContext<TData = Awaited<ReturnType<typeof getConversationContext>>, TError = ErrorType<GetConversationContext401 | GetConversationContext404>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationContext>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getConversationContext>>,
+          TError,
+          Awaited<ReturnType<typeof getConversationContext>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetConversationContext<TData = Awaited<ReturnType<typeof getConversationContext>>, TError = ErrorType<GetConversationContext401 | GetConversationContext404>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationContext>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetConversationContext<TData = Awaited<ReturnType<typeof getConversationContext>>, TError = ErrorType<GetConversationContext401 | GetConversationContext404>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationContext>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetConversationContextQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCompactConversationUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/compact`
+}
+
+export const compactConversation = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<CompactConversation200> => {
+
+  return apiMutator<CompactConversation200>(getCompactConversationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompactConversationMutationOptions = <TError = ErrorType<CompactConversation401 | CompactConversation404 | CompactConversation409>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof compactConversation>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiMutator>}
+): UseMutationOptions<Awaited<ReturnType<typeof compactConversation>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['compactConversation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof compactConversation>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  compactConversation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompactConversationMutationResult = NonNullable<Awaited<ReturnType<typeof compactConversation>>>
+
+    export type CompactConversationMutationError = ErrorType<CompactConversation401 | CompactConversation404 | CompactConversation409>
+
+    export const useCompactConversation = <TError = ErrorType<CompactConversation401 | CompactConversation404 | CompactConversation409>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof compactConversation>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof compactConversation>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getCompactConversationMutationOptions(options), queryClient);
     }
 
 export const getResolveDecisionUrl = (decisionId: string,) => {

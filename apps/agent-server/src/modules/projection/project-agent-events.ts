@@ -83,6 +83,9 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
       case "todo.updated":
         publish(event);
         return;
+      case "context.updated":
+        publish({ type: "context.updated", ...event.usage });
+        return;
       case "decision.requested":
       case "decision.resolved":
         return;

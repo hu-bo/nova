@@ -8,6 +8,7 @@ import {
   SseEnvelopeSchema,
   pageSchema,
   ChatMessageSchema,
+  CompactConversationResultSchema,
 } from "./index.js";
 
 describe("protocol schemas", () => {
@@ -29,19 +30,23 @@ describe("protocol schemas", () => {
 
   it("rejects empty messages and invalid decision risks", () => {
     expect(() => SendMessageSchema.parse({ text: "   " })).toThrow();
-    expect(() => DecisionRequestSchema.parse({
-      kind: "approval",
-      decisionId: "decision-1",
-      toolName: "bash",
-      args: {},
-      risk: "none",
-    })).toThrow();
-    expect(() => BlockSchema.parse({
-      type: "tool_call",
-      callId: "call-1",
-      name: "bash",
-      status: "running",
-    })).toThrow();
+    expect(() =>
+      DecisionRequestSchema.parse({
+        kind: "approval",
+        decisionId: "decision-1",
+        toolName: "bash",
+        args: {},
+        risk: "none",
+      }),
+    ).toThrow();
+    expect(() =>
+      BlockSchema.parse({
+        type: "tool_call",
+        callId: "call-1",
+        name: "bash",
+        status: "running",
+      }),
+    ).toThrow();
   });
 
   it("allows an unbound runner and requires a safe model endpoint for conversations", async () => {
@@ -63,10 +68,12 @@ describe("protocol schemas", () => {
     };
     expect(CreateConversationSchema.parse(input).runnerId).toBe("runner-1");
     expect(CreateConversationSchema.parse({ modelConfig: input.modelConfig }).runnerId).toBeUndefined();
-    expect(() => CreateConversationSchema.parse({
-      ...input,
-      modelConfig: { ...input.modelConfig, endpoint: "http://localhost:11434" },
-    })).toThrow();
+    expect(() =>
+      CreateConversationSchema.parse({
+        ...input,
+        modelConfig: { ...input.modelConfig, endpoint: "http://localhost:11434" },
+      }),
+    ).toThrow();
   });
 
   it("validates pages and SSE envelopes", () => {
@@ -79,9 +86,27 @@ describe("protocol schemas", () => {
       createdAt: 1,
     };
     expect(pageSchema(ChatMessageSchema).parse({ items: [message], nextCursor: null }).items).toHaveLength(1);
-    expect(SseEnvelopeSchema.parse({
-      id: "42",
-      event: { type: "message.end", messageId: "message-1", status: "done" },
-    }).id).toBe("42");
+    expect(
+      SseEnvelopeSchema.parse({
+        id: "42",
+        event: { type: "message.end", messageId: "message-1", status: "done" },
+      }).id,
+    ).toBe("42");
+  });
+
+  it("validates context usage and compaction results", () => {
+    expect(
+      CompactConversationResultSchema.parse({
+        compacted: true,
+        summarized: true,
+        context: { inputTokens: null, contextWindow: 128_000 },
+      }).context,
+    ).toEqual({ inputTokens: null, contextWindow: 128_000 });
+    expect(
+      SseEnvelopeSchema.parse({
+        id: "43",
+        event: { type: "context.updated", inputTokens: 32_000, contextWindow: 128_000 },
+      }).event,
+    ).toMatchObject({ type: "context.updated", inputTokens: 32_000 });
   });
 });

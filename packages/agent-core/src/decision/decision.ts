@@ -3,6 +3,7 @@ import type {
   AgentEvent,
   ApprovalMode,
   ApprovalPolicy,
+  CodeChange,
   Decide,
   DecisionRequest,
   DecisionResponse,

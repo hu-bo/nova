@@ -456,6 +456,11 @@ Projection，且 tool 的 `details` 已经不在 entries 里了（`agent-core.md
   重连客户端以已落库历史 + `RESYNC` 为准；
 - `streaming` 只属于 SSE 期间的客户端状态，不写数据库，所以 DB 的 status CHECK 不含它。
 
+上下文状态不写入 `messages`。`GET /conversations/:id/context` 从 conversation runtime 读取最近一次
+真实模型 input usage；`POST /conversations/:id/compact` 复用同一个 runtime 调用
+`agent.compact()`。压缩与 run 都修改同一 Entry 分支，所以 runtime registry 是唯一并发 owner，
+运行中请求压缩返回 409。压缩成功后 Agent 清空旧 usage，并通过 SSE 发布 `context.updated`。
+
 Message 与 Entry 是两个写模型，不追求跨越整个模型运行的大事务。用户 Message 表示“server 已接受
 这次输入”；若 Agent 启动失败，它仍应保留，并由错误事件解释失败。
 

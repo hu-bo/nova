@@ -78,6 +78,11 @@ export function useConversationMutations(conversationId: string, modelProfileId:
     onSuccess: refreshLists,
   });
 
+  const compactMutation = useMutation({
+    mutationFn: () => api!.compactConversation(conversationId),
+    onSuccess: (result) => dispatch({ type: "context.set", usage: result.context }),
+  });
+
   const steerMutation = useMutation({
     mutationFn: async (queued: QueuedMessage) => {
       dispatch({ type: "queue.start", messageId: queued.message.id });
@@ -165,6 +170,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
       });
     },
     abort: () => abortMutation.mutateAsync(),
+    compact: () => compactMutation.mutateAsync(),
     steerQueued: (messageId: string) => {
       const queued = state.queuedMessages.find((item) => item.message.id === messageId);
       if (!queued) return Promise.resolve();
@@ -184,6 +190,7 @@ export function useConversationMutations(conversationId: string, modelProfileId:
     changeRunner: (runnerId: string) => runnerMutation.mutateAsync(runnerId),
     sendMutation,
     abortMutation,
+    compactMutation,
     steerMutation,
     queuedRunMutation,
     decisionMutation,

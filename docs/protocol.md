@@ -81,6 +81,8 @@ interface Todo {
 | `GET` | `/conversations` | `?projectId&limit&cursor` | `Page<Conversation>` |
 | `GET` | `/conversations/:id/messages` | `?before&limit` | `Page<ChatMessage>` |
 | `POST` | `/conversations/:id/messages` | `SendMessage` | `202` |
+| `GET` | `/conversations/:id/context` | — | `ContextUsage` |
+| `POST` | `/conversations/:id/compact` | — | `CompactConversationResult` |
 | `GET` | `/runners/directories` | `?runnerId&path?` | `RunnerDirectory` |
 | `POST` | `/uploads` | `CreateUpload` | `UploadTicket` |
 | `POST` | `/uploads/runner` | `{ runnerId, path }` | `UploadedFile` |
@@ -144,6 +146,17 @@ interface SendMessage {
   queue?: "steering" | "followUp" | "nextRun"   // 缺省：无运行时新开 run，运行中入 steering
 }
 
+interface ContextUsage {
+  inputTokens: number | null // 最近一次真实模型输入；无数据或刚压缩后为 null
+  contextWindow: number
+}
+
+interface CompactConversationResult {
+  compacted: boolean
+  summarized: boolean
+  context: ContextUsage
+}
+
 interface Page<T> { items: T[]; nextCursor: string | null }
 interface ApiError { code: string; message: string }     // 非 2xx 一律这个形状
 ```
@@ -157,7 +170,7 @@ HTTP 层不能为了凑 `{ runId }` 阻塞到模型完成，也不能在 server 
 最终 `runId` 通过 SSE 的 `run.end` 观察。conversation 空闲时，无论 `queue` 是否给出都启动
 一个新 run；运行中缺省进入 steering，显式值按对应队列处理。
 
-**十一个端点**，其中 4 个是 project 的纯 CRUD。没有 `/tasks` / `/executions` / `/runners` 的 CRUD ——
+端点保持围绕会话与 project 的最小集合。没有 `/tasks` / `/executions` / `/runners` 的 CRUD ——
 Phase 2 的 UI 只需要看到对话与其中的 tool 执行，Task / Execution 作为 Block 呈现，
 不需要独立资源。真需要运维视图时再加。
 
@@ -184,6 +197,7 @@ type UiEvent =
   | { type: "decision.requested"; request: DecisionRequest }
   | { type: "decision.resolved";  decisionId: string }
   | { type: "todo.updated";   items: Todo[] }
+  | { type: "context.updated"; inputTokens: number | null; contextWindow: number }
   | { type: "run.end";        runId: string; stopReason: string }
   | { type: "error";          code: string; message: string }
 ```
@@ -203,6 +217,7 @@ agent-server 负责这层翻译。**UI 消费 Projection，不是内部运行时
 | `AgentEvent.tool.end` | `block.end`，由 `details` 派生 `code`/`diff`/`file` 子 block |
 | `ExecutionEvent.Output`（经 tool 的 `onOutput`） | `tool.output` |
 | `AgentEvent.todo.updated` | `todo.updated` **且** 消息流里保留一个 `todo` block |
+| `AgentEvent.context.updated` | 同名事件；前端据此计算并展示上下文占用百分比 |
 | `TaskEvent.*` | **不外发**。taskflow 是内部编排细节 |
 | `AgentEvent.decision.*` | 同名 UiEvent |
 

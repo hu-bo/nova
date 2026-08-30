@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export type CodeChange = {
+  path: string;
+  oldText: string;
+  newText: string;
+};
+
 export type DecisionRequest =
   | {
       kind: "approval";
@@ -7,6 +13,7 @@ export type DecisionRequest =
       toolName: string;
       args: unknown;
       risk: "read" | "write" | "exec";
+      codeChanges?: CodeChange[];
     }
   | {
       kind: "question";
@@ -20,13 +27,20 @@ export type DecisionResponse =
   | { kind: "approval"; decision: "allow" | "deny" | "allow_always"; reason?: string | undefined }
   | { kind: "question"; answers: string[] };
 
+const CodeChangeSchema: z.ZodType<CodeChange> = z.object({
+  path: z.string().min(1),
+  oldText: z.string(),
+  newText: z.string(),
+});
+
 export const DecisionRequestSchema: z.ZodType<DecisionRequest> = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("approval"),
     decisionId: z.string().min(1),
     toolName: z.string().min(1),
-    args: z.unknown().refine(value => value !== undefined, "args is required"),
+    args: z.unknown().refine((value) => value !== undefined, "args is required"),
     risk: z.enum(["read", "write", "exec"]),
+    codeChanges: z.array(CodeChangeSchema).optional(),
   }),
   z.object({
     kind: z.literal("question"),

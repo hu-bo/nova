@@ -23,18 +23,17 @@
     "@nova/protocol": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "diff": "^7.0.0",
     "lucide-react": "^0.468.0",
     "prism-react-renderer": "^2.4.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "shiki": "^4.4.3",
     "tailwind-merge": "^3.6.0"
-  },
-  "peerDependencies": {
-    "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
+    "@types/diff": "^5.2.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "react": "^19.2.0",

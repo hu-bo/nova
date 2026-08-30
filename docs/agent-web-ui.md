@@ -285,6 +285,14 @@ Composer 接受两种附件来源。浏览器拖入 / 粘贴的本地 `File` 先
 Project workspace 绑定也复用同一个 `RemoteExplorer`，但使用 `mode="directory"` 和单选。
 Runner id、目录请求、已选路径和上传 mutation 全部由 `agent-web-ui` 持有；`chat-ui` 不知道 Runner。
 
+Composer 的 Skill 菜单第一版只提供 `/compact`。只有输入首字符是 `/` 才展示候选，正文里的
+斜杠按普通文本处理。选择后调用 `POST /conversations/:id/compact`，不把 `/compact` 当用户消息
+写入会话。运行中禁用压缩，避免与 Agent Loop 同时改 Entry 分支。
+
+页面通过 `GET /conversations/:id/context` 获取初始 `ContextUsage`，之后由 SSE
+`context.updated` 覆盖。Composer 底部与模型选择并列展示 `inputTokens / contextWindow` 的整数
+百分比；无真实用量或刚压缩后显示“上下文待测量”，不能用字符数伪估 token。
+
 `queue` 的选择规则（对应 `agent-core.md` §7 的三条队列）：
 
 | 情况 | queue |

@@ -214,6 +214,23 @@ export const SendMessageSchema = z
   });
 export type SendMessage = z.infer<typeof SendMessageSchema>;
 
+export const ContextUsageSchema = z
+  .object({
+    inputTokens: z.number().int().nonnegative().nullable(),
+    contextWindow: z.number().int().positive(),
+  })
+  .strict();
+export type ContextUsage = z.infer<typeof ContextUsageSchema>;
+
+export const CompactConversationResultSchema = z
+  .object({
+    compacted: z.boolean(),
+    summarized: z.boolean(),
+    context: ContextUsageSchema,
+  })
+  .strict();
+export type CompactConversationResult = z.infer<typeof CompactConversationResultSchema>;
+
 export const CreateUploadSchema = z
   .object({
     name: z.string().trim().min(1).max(255),

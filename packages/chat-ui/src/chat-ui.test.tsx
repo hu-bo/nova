@@ -1,7 +1,18 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "@nova/protocol";
-import { BlockView, Composer, DecisionPrompt, MessageList, RemoteExplorer, TodoPanel, UploadCover } from "./index.js";
+import { ComposerSkillMenu } from "./composer-skill-menu.js";
+import {
+  BlockView,
+  Composer,
+  DecisionPrompt,
+  MessageList,
+  RemoteExplorer,
+  TodoPanel,
+  UploadCover,
+  contextUsagePercent,
+  matchComposerSkills,
+} from "./index.js";
 
 describe("chat-ui", () => {
   it("renders markdown and structured code", () => {
@@ -157,6 +168,38 @@ describe("chat-ui", () => {
     expect(html).toContain('data-slot="textarea"');
     expect(html).toContain('data-slot="button"');
     expect(html).not.toContain("<select");
+  });
+
+  it("matches skills only when slash is the first draft character", () => {
+    const skills = [
+      { id: "compact", command: "compact", label: "压缩上下文" },
+      { id: "review", command: "review", label: "检查变更" },
+    ];
+    expect(matchComposerSkills("/", skills)).toEqual(skills);
+    expect(matchComposerSkills("/comp", skills)).toEqual([skills[0]]);
+    expect(matchComposerSkills("请查看 /compact", skills)).toEqual([]);
+    expect(matchComposerSkills(" /compact", skills)).toEqual([]);
+    expect(matchComposerSkills("/compact now", skills)).toEqual([]);
+  });
+
+  it("renders the extracted skill list as an accessible selection surface", () => {
+    const skill = { id: "compact", command: "compact", label: "压缩上下文", description: "释放上下文空间" };
+    const html = renderToStaticMarkup(
+      <ComposerSkillMenu listId="skills" skills={[skill]} selected={skill} onSelect={() => undefined} />,
+    );
+    expect(html).toContain('role="listbox"');
+    expect(html).toContain('role="option"');
+    expect(html).toContain('aria-selected="true"');
+    expect(html).toContain("/compact");
+  });
+
+  it("renders measured context usage next to the composer actions", () => {
+    const html = renderToStaticMarkup(
+      <Composer contextUsage={{ inputTokens: 72_000, contextWindow: 128_000 }} onSubmit={() => undefined} />,
+    );
+    expect(contextUsagePercent({ inputTokens: 72_000, contextWindow: 128_000 })).toBe(56);
+    expect(html).toContain("上下文 56%");
+    expect(html).toContain("72,000 / 128,000 tokens");
   });
 
   it("replaces the send button with an abort action while a run is active", () => {

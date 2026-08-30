@@ -1,5 +1,6 @@
 // §5.1 Record —— 运行事实流：不进模型上下文，供 resume / 排障 / 计费 / 审计。
 import type { DecisionRequest, DecisionResponse, QueueName, StopReason, Todo, Usage } from "../types.js";
+import type { CompactionTrigger } from "../context/compaction.js";
 
 export type Record = { id: string; runId: string; ts: number } & (
   | { kind: "run-started"; input: string }
@@ -11,6 +12,7 @@ export type Record = { id: string; runId: string; ts: number } & (
   | { kind: "queue-enqueued"; queue: QueueName; message: string }
   | { kind: "todo-updated"; items: Todo[] }
   | { kind: "usage"; model: string; usage: Usage }
+  | { kind: "context-compacted"; trigger: CompactionTrigger; summarized: boolean }
   | { kind: "abort-requested" }
   | { kind: "run-finished"; stopReason: StopReason }
 );

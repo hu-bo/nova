@@ -1,91 +1,13 @@
-import { BrainCircuit, ChevronDown, CircleStop, Cpu, LoaderCircle, Send } from "lucide-react";
-import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { BrainCircuit, CircleStop, Cpu, LoaderCircle, Send } from "lucide-react";
+import { useId, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "./components/ui/button.js";
 import { Card } from "./components/ui/card.js";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "./components/ui/dropdown-menu.js";
+import { ComposerContextUsageIndicator } from "./composer-context-usage.js";
+import { ComposerOptionMenu } from "./composer-option-menu.js";
+import { ComposerSkillMenu, matchComposerSkills } from "./composer-skill-menu.js";
+import type { ComposerProps, ComposerSkill, ComposerSubmission } from "./composer-types.js";
 import { Textarea } from "./components/ui/textarea.js";
-import { UploadCover, type UploadAttachment } from "./upload-cover.js";
-
-export interface ComposerOption {
-  value: string;
-  label: string;
-  disabled?: boolean | undefined;
-}
-
-export type ComposerAttachment<TMetadata = unknown> = UploadAttachment<TMetadata>;
-
-export interface ComposerSubmission<TMetadata = unknown> {
-  text: string;
-  files: File[];
-  attachments: ComposerAttachment<TMetadata>[];
-  model?: string | undefined;
-  reasoningEffort?: string | undefined;
-}
-
-export interface ComposerProps<TMetadata = unknown> {
-  disabled?: boolean | undefined;
-  isRunning?: boolean | undefined;
-  isAborting?: boolean | undefined;
-  onAbort?: (() => void | Promise<void>) | undefined;
-  allowFiles?: boolean | undefined;
-  placeholder?: string | undefined;
-  models?: readonly ComposerOption[] | undefined;
-  model?: string | undefined;
-  onModelChange?: ((model: string) => void) | undefined;
-  reasoningEfforts?: readonly ComposerOption[] | undefined;
-  reasoningEffort?: string | undefined;
-  onReasoningEffortChange?: ((effort: string) => void) | undefined;
-  accept?: string | undefined;
-  attachments?: readonly ComposerAttachment<TMetadata>[] | undefined;
-  onAttachmentsChange?: ((attachments: ComposerAttachment<TMetadata>[]) => void) | undefined;
-  onAttachmentButtonClick?: (() => void | Promise<void>) | undefined;
-  onSubmit: (submission: ComposerSubmission<TMetadata>) => void | boolean | Promise<void | boolean>;
-}
-
-function OptionMenu({
-  label,
-  value,
-  options,
-  disabled,
-  icon,
-  onChange,
-}: {
-  label: string;
-  value?: string | undefined;
-  options: readonly ComposerOption[];
-  disabled: boolean;
-  icon: ReactNode;
-  onChange?: ((value: string) => void) | undefined;
-}) {
-  const selected = options.find((option) => option.value === value);
-  return (
-    <DropdownMenu disabled={disabled || !onChange}>
-      <DropdownMenuTrigger
-        aria-label={label}
-        className="inline-flex h-8 max-w-40 min-w-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-slate-500 outline-none transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-3 focus-visible:ring-indigo-500/20 disabled:pointer-events-none disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-      >
-        {icon}
-        <span className="truncate">{selected?.label ?? label}</span>
-        <ChevronDown className="size-3 shrink-0 opacity-60" aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuRadioGroup value={value} onValueChange={(next) => onChange?.(String(next))}>
-          {options.map((option) => (
-            <DropdownMenuRadioItem key={option.value} value={option.value} disabled={option.disabled}>
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+import { UploadCover } from "./upload-cover.js";
 
 export function Composer<TMetadata = unknown>({
   disabled = false,
@@ -100,6 +22,9 @@ export function Composer<TMetadata = unknown>({
   reasoningEfforts = [],
   reasoningEffort,
   onReasoningEffortChange,
+  skills = [],
+  onSkillInvoke,
+  contextUsage,
   accept,
   attachments = [],
   onAttachmentsChange,
@@ -109,7 +34,13 @@ export function Composer<TMetadata = unknown>({
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const locked = disabled || submitting;
+  const [invokingSkill, setInvokingSkill] = useState(false);
+  const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
+  const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
+  const skillListId = useId();
+  const locked = disabled || submitting || invokingSkill;
+  const matchingSkills = skillMenuDismissed ? [] : matchComposerSkills(text, skills);
+  const selectedSkill = matchingSkills[Math.min(selectedSkillIndex, Math.max(0, matchingSkills.length - 1))];
   const hasDraft = Boolean(text.trim() || files.length || attachments.length);
   const canSubmit = !locked && hasDraft;
 
@@ -144,7 +75,43 @@ export function Composer<TMetadata = unknown>({
     }
   }
 
+  function invokeSkill(skill: ComposerSkill) {
+    if (locked || skill.disabled || !onSkillInvoke) return;
+    const commandDraft = text;
+    setText("");
+    setInvokingSkill(true);
+    let result: void | Promise<void>;
+    try {
+      result = onSkillInvoke(skill);
+    } catch {
+      setText(commandDraft);
+      setInvokingSkill(false);
+      return;
+    }
+    Promise.resolve(result)
+      .catch(() => setText(commandDraft))
+      .finally(() => setInvokingSkill(false));
+  }
+
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (matchingSkills.length > 0) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const direction = event.key === "ArrowDown" ? 1 : -1;
+        setSelectedSkillIndex((current) => (current + direction + matchingSkills.length) % matchingSkills.length);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSkillMenuDismissed(true);
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && selectedSkill) {
+        event.preventDefault();
+        invokeSkill(selectedSkill);
+        return;
+      }
+    }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       submit();
@@ -152,7 +119,7 @@ export function Composer<TMetadata = unknown>({
   }
 
   return (
-    <Card className="nova-composer overflow-hidden rounded-2xl">
+    <Card className="nova-composer overflow-visible rounded-2xl">
       <UploadCover
         files={files}
         onFilesChange={setFiles}
@@ -170,20 +137,34 @@ export function Composer<TMetadata = unknown>({
               <Textarea
                 value={text}
                 disabled={locked}
-                onChange={(event) => setText(event.currentTarget.value)}
+                onChange={(event) => {
+                  setText(event.currentTarget.value);
+                  setSelectedSkillIndex(0);
+                  setSkillMenuDismissed(false);
+                }}
                 onKeyDown={keyDown}
                 onPaste={allowFiles ? onPaste : undefined}
                 rows={2}
                 placeholder={placeholder}
                 className="min-h-16 resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
+                aria-expanded={matchingSkills.length > 0}
+                aria-controls={matchingSkills.length > 0 ? skillListId : undefined}
+                aria-activedescendant={selectedSkill ? `${skillListId}-${selectedSkill.id}` : undefined}
               />
             </label>
+
+            <ComposerSkillMenu
+              listId={skillListId}
+              skills={matchingSkills}
+              selected={selectedSkill}
+              onSelect={onSkillInvoke ? invokeSkill : undefined}
+            />
 
             <div className="nova-composer-input-row flex min-w-0 items-center justify-between gap-2 border-t border-slate-100 pt-1.5 dark:border-slate-800/80">
               <div className="nova-composer-options flex min-w-0 flex-wrap items-center gap-1">
                 {trigger}
                 {models.length > 0 && (
-                  <OptionMenu
+                  <ComposerOptionMenu
                     label="选择模型"
                     value={model}
                     options={models}
@@ -193,7 +174,7 @@ export function Composer<TMetadata = unknown>({
                   />
                 )}
                 {reasoningEfforts.length > 0 && (
-                  <OptionMenu
+                  <ComposerOptionMenu
                     label="选择推理强度"
                     value={reasoningEffort}
                     options={reasoningEfforts}
@@ -205,6 +186,7 @@ export function Composer<TMetadata = unknown>({
               </div>
 
               <div className="flex shrink-0 items-center gap-1.5">
+                {contextUsage && <ComposerContextUsageIndicator usage={contextUsage} />}
                 {isRunning && onAbort && !hasDraft && !submitting ? (
                   <Button
                     type="button"

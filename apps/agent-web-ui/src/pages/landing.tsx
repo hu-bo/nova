@@ -15,15 +15,18 @@ import {
   TerminalSquare,
 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { RunnerToken } from "@nova/protocol";
 import { useAuth } from "../auth/provider.js";
 import { Button } from "../components/ui/button.js";
+import { useQuickConversationCreate } from "./project/new-conversation.js";
 import { installCommand, runnerCommand } from "./settings/runner/commands.js";
 import { useRunnerConnection, useRunnerTokens } from "./settings/runner/use-runners.js";
 
 export function LandingRoute() {
   const auth = useAuth();
+  const navigate = useNavigate();
+  const createConversation = useQuickConversationCreate();
   const runnerTokens = useRunnerTokens(auth.isAuthenticated);
   const runnerConnection = useRunnerConnection(auth.isAuthenticated);
   const [copiedCommand, setCopiedCommand] = useState<"install" | "run" | null>(null);
@@ -35,6 +38,22 @@ export function LandingRoute() {
       : auth.isAuthenticated
         ? "正在生成启动命令…"
         : "登录后生成带 Token 的启动命令";
+
+  function openWorkspace(to: string) {
+    if (!auth.isAuthenticated) {
+      void auth.login();
+      return;
+    }
+    navigate(to);
+  }
+
+  function startCoding() {
+    if (!auth.isAuthenticated) {
+      void auth.login();
+      return;
+    }
+    createConversation.mutate(undefined);
+  }
 
   async function copyCommand(command: string, kind: "install" | "run") {
     try {
@@ -184,20 +203,32 @@ export function LandingRoute() {
                 step="01"
                 title="连接 Runner"
                 description="在 Linux 或 Windows 设备启动 Runner，保持资源归属明确。"
+                action="前往 Runner 管理"
+                onClick={() => openWorkspace("/settings/runners")}
               />
               <Feature
                 icon={<MonitorCog className="size-5" aria-hidden="true" />}
                 step="02"
                 title="选择 workspace"
                 description="为 Project 绑定唯一工作目录，路径边界在服务端校验。"
+                action="创建 Project"
+                onClick={() => openWorkspace("/app?createProject=1")}
               />
               <Feature
                 icon={<Code2 className="size-5" aria-hidden="true" />}
                 step="03"
                 title="开始 coding"
                 description="实时查看消息、工具输出和 TODO，长任务可以随时中断。"
+                action={createConversation.isPending ? "正在创建…" : "开始普通 Chat"}
+                onClick={startCoding}
+                disabled={createConversation.isPending}
               />
             </div>
+            {createConversation.error && (
+              <p className="mt-5 text-sm text-rose-600" role="alert">
+                无法创建会话，请先在设置中配置可用模型。
+              </p>
+            )}
           </div>
         </section>
       </main>
@@ -304,20 +335,34 @@ function Feature({
   step,
   title,
   description,
+  action,
+  onClick,
+  disabled = false,
 }: {
   icon: React.ReactNode;
   step: string;
   title: string;
   description: string;
+  action: string;
+  onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <article className="rounded-xl bg-white p-6 ring-1 ring-slate-200 transition duration-200 hover:-translate-y-1 hover:shadow-soft">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="group rounded-xl bg-white p-6 text-left ring-1 ring-slate-200 transition duration-200 hover:-translate-y-1 hover:shadow-soft focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:pointer-events-none disabled:opacity-60"
+    >
       <div className="flex items-center justify-between">
         <span className="grid size-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600">{icon}</span>
         <span className="text-xs font-semibold text-slate-300">{step}</span>
       </div>
       <h3 className="mt-6 font-semibold text-slate-900">{title}</h3>
       <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-    </article>
+      <span className="mt-5 flex items-center gap-1 text-xs font-semibold text-indigo-600">
+        {action} <ArrowRight className="size-3.5 transition group-hover:translate-x-1" aria-hidden="true" />
+      </span>
+    </button>
   );
 }

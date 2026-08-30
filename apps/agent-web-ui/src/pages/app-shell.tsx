@@ -1,6 +1,6 @@
 import { LayoutDashboard, LogOut, Menu, MessageCircle, Plus, Settings, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/provider.js";
 import { useConversationListMutations, useConversations, useProjects } from "./project/use-projects.js";
 import { RunnerLiveUpdates } from "./settings/runner/live-updates.js";
@@ -17,6 +17,7 @@ export function AppShell() {
   const projects = useProjects();
   const conversations = useConversations();
   const location = useLocation();
+  const navigate = useNavigate();
   const createChat = useQuickConversationCreate();
   const conversationMutations = useConversationListMutations();
 
@@ -35,6 +36,21 @@ export function AppShell() {
     if (mobileOpen && !dialog.open) dialog.showModal();
     if (!mobileOpen && dialog.open) dialog.close();
   }, [mobileOpen]);
+
+  useEffect(() => {
+    const parameters = new URLSearchParams(location.search);
+    if (parameters.get("createProject") !== "1") return;
+
+    setProjectCreatorOpen(true);
+    parameters.delete("createProject");
+    navigate(
+      {
+        pathname: location.pathname,
+        ...(parameters.size ? { search: `?${parameters.toString()}` } : {}),
+      },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate]);
 
   return (
     <div className="min-h-screen bg-slate-50">

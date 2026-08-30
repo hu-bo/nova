@@ -69,6 +69,7 @@ interface Agent {
 
   abort(): Promise<void>
   compact(opts?: { instruction?: string }): Promise<CompactionResult>
+  contextUsage(): Promise<ContextUsage>
   fork(entryId: EntryId): Promise<Agent>
   resume(): Promise<void>         // 崩溃 / 重启后依据 Record 续跑
 
@@ -412,6 +413,7 @@ type Record = { id: string; runId: string; ts: number } & (
   | { kind: "queue-enqueued";     queue: QueueName; message: string }
   | { kind: "todo-updated";       items: Todo[] }
   | { kind: "usage";              model: string; usage: Usage }
+  | { kind: "context-compacted";  trigger: CompactionTrigger; summarized: boolean }
   | { kind: "abort-requested" }
   | { kind: "run-finished";       stopReason: StopReason }
 )
@@ -557,6 +559,11 @@ type QueueName = "steering" | "followUp" | "nextRun"
 | 输出截断 | 单个 tool 的 `content` 有上限（缺省 30_000 字符），超出则**保留头尾、中间省略并标注省略行数**。`details` 不截断 |
 
 **截断策略在 agent-core，不在 tools。** 否则每个 tool 都要自己实现一遍，且策略无法统一调整。
+
+`ContextUsage` 只报告最近一次模型请求的真实 input token 与当前模型的 `contextWindow`；没有模型
+用量或刚完成压缩时 `inputTokens = null`，不伪造压缩后的 token 数。每次模型返回 usage 时发出
+`context.updated`，压缩成功后清空最近用量并再次发出该事件。`context-compacted` Record 与 usage
+Record 共同决定重建 runtime 后的最近状态，避免把压缩前的高水位误报为当前占用。
 
 > 长会话跑不下去，90% 的原因在这一组。`npm test` 一次输出就可能撑爆上下文。
 
@@ -744,6 +751,7 @@ type AgentEvent =
   | { type: "decision.requested"; request: DecisionRequest }
   | { type: "decision.resolved";  decisionId: string }
   | { type: "todo.updated";   items: Todo[] }
+  | { type: "context.updated"; usage: ContextUsage }
   | { type: "run.end";        runId: string; stopReason: StopReason; usage: Usage }
   | { type: "error";          code: string; message: string }
 ```

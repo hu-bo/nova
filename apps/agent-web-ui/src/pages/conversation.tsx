@@ -90,6 +90,7 @@ function ConversationView({
   const [runnerWarning, setRunnerWarning] = useState<ComposerSubmission<RunnerAttachmentMetadata> | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [compactNotice, setCompactNotice] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<ComposerAttachment<RunnerAttachmentMetadata>[]>([]);
   const store = useConversationStore();
   const mutations = useConversationMutations(conversation.id, modelProfileId);
@@ -105,6 +106,20 @@ function ConversationView({
   useEffect(() => setAttachmentOpen(false), [runnerId]);
   const incompleteTodos = store.state.todos.filter((todo) => todo.status !== "completed").length;
   const selectedProfile = models.profiles.find((profile) => profile.id === modelProfileId);
+  const contextUsage =
+    store.state.contextUsage ??
+    (selectedProfile ? { inputTokens: null, contextWindow: selectedProfile.contextWindow } : undefined);
+  const composerSkills = useMemo(
+    () => [
+      {
+        id: "compact",
+        command: "compact",
+        label: "压缩上下文",
+        disabled: store.state.isRunning || mutations.compactMutation.isPending,
+      },
+    ],
+    [mutations.compactMutation.isPending, store.state.isRunning],
+  );
 
   const modelOptions = useMemo(
     () =>
@@ -200,7 +215,7 @@ function ConversationView({
               )}
             </div>
 
-            <div className="min-w-0 shrink-0 overflow-hidden border-t border-slate-200 bg-white px-3 pb-2 pt-2 sm:px-4">
+            <div className="min-w-0 shrink-0 overflow-visible border-t border-slate-200 bg-white px-3 pb-2 pt-2 sm:px-4">
               {incompleteTodos > 0 && (
                 <div className="mb-2 xl:hidden">
                   <TodoPanel items={store.state.todos} collapsed />
@@ -235,6 +250,25 @@ function ConversationView({
                   role="alert"
                 >
                   中断失败：{errorMessage(mutations.abortMutation.error)}
+                </div>
+              )}
+              {mutations.compactMutation.error && (
+                <div
+                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
+                  role="alert"
+                >
+                  压缩失败：{errorMessage(mutations.compactMutation.error)}
+                </div>
+              )}
+              {compactNotice && (
+                <div
+                  className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm text-indigo-800 ring-1 ring-indigo-200"
+                  role="status"
+                >
+                  <span>{compactNotice}</span>
+                  <button type="button" className="font-semibold" onClick={() => setCompactNotice(null)}>
+                    关闭
+                  </button>
                 </div>
               )}
               {attachmentError && (
@@ -331,7 +365,7 @@ function ConversationView({
               )}
               <div className="relative z-10">
                 <Composer
-                  disabled={mutations.sendMutation.isPending}
+                  disabled={mutations.sendMutation.isPending || mutations.compactMutation.isPending}
                   isRunning={store.state.isRunning}
                   isAborting={mutations.abortMutation.isPending}
                   onAbort={() => mutations.abort()}
@@ -351,6 +385,16 @@ function ConversationView({
                   placeholder={project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行"}
                   models={modelOptions}
                   model={modelProfileId}
+                  skills={composerSkills}
+                  contextUsage={contextUsage}
+                  onSkillInvoke={async (skill) => {
+                    if (skill.id !== "compact") return;
+                    setCompactNotice(null);
+                    const result = await mutations.compact();
+                    setCompactNotice(
+                      result.compacted ? "上下文已压缩，占用将在下一次模型请求后更新。" : "当前没有可压缩的上下文。",
+                    );
+                  }}
                   onModelChange={(id) => {
                     SELECTED_MODEL_STORE.set(id);
                     setStoredProfileId(id);

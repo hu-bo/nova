@@ -51,6 +51,19 @@ export function createMessagesService(
       await store.routeConversation(userId, conversationId);
       await runtimes.abort(conversationId);
     },
+    async context(userId: string, conversationId: string) {
+      const route = await store.routeConversation(userId, conversationId);
+      return runtimes.context(route);
+    },
+    async compact(userId: string, conversationId: string) {
+      const route = await store.routeConversation(userId, conversationId);
+      const result = await runtimes.compact(route);
+      return {
+        compacted: result.replacedFrom !== null,
+        summarized: result.summarized,
+        context: await runtimes.context(route),
+      };
+    },
   };
 }
 

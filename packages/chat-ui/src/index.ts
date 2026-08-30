@@ -1,5 +1,8 @@
 export * from "./block-view.js";
 export * from "./composer.js";
+export type * from "./composer-types.js";
+export { contextUsagePercent } from "./composer-context-usage.js";
+export { matchComposerSkills } from "./composer-skill-menu.js";
 export * from "./decision-prompt.js";
 export * from "./message-list.js";
 export * from "./remote-explorer.js";

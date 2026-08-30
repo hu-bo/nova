@@ -1,7 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { ApiErrorSchema, ChatMessageSchema, MessageQuerySchema, SendMessageSchema, pageSchema } from "@nova/protocol";
+import {
+  ApiErrorSchema,
+  ChatMessageSchema,
+  CompactConversationResultSchema,
+  ContextUsageSchema,
+  MessageQuerySchema,
+  SendMessageSchema,
+  pageSchema,
+} from "@nova/protocol";
 import type { AgentStore } from "../../store.js";
 import type { EventHub } from "../runtime/event-hub.js";
 import type { ConversationRuntimes } from "../runtime/runtime-registry.js";
@@ -77,6 +85,39 @@ export function messageRoutes(
       await messages.abort(request.userId, request.params.id);
       return reply.code(204).send(null);
     },
+  );
+
+  server.get(
+    "/conversations/:id/context",
+    {
+      schema: {
+        operationId: "getConversationContext",
+        tags: ["messages"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: { 200: ContextUsageSchema, 401: ApiErrorSchema, 404: ApiErrorSchema },
+      },
+    },
+    (request) => messages.context(request.userId, request.params.id),
+  );
+
+  server.post(
+    "/conversations/:id/compact",
+    {
+      schema: {
+        operationId: "compactConversation",
+        tags: ["messages"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: {
+          200: CompactConversationResultSchema,
+          401: ApiErrorSchema,
+          404: ApiErrorSchema,
+          409: ApiErrorSchema,
+        },
+      },
+    },
+    (request) => messages.compact(request.userId, request.params.id),
   );
 }
 

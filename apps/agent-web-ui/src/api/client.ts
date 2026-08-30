@@ -18,7 +18,9 @@ import {
   deleteRunner,
   deleteRunnerToken,
   createRunnerToken,
+  compactConversation,
   getRunnerConnectionInfo,
+  getConversationContext,
   listAvailableModels,
   listConversations,
   listMessages,
@@ -100,6 +102,8 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
       });
     },
     abortConversation,
+    getConversationContext,
+    compactConversation,
     resolveDecision: (decisionId: string, input: DecisionResponse) => {
       if (input.kind === "question") return resolveDecision(decisionId, input);
       return resolveDecision(decisionId, {

@@ -42,10 +42,21 @@ export function ConversationProvider({ conversationId, children }: { conversatio
     refetchOnWindowFocus: false,
     retry: 1,
   });
+  const context = useQuery({
+    queryKey: queryKeys.context(conversationId),
+    queryFn: () => api!.getConversationContext(conversationId),
+    enabled: Boolean(api),
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 
   useEffect(() => {
     if (history.data) dispatch({ type: "hydrate", messages: history.data.items });
   }, [history.data]);
+
+  useEffect(() => {
+    if (context.data) dispatch({ type: "context.set", usage: context.data });
+  }, [context.data]);
 
   const loadSnapshot = useCallback(async (): Promise<ChatMessage[]> => {
     const snapshot = await api!.listMessages(conversationId);

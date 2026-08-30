@@ -60,7 +60,7 @@ export interface LoopHost {
   todos(): TodoState | null;
   updateTodos(items: Todo[]): Promise<void>;
   lastUsage(): Usage | null;
-  setLastUsage(usage: Usage): void;
+  setLastUsage(usage: Usage | null): void;
   addUsage(usage: Usage): void;
   runUsage(): Usage;
   emit(event: AgentEvent): void;
@@ -398,6 +398,8 @@ export async function compactNow(
   const plan = await planCompaction(host.view(), { stream: host.stream, signal }, instruction);
   if (!plan) return { trigger, summarized: false, replacedFrom: null, replacedTo: null };
   await host.applyCompaction(plan);
+  await host.rec({ kind: "context-compacted", trigger, summarized: plan.summarized });
+  host.setLastUsage(null);
   return { trigger, summarized: plan.summarized, replacedFrom: plan.replacedFrom, replacedTo: plan.replacedTo };
 }
 

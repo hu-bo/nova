@@ -171,6 +171,12 @@ it("runs the authenticated project and conversation flow with ownership isolatio
         events.publish(route.conversation.id, { type: "run.end", runId: "run-1", stopReason: "done" });
       },
       async abort() {},
+      async context() {
+        return { inputTokens: 32_000, contextWindow: 128_000 };
+      },
+      async compact() {
+        return { trigger: "manual", summarized: true, replacedFrom: "entry-1", replacedTo: "entry-2" };
+      },
       invalidate() {},
     },
   });
@@ -359,6 +365,26 @@ it("runs the authenticated project and conversation flow with ownership isolatio
   expect(createdConversation.statusCode).toBe(201);
   const conversationId = createdConversation.json().id as string;
 
+  const context = await app.inject({
+    method: "GET",
+    url: `/api/conversations/${conversationId}/context`,
+    headers: { authorization: "Bearer alice-token" },
+  });
+  expect(context.statusCode).toBe(200);
+  expect(context.json()).toEqual({ inputTokens: 32_000, contextWindow: 128_000 });
+
+  const compacted = await app.inject({
+    method: "POST",
+    url: `/api/conversations/${conversationId}/compact`,
+    headers: { authorization: "Bearer alice-token" },
+  });
+  expect(compacted.statusCode).toBe(200);
+  expect(compacted.json()).toEqual({
+    compacted: true,
+    summarized: true,
+    context: { inputTokens: 32_000, contextWindow: 128_000 },
+  });
+
   const origin = await app.listen({ host: "127.0.0.1", port: 0 });
   const eventController = new AbortController();
   const eventResponse = await fetch(`${origin}/api/conversations/${conversationId}/events`, {
@@ -437,6 +463,7 @@ it("runs the authenticated project and conversation flow with ownership isolatio
   expect(openapi.json().paths["/api/apps/{appName}/oauth/authorize-url"].post.operationId).toBe("createAuthorizeUrl");
   expect(openapi.json().paths["/api/me"].get.operationId).toBe("getCurrentUser");
   expect(openapi.json().paths["/api/conversations/{id}/messages"].post.operationId).toBe("sendMessage");
+  expect(openapi.json().paths["/api/conversations/{id}/compact"].post.operationId).toBe("compactConversation");
   expect(openapi.json().paths["/api/conversations/{id}/events"].get.security).toBeUndefined();
   expect(openapi.json().paths["/admin/model-config/providers"].get.operationId).toBe("listProviders");
 });

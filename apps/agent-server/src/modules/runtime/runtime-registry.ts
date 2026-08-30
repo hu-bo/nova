@@ -1,4 +1,4 @@
-import type { Agent, QueueName } from "@nova/agent-core";
+import type { Agent, CompactionResult, ContextUsage, QueueName } from "@nova/agent-core";
 import { createLogger } from "@nova/logger";
 import type { EntryRoute } from "../../store.js";
 import { conflict } from "../../errors.js";
@@ -8,6 +8,8 @@ const logger = createLogger("agent-server").child("runtime-registry");
 export interface ConversationRuntimes {
   send(route: EntryRoute, text: string, queue?: QueueName): Promise<void>;
   abort(conversationId: string): Promise<void>;
+  context(route: EntryRoute): Promise<ContextUsage>;
+  compact(route: EntryRoute): Promise<CompactionResult>;
   invalidate(conversationId: string): void;
 }
 
@@ -124,6 +126,21 @@ export function createRuntimeRegistry(
       if (!entry) throw conflict("Conversation is not running");
       logger.info({ conversationId }, "aborting agent run");
       await entry.agent.abort();
+    },
+    async context(route) {
+      return get(route).agent.contextUsage();
+    },
+    async compact(route) {
+      const { agent } = get(route);
+      if (agent.state.isStreaming) throw conflict("Conversation is running");
+      try {
+        return await agent.compact();
+      } catch (error) {
+        if (error instanceof Error && error.message === "agent is running") {
+          throw conflict("Conversation is running");
+        }
+        throw error;
+      }
     },
     invalidate(conversationId) {
       const entry = entries.get(conversationId);

@@ -85,4 +85,19 @@ describe("conversationReducer", () => {
     expect(completed.isRunning).toBe(false);
     expect(completed.queueReady).toBe(true);
   });
+
+  it("replaces context usage with the latest measured SSE value", () => {
+    const measured = conversationReducer(initialConversationState, {
+      type: "event",
+      conversationId: "conversation-1",
+      event: { type: "context.updated", inputTokens: 64_000, contextWindow: 128_000 },
+    });
+    expect(measured.contextUsage).toEqual({ inputTokens: 64_000, contextWindow: 128_000 });
+
+    const compacted = conversationReducer(measured, {
+      type: "context.set",
+      usage: { inputTokens: null, contextWindow: 128_000 },
+    });
+    expect(compacted.contextUsage).toEqual({ inputTokens: null, contextWindow: 128_000 });
+  });
 });

@@ -59,3 +59,24 @@ it("marks a repetition-stopped response as an error instead of a completed messa
 
   expect(saved[0]!.status).toBe("error");
 });
+
+it("projects measured and reset context usage without writing a chat message", () => {
+  const events = createEventHub();
+  const project = projectAgentEvents("conversation-1", events, {
+    async appendMessage(message) {
+      return { ...message, seq: 1 };
+    },
+  });
+
+  project({ type: "context.updated", usage: { inputTokens: 32_000, contextWindow: 128_000 } });
+  project({ type: "context.updated", usage: { inputTokens: null, contextWindow: 128_000 } });
+
+  const replay = events.replay("conversation-1", "0");
+  expect(replay.kind).toBe("events");
+  if (replay.kind === "events") {
+    expect(replay.events.map((item) => item.event)).toEqual([
+      { type: "context.updated", inputTokens: 32_000, contextWindow: 128_000 },
+      { type: "context.updated", inputTokens: null, contextWindow: 128_000 },
+    ]);
+  }
+});
