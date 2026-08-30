@@ -20,8 +20,8 @@ function CodeDiffView({ codeChanges }: { codeChanges: CodeChange[] }) {
 function DiffFile({ change }: { change: CodeChange }) {
   const diff = useMemo(() => diffLines(change.oldText, change.newText), [change.oldText, change.newText]);
 
-  const addedCount = diff.filter((d) => d.added).reduce((sum, d) => sum + d.count, 0);
-  const removedCount = diff.filter((d) => d.removed).reduce((sum, d) => sum + d.count, 0);
+  const addedCount = diff.filter((d) => d.added).reduce((sum, d) => sum + (d.count ?? 0), 0);
+  const removedCount = diff.filter((d) => d.removed).reduce((sum, d) => sum + (d.count ?? 0), 0);
 
   return (
     <div className="py-2">
@@ -59,7 +59,7 @@ function DiffLine({ part }: { part: Change }) {
   return (
     <div className={className}>
       <span className="select-none text-slate-600">{prefix}</span>
-      {part.lines?.join("\n") || part.value}
+      {part.value}
     </div>
   );
 }

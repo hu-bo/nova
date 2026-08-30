@@ -13,7 +13,7 @@ export type DecisionRequest =
       toolName: string;
       args: unknown;
       risk: "read" | "write" | "exec";
-      codeChanges?: CodeChange[];
+      codeChanges?: CodeChange[] | undefined;
     }
   | {
       kind: "question";
