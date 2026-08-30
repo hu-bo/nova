@@ -34,6 +34,7 @@ import { RunnerManagerDialog } from "./settings/runner/runner-manager-dialog.js"
 import { useRunnerDirectoryLoader } from "./settings/runner/use-runners.js";
 
 const SELECTED_MODEL_STORE = new LocalStore("nova_selected_model_profile", "");
+const SELECTED_REASONING_STORE = new LocalStore("nova_selected_reasoning_effort", "");
 
 export function ConversationRoute() {
   const { projectId, conversationId } = useParams();
@@ -79,6 +80,7 @@ function ConversationView({
 }) {
   const models = useModelSettings();
   const [storedProfileId, setStoredProfileId] = useState(() => SELECTED_MODEL_STORE.get());
+  const [storedReasoning, setStoredReasoning] = useState(() => SELECTED_REASONING_STORE.get());
   // 存储的模型可能已被删除或不在当前用户的服务端目录里，此时回落到默认值
   const modelProfileId = models.profiles.some((profile) => profile.id === storedProfileId)
     ? storedProfileId
@@ -92,8 +94,22 @@ function ConversationView({
   const [attachments, setAttachments] = useState<ComposerAttachment<RunnerAttachmentMetadata>[]>([]);
   const session = useConversationSession(conversation.id);
   const store = useConversationStore(conversation.id);
-  const mutations = useConversationMutations(conversation.id, modelProfileId, session.ensureStreamConnected);
   const runnerId = conversation.runnerId ?? project?.runnerId ?? "";
+  const selectedProfile = models.profiles.find((profile) => profile.id === modelProfileId);
+  const reasoningEfforts = useMemo<{ value: string; label: string }[]>(
+    () =>
+      (selectedProfile?.thinkingLevels ?? []).map((level) => ({
+        value: level,
+        label:
+          { off: "关闭", low: "低", medium: "中", high: "高", max: "最大" }[level] ?? level,
+      })),
+    [selectedProfile?.thinkingLevels],
+  );
+  // 存储的推理强度可能在当前模型中不存在，需要过滤
+  const reasoningEffort = reasoningEfforts.some((e) => e.value === storedReasoning)
+    ? storedReasoning
+    : reasoningEfforts[0]?.value ?? "";
+  const mutations = useConversationMutations(conversation.id, modelProfileId, session.ensureStreamConnected, reasoningEffort);
   const loadDirectory = useRunnerDirectoryLoader(runnerId);
   const selectedRunnerAttachmentPaths = useMemo(
     () =>
@@ -104,7 +120,6 @@ function ConversationView({
   );
   useEffect(() => setAttachmentOpen(false), [runnerId]);
   const incompleteTodos = store.state.todos.filter((todo) => todo.status !== "completed").length;
-  const selectedProfile = models.profiles.find((profile) => profile.id === modelProfileId);
   const contextUsage =
     store.state.contextUsage ??
     (selectedProfile ? { inputTokens: null, contextWindow: selectedProfile.contextWindow } : undefined);
@@ -199,9 +214,9 @@ function ConversationView({
         )}
 
         <div
-          className={`grid min-h-0 flex-1 overflow-hidden ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}
+          className={`grid min-h-0 flex-1 overflow-hidden  bg-white ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}
         >
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
+          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white max-w-[950px] mx-auto ">
             <div className="relative min-h-0 flex-1 overflow-hidden px-3 py-3 sm:px-5">
               {store.state.messages.length ? (
                 <MessageList messages={store.state.messages} onRetry={(messageId) => void mutations.retry(messageId)} />
@@ -431,6 +446,12 @@ function ConversationView({
                   onModelChange={(id) => {
                     SELECTED_MODEL_STORE.set(id);
                     setStoredProfileId(id);
+                  }}
+                  reasoningEfforts={reasoningEfforts}
+                  reasoningEffort={reasoningEffort}
+                  onReasoningEffortChange={(value) => {
+                    SELECTED_REASONING_STORE.set(value);
+                    setStoredReasoning(value);
                   }}
                   onSubmit={submit}
                 />

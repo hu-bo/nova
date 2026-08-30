@@ -3,7 +3,8 @@ import type { ComposerContextUsage } from "./composer-types.js";
 
 export function contextUsagePercent(usage: ComposerContextUsage): number | null {
   if (usage.inputTokens === null || usage.contextWindow <= 0) return null;
-  return Math.max(0, Math.round((usage.inputTokens / usage.contextWindow) * 100));
+  // 只要已经测到 token，就不要显示成 0%；否则用户会误以为上下文为空。
+  return Math.min(100, Math.max(0, Math.ceil((usage.inputTokens / usage.contextWindow) * 100)));
 }
 
 export function ComposerContextUsageIndicator({ usage }: { usage: ComposerContextUsage }) {

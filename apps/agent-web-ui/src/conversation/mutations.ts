@@ -13,11 +13,13 @@ export interface RunnerAttachmentMetadata {
   runnerId: string;
   path: string;
 }
+type ReasoningEffort = "off" | "low" | "medium" | "high" | "max";
 
 export function useConversationMutations(
   conversationId: string,
   modelProfileId: string,
   ensureStreamConnected: () => Promise<void>,
+  reasoningEffort?: string,
 ) {
   const { api } = useAuth();
   const models = useModelSettings();
@@ -48,7 +50,14 @@ export function useConversationMutations(
       const text = [submission.text, attachmentText].filter(Boolean).join("\n\n");
       const wasRunning = state.isRunning;
       const messageId = retryId ?? crypto.randomUUID();
-      const request = { text, ...model };
+      // reasoningEffort is a UI-only selection for now. The message API does
+      // not accept a per-request reasoningEffort field; sending it makes the
+      // strict server schema reject an otherwise valid message.
+      const request = {
+        text,
+        ...model,
+        ...(isReasoningEffort(reasoningEffort) ? { reasoningEffort } : {}),
+      };
       if (retryId) {
         dispatch({ type: "optimistic.retry", messageId });
       } else {
@@ -160,7 +169,8 @@ export function useConversationMutations(
   });
 
   return {
-    send: (submission: ComposerSubmission<RunnerAttachmentMetadata>) => sendMutation.mutateAsync({ submission }),
+    send: (submission: ComposerSubmission<RunnerAttachmentMetadata>) =>
+      sendMutation.mutateAsync({ submission }),
     retry: (messageId: string) => {
       const index = state.messages.findIndex((item) => item.id === messageId);
       const message = state.messages[index];
@@ -207,4 +217,8 @@ export function useConversationMutations(
     decisionMutation,
     runnerMutation,
   };
+}
+
+function isReasoningEffort(value: string | undefined): value is ReasoningEffort {
+  return value === "off" || value === "low" || value === "medium" || value === "high" || value === "max";
 }

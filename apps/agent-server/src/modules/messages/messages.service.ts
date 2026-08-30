@@ -45,7 +45,7 @@ export function createMessagesService(
       if (route.conversation.title === "New conversation") {
         await store.setConversationTitleIfUntitled({ userId, id: conversationId, title: titleFromMessage(input.text) });
       }
-      await runtimes.send(route, input.text, input.queue);
+      await runtimes.send(route, input.text, input.queue, input.reasoningEffort);
     },
     async abort(userId: string, conversationId: string) {
       await store.routeConversation(userId, conversationId);

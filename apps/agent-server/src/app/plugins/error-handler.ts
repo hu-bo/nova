@@ -13,7 +13,21 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return reply.code(error.statusCode).send({ code: error.code, message: error.message, requestId: request.id });
     }
     if (hasZodFastifySchemaValidationErrors(error)) {
-      request.log.warn({ component: "server", code: "INVALID_INPUT", statusCode: 400 }, "request validation failed");
+      request.log.warn(
+        {
+          component: "server",
+          code: "INVALID_INPUT",
+          statusCode: 400,
+          method: request.method,
+          url: request.url,
+          validation: error.validation.map((item) => ({
+            path: item.instancePath || item.params?.missingProperty || "<request>",
+            keyword: item.keyword,
+            message: item.message,
+          })),
+        },
+        "request validation failed",
+      );
       return reply
         .code(400)
         .send({ code: "INVALID_INPUT", message: "Request validation failed", requestId: request.id });

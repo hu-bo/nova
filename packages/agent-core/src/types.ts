@@ -259,7 +259,7 @@ export interface RunResult {
 
 export interface Agent {
   readonly sessionId: string;
-  prompt(input: string | ContentPart[]): Promise<RunResult>;
+  prompt(input: string | ContentPart[], options?: { thinkingLevel?: ThinkingLevel }): Promise<RunResult>;
   steer(msg: string): void; // 运行中插话，当前 tool batch 跑完后注入
   followUp(msg: string): void; // agent 准备停下时注入，让它继续
   nextRun(msg: string): void; // 排到下一个独立 run

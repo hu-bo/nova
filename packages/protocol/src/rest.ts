@@ -205,6 +205,7 @@ export const SendMessageSchema = z
   .object({
     text: z.string().trim().min(1),
     queue: z.enum(["steering", "followUp", "nextRun"]).optional(),
+    reasoningEffort: z.enum(["off", "low", "medium", "high", "max"]).optional(),
     modelConfig: ModelConfigSchema.optional(),
     modelId: z.uuid().optional(),
   })

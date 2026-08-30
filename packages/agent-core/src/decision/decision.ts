@@ -7,6 +7,7 @@ import type {
   Decide,
   DecisionRequest,
   DecisionResponse,
+  FileSystem,
   Risk,
 } from "../types.js";
 import { record } from "../session/record.js";
@@ -21,6 +22,7 @@ export interface DecisionDeps {
   runId: () => string;
   emit: (event: AgentEvent) => void;
   timeoutMs?: number;
+  fs?: FileSystem;
 }
 
 // 缺省策略：read → auto，write / exec → ask（none 不触发审批）
@@ -128,12 +130,41 @@ export async function requestApproval(
     toolName: call.name,
     args: call.args,
     risk: call.risk,
+    codeChanges: await buildCodeChanges(call, deps.fs),
   };
   const response = await requestDecision(request, deps, signal);
   if (response === null) return "aborted";
   if (response === "timeout" || response.kind !== "approval") return { allowed: false, alwaysAllowed: false };
   if (response.decision === "allow_always") allowlist.add(call.name);
   return { allowed: response.decision !== "deny", alwaysAllowed: response.decision === "allow_always" };
+}
+
+async function buildCodeChanges(
+  call: { name: string; args: unknown },
+  fs: FileSystem | undefined,
+): Promise<CodeChange[] | undefined> {
+  if (!fs || !call.args || typeof call.args !== "object") return undefined;
+  const args = call.args as Record<string, unknown>;
+  if (typeof args.path !== "string") return undefined;
+
+  if (call.name === "edit_file" && typeof args.oldText === "string" && typeof args.newText === "string") {
+    const current = await fs.read(args.path);
+    if (!current.ok) return undefined;
+    const occurrences = current.value.text.split(args.oldText).length - 1;
+    if (occurrences === 0 || (occurrences > 1 && args.replaceAll !== true)) return undefined;
+    const newText = args.replaceAll === true
+      ? current.value.text.split(args.oldText).join(args.newText)
+      : current.value.text.replace(args.oldText, args.newText);
+    return [{ path: args.path, oldText: current.value.text, newText }];
+  }
+
+  if (call.name === "write_file" && typeof args.content === "string") {
+    const current = await fs.read(args.path);
+    if (!current.ok && current.error.code !== "NOT_FOUND") return undefined;
+    return [{ path: args.path, oldText: current.ok ? current.value.text : "", newText: args.content }];
+  }
+
+  return undefined;
 }
 
 // 反问（ask_user）：返回答案；超时 / abort / 拒绝 → null

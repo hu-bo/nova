@@ -1,5 +1,5 @@
 import { BrainCircuit, CircleStop, Cpu, LoaderCircle, Send } from "lucide-react";
-import { useId, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "./components/ui/button.js";
 import { Card } from "./components/ui/card.js";
 import { ComposerContextUsageIndicator } from "./composer-context-usage.js";
@@ -37,12 +37,23 @@ export function Composer<TMetadata = unknown>({
   const [invokingSkill, setInvokingSkill] = useState(false);
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
   const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const skillListId = useId();
   const locked = disabled || submitting || invokingSkill;
   const matchingSkills = skillMenuDismissed ? [] : matchComposerSkills(text, skills);
   const selectedSkill = matchingSkills[Math.min(selectedSkillIndex, Math.max(0, matchingSkills.length - 1))];
   const hasDraft = Boolean(text.trim() || files.length || attachments.length);
   const canSubmit = !locked && hasDraft;
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    const maxHeight = Number.parseFloat(getComputedStyle(textarea).maxHeight);
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [text]);
 
   function clearDraft() {
     setText("");
@@ -135,6 +146,7 @@ export function Composer<TMetadata = unknown>({
             <label className="block px-2">
               <span className="sr-only">消息</span>
               <Textarea
+                ref={textareaRef}
                 value={text}
                 disabled={locked}
                 onChange={(event) => {
@@ -146,7 +158,7 @@ export function Composer<TMetadata = unknown>({
                 onPaste={allowFiles ? onPaste : undefined}
                 rows={2}
                 placeholder={placeholder}
-                className="min-h-16 resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
+                className="min-h-16 max-h-[204px] resize-none overflow-y-hidden border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
                 aria-expanded={matchingSkills.length > 0}
                 aria-controls={matchingSkills.length > 0 ? skillListId : undefined}
                 aria-activedescendant={selectedSkill ? `${skillListId}-${selectedSkill.id}` : undefined}

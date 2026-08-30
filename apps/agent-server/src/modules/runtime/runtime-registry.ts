@@ -1,4 +1,5 @@
 import type { Agent, CompactionResult, ContextUsage, QueueName } from "@nova/agent-core";
+import type { ThinkingLevel } from "@nova/model-adapters";
 import { createLogger } from "@nova/logger";
 import type { EntryRoute } from "../../store.js";
 import { conflict } from "../../errors.js";
@@ -6,7 +7,7 @@ import { conflict } from "../../errors.js";
 const logger = createLogger("agent-server").child("runtime-registry");
 
 export interface ConversationRuntimes {
-  send(route: EntryRoute, text: string, queue?: QueueName): Promise<void>;
+  send(route: EntryRoute, text: string, queue?: QueueName, thinkingLevel?: ThinkingLevel): Promise<void>;
   abort(conversationId: string): Promise<void>;
   context(route: EntryRoute): Promise<ContextUsage>;
   compact(route: EntryRoute): Promise<CompactionResult>;
@@ -66,7 +67,7 @@ export function createRuntimeRegistry(
   interval.unref();
 
   return {
-    async send(route, text, queue) {
+    async send(route, text, queue, thinkingLevel) {
       if (clearing.has(route.conversation.id)) throw conflict("Conversation context is being cleared");
       const { agent } = get(route);
       if (agent.state.isStreaming) {
@@ -89,7 +90,7 @@ export function createRuntimeRegistry(
       }
       logger.info({ conversationId: route.conversation.id }, "starting agent run");
       void agent
-        .prompt(text)
+        .prompt(text, thinkingLevel ? { thinkingLevel } : undefined)
         .then((result) => {
           if (result.stopReason === "error") {
             logger.error(

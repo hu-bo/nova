@@ -198,9 +198,15 @@ describe("chat-ui", () => {
     const html = renderToStaticMarkup(
       <Composer contextUsage={{ inputTokens: 72_000, contextWindow: 128_000 }} onSubmit={() => undefined} />,
     );
-    expect(contextUsagePercent({ inputTokens: 72_000, contextWindow: 128_000 })).toBe(56);
-    expect(html).toContain("上下文 56%");
+    expect(contextUsagePercent({ inputTokens: 72_000, contextWindow: 128_000 })).toBe(57);
+    expect(html).toContain("上下文 57%");
     expect(html).toContain("72,000 / 128,000 tokens");
+  });
+
+  it("does not display non-zero context usage as 0%", () => {
+    expect(contextUsagePercent({ inputTokens: 1, contextWindow: 128_000 })).toBe(1);
+    expect(contextUsagePercent({ inputTokens: 128_000, contextWindow: 128_000 })).toBe(100);
+    expect(contextUsagePercent({ inputTokens: 256_000, contextWindow: 128_000 })).toBe(100);
   });
 
   it("replaces the send button with an abort action while a run is active", () => {

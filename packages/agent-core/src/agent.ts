@@ -139,6 +139,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     storage: config.storage,
     runId: () => runId,
     emit,
+    fs: config.ctx?.fs,
   };
 
   // §4.3 hooks.beforeToolCall 只能单调收紧基础策略；异常与 abort 均 fail-closed。
@@ -266,11 +267,12 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     }
   }
 
-  async function prompt(input: string | ContentPart[]): Promise<RunResult> {
+  async function prompt(input: string | ContentPart[], options?: { thinkingLevel?: ThinkingLevel }): Promise<RunResult> {
     if (busy) throw new Error("agent is running");
     busy = true;
     try {
       await ensureLoaded();
+      if (options?.thinkingLevel !== undefined) await applyTurnConfig({ thinkingLevel: options.thinkingLevel });
       runId = newRunId();
       runController = new AbortController();
       runUsage = { input: 0, output: 0 };
