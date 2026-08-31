@@ -14,7 +14,6 @@ import {
   CornerDownRight,
   FolderKanban,
   MessageCircle,
-  Server,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -30,7 +29,6 @@ import { displayWorkspacePath } from "../lib/workspace-path.js";
 import { useModelSettings } from "./settings/model/provider.js";
 import { useConversations, useProject } from "./project/use-projects.js";
 import { RunnerBadge } from "./home.js";
-import { RunnerManagerDialog } from "./settings/runner/runner-manager-dialog.js";
 import { useRunnerDirectoryLoader } from "./settings/runner/use-runners.js";
 
 const SELECTED_MODEL_STORE = new LocalStore("nova_selected_model_profile", "");
@@ -85,7 +83,6 @@ function ConversationView({
   const modelProfileId = models.profiles.some((profile) => profile.id === storedProfileId)
     ? storedProfileId
     : models.defaultProfileId || models.profiles[0]?.id || "";
-  const [runnerOpen, setRunnerOpen] = useState(false);
   const [runnerWarning, setRunnerWarning] = useState<ComposerSubmission<RunnerAttachmentMetadata> | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -100,16 +97,20 @@ function ConversationView({
     () =>
       (selectedProfile?.thinkingLevels ?? []).map((level) => ({
         value: level,
-        label:
-          { off: "关闭", low: "低", medium: "中", high: "高", max: "最大" }[level] ?? level,
+        label: { off: "关闭", low: "低", medium: "中", high: "高", max: "最大" }[level] ?? level,
       })),
     [selectedProfile?.thinkingLevels],
   );
   // 存储的推理强度可能在当前模型中不存在，需要过滤
   const reasoningEffort = reasoningEfforts.some((e) => e.value === storedReasoning)
     ? storedReasoning
-    : reasoningEfforts[0]?.value ?? "";
-  const mutations = useConversationMutations(conversation.id, modelProfileId, session.ensureStreamConnected, reasoningEffort);
+    : (reasoningEfforts[0]?.value ?? "");
+  const mutations = useConversationMutations(
+    conversation.id,
+    modelProfileId,
+    session.ensureStreamConnected,
+    reasoningEffort,
+  );
   const loadDirectory = useRunnerDirectoryLoader(runnerId);
   const selectedRunnerAttachmentPaths = useMemo(
     () =>
@@ -119,6 +120,23 @@ function ConversationView({
     [attachments, runnerId],
   );
   useEffect(() => setAttachmentOpen(false), [runnerId]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.repeat ||
+        event.defaultPrevented ||
+        !store.state.isRunning ||
+        mutations.abortMutation.isPending ||
+        document.querySelector('[role="dialog"]')
+      )
+        return;
+      event.preventDefault();
+      void mutations.abort();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mutations, store.state.isRunning]);
   const incompleteTodos = store.state.todos.filter((todo) => todo.status !== "completed").length;
   const contextUsage =
     store.state.contextUsage ??
@@ -190,15 +208,6 @@ function ConversationView({
               <RunnerBadge state={project.runnerState} />
             </span>
           )}
-          <span className="hidden sm:block">
-            <Button
-              variant="ghost"
-              icon={<Server className="size-4" aria-hidden="true" />}
-              onClick={() => setRunnerOpen(true)}
-            >
-              切换 Runner
-            </Button>
-          </span>
         </header>
 
         {project && (!project.workspace || !project.runnerId) && (
@@ -359,6 +368,8 @@ function ConversationView({
                     request={store.state.pendingDecision}
                     disabled={mutations.decisionMutation.isPending}
                     onResolve={mutations.resolveDecision}
+                    onAbort={() => mutations.abort()}
+                    isAborting={mutations.abortMutation.isPending}
                   />
                 </div>
               )}
@@ -405,7 +416,9 @@ function ConversationView({
               <div className="relative z-10">
                 <Composer
                   disabled={
-                    mutations.sendMutation.isPending || mutations.compactMutation.isPending || mutations.clearMutation.isPending
+                    mutations.sendMutation.isPending ||
+                    mutations.compactMutation.isPending ||
+                    mutations.clearMutation.isPending
                   }
                   isRunning={store.state.isRunning}
                   isAborting={mutations.abortMutation.isPending}
@@ -469,13 +482,6 @@ function ConversationView({
           )}
         </div>
       </section>
-
-      <RunnerManagerDialog
-        open={runnerOpen}
-        onClose={() => setRunnerOpen(false)}
-        selectedRunnerId={conversation.runnerId ?? undefined}
-        onSelect={(runnerId) => mutations.changeRunner(runnerId)}
-      />
 
       <RemoteExplorer
         open={attachmentOpen}

@@ -1801,61 +1801,6 @@ export type DeleteConversation404 = {
   requestId?: string;
 };
 
-export type UpdateConversationRunnerBody = {
-  /** @minLength 1 */
-  runnerId: string;
-};
-
-export type UpdateConversationRunner200 = {
-  /** @minLength 1 */
-  id: string;
-  /**
-     * @minLength 1
-     * @nullable
-     */
-  projectId: string | null;
-  /**
-     * @minLength 1
-     * @nullable
-     */
-  runnerId: string | null;
-  title: string;
-  /**
-     * @minimum 0
-     * @maximum 9007199254740991
-     */
-  createdAt: number;
-  /**
-     * @minimum 0
-     * @maximum 9007199254740991
-     */
-  updatedAt: number;
-};
-
-export type UpdateConversationRunner400 = {
-  code: string;
-  message: string;
-  requestId?: string;
-};
-
-export type UpdateConversationRunner401 = {
-  code: string;
-  message: string;
-  requestId?: string;
-};
-
-export type UpdateConversationRunner404 = {
-  code: string;
-  message: string;
-  requestId?: string;
-};
-
-export type UpdateConversationRunner409 = {
-  code: string;
-  message: string;
-  requestId?: string;
-};
-
 export type ListMessagesParams = {
 /**
  * @minLength 1
@@ -1934,6 +1879,17 @@ export const SendMessageBodyQueue = {
   nextRun: 'nextRun',
 } as const;
 
+export type SendMessageBodyReasoningEffort = typeof SendMessageBodyReasoningEffort[keyof typeof SendMessageBodyReasoningEffort];
+
+
+export const SendMessageBodyReasoningEffort = {
+  off: 'off',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  max: 'max',
+} as const;
+
 export type SendMessageBodyModelConfigProvider = typeof SendMessageBodyModelConfigProvider[keyof typeof SendMessageBodyModelConfigProvider];
 
 
@@ -2000,6 +1956,7 @@ export type SendMessageBody = {
   /** @minLength 1 */
   text: string;
   queue?: SendMessageBodyQueue;
+  reasoningEffort?: SendMessageBodyReasoningEffort;
   modelConfig?: SendMessageBodyModelConfig;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
   modelId?: string;
@@ -4763,72 +4720,6 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteConversationMutationOptions(options), queryClient);
-    }
-
-export const getUpdateConversationRunnerUrl = (id: string,) => {
-
-
-
-
-  return `/api/conversations/${id}/runner`
-}
-
-export const updateConversationRunner = async (id: string,
-    updateConversationRunnerBody: UpdateConversationRunnerBody, options?: Parameters<typeof apiMutator>[1]): Promise<UpdateConversationRunner200> => {
-
-  return apiMutator<UpdateConversationRunner200>(getUpdateConversationRunnerUrl(id),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateConversationRunnerBody)
-  }
-);}
-
-
-
-
-
-export const getUpdateConversationRunnerMutationOptions = <TError = ErrorType<UpdateConversationRunner400 | UpdateConversationRunner401 | UpdateConversationRunner404 | UpdateConversationRunner409>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateConversationRunner>>, TError,{id: string;data: BodyType<UpdateConversationRunnerBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateConversationRunner>>, TError,{id: string;data: BodyType<UpdateConversationRunnerBody>}, TContext> => {
-
-const mutationKey = ['updateConversationRunner'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateConversationRunner>>, {id: string;data: BodyType<UpdateConversationRunnerBody>}> = (props) => {
-          const {id,data} = props ?? {};
-
-          return  updateConversationRunner(id,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateConversationRunnerMutationResult = NonNullable<Awaited<ReturnType<typeof updateConversationRunner>>>
-    export type UpdateConversationRunnerMutationBody = BodyType<UpdateConversationRunnerBody>
-    export type UpdateConversationRunnerMutationError = ErrorType<UpdateConversationRunner400 | UpdateConversationRunner401 | UpdateConversationRunner404 | UpdateConversationRunner409>
-
-    export const useUpdateConversationRunner = <TError = ErrorType<UpdateConversationRunner400 | UpdateConversationRunner401 | UpdateConversationRunner404 | UpdateConversationRunner409>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateConversationRunner>>, TError,{id: string;data: BodyType<UpdateConversationRunnerBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof updateConversationRunner>>,
-        TError,
-        {id: string;data: BodyType<UpdateConversationRunnerBody>},
-        TContext
-      > => {
-      return useMutation(getUpdateConversationRunnerMutationOptions(options), queryClient);
     }
 
 export const getListMessagesUrl = (id: string,

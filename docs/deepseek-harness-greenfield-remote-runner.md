@@ -2,7 +2,7 @@
 
 > 状态：架构分析与部署方案
 >
-> 项目性质：全新项目，不集成、不兼容、不复用 Nova 代码
+> 项目性质：全新项目，不集成 Nova、不以兼容 Nova 为目标、不复用 Nova 代码；DSH 官方／社区插件兼容是独立的产品目标
 >
 > 参考边界：只参考 Nova 已验证的产品体验与控制面／执行面分离思想
 >
@@ -17,6 +17,8 @@
 1. 自研 Web UI 部署在公网服务器，负责登录、项目、Runner 选择、会话和事件展示；
 2. 自研 Control Server 部署在服务器，在进程内组装 DSH，持有 Agent 生命周期、模型调用、会话持久化和产品控制面；
 3. 自研 Remote Runner 安装在服务器、macOS 或 Windows 开发机，只执行文件与进程操作，通过主动发起的持久双向 gRPC 连接接收请求。
+
+一句话概括核心边界：**云端 Control Server 调度 DSH 核心能力，Remote Runner 只负责操作目标 OS 上的文件、进程和工作区；DSH 通过新项目内部 `packages/` 中的集成包接入，保持上游零修改和公开契约依赖，以较低成本跟随官方仓库升级，并在底层兼容官方与合规的社区 Cordis 插件。**
 
 推荐链路是：
 
@@ -55,6 +57,9 @@ real workspace / process / operating system
 | 会话如何恢复 | DSH Session Event Log 持久化到 PostgreSQL，产品表是投影 |
 | 是否复用 Nova 包、Proto 或数据库 | 不复用；所有包、协议和表在新项目重新定义 |
 | 是否修改 DSH 上游 | 不修改；只使用公开 package export 和 Cordis seam |
+| 开发机是否安装 DSH / npm 插件 | 不安装；只安装新项目 Remote Runner |
+| DSH 与 Cordis 插件运行在哪里 | Control Server 的 Runtime Shard 内，统一安装和治理 |
+| 官方／社区插件兼容范围 | 首先兼容 Host 插件；Client/Web 插件通过产品 UI 协议适配 |
 
 ### 1.2 为什么不能直接部署 DSH Web
 
@@ -203,6 +208,92 @@ Coordinator 继续拥有批写、顺序、准备、恢复、flush、crash repair
 
 `dsh-sdk-jsonrpc-server` 目前没有逐 Session close、逐 prompt cancel 或逐 prompt 最终结果，不适合作为产品 Server。产品 Server 可以复用其“Server 持有 AgentHandle、先订阅事件、`followup()` 立即返回 MessageId、shutdown 完整 dispose”的模式。
 
+### 3.7 DSH 官方与社区 Cordis 插件兼容
+
+新项目不要求每台开发机安装 DSH。DSH、Cordis Loader、插件包和 profile composition 全部属于 Control Server；Remote Runner 只是产品自带的轻量执行守护进程。插件在 Server 端参与 Agent、Tool、Prompt 和事件生命周期，需要访问 workspace 或启动进程时，再通过当前 Runtime Shard 注入的远程 Service 走 gRPC。
+
+```text
+Web UI
+  │ install / configure / enable / disable
+  ▼
+Control Server
+  ├─ Plugin Registry + policy + lockfile
+  ├─ DSH public packages
+  ├─ Cordis Context / Loader
+  ├─ official and community Host plugins
+  └─ Runner-bound compatibility Services
+       │ gRPC
+       ▼
+Remote Runner
+  ├─ filesystem
+  ├─ shell / PowerShell / process / PTY
+  ├─ Git and workspace operations
+  └─ OS-specific containment and cancellation
+```
+
+DSH profile 已支持通过 `dsh plugin --profile <name> add <package>` 把树外包安装到 profile 的 `node_modules`，再由 bundle、profile manifest 和 `cordis.patch.yml` 组合。新项目可以兼容这套包格式和组合语义，但插件安装由 Server 的 `PluginRegistry` 实现，不要求生产运行 `dsh` CLI，也不把插件下发到 Runner。
+
+#### 3.7.1 兼容级别
+
+| 插件类型 | 兼容目标 | 迁移成本 | 处理方式 |
+|---|---|---:|---|
+| Prompt、Agent 策略、事件监听 | 原样加载 | 很低 | 直接运行在 Server Cordis Context |
+| LLM Provider、重试、Token 统计 | 原样加载 | 很低 | 作为 Server 全局或 Shard 插件 |
+| 只通过 `ctx.tools`、`ctx.workspace`、`ctx.subprocess` 等公开 Service 工作的插件 | 源码兼容 | 低 | 注入 Runner-bound 兼容 Service |
+| Tool 插件 | 尽量源码兼容 | 中 | Tool 决策留在 Server，OS 操作经 gRPC 执行 |
+| 直接使用 Node `fs`、`child_process` 或本机 Git 的插件 | 不承诺透明兼容 | 较高 | 改为 DSH Service，或提供明确的远程适配 |
+| Sandbox、PTY、LSP、文件监听插件 | 能力兼容 | 较高 | Server 保留插件逻辑，Runner 实现平台能力和协议 |
+| 带原生 Node 依赖的插件 | 按包评估 | 较高 | 在 Server 镜像构建，不允许假定目标 Runner ABI |
+| DSH Client/Web 插件 | 不承诺源码直跑 | 较高 | 使用产品自有 UI Contribution 协议或专用 Adapter |
+| 依赖非 DSH Cordis 发行版或其他产品 Service 的插件 | 不保证 | 不确定 | 检查 Cordis 包身份、版本和 Service 契约 |
+
+“兼容 Cordis 插件”不能理解为任意 Cordis 生态包都可直接安装。可直接兼容的前提是插件面向当前 DSH 使用的 `@deepseek-ai/cordis` 版本，并且它声明的 Service、Event、配置和生命周期契约在生产 Composition 中真实存在。
+
+#### 3.7.2 通过 Service 兼容，而不是逐插件改写
+
+低成本跟随官方插件的关键，是把迁移成本集中到少数基础 Service：
+
+```text
+DSH / Cordis Host plugin
+       │ inject
+       ▼
+Server compatibility Services
+├─ ctx.workspace / ctx.fs
+├─ ctx.subprocess / ctx.shell
+├─ ctx.sandbox
+├─ ctx.shellEnv
+├─ ctx.attachments
+└─ ctx.jobs
+       │ RunnerClient
+       ▼
+gRPC Remote Runner
+```
+
+遵守 Service 边界的官方和社区插件可以保持原代码；绕过 Service、直接访问 Server 本机 OS 的插件必须适配。Control Server 不提供本地 workspace fallback，否则这类插件可能误读或修改 Server 容器文件。
+
+#### 3.7.3 Host 插件与 Client 插件分开承诺
+
+第一阶段只承诺 DSH Host 插件兼容，包括 Tool、LLM、Prompt、Agent、Session Hook、Sandbox 策略、Web Search 和 MCP 等服务端能力。自研 Web UI 不运行完整的 DSH Client Runtime，因此插件贡献的 DSH Slot、Overlay、Settings Page、主题或 React 卡片不会自动出现。
+
+产品后续可以定义稳定的 UI Contribution 协议，支持配置 Schema、Tool Result Renderer、审批表单和状态卡片；对高价值官方插件提供 Adapter。只有在社区确实大量依赖 DSH Client 插件时，才评估嵌入 DSH Client Cordis Runtime，不能把它作为 Host 插件兼容的前置条件。
+
+#### 3.7.4 Server 统一安装与治理
+
+Web UI 的“安装插件”操作只调用产品 API，真实流程是：
+
+```text
+request install
+  → resolve package and exact version
+  → verify source, integrity and allow policy
+  → install into an isolated Server plugin store
+  → persist lockfile and compatibility metadata
+  → validate Cordis dependency composition
+  → activate in the selected logical profile / Runtime Shard
+  → record audit result
+```
+
+Server 至少记录插件名、精确版本、来源、完整性哈希、配置、所需 Service、Host/Client 能力声明、启停状态和升级结果。插件是可执行代码：多租户环境默认使用允许列表，并通过容器、Worker 或等价边界隔离不可信插件；不能让普通用户把任意 npm 包加载进 Control Server 主进程。
+
 ## 4. 推荐生产部署拓扑
 
 ### 4.1 单 Server 副本的第一版
@@ -245,8 +336,8 @@ Control Server
 | 组件 | 建议形态 | 对外暴露 |
 |---|---|---|
 | Web UI | Vite 等构建后的静态文件，由 Nginx / CDN 服务 | HTTPS 443 |
-| Control Server HTTP | Node.js 24 LTS 容器或 systemd 服务 | 仅反向代理可达，例如 3000 |
-| Control Server gRPC | 与 Server 同进程的独立 listener | 仅反向代理可达，例如 50051 |
+| Control Server HTTP | Node.js 24 容器或 systemd 服务 | 仅反向代理可达，例如 9105 |
+| Control Server gRPC | 与 Server 同进程的独立 listener | 仅反向代理可达，例如 9106 |
 | PostgreSQL | 托管数据库或独立容器 | 只在私网 |
 | Object Storage | 仅附件功能需要时增加 | 只经 Server 签名或代理 |
 | Remote Runner | 各开发机原生进程或系统服务 | 不开放入站端口 |
@@ -498,6 +589,23 @@ HarnessRuntimeShard
 
 Controller、Project Service、SSE Hub 和 Remote Provider 都不能缓存第二份 AgentHandle 或 Runner connection owner。
 
+### 7.4 禁止全局 `currentRunner`
+
+插件在 Server 运行不意味着所有插件共享一个可变的当前机器。并发用户、并发 Conversation 和 Runner 重连会让全局 `currentRunner` 立即产生串 workspace 风险。Runner 选择必须由 Runtime Shard / Cordis 子 Context 持有：
+
+```text
+Server Cordis root
+├─ global services: plugin registry, LLM routes, logging
+├─ Runtime Shard A / child Context
+│  ├─ runner = mac-01, generation = 42
+│  └─ fs / shell / workspace Services → mac-01#42
+└─ Runtime Shard B / child Context
+   ├─ runner = windows-02, generation = 7
+   └─ fs / shell / workspace Services → windows-02#7
+```
+
+插件通过所在 Context 注入的 Service 得到执行目标，不读取进程全局变量，也不在每次调用临时替换共享 Service。Runner generation 变化时销毁旧 Shard 并创建新 Shard，保证旧 target、process handle 和插件 effect 不会漂移到新连接。
+
 ## 8. 全新项目建议结构
 
 以下只是 Greenfield 结构建议，不映射 Nova 包：
@@ -509,10 +617,13 @@ apps/
 
 packages/
 ├─ harness-runtime/           # 显式 DSH Composition Root
+├─ harness-plugin-host/       # Cordis Loader、逻辑 profile 与插件生命周期
+├─ harness-plugin-compat/     # DSH Service → Runner-bound 兼容实现
 ├─ harness-runner-fs/         # DSH FileSystem → Runner client
 ├─ harness-runner-shell/      # DSH ShellExecutor → Runner client
 ├─ harness-persistence-pg/    # DSH PersistenceBackend → PostgreSQL
 ├─ harness-server-bridge/     # Agent lifecycle / event / interaction bridge
+├─ plugin-protocol/           # 插件目录、配置与可选 UI Contribution 稳定类型
 ├─ product-protocol/          # Browser REST / SSE 稳定类型
 ├─ runner-client/             # Node gRPC session 与消息关联
 └─ testkit/                   # fake LLM、真实 Runner harness、协议测试
@@ -546,6 +657,7 @@ deploy/
 ```text
 Cordis Context per Runtime Shard
 ├─ timer
+├─ product-owned Cordis Loader / validated logical profile
 ├─ dsh-llm + selected provider adapters
 ├─ dsh-session
 ├─ PostgreSQL SessionPersistence provider
@@ -561,6 +673,7 @@ Cordis Context per Runtime Shard
 ├─ dsh-tool-bash OR dsh-tool-pwsh
 │  └─ phase 1: enableRunInBackground = false
 ├─ optional product instructions
+├─ validated official / community Host plugins
 ├─ optional compaction
 └─ dsh-agent-loop
 ```
@@ -574,6 +687,8 @@ Cordis Context per Runtime Shard
 - 从 Control Server 文件系统发现 workspace Skill 的 provider；
 - JSONL / SQLite 作为生产 Session 事实源；
 - DSH Web Host、Settings UI 或本地 Credentials UI。
+- 未经校验的任意 npm 插件；
+- 直接把 Server 文件系统当作用户 workspace 的社区插件。
 
 Skill 第一版可以关闭，或只使用随部署发布的只读内置 Skill。若需要读取 workspace 中的 `SKILL.md`，必须实现 Remote Skill Provider 或确认现有 consumer 全程只通过 `ctx.fs`，不能让 Server 本地 Skill FileSystem 读取同名路径。
 
@@ -884,12 +999,16 @@ ready 不要求至少一个用户 Runner 在线，否则没有连接 Runner 的�
 
 DSH 当前仓库使用 MIT License，公开包版本为 `0.1.1-rc.2`。实现时应重新选择并精确锁定经过验证的版本：
 
+DSH 不以复制源码的方式并入新项目。`packages/harness-runtime`、`packages/harness-plugin-host` 和各兼容包是产品拥有的集成边界，通过 `package.json` 依赖 DSH 公开 packages；Control Server 构建时把这些依赖和经过批准的插件统一打入镜像或 Server 插件仓库。这样开发机只分发 Remote Runner，DSH 升级也集中在一处完成。
+
 - `package.json` 使用精确版本，不用 `^` 跟随 RC 漂移；
 - 提交 lockfile；
 - 只从 package root import；即使包暂时导出 `./src/*`，生产也不依赖内部源码路径；
 - 不使用 `patch-package`、长期私有补丁或修改 `deepseek-harness-master/packages/**`；
 - 完整上游仓库可以作为只读 Git submodule 或 sibling checkout，用于源码阅读与候选验证；
 - 新项目不与 DSH monorepo 合并为同一个 pnpm workspace。
+
+低成本跟随官方仓库不等于运行时自动追随最新版。每次升级仍精确锁定官方版本或 commit SHA，通过集成包编译、Composition 验证、官方插件兼容矩阵和跨平台 Runner canary 后再发布。若上游公开 Service 能力不足，优先向官方贡献通用 seam，不维护长期私有 fork。
 
 如需跟踪尚未发布的 DSH commit，应在独立上游 workspace 构建并 pack 公开包，新项目只安装产物。
 
@@ -899,6 +1018,7 @@ DSH 当前仓库使用 MIT License，公开包版本为 `0.1.1-rc.2`。实现时
 update exact DSH version / SHA
   → build public packages
   → integration packages compile
+  → official / approved community plugin composition tests
   → fake-model runtime scenarios
   → PostgreSQL persistence conformance
   → real Linux / macOS / Windows Runner canary
@@ -917,6 +1037,9 @@ CI 至少验证：
 - Shell exit、timeout、cancel、truncation、disconnect；
 - Runner 断线无本地 fallback；
 - 候选 DSH 能读取受支持的历史 Session。
+- 已支持的官方插件能够加载、执行、停止并正确释放 effect；
+- Host-only 插件不会把 Client UI 依赖带入生产 Server；
+- 插件没有绕过 Remote Service 访问 Server 本地 workspace。
 
 ## 15. 实施路线
 
@@ -926,6 +1049,7 @@ CI 至少验证：
 - fake LLM 完成 create、followup、session event、cancel、dispose；
 - 实现最小内存 Remote FS / Shell fake；
 - 验证 PostgreSQL Backend 的最小原语；
+- 原样加载一个官方 Host 插件和一个最小树外 Cordis 插件，验证 inject、effect 与 dispose；
 - 冻结 DSH 版本和 Node 版本。
 
 验收：不启动 DSH Web / CLI，也能通过自研入口完成一轮固定模型对话；无内部 import；上游零修改；dispose 后无悬挂资源。
@@ -947,6 +1071,7 @@ CI 至少验证：
 - AgentRuntimeRegistry、Runtime Shard 和 Session lease；
 - PostgreSQL DSH Persistence；
 - Message POST、Session projection、SSE replay、cancel；
+- Server Plugin Registry、精确版本 lockfile、允许列表与逻辑 profile；
 - Nginx / TLS / gRPC 长连接部署。
 
 验收：用户从公网 UI 登录、选择本机 Runner 与 workspace、发送 coding query，并看到 DSH 经 gRPC 读写真实 workspace；Server 重启可恢复已提交历史。
@@ -1000,6 +1125,14 @@ CI 至少验证：
 - Control Server 文件系统上没有任何产品代码 workspace；
 - 日志中不出现 OIDC token、Runner token、模型 key 或文件内容。
 
+### 16.4 插件兼容
+
+- Server 安装并加载受支持的官方 Host 插件，开发机不安装 DSH 或该 npm 包；
+- 同一插件在 macOS 与 Windows Runtime Shard 中分别操作各自 workspace，不发生串路由；
+- 插件 stop、update、Runner disconnect 和 Shard dispose 后，注册的 Tool、Event 与资源 effect 全部撤销；
+- 直接调用 Node `fs` 的测试插件不能接触用户 workspace，并被兼容性检查标记为需要适配；
+- 带 DSH Client UI 的插件能够继续使用 Host 能力，但 UI 部分明确显示为 unsupported 或由产品 Adapter 接管。
+
 ## 17. 风险与 Go / No-Go
 
 | 风险 | 控制 |
@@ -1013,6 +1146,9 @@ CI 至少验证：
 | 多 Server 双写 | 第一版单副本；扩容前实现 lease、fencing 和 owner 路由 |
 | DSH local provider 绕过远程边界 | 代码式组合、启动审计、Server 不挂载 workspace |
 | 公网 DSH Web 暴露本地能力 | 不部署 DSH Web，全新产品协议与 Auth |
+| 社区插件直接访问 Server OS | 允许列表、静态/运行时审计、隔离执行、禁止本地 workspace fallback |
+| 插件把请求路由到错误机器 | 每个 generation 独立 Shard / Context，禁止全局 `currentRunner` |
+| DSH Client 插件无法在自研 Web 运行 | 分级兼容，Host 优先，稳定 UI Contribution 协议与按需 Adapter |
 
 正式开发前的 Go 条件：
 
@@ -1024,6 +1160,8 @@ CI 至少验证：
 - [ ] Linux、macOS、Windows 真实 Runner 均通过；
 - [ ] Runner generation 失效可完整清理对应 Shard；
 - [ ] 生产组合中不存在本地 workspace Provider；
+- [ ] 至少一个官方 Host 插件无需修改即可在 Server 加载并通过 Remote Service 操作 Runner；
+- [ ] 插件安装具备精确版本、完整性校验、允许策略、审计和可回滚能力；
 - [ ] 团队接受 DSH 的 Agent、Session、Tool、Approval 和 Compaction 语义。
 
 若 DSH 公开 seam 无法满足前三项，不应通过长期私有 patch 绕过。应先向上游贡献通用扩展点，或重新评估 DSH 版本与依赖策略。
@@ -1032,7 +1170,7 @@ CI 至少验证：
 
 新项目的推荐组合是：
 
-> **全新 Web UI + 全新 Control Server + DSH public core packages + 自有最小 Runtime Composition + PostgreSQL Session Persistence + 自有 Remote FS / Shell Provider + 全新 gRPC 协议 + 跨平台 Rust Remote Runner。**
+> **全新 Web UI + 全新 Control Server + `packages/` 内的 DSH/Cordis 集成与插件宿主 + 自有最小 Runtime Composition + PostgreSQL Session Persistence + 自有 Remote FS / Shell 兼容 Service + 全新 gRPC 协议 + 不含 DSH 的跨平台 Rust Remote Runner。**
 
 Nova 只提供产品体验和架构思想参考：公网聊天入口、Server 控制面、Runner 主动出站连接、真实远程执行边界。新项目不依赖 Nova package、数据库、Proto、Runner binary 或内部类型。
 
@@ -1052,6 +1190,8 @@ Nova 只提供产品体验和架构思想参考：公网聊天入口、Server �
 
 这条链路成立后，服务器、macOS 和 Windows 只是同一 Remote Runner 协议下的不同执行世界，不需要三套 Agent 或三套 Server 实现。
 
+最终产品承诺应表述为：**DSH 核心能力和 Host 插件集中部署在云端 Server，开发机只安装轻量 Remote Runner；新项目通过稳定的内部 integration packages 跟随 DSH 官方升级，并以 DSH 公开 Cordis Service 为兼容面，优先做到官方与社区 Host 插件低成本接入。**
+
 ## 19. 本地参考资料
 
 DeepSeek Harness：
@@ -1061,6 +1201,8 @@ DeepSeek Harness：
 - `deepseek-harness-master/docs/architecture.zh.md`
 - `deepseek-harness-master/docs/agent-lifecycle.zh.md`
 - `deepseek-harness-master/docs/capability-seams.zh.md`
+- `deepseek-harness-master/docs/cordis-primer.zh.md`
+- `deepseek-harness-master/docs/cordis-tutorial/07-into-the-harness.zh.md`
 - `deepseek-harness-master/docs/api-gateway.zh.md`
 - `deepseek-harness-master/docs/subsystems/web-server.zh.md`
 - `deepseek-harness-master/docs/subsystems/session.zh.md`
@@ -1079,6 +1221,8 @@ DeepSeek Harness：
 - `deepseek-harness-master/packages/sdk/server/src/server.ts`
 - `deepseek-harness-master/packages/sdk/server/README.zh.md`
 - `deepseek-harness-master/packages/bundle/web-app/README.zh.md`
+- `deepseek-harness-master/packages/bundle/README.zh.md`
+- `deepseek-harness-master/apps/cli/README.zh.md`
 - `deepseek-harness-master/packages/host/webserver/README.zh.md`
 - `deepseek-harness-master/packages/client/connection/README.zh.md`
 

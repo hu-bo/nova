@@ -101,6 +101,18 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
         return;
       }
       case "run.end": {
+        if (event.stopReason === "aborted") {
+          for (const message of messages.values()) {
+            message.status = "aborted";
+            publish({ type: "message.end", messageId: message.id, status: "aborted" });
+            message.blocks.forEach((block, index) => {
+              if (block?.type !== "tool_call" || block.status !== "running") return;
+              const cancelled: Block = { ...block, status: "cancelled" };
+              message.blocks[index] = cancelled;
+              publish({ type: "block.end", messageId: message.id, index, block: cancelled });
+            });
+          }
+        }
         publish({ type: "run.end", runId: event.runId, stopReason: event.stopReason });
         const completed = [...messages.values()];
         messages.clear();

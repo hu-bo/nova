@@ -3,6 +3,26 @@ import { describe, expect, it, vi } from "vitest";
 import { createRunnerRegistry } from "./registry.js";
 
 describe("runner file browsing", () => {
+  it("reports the selected-workspace error when a project path is outside the runner root", async () => {
+    const session = {
+      identity: { runnerId: "runner-1", workspace: "E:\\work" },
+      generation: "generation-1",
+      lastHeartbeatAt: Date.now(),
+      state: 1,
+      running: 0,
+      onStatus: () => () => {},
+      close: async () => {},
+      fs: { stat: async () => ({ kind: 2, size: 0n }) },
+    } as unknown as RunnerSession;
+    const registry = createRunnerRegistry();
+    await registry.register("alice", "token-1", session);
+
+    await expect(registry.verifyWorkspace("alice", "runner-1", "E:\\other")).rejects.toMatchObject({
+      code: "RUNNER_UNAVAILABLE",
+      message: "Runner cannot access the selected workspace",
+    });
+  });
+
   it("lists owned files and directories from the runner root and rejects paths outside it", async () => {
     const root = "E:\\work";
     const mutableSession = {

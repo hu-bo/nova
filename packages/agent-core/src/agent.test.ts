@@ -156,6 +156,7 @@ interface SetupOpts {
   approvalPolicy?: ApprovalPolicy;
   maxTurns?: number;
   toolConcurrency?: number;
+  toolTimeoutMs?: number;
   contextWindow?: number;
   maxOutput?: number;
   sessionId?: string;
@@ -180,6 +181,7 @@ function setup(stream: StreamFn, opts: SetupOpts = {}) {
     approvalPolicy: opts.approvalPolicy,
     maxTurns: opts.maxTurns,
     toolConcurrency: opts.toolConcurrency,
+    toolTimeoutMs: opts.toolTimeoutMs,
     sessionId: opts.sessionId,
   });
   return { agent, storage };
@@ -645,6 +647,27 @@ describe("tool batch", () => {
     expect(started).toHaveLength(1); // quick 从未启动
     expect(records.some((item) => item.kind === "abort-requested")).toBe(true);
     expect(events.some((event) => event.type === "run.end" && event.stopReason === "aborted")).toBe(true);
+  });
+
+  it("tool 超时会 abort ToolContext，并将调用收敛为 error 结果", async () => {
+    let observedAbort = false;
+    const slow = localTestTool("slow", {
+      risk: "read",
+      untilAborted: true,
+      onExecute: (_, ctx) =>
+        ctx?.signal.addEventListener("abort", () => {
+          observedAbort = true;
+        }),
+    });
+    const { stream } = scripted([toolEvents([{ name: "slow", callId: "slow-1" }]), textEvents("recovered")]);
+    const { agent, storage } = setup(stream, { tools: [slow], toolTimeoutMs: 25 });
+
+    const result = await agent.prompt("go");
+
+    expect(result.stopReason).toBe("done");
+    expect(observedAbort).toBe(true);
+    const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
+    expect(textOf(results[0]!.content)).toContain("timed out after 25ms");
   });
 });
 

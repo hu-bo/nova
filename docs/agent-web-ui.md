@@ -160,22 +160,19 @@ interface ConversationState {
 
 ### 3.1 会话 Runner 绑定
 
-Runner 选择属于 `apps/agent-web-ui` 的会话页面，不属于 `packages/chat-ui`。新建普通
-Chat 或 Project 会话直接进入会话页面，不为 Runner 弹窗。独立 Chat 不需要 Runner；
-Project 尚未绑定 Runner/workspace 时，用户首次发送才提示完成绑定。用户也可在会话页面
-随时切换到自己拥有的其他 Runner；切换通过 server mutation 完成，当前运行中的 run 不迁移，
-下一次发送才使用新 Runner。
+Runner 选择发生在 Project 的 workspace 绑定或新建 Conversation 时，不属于
+`packages/chat-ui`。新建普通 Chat 或 Project 会话直接进入会话页面，不为 Runner 弹窗。
+独立 Chat 不需要 Runner；Project 尚未绑定 Runner/workspace 时，用户首次发送才提示完成绑定。
+已有 Conversation 不展示 Runner 切换控件，也没有对应的 server mutation，确保其执行环境不变。
 
 ```text
 Chat 页面
-  ├── 当前 Runner：Linux Server / Windows PC
-  ├── Runner 状态与 workspace
-  └── 切换 Runner → PATCH /api/conversations/:id/runner
+  ├── 当前 Runner 状态与 workspace
 ```
 
-切换控件由 Chat 页面组合，`chat-ui` 只接收展示数据和回调，不知道 Runner、设备、权限
-或 API 路径。Project Chat 还必须校验新 Runner 能访问 Project 已绑定的 workspace；独立
-Chat 不执行文件工具，因此不保存 Runner 绑定。
+`chat-ui` 只接收展示数据和回调，不知道 Runner、设备、权限或 API 路径。Project
+workspace 绑定失败时，页面直接展示服务端返回的错误（例如 `Runner cannot access the selected workspace`）；
+独立 Chat 不执行文件工具，因此不保存 Runner 绑定。
 
 ### 3.2 产品首页
 

@@ -122,6 +122,7 @@ describe("chat-ui", () => {
           risk: "exec",
         }}
         onResolve={() => undefined}
+        onAbort={() => undefined}
       />,
     );
     const todo = renderToStaticMarkup(<TodoPanel items={[{ id: "1", text: "verify", status: "in_progress" }]} />);
@@ -130,6 +131,7 @@ describe("chat-ui", () => {
     expect(decision).toContain("允许执行");
     expect(decision).toContain('data-slot="card"');
     expect(decision).toContain("总是允许");
+    expect(decision).toContain("取消流程");
     expect(todo).not.toContain("checkbox");
     expect(todo).toContain("verify");
     expect(todo).toContain('data-slot="card"');

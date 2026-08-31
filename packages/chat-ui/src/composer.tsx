@@ -105,6 +105,11 @@ export function Composer<TMetadata = unknown>({
   }
 
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Escape" && isRunning && onAbort) {
+      event.preventDefault();
+      void onAbort();
+      return;
+    }
     if (matchingSkills.length > 0) {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createApiClient } from "./client.js";
+import { ApiClientError, createApiClient, errorMessage } from "./client.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -7,6 +7,12 @@ afterEach(() => {
 });
 
 describe("attachment upload client", () => {
+  it("keeps the selected-workspace error visible to the user", () => {
+    expect(
+      errorMessage(new ApiClientError(409, "RUNNER_UNAVAILABLE", "Runner cannot access the selected workspace")),
+    ).toBe("Runner cannot access the selected workspace");
+  });
+
   it("gets signed URLs from Nova and PUTs the file directly to MinIO", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

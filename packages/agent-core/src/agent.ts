@@ -210,6 +210,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     hooks: config.hooks,
     maxTurns: config.maxTurns ?? 100,
     toolConcurrency: config.toolConcurrency ?? 8,
+    toolTimeoutMs: config.toolTimeoutMs ?? 120_000,
     systemPrompt: assembleSystem(userId, config.systemPrompt),
     queues,
     runId: () => runId,
@@ -267,7 +268,10 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     }
   }
 
-  async function prompt(input: string | ContentPart[], options?: { thinkingLevel?: ThinkingLevel }): Promise<RunResult> {
+  async function prompt(
+    input: string | ContentPart[],
+    options?: { thinkingLevel?: ThinkingLevel },
+  ): Promise<RunResult> {
     if (busy) throw new Error("agent is running");
     busy = true;
     try {

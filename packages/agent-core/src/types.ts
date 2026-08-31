@@ -234,6 +234,7 @@ export interface AgentConfig {
   systemPrompt?: PromptAsset[];
   maxTurns?: number; // 缺省 100
   toolConcurrency?: number; // 缺省 8（§4.2）
+  toolTimeoutMs?: number; // 每个 tool call 的总时限，缺省 120_000；超时会 abort ToolContext
   subAgent?: { maxConcurrent?: number; maxDepth?: number }; // 缺省 4 / 1（§10）
 }
 

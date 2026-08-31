@@ -476,6 +476,7 @@ it("runs the authenticated project and conversation flow with ownership isolatio
   expect(openapi.json().paths["/api/conversations/{id}/messages"].post.operationId).toBe("sendMessage");
   expect(openapi.json().paths["/api/conversations/{id}/compact"].post.operationId).toBe("compactConversation");
   expect(openapi.json().paths["/api/conversations/{id}/clear"].post.operationId).toBe("clearConversationContext");
+  expect(openapi.json().paths["/api/conversations/{id}/runner"]).toBeUndefined();
   expect(openapi.json().paths["/api/conversations/{id}/events"].get.security).toBeUndefined();
   expect(openapi.json().paths["/admin/model-config/providers"].get.operationId).toBe("listProviders");
 });

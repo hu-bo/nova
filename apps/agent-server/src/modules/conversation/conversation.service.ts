@@ -1,6 +1,5 @@
 import type { Conversation, CreateConversation } from "@nova/protocol";
 import type { AgentStore, ConversationRow } from "../../store.js";
-import type { RunnerRegistry } from "../runner/registry.js";
 import type { ConversationRuntimes } from "../runtime/runtime-registry.js";
 import type { ModelConfigStore } from "../model-config/model-config.store.js";
 import { resolveCatalogModel } from "../model-config/model-config.store.js";
@@ -8,7 +7,6 @@ import type { CredentialCipher } from "../model-config/credential.js";
 
 export function createConversationService(
   store: AgentStore,
-  runners: RunnerRegistry,
   runtimes: ConversationRuntimes,
   models: ModelConfigStore,
   cipher: CredentialCipher,
@@ -41,13 +39,6 @@ export function createConversationService(
     async remove(userId: string, id: string) {
       await store.deleteConversation({ userId, id });
       runtimes.invalidate(id);
-    },
-    async changeRunner(userId: string, id: string, runnerId: string) {
-      const route = await store.routeConversation(userId, id);
-      if (route.project?.workspace) await runners.verifyWorkspace(userId, runnerId, route.project.workspace);
-      const updated = await store.updateConversationRunner({ userId, id, runnerId });
-      runtimes.invalidate(id);
-      return view(updated);
     },
   };
 }

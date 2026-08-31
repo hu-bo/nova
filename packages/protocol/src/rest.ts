@@ -181,13 +181,6 @@ export const CreateConversationSchema = z
   });
 export type CreateConversation = z.infer<typeof CreateConversationSchema>;
 
-export const UpdateConversationRunnerSchema = z
-  .object({
-    runnerId: z.string().trim().min(1),
-  })
-  .strict();
-export type UpdateConversationRunner = z.infer<typeof UpdateConversationRunnerSchema>;
-
 export const ConversationQuerySchema = z.object({
   projectId: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),

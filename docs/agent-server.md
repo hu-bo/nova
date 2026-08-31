@@ -114,9 +114,8 @@ Chat 转成 Project，意味着历史里所有"我没有执行环境"的回答�
 
 创建 conversation 不要求 Runner：独立 Chat 不使用 Runner，Project Chat 可以先创建并
 进入会话。Project 首次执行前必须解析出 Project workspace 和 Runner；缺失时返回可解释的
-错误，且绝不降级为独立 Chat。已有会话可通过 `PATCH /api/conversations/:id/runner` 选择
-Runner；切换只影响后续 run，正在运行的 run 继续使用原 Runner。Project Chat 切换时还要
-校验新 Runner 的 root 包含 Project.workspace。
+错误，且绝不降级为独立 Chat。Runner 只能在创建 Conversation 时确定；已有 Conversation 不提供切换 Runner 的接口，
+从而确保整个会话始终使用同一执行环境。
 
 ### 1.3 OpenAPI 与 API 生成
 

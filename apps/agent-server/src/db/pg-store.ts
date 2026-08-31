@@ -4,7 +4,16 @@ import postgres from "postgres";
 import type { Page } from "@nova/protocol";
 import { conflict, invalidInput, notFound } from "../errors.js";
 import type { AgentStore } from "../store.js";
-import { conversations, entries, messages, projects, records, runners as runnerRecords, runnerTokens, users } from "./schema.js";
+import {
+  conversations,
+  entries,
+  messages,
+  projects,
+  records,
+  runners as runnerRecords,
+  runnerTokens,
+  users,
+} from "./schema.js";
 
 export interface PgStore {
   store: AgentStore;
@@ -288,15 +297,6 @@ export function createPgStore(databaseUrl: string): PgStore {
         .limit(1);
       if (!project) throw notFound("Project");
       return { userId, conversation, project };
-    },
-    async updateConversationRunner(input) {
-      const [conversation] = await db
-        .update(conversations)
-        .set({ runnerId: input.runnerId, updatedAt: new Date() })
-        .where(and(eq(conversations.id, input.id), eq(conversations.userId, input.userId)))
-        .returning();
-      if (!conversation) throw notFound("Conversation");
-      return conversation;
     },
     async setConversationTitleIfUntitled(input) {
       await db

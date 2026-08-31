@@ -24,6 +24,10 @@ export function createPendingDecisions(events: EventHub): PendingDecisions {
         new Promise((resolve, reject) => {
           const onAbort = () => {
             pending.delete(request.decisionId);
+            // decision.requested is published here (rather than by the projection), so this
+            // matching terminal event must also originate here. Otherwise an abort leaves the
+            // approval/question card visible even though the Agent has already stopped waiting.
+            events.publish(conversationId, { type: "decision.resolved", decisionId: request.decisionId });
             reject(signal.reason);
           };
           pending.set(request.decisionId, {

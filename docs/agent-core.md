@@ -283,6 +283,10 @@ type FsError   = { code: FsErrorCode;   message: string; path?: string }
 type ExecError = { code: ExecErrorCode; message: string; exitCode?: number }
 ```
 
+Agent 每个 tool call 也有总时限：`AgentConfig.toolTimeoutMs`，缺省 120 秒。该时限由 TaskFlow
+持有，并会 abort 传入工具的 `ToolContext.signal`；Runner 执行因此会收到取消请求。工具未能自行响应
+abort 时，Agent 仍会将该调用收敛为 timeout 结果，不会让整个 run 永久停在 loading。
+
 > **联动点**：`fs` 面的存在要求 `proto/execution.proto` 除 `Execute` 外必须有文件操作 RPC。
 > 若只有 `command / args`，`read_file` 就只能拼 `cat` —— 不可接受。见 `proto.md` §4。
 

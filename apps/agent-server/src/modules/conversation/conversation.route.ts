@@ -6,11 +6,9 @@ import {
   ConversationQuerySchema,
   ConversationSchema,
   CreateConversationSchema,
-  UpdateConversationRunnerSchema,
   pageSchema,
 } from "@nova/protocol";
 import type { AgentStore } from "../../store.js";
-import type { RunnerRegistry } from "../runner/registry.js";
 import type { ConversationRuntimes } from "../runtime/runtime-registry.js";
 import { createConversationService } from "./conversation.service.js";
 import type { ModelConfigStore } from "../model-config/model-config.store.js";
@@ -21,13 +19,12 @@ const IdParams = z.object({ id: z.uuid() });
 export function conversationRoutes(
   app: FastifyInstance,
   store: AgentStore,
-  runners: RunnerRegistry,
   runtimes: ConversationRuntimes,
   models: ModelConfigStore,
   cipher: CredentialCipher,
 ): void {
   const server = app.withTypeProvider<ZodTypeProvider>();
-  const conversations = createConversationService(store, runners, runtimes, models, cipher);
+  const conversations = createConversationService(store, runtimes, models, cipher);
 
   server.post(
     "/conversations",
@@ -72,26 +69,5 @@ export function conversationRoutes(
       await conversations.remove(request.userId, request.params.id);
       return reply.code(204).send(null);
     },
-  );
-
-  server.patch(
-    "/conversations/:id/runner",
-    {
-      schema: {
-        operationId: "updateConversationRunner",
-        tags: ["conversations"],
-        security: [{ bearerAuth: [] }],
-        params: IdParams,
-        body: UpdateConversationRunnerSchema,
-        response: {
-          200: ConversationSchema,
-          400: ApiErrorSchema,
-          401: ApiErrorSchema,
-          404: ApiErrorSchema,
-          409: ApiErrorSchema,
-        },
-      },
-    },
-    (request) => conversations.changeRunner(request.userId, request.params.id, request.body.runnerId),
   );
 }

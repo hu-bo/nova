@@ -160,17 +160,8 @@ export function useConversationMutations(
     onSuccess: refreshLists,
   });
 
-  const runnerMutation = useMutation({
-    mutationFn: (runnerId: string) => api!.updateConversationRunner(conversationId, { runnerId }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-    },
-  });
-
   return {
-    send: (submission: ComposerSubmission<RunnerAttachmentMetadata>) =>
-      sendMutation.mutateAsync({ submission }),
+    send: (submission: ComposerSubmission<RunnerAttachmentMetadata>) => sendMutation.mutateAsync({ submission }),
     retry: (messageId: string) => {
       const index = state.messages.findIndex((item) => item.id === messageId);
       const message = state.messages[index];
@@ -207,7 +198,6 @@ export function useConversationMutations(
         throw error;
       }
     },
-    changeRunner: (runnerId: string) => runnerMutation.mutateAsync(runnerId),
     sendMutation,
     abortMutation,
     compactMutation,
@@ -215,7 +205,6 @@ export function useConversationMutations(
     steerMutation,
     queuedRunMutation,
     decisionMutation,
-    runnerMutation,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Pencil, Plus, Power, ServerCog, Trash2 } from "lucide-react";
+import { Check, Clipboard, KeyRound, Pencil, Plus, Power, ServerCog, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
   createProvider,
@@ -26,6 +26,13 @@ export function ProvidersRoute() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = async (provider: Provider) => {
+    await navigator.clipboard.writeText(provider.credentialMasked);
+    setCopiedId(provider.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
   const saveMutation = useMutation({
     mutationFn: (input: CreateProvider | UpdateProvider) =>
       editing ? updateProvider(editing.id, input) : createProvider(input as CreateProvider),
@@ -130,7 +137,22 @@ export function ProvidersRoute() {
                   <td className={`${tableCellClass} max-w-xs truncate font-mono text-xs`} title={provider.baseUrl}>
                     {provider.baseUrl}
                   </td>
-                  <td className={`${tableCellClass} font-mono text-xs`}>{provider.credentialMasked}</td>
+                  <td className={tableCellClass}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs">{provider.credentialMasked}</span>
+                      <button
+                        onClick={() => void handleCopy(provider)}
+                        className="flex-shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                        aria-label="复制凭据"
+                      >
+                        {copiedId === provider.id ? (
+                          <Check className="size-3.5 text-emerald-500" />
+                        ) : (
+                          <Clipboard className="size-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </td>
                   <td className={tableCellClass}>
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-semibold ${provider.isPublic ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}

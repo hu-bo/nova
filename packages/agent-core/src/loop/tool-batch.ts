@@ -21,7 +21,10 @@ export interface BatchDeps {
   tools: ReadonlyMap<string, AgentTool>;
   ctx: ToolContext | undefined;
   concurrency: number;
+  timeoutMs: number;
   signal: AbortSignal;
+  /** 原始 run signal。task timeout 使用组合后的 signal，仍需保留它来区分 timeout 与用户 abort。 */
+  runSignal?: AbortSignal;
   approve(call: ToolCall & { risk: Risk }): Promise<ApprovalOutcome | "aborted">;
   onToolStart(call: ToolCall): Promise<void>;
   onToolEnd(call: ToolCall, outcome: ToolOutcome): Promise<void>;
@@ -69,8 +72,12 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
     flow.addTask({
       id: taskId,
       deps: taskDeps,
-      run: async () => {
-        outcomes.set(call.callId, await runOne(call, tool, risk, deps));
+      timeoutMs: deps.timeoutMs,
+      run: async (task) => {
+        // TaskFlow owns the per-tool timeout. Its task signal must reach the ToolContext,
+        // otherwise a timeout only changes scheduler state and leaves the remote process running.
+        const signal = AbortSignal.any([deps.signal, task.signal]);
+        outcomes.set(call.callId, await runOne(call, tool, risk, { ...deps, signal, runSignal: deps.signal }));
       },
     });
   }
@@ -106,27 +113,29 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
     executed: false,
   });
 
-  if (!tool) return fail(`unknown tool: ${call.name}`);
-  if (deps.signal.aborted) return fail("tool call was not executed (run aborted)");
+  if (!tool) return end(fail(`unknown tool: ${call.name}`));
+  if (deps.signal.aborted) return end(fail(interruptedText(deps, false)));
 
   const parsed = tool.schema.safeParse(call.args);
   if (!parsed.success)
-    return fail(
-      `invalid arguments: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "arguments"}: ${issue.message}`).join("; ")}`,
+    return end(
+      fail(
+        `invalid arguments: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "arguments"}: ${issue.message}`).join("; ")}`,
+      ),
     );
 
   const approval = await deps.approve({ ...call, risk });
-  if (approval === "aborted") return fail("tool call was not executed (run aborted)");
+  if (approval === "aborted") return end(fail(interruptedText(deps, false)));
   if (!approval.allowed) {
     // §6：拒绝必须让模型知道，否则它会反复重试同一个操作
-    return fail(`denied by user: ${call.name}`);
+    return end(fail(`denied by user: ${call.name}`));
   }
 
   await deps.onToolStart(call);
 
   try {
     const toolCtx = deps.ctx ? withSignal(deps.ctx, deps.signal) : undefined;
-    const result = await tool.execute(parsed.data, toolCtx);
+    const result = await awaitTool(tool.execute(parsed.data, toolCtx), deps.signal);
     return await end({
       callId: call.callId,
       name: call.name,
@@ -138,6 +147,12 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
       ...(result.usage ? { usage: result.usage } : {}),
     });
   } catch (error) {
+    if (error instanceof ToolInterrupted) {
+      const text = interruptedText(deps, true);
+      const outcome = fail(text);
+      outcome.executed = true;
+      return await end(outcome);
+    }
     // §3.3：AgentTool.execute 可以 throw —— 转成 error tool_result 喂回模型自行纠错
     const outcome = fail(error instanceof Error ? error.message : String(error));
     outcome.executed = true;
@@ -148,6 +163,35 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
     await deps.onToolEnd(call, outcome);
     return outcome;
   }
+}
+
+function interruptedText(deps: BatchDeps, started: boolean): string {
+  if ((deps.runSignal ?? deps.signal).aborted)
+    return started ? "tool call was cancelled (run aborted)" : "tool call was not executed (run aborted)";
+  return started
+    ? `tool call timed out after ${deps.timeoutMs}ms`
+    : `tool call was not executed (timed out after ${deps.timeoutMs}ms)`;
+}
+
+class ToolInterrupted extends Error {}
+
+function awaitTool<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => finish(() => reject(new ToolInterrupted()));
+    const finish = (settle: () => void) => {
+      signal.removeEventListener("abort", onAbort);
+      settle();
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    void operation.then(
+      (result) => finish(() => resolve(result)),
+      (error) => finish(() => reject(error)),
+    );
+  });
 }
 
 function writePathOf(args: unknown): string {

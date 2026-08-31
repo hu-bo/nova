@@ -60,6 +60,47 @@ it("marks a repetition-stopped response as an error instead of a completed messa
   expect(saved[0]!.status).toBe("error");
 });
 
+it("turns in-flight tool cards into cancelled terminal states when a run is aborted", async () => {
+  const events = createEventHub();
+  const project = projectAgentEvents("conversation-1", events, {
+    async appendMessage(message) {
+      return { ...message, seq: 1 };
+    },
+  });
+
+  project({ type: "message.start", messageId: "message-1", role: "assistant" });
+  project({
+    type: "block.end",
+    messageId: "message-1",
+    index: 0,
+    block: { type: "tool_call", callId: "call-1", name: "list_dir", args: { path: "/workspace" } },
+  });
+  project({ type: "message.end", messageId: "message-1", stopReason: "done" });
+  project({ type: "run.end", runId: "run-1", stopReason: "aborted", usage: { input: 0, output: 0 } });
+
+  const replay = events.replay("conversation-1", "0");
+  expect(replay).toMatchObject({
+    kind: "events",
+    events: expect.arrayContaining([
+      expect.objectContaining({ event: { type: "message.end", messageId: "message-1", status: "aborted" } }),
+      expect.objectContaining({
+        event: {
+          type: "block.end",
+          messageId: "message-1",
+          index: 0,
+          block: {
+            type: "tool_call",
+            callId: "call-1",
+            name: "list_dir",
+            args: { path: "/workspace" },
+            status: "cancelled",
+          },
+        },
+      }),
+    ]),
+  });
+});
+
 it("projects measured and reset context usage without writing a chat message", () => {
   const events = createEventHub();
   const project = projectAgentEvents("conversation-1", events, {

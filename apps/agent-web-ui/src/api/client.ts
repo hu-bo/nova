@@ -4,7 +4,6 @@ import type {
   CreateProject,
   DecisionResponse,
   SendMessage,
-  UpdateConversationRunner,
   UpdateProject,
 } from "@nova/protocol";
 import {
@@ -31,7 +30,6 @@ import {
   listRunnerTokens,
   resolveDecision,
   sendMessage,
-  updateConversationRunner,
   updateProject,
   uploadRunnerFile,
 } from "./generated/agent-server.js";
@@ -90,14 +88,13 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
         ...(modelId === undefined ? {} : { modelId }),
       });
     },
-    updateConversationRunner: (conversationId: string, input: UpdateConversationRunner) =>
-      updateConversationRunner(conversationId, input),
     listMessages: (conversationId: string) => listMessages(conversationId, { limit: 100 }),
     sendMessage: (conversationId: string, input: SendMessage) => {
-      const { queue, modelConfig, modelId, ...required } = input;
+      const { queue, reasoningEffort, modelConfig, modelId, ...required } = input;
       return sendMessage(conversationId, {
         ...required,
         ...(queue === undefined ? {} : { queue }),
+        ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
         ...(modelConfig === undefined ? {} : { modelConfig: modelConfigBody(modelConfig) }),
         ...(modelId === undefined ? {} : { modelId }),
       });

@@ -117,7 +117,6 @@ export async function registerApp(app: FastifyInstance, dependencies: AppDepende
       conversationRoutes(
         api,
         dependencies.store,
-        dependencies.runners,
         dependencies.runtimes,
         dependencies.modelConfigStore,
         dependencies.credentialCipher,

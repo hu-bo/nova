@@ -1,4 +1,15 @@
-import { Check, CheckCircle2, Circle, FileCode, HelpCircle, LoaderCircle, ShieldCheck, X, Zap } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  Circle,
+  CircleStop,
+  FileCode,
+  HelpCircle,
+  LoaderCircle,
+  ShieldCheck,
+  X,
+  Zap,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { diffLines, type Change } from "diff";
 import type { CodeChange, DecisionRequest, DecisionResponse } from "@nova/protocol";
@@ -27,7 +38,7 @@ function DiffFile({ change }: { change: CodeChange }) {
     <div className="py-2">
       <div className="mb-1.5 flex items-center gap-2 px-1">
         <FileCode className="size-3.5 text-slate-400" aria-hidden="true" />
-        <span className="text-xs font-medium text-slate-300">{change.path}</span>
+        <span className="min-w-0 break-all text-xs font-medium text-slate-300">{change.path}</span>
         {addedCount > 0 && (
           <Badge variant="success" className="bg-emerald-500/20 text-emerald-400">
             +{addedCount}
@@ -39,7 +50,7 @@ function DiffFile({ change }: { change: CodeChange }) {
           </Badge>
         )}
       </div>
-      <pre className="nova-scrollbar m-0 overflow-auto rounded-md bg-slate-950 px-2 py-1.5 font-mono text-xs leading-4 text-slate-200">
+      <pre className="nova-scrollbar m-0 max-w-full overflow-x-hidden overflow-y-auto rounded-md bg-slate-950 px-2 py-1.5 font-mono text-xs leading-4 whitespace-pre-wrap break-words text-slate-200">
         {diff.map((part, i) => (
           <DiffLine key={i} part={part} />
         ))}
@@ -69,6 +80,8 @@ export interface DecisionPromptProps {
   onResolve: (response: DecisionResponse) => void | Promise<void>;
   disabled?: boolean | undefined;
   resolved?: DecisionResponse | undefined;
+  onAbort?: (() => void | Promise<void>) | undefined;
+  isAborting?: boolean | undefined;
 }
 
 function approvalDetails(request: Extract<DecisionRequest, { kind: "approval" }>) {
@@ -78,7 +91,14 @@ function approvalDetails(request: Extract<DecisionRequest, { kind: "approval" }>
   return JSON.stringify(request.args, null, 2);
 }
 
-export function DecisionPrompt({ request, onResolve, disabled = false, resolved }: DecisionPromptProps) {
+export function DecisionPrompt({
+  request,
+  onResolve,
+  disabled = false,
+  resolved,
+  onAbort,
+  isAborting = false,
+}: DecisionPromptProps) {
   const [submitted, setSubmitted] = useState(false);
   const [answers, setAnswers] = useState<string[]>([]);
 
@@ -87,7 +107,7 @@ export function DecisionPrompt({ request, onResolve, disabled = false, resolved 
     setAnswers([]);
   }, [request.decisionId]);
 
-  const locked = disabled || submitted || resolved !== undefined;
+  const locked = disabled || submitted || resolved !== undefined || isAborting;
 
   async function resolve(response: DecisionResponse) {
     setSubmitted(true);
@@ -122,7 +142,7 @@ export function DecisionPrompt({ request, onResolve, disabled = false, resolved 
     return (
       <Card
         data-kind="approval"
-        className="nova-decision-prompt nova-approval-prompt overflow-hidden bg-indigo-50/80 text-indigo-950 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-50 dark:ring-indigo-800"
+        className="nova-decision-prompt nova-approval-prompt min-w-0 max-w-full overflow-hidden bg-indigo-50/80 text-indigo-950 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-50 dark:ring-indigo-800"
         role="region"
         aria-labelledby={`${request.decisionId}-title`}
       >
@@ -145,7 +165,7 @@ export function DecisionPrompt({ request, onResolve, disabled = false, resolved 
             <CodeDiffView codeChanges={request.codeChanges} />
           </div>
         ) : (
-          <pre className="nova-scrollbar mx-3 my-0 max-h-56 overflow-auto rounded-md bg-slate-950 px-2.5 py-2 font-mono text-xs leading-5 text-slate-200">
+          <pre className="nova-scrollbar mx-3 my-0 max-h-56 max-w-[calc(100%-1.5rem)] overflow-x-hidden overflow-y-auto break-words whitespace-pre-wrap rounded-md bg-slate-950 px-2.5 py-2 font-mono text-xs leading-5 text-slate-200">
             {approvalDetails(request)}
           </pre>
         )}
@@ -184,6 +204,12 @@ export function DecisionPrompt({ request, onResolve, disabled = false, resolved 
             <ShieldCheck aria-hidden="true" />
             总是允许
           </Button>
+          {onAbort && (
+            <Button type="button" variant="ghost" size="xs" disabled={locked} onClick={() => void onAbort()}>
+              <CircleStop aria-hidden="true" />
+              取消流程
+            </Button>
+          )}
         </CardFooter>
       </Card>
     );
@@ -259,6 +285,12 @@ export function DecisionPrompt({ request, onResolve, disabled = false, resolved 
         })}
       </CardContent>
       <CardFooter className="justify-end">
+        {onAbort && (
+          <Button type="button" variant="ghost" size="xs" disabled={locked} onClick={() => void onAbort()}>
+            <CircleStop aria-hidden="true" />
+            取消流程
+          </Button>
+        )}
         <Button
           type="button"
           size="sm"

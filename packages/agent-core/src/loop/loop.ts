@@ -44,6 +44,7 @@ export interface LoopHost {
   hooks: AgentHooks | undefined;
   maxTurns: number;
   toolConcurrency: number;
+  toolTimeoutMs: number;
   systemPrompt: string;
   queues: Queues;
   // —— 状态归 agent 所有，loop 经这些方法读写 ——
@@ -360,6 +361,7 @@ async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutc
     tools: host.tools,
     ctx: host.toolCtx,
     concurrency: host.toolConcurrency,
+    timeoutMs: host.toolTimeoutMs,
     signal,
     approve: (call) => host.approveCall(call, signal),
     async onToolStart(call) {
@@ -369,12 +371,13 @@ async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutc
     },
     async onToolEnd(call, outcome) {
       const started = startedAt.get(call.callId);
-      await host.rec({
-        kind: "tool-finished",
-        callId: call.callId,
-        status: outcome.status,
-        durationMs: started !== undefined ? Date.now() - started : 0,
-      });
+      if (started !== undefined)
+        await host.rec({
+          kind: "tool-finished",
+          callId: call.callId,
+          status: outcome.status,
+          durationMs: Date.now() - started,
+        });
       host.emit({ type: "tool.end", callId: call.callId, status: outcome.status, details: outcome.details });
       if (outcome.executed)
         await host.hooks?.afterToolCall?.(call, {
