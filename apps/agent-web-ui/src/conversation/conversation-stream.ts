@@ -34,6 +34,7 @@ export class ConversationStream {
   private source: EventSourceLike | null = null;
   private openWaiter: OpenWaiter | null = null;
   private resyncTask: Promise<void> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private generation = 0;
   private lastEventId: string | null = null;
 
@@ -62,6 +63,7 @@ export class ConversationStream {
 
   close(reason = new Error("实时消息流已关闭")): void {
     this.generation += 1;
+    this.clearReconnectTimer();
     this.disposeSource();
     this.rejectOpen(reason);
     this.callbacks.onConnection("closed");
@@ -88,7 +90,28 @@ export class ConversationStream {
     source.onerror = () => {
       if (this.source !== source) return;
       this.callbacks.onConnection("reconnecting");
+      // EventSource normally retries itself while CONNECTING, but a failed
+      // fetch can also leave it CLOSED. In that state ensureConnected() would
+      // wait on a dead source forever, so create a fresh subscription.
+      if (source.readyState === 2) this.scheduleReconnect(source);
     };
+  }
+
+  private scheduleReconnect(source: EventSourceLike): void {
+    if (this.reconnectTimer !== null) return;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.source !== source || source.readyState === EVENT_SOURCE_OPEN) return;
+      this.disposeSource();
+      try {
+        this.openSource("reconnecting");
+      } catch (error) {
+        const cause = error instanceof Error ? error : new Error("无法创建实时消息流");
+        this.callbacks.onEvent({ type: "error", code: "SSE_CONNECT_FAILED", message: cause.message });
+        this.callbacks.onConnection("closed");
+        this.rejectOpen(cause);
+      }
+    }, 1_000);
   }
 
   private waitForOpen(): Promise<void> {
@@ -169,6 +192,12 @@ export class ConversationStream {
     source.onmessage = null;
     source.onerror = null;
     source.close();
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer === null) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
   }
 
   private resolveOpen(): void {

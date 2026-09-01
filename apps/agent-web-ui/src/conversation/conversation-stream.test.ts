@@ -111,6 +111,23 @@ describe("ConversationStream", () => {
     stream.close();
   });
 
+  it("recreates the subscription when EventSource is permanently closed", async () => {
+    const { stream, sources, connections } = setup();
+    const initial = stream.ensureConnected();
+    sources[0]!.open();
+    await initial;
+
+    sources[0]!.close();
+    sources[0]!.onerror?.({} as Event);
+    const reconnected = stream.ensureConnected();
+    await vi.waitFor(() => expect(sources).toHaveLength(2), { timeout: 3_000 });
+    sources[1]!.open();
+    await reconnected;
+
+    expect(connections).toEqual(["connecting", "open", "reconnecting", "reconnecting", "open"]);
+    stream.close();
+  });
+
   it("keeps one stream across run.end so a queued next run cannot lose events", async () => {
     const { stream, sources, events, onRunEnd } = setup();
     const first = stream.ensureConnected();
