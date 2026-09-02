@@ -315,6 +315,29 @@ describe("主流程", () => {
     expect(finished && finished.kind === "tool-finished" && finished.status).toBe("error");
   });
 
+  it("run 内部异常也会收敛为 error 和 run.end", async () => {
+    const { stream } = scripted([textEvents("unreachable")]);
+    const base = memoryStorage();
+    const storage: SessionStorage = {
+      ...base,
+      async appendRecord(sessionId, value) {
+        if (value.kind === "turn-started") throw new Error("recording failed");
+        await base.appendRecord(sessionId, value);
+      },
+    };
+    const { agent } = setup(stream, { storage });
+    const events: AgentEvent[] = [];
+    agent.subscribe((event) => events.push(event));
+
+    const result = await agent.prompt("go");
+
+    expect(result.stopReason).toBe("error");
+    expect(result.errorMessage).toBe("recording failed");
+    expect(agent.state.isStreaming).toBe(false);
+    expect(agent.state.pendingToolCalls).toEqual([]);
+    expect(events).toContainEqual(expect.objectContaining({ type: "run.end", stopReason: "error" }));
+  });
+
   it("rejects invalid tool arguments before approval or execution", async () => {
     const { stream } = scripted([toolEvents([{ name: "typed", args: {} }]), textEvents("recovered")]);
     let executed = false;

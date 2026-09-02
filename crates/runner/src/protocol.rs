@@ -134,19 +134,30 @@ async fn handle_execute(
         prepare_execute(&workspace, &request, &state).and_then(|params| executor.execute(params));
     match result {
         Ok(events) => {
+            let task = tokio::spawn(forward_execution_events(
+                outbound,
+                execution_id.clone(),
+                events,
+            ));
             tokio::spawn(async move {
-                tokio::pin!(events);
-                while let Some(event) = events.next().await {
-                    if send(
-                        &outbound,
-                        String::new(),
-                        runner_envelope::Payload::ExecutionEvent(event),
-                    )
-                    .await
-                    .is_err()
-                    {
-                        break;
-                    }
+                match task.await {
+                    Ok(Ok(())) => tracing::debug!(
+                        execution_id = %execution_id,
+                        category = "task_completed",
+                        "execution event stream completed"
+                    ),
+                    Ok(Err(error)) => tracing::warn!(
+                        execution_id = %execution_id,
+                        category = "stream_send_error",
+                        error = %error,
+                        "execution event forwarding stopped because the runner stream closed"
+                    ),
+                    Err(error) => tracing::error!(
+                        execution_id = %execution_id,
+                        category = if error.is_panic() { "panic" } else { "task_join_error" },
+                        error = ?error,
+                        "execution event task failed"
+                    ),
                 }
             });
         }
@@ -160,6 +171,32 @@ async fn handle_execute(
             .await;
         }
     }
+}
+
+async fn forward_execution_events(
+    outbound: mpsc::Sender<RunnerEnvelope>,
+    execution_id: String,
+    events: impl tokio_stream::Stream<Item = ExecutionEvent>,
+) -> Result<(), mpsc::error::SendError<RunnerEnvelope>> {
+    tokio::pin!(events);
+    while let Some(event) = events.next().await {
+        send(
+            &outbound,
+            String::new(),
+            runner_envelope::Payload::ExecutionEvent(event),
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(
+                %execution_id,
+                category = "stream_send_error",
+                error = %error,
+                "failed to send execution event"
+            );
+            error
+        })?;
+    }
+    Ok(())
 }
 
 fn prepare_execute(

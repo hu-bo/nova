@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use tokio::sync::{Notify, oneshot};
+use tokio::sync::Notify;
 use tokio_stream::Stream as EventStream;
 
 use crate::error::RunnerError;
@@ -268,11 +268,7 @@ impl Executor {
             let stderr = process.take_stderr().expect("stderr was piped at spawn");
             let mut output_rx = stream::spawn_readers(stdout, stderr);
 
-            let (exit_tx, exit_rx) = oneshot::channel();
-            tokio::spawn(async move {
-                let status = process.wait().await;
-                let _ = exit_tx.send(status);
-            });
+            let wait_task = tokio::spawn(async move { process.wait().await });
 
             let started_at = Instant::now();
             let sleep = tokio::time::sleep(Duration::from_millis(timeout_ms as u64));
@@ -308,16 +304,47 @@ impl Executor {
                     }
                     _ = &mut sleep, if kill_reason.is_none() => {
                         kill_reason = Some(KillReason::TimedOut);
+                        tracing::warn!(
+                            %execution_id,
+                            category = "execution_timeout",
+                            timeout_ms,
+                            "execution timed out; killing process"
+                        );
                         killer.kill();
                     }
                     _ = handle.cancel.cancelled(), if kill_reason.is_none() => {
                         kill_reason = Some(KillReason::Cancelled);
+                        tracing::info!(
+                            %execution_id,
+                            category = "execution_cancelled",
+                            "execution cancelled; killing process"
+                        );
                         killer.kill();
                     }
                 }
             }
 
-            let exit_status = exit_rx.await.ok().and_then(|r| r.ok());
+            let exit_status = match wait_task.await {
+                Ok(Ok(status)) => Some(status),
+                Ok(Err(error)) => {
+                    tracing::warn!(
+                        %execution_id,
+                        category = "process_error",
+                        error = %error,
+                        "failed to wait for the child process"
+                    );
+                    None
+                }
+                Err(error) => {
+                    tracing::error!(
+                        %execution_id,
+                        category = if error.is_panic() { "panic" } else { "task_join_error" },
+                        error = ?error,
+                        "child-process wait task failed"
+                    );
+                    None
+                }
+            };
             let duration_ms = started_at.elapsed().as_millis() as u64;
             executor.registry.finish(&execution_id);
 

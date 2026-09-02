@@ -166,11 +166,26 @@ impl SpawnedProcess {
         let killer = Killer::for_child(&child);
 
         if let Some(mut stdin) = child.stdin.take() {
+            let command = command.to_string();
             tokio::spawn(async move {
                 if !stdin_data.is_empty() {
-                    let _ = stdin.write_all(&stdin_data).await;
+                    if let Err(error) = stdin.write_all(&stdin_data).await {
+                        tracing::warn!(
+                            %command,
+                            category = "process_stdin_error",
+                            error = %error,
+                            "failed to write execution stdin"
+                        );
+                    }
                 }
-                let _ = stdin.shutdown().await;
+                if let Err(error) = stdin.shutdown().await {
+                    tracing::warn!(
+                        %command,
+                        category = "process_stdin_error",
+                        error = %error,
+                        "failed to close execution stdin"
+                    );
+                }
             });
         }
 

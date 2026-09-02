@@ -121,3 +121,47 @@ it("projects measured and reset context usage without writing a chat message", (
     ]);
   }
 });
+
+it("keeps approved file changes as diff blocks after the tool completes", async () => {
+  const saved: MessageRow[] = [];
+  const project = projectAgentEvents("conversation-1", createEventHub(), {
+    async appendMessage(message) {
+      const row = { ...message, seq: 1 };
+      saved.push(row);
+      return row;
+    },
+  });
+
+  project({ type: "message.start", messageId: "message-1", role: "assistant" });
+  project({
+    type: "decision.requested",
+    request: {
+      kind: "approval",
+      decisionId: "decision-1",
+      callId: "call-1",
+      toolName: "write_file",
+      args: { path: "src/a.ts", content: "const next = true" },
+      risk: "write",
+      codeChanges: [{ path: "src/a.ts", oldText: "const current = false", newText: "const next = true" }],
+    },
+  });
+  project({ type: "tool.start", callId: "call-1", name: "write_file", args: {} });
+  project({ type: "tool.end", callId: "call-1", status: "ok", details: { path: "src/a.ts", bytes: 16 } });
+  project({ type: "run.end", runId: "run-1", stopReason: "done", usage: { input: 0, output: 0 } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(saved[0]?.blocks).toEqual([
+    {
+      type: "tool_result",
+      callId: "call-1",
+      status: "ok",
+      blocks: [
+        expect.objectContaining({
+          type: "diff",
+          path: "src/a.ts",
+          diff: expect.stringContaining("-const current = false"),
+        }),
+      ],
+    },
+  ]);
+});

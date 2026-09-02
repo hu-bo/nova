@@ -47,7 +47,16 @@ async fn read_and_chunk(
         tokio::select! {
             read = reader.read(&mut read_buf) => {
                 match read {
-                    Ok(0) | Err(_) => break, // EOF or a broken pipe — either way, done.
+                    Ok(0) => break, // EOF.
+                    Err(error) => {
+                        tracing::warn!(
+                            stream = ?stream,
+                            category = "process_output_error",
+                            error = %error,
+                            "failed to read child-process output"
+                        );
+                        break;
+                    }
                     Ok(n) => {
                         pending.extend_from_slice(&read_buf[..n]);
                         if pending.len() >= CHUNK_BYTES {

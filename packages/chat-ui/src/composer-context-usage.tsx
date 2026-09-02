@@ -16,7 +16,7 @@ export function ComposerContextUsageIndicator({ usage }: { usage: ComposerContex
       : `${label}（${usage.inputTokens!.toLocaleString()} / ${usage.contextWindow.toLocaleString()} tokens）`;
   return (
     <span
-      className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-slate-500 dark:text-slate-400"
+      className="hidden h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-slate-500 sm:inline-flex dark:text-slate-400"
       aria-label={detail}
       title={detail}
     >

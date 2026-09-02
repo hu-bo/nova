@@ -1,5 +1,7 @@
 /* Shared depth, light, and motion language for Nova chat surfaces. */
 
+@import "@git-diff-view/react/styles/diff-view-pure.css";
+
 .nova-chat {
   /* Public theme contract. Override these on the host's .nova-chat boundary. */
   --nova-chat-accent-rgb: 79 70 229;

@@ -1,6 +1,8 @@
 import type { Block } from "@nova/protocol";
 
-export function projectToolDetails(toolName: string, details: unknown): Block[] {
+type CodeChange = { path: string; oldText: string; newText: string };
+
+export function projectToolDetails(toolName: string, details: unknown, codeChanges: CodeChange[] = []): Block[] {
   const data = object(details);
   switch (toolName) {
     case "read_file":
@@ -16,6 +18,15 @@ export function projectToolDetails(toolName: string, details: unknown): Block[] 
     case "edit_file":
     case "git_diff":
     case "write_file":
+      if (codeChanges.length > 0 && (toolName === "edit_file" || toolName === "write_file")) {
+        return codeChanges.map((change) => ({
+          type: "diff",
+          path: change.path,
+          diff: unifiedDiff(change.oldText, change.newText),
+          added: lineCount(change.newText),
+          removed: lineCount(change.oldText),
+        }));
+      }
       if (typeof data.diff === "string" && typeof data.path === "string") {
         return [
           {
@@ -42,6 +53,20 @@ export function projectToolDetails(toolName: string, details: unknown): Block[] 
       break;
   }
   return [{ type: "text", text: safeStringify(details) }];
+}
+
+function unifiedDiff(oldText: string, newText: string): string {
+  const oldLines = oldText ? oldText.split("\n") : [];
+  const newLines = newText ? newText.split("\n") : [];
+  return [
+    `@@ -${oldLines.length ? 1 : 0},${oldLines.length} +${newLines.length ? 1 : 0},${newLines.length} @@`,
+    ...oldLines.map((line) => `-${line}`),
+    ...newLines.map((line) => `+${line}`),
+  ].join("\n");
+}
+
+function lineCount(value: string): number {
+  return value ? value.split("\n").length : 0;
 }
 
 function object(value: unknown): Record<string, unknown> {

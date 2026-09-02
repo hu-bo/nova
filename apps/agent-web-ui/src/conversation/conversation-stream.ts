@@ -172,6 +172,10 @@ export class ConversationStream {
     this.callbacks.onConnection("reconnecting");
 
     try {
+      // The server has told us that this cursor cannot be replayed anymore. Keeping it
+      // would make every replacement stream request the same stale `after` value and
+      // receive RESYNC forever (especially after the server/event hub restarts).
+      this.lastEventId = null;
       await this.callbacks.onResync();
       if (this.generation !== generation) return;
       this.openSource("reconnecting");

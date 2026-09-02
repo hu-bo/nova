@@ -17,6 +17,7 @@ type ProjectedMessage = {
 export function projectAgentEvents(conversationId: string, events: EventHub, store: Pick<AgentStore, "appendMessage">) {
   const messages = new Map<string, ProjectedMessage>();
   const toolNames = new Map<string, string>();
+  const toolCodeChanges = new Map<string, Array<{ path: string; oldText: string; newText: string }>>();
   let activeMessageId: string | null = null;
   let writes = Promise.resolve();
 
@@ -74,8 +75,9 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
           type: "tool_result",
           callId: event.callId,
           status: event.status,
-          blocks: projectToolDetails(name, event.details),
-        };
+        blocks: projectToolDetails(name, event.details, toolCodeChanges.get(event.callId)),
+      };
+        toolCodeChanges.delete(event.callId);
         message.blocks[index] = block;
         publish({ type: "block.end", messageId: message.id, index, block });
         return;
@@ -87,6 +89,10 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
         publish({ type: "context.updated", ...event.usage });
         return;
       case "decision.requested":
+        if (event.request.kind === "approval" && event.request.codeChanges && "callId" in event.request) {
+          toolCodeChanges.set(event.request.callId, event.request.codeChanges);
+        }
+        return;
       case "decision.resolved":
         return;
       case "error": {

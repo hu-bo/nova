@@ -11,6 +11,7 @@ export function RunnerLiveUpdates() {
     if (!api) return;
     const controller = new AbortController();
     let retry: ReturnType<typeof setTimeout> | undefined;
+    let retryDelayMs = 2_000;
     let disposed = false;
 
     const connect = async () => {
@@ -20,6 +21,7 @@ export function RunnerLiveUpdates() {
           signal: controller.signal,
         });
         if (!response.ok || !response.body) throw new Error("Runner event stream unavailable");
+        retryDelayMs = 2_000;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
@@ -43,7 +45,11 @@ export function RunnerLiveUpdates() {
         }
         if (!disposed) throw new Error("Runner event stream closed");
       } catch {
-        if (!disposed && !controller.signal.aborted) retry = setTimeout(() => void connect(), 2_000);
+        if (!disposed && !controller.signal.aborted) {
+          const delay = retryDelayMs;
+          retryDelayMs = Math.min(retryDelayMs * 2, 30_000);
+          retry = setTimeout(() => void connect(), delay);
+        }
       }
     };
     void connect();

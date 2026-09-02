@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@git-diff-view/react": "^0.1.7",
     "@nova/protocol": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

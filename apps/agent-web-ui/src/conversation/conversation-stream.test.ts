@@ -161,6 +161,38 @@ describe("ConversationStream", () => {
     stream.close();
   });
 
+  it("drops the stale cursor after RESYNC", async () => {
+    const urls: string[] = [];
+    const sources: FakeEventSource[] = [];
+    const stream = new ConversationStream(
+      "conversation-1",
+      {
+        onConnection: () => {},
+        onEvent: () => {},
+        onOpen: () => {},
+        onResync: async () => {},
+        onRunEnd: () => {},
+      },
+      (url) => {
+        urls.push(url);
+        const source = new FakeEventSource();
+        sources.push(source);
+        return source;
+      },
+    );
+
+    const opened = stream.ensureConnected();
+    sources[0]!.open();
+    await opened;
+    sources[0]!.message({ type: "context.updated", inputTokens: 1, contextWindow: 2 }, "656");
+    sources[0]!.message({ type: "error", code: "RESYNC", message: "replay expired" });
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    expect(urls[1]).toBe("/api/conversations/conversation-1/events");
+    sources[1]!.open();
+    stream.close();
+  });
+
   it("replays from the last received event when a new EventSource is created", async () => {
     const urls: string[] = [];
     const sources: FakeEventSource[] = [];

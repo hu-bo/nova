@@ -287,7 +287,27 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
         activeRun = null;
       });
       activeRun = run;
-      const result = await run;
+      let result: RunResult;
+      try {
+        result = await run;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // A failure outside the loop's normal error boundaries must still close the run
+        // for storage and UI consumers. Otherwise the conversation can remain "thinking"
+        // forever after a transport/tool or persistence failure.
+        state.errorMessage = message;
+        state.isStreaming = false;
+        state.streamingMessage = null;
+        state.pendingToolCalls = [];
+        try {
+          await rec({ kind: "run-finished", stopReason: "error" });
+        } catch {
+          // Preserve the terminal UI event even if persistence is the original failure.
+        }
+        emit({ type: "error", code: "run_failed", message });
+        emit({ type: "run.end", runId, stopReason: "error", usage: runUsage });
+        result = { runId, stopReason: "error", message: null, usage: runUsage, errorMessage: message };
+      }
       // §7 nextRun：当前 run 结束后触发一个新的独立 run
       const queued = queues.drain("nextRun");
       if (queued.length > 0) {

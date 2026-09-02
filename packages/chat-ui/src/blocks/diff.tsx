@@ -1,35 +1,47 @@
-import { ChevronUp, FileDiff, UnfoldVertical } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { DiffModeEnum, DiffView } from "@git-diff-view/react";
+import { FileDiff } from "lucide-react";
+import { useMemo } from "react";
 
-interface DiffLine {
-  text: string;
-  kind: "add" | "remove" | "meta" | "context";
-}
+function patchContents(diff: string): { oldContent: string; newContent: string } {
+  const oldLines: string[] = [];
+  const newLines: string[] = [];
+  let oldLine = 0;
+  let newLine = 0;
 
-function classify(text: string): DiffLine {
-  if (text.startsWith("+++") || text.startsWith("---") || text.startsWith("@@")) return { text, kind: "meta" };
-  if (text.startsWith("+")) return { text, kind: "add" };
-  if (text.startsWith("-")) return { text, kind: "remove" };
-  return { text, kind: "context" };
-}
+  const padTo = (lines: string[], line: number) => {
+    while (lines.length < line - 1) lines.push("");
+  };
 
-function visibleLines(lines: DiffLine[], expanded: boolean): Array<DiffLine | { omitted: number }> {
-  if (expanded) return lines;
-  const result: Array<DiffLine | { omitted: number }> = [];
-  for (let index = 0; index < lines.length;) {
-    if (lines[index]?.kind !== "context") {
-      result.push(lines[index]!);
-      index += 1;
+  for (const line of diff.split("\n")) {
+    const header = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+    if (header) {
+      oldLine = Number(header[1]);
+      newLine = Number(header[3]);
+      padTo(oldLines, oldLine);
+      padTo(newLines, newLine);
       continue;
     }
-    let end = index;
-    while (lines[end]?.kind === "context") end += 1;
-    const length = end - index;
-    if (length <= 6) result.push(...lines.slice(index, end));
-    else result.push(...lines.slice(index, index + 3), { omitted: length - 6 }, ...lines.slice(end - 3, end));
-    index = end;
+    if (line.startsWith("\\")) continue;
+    if (line.startsWith("-")) {
+      padTo(oldLines, oldLine);
+      oldLines[oldLine - 1] = line.slice(1);
+      oldLine += 1;
+    } else if (line.startsWith("+")) {
+      padTo(newLines, newLine);
+      newLines[newLine - 1] = line.slice(1);
+      newLine += 1;
+    } else if (line.startsWith(" ")) {
+      const content = line.slice(1);
+      padTo(oldLines, oldLine);
+      padTo(newLines, newLine);
+      oldLines[oldLine - 1] = content;
+      newLines[newLine - 1] = content;
+      oldLine += 1;
+      newLine += 1;
+    }
   }
-  return result;
+
+  return { oldContent: oldLines.join("\n"), newContent: newLines.join("\n") };
 }
 
 export function DiffBlock({
@@ -45,38 +57,7 @@ export function DiffBlock({
   removed: number;
   onOpenPath?: ((path: string) => void) | undefined;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const lines = diff.split("\n").map(classify);
-  const hasFold = lines.some(
-    (line, index) => line.kind === "context" && lines.slice(index, index + 7).every((item) => item.kind === "context"),
-  );
-  const content: ReactNode[] = visibleLines(lines, expanded).map((line, index) => {
-    if ("omitted" in line)
-      return (
-        <button
-          type="button"
-          key={index}
-          onClick={() => setExpanded(true)}
-          className="flex w-full items-center justify-center gap-2 border-y border-slate-200 bg-slate-50 py-1.5 text-[11px] text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-        >
-          <UnfoldVertical className="size-3" aria-hidden="true" />
-          {line.omitted} 行未变更内容
-        </button>
-      );
-    const className =
-      line.kind === "add"
-        ? "bg-emerald-50 text-emerald-950 dark:bg-emerald-950/35 dark:text-emerald-200"
-        : line.kind === "remove"
-          ? "bg-rose-50 text-rose-950 dark:bg-rose-950/35 dark:text-rose-200"
-          : line.kind === "meta"
-            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/35 dark:text-indigo-300"
-            : "text-slate-600 dark:text-slate-400";
-    return (
-      <div key={index} className={`min-h-[1.5rem] px-3 ${className}`}>
-        {line.text || " "}
-      </div>
-    );
-  });
+  const { oldContent, newContent } = useMemo(() => patchContents(diff), [diff]);
 
   return (
     <section className="nova-diff-block min-w-0 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-950 dark:ring-slate-800">
@@ -95,18 +76,17 @@ export function DiffBlock({
           <span className="mx-1 text-slate-300 dark:text-slate-700">/</span>
           <span className="text-rose-600 dark:text-rose-400">-{removed}</span>
         </span>
-        {hasFold && expanded && (
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            aria-label="折叠上下文"
-            className="grid size-7 shrink-0 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-          >
-            <ChevronUp className="size-3.5" aria-hidden="true" />
-          </button>
-        )}
       </header>
-      <pre className="nova-scrollbar m-0 overflow-x-auto py-1.5 font-mono text-xs leading-5">{content}</pre>
+      <DiffView
+        data={{
+          oldFile: { fileName: path, content: oldContent },
+          newFile: { fileName: path, content: newContent },
+          hunks: [diff],
+        }}
+        diffViewMode={DiffModeEnum.Unified}
+        diffViewHighlight={false}
+        diffViewWrap={false}
+      />
     </section>
   );
 }

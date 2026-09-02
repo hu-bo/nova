@@ -72,6 +72,9 @@ pub async fn run(
                             server = %config.server,
                             attempt,
                             retry_in_ms = delay.as_millis(),
+                            category = classify_connection_error(&error),
+                            error_chain = %error_chain(&error),
+                            error_debug = ?error,
                             %error,
                             "runner connection failed; reconnecting"
                         );
@@ -100,6 +103,25 @@ pub async fn run(
             }
         }
         delay = next_reconnect_delay(delay);
+    }
+}
+
+fn error_chain(error: &anyhow::Error) -> String {
+    error
+        .chain()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(" -> ")
+}
+
+fn classify_connection_error(error: &anyhow::Error) -> &'static str {
+    let text = error_chain(error).to_ascii_lowercase();
+    if text.contains("h2") || text.contains("http/2") || text.contains("transport") {
+        "transport_h2_error"
+    } else if text.contains("connection closed") || text.contains("senderror") {
+        "stream_send_error"
+    } else {
+        "connect_or_protocol_error"
     }
 }
 

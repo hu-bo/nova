@@ -29,6 +29,25 @@ describe("chat-ui", () => {
     expect(code).toContain("const");
   });
 
+  it("renders diff blocks through git-diff-view", () => {
+    const html = renderToStaticMarkup(
+      <BlockView
+        block={{
+          type: "diff",
+          path: "src/auth/provider.tsx",
+          added: 2,
+          removed: 1,
+          diff: "@@ -18,1 +18,2 @@\n-const oldValue = true\n+const newValue = true\n+return newValue",
+        }}
+        onOpenPath={() => undefined}
+      />,
+    );
+    expect(html).toContain("src/auth/provider.tsx");
+    expect(html).toContain('data-component="git-diff-view"');
+    expect(html).toContain("+2");
+    expect(html).toContain("-1");
+  });
+
   it("pairs tool calls and results while hiding todo_write", () => {
     const messages: ChatMessage[] = [
       {
@@ -203,6 +222,8 @@ describe("chat-ui", () => {
     expect(contextUsagePercent({ inputTokens: 72_000, contextWindow: 128_000 })).toBe(57);
     expect(html).toContain("上下文 57%");
     expect(html).toContain("72,000 / 128,000 tokens");
+    expect(html).toContain("hidden");
+    expect(html).toContain("sm:inline-flex");
   });
 
   it("does not display non-zero context usage as 0%", () => {
