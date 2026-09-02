@@ -19,7 +19,9 @@ import {
 } from "./session.js";
 import { runnerUnavailable } from "./errors.js";
 
-const DEFAULT_HEARTBEAT_MS = 5000;
+// The runner shares one bounded outbound stream for heartbeats and work data. Allow a
+// transient proxy/backpressure delay without declaring the whole session stale.
+const DEFAULT_HEARTBEAT_MS = 10_000;
 const DEFAULT_ADMISSION_TIMEOUT_MS = 30_000;
 const OUTBOUND_CAPACITY = 64; // server→runner 发送缓冲上限，满则背压到 handleEnvelope
 

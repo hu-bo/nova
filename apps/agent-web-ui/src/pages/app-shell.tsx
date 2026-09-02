@@ -56,7 +56,7 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50">
       <RunnerLiveUpdates />
-      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur lg:left-64 lg:px-6">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-13 items-center border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur lg:left-64 lg:px-6">
         <button
           ref={menuButtonRef}
           type="button"
@@ -141,7 +141,7 @@ export function AppShell() {
         </aside>
       </dialog>
 
-      <main className="min-h-screen pt-14 lg:pl-64">
+      <main className="min-h-screen pt-13 lg:pl-64">
         {createChat.error && (
           <div className="mx-5 pt-4 lg:mx-8" role="alert">
             <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200">

@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../../auth/provider.js";
 import { LocalStore } from "../../../lib/storage.js";
+import { createUuid } from "../../../lib/uuid.js";
 import type { ModelProfileForm } from "./schemas.js";
 
 export interface ModelProfile extends ModelProfileForm {
@@ -98,7 +99,7 @@ export function ModelSettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveProfile = useCallback(
-    (profile: ModelProfileForm, id: string = crypto.randomUUID()) => {
+    (profile: ModelProfileForm, id: string = createUuid()) => {
       setSettings((current) =>
         persist({
           ...current,

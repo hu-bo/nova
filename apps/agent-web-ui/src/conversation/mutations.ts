@@ -6,6 +6,7 @@ import { ApiClientError, errorMessage } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAuth } from "../auth/provider.js";
 import { useModelSettings } from "../pages/settings/model/provider.js";
+import { createUuid } from "../lib/uuid.js";
 import { useConversationStore } from "./store.js";
 import type { QueuedMessage } from "./reducer.js";
 
@@ -49,7 +50,7 @@ export function useConversationMutations(
         .join("\n");
       const text = [submission.text, attachmentText].filter(Boolean).join("\n\n");
       const wasRunning = state.isRunning;
-      const messageId = retryId ?? crypto.randomUUID();
+      const messageId = retryId ?? createUuid();
       // reasoningEffort is a UI-only selection for now. The message API does
       // not accept a per-request reasoningEffort field; sending it makes the
       // strict server schema reject an otherwise valid message.

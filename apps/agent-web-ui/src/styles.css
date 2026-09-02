@@ -108,7 +108,7 @@ body {
 }
 
 .nova-conversation-viewport {
-  height: calc(100vh - 4rem);
+  height: calc(100vh - 3.5rem);
 }
 
 .agent-scrollbar {
@@ -138,7 +138,7 @@ body {
 
 @supports (height: 100dvh) {
   .nova-conversation-viewport {
-    height: calc(100dvh - 4rem);
+    height: calc(100dvh - 3.5rem);
   }
 }
 

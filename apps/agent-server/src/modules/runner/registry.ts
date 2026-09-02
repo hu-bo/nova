@@ -35,7 +35,7 @@ type Registered = {
   lastEvent: string;
 };
 
-export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 5_000): RunnerRegistry {
+export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 10_000): RunnerRegistry {
   const sessions = new Map<string, Registered>();
   const listeners = new Map<string, Set<(event: RunnerEvent) => void>>();
 

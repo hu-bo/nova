@@ -24,8 +24,10 @@ const INITIAL_RECONNECT_DELAY: Duration = Duration::from_secs(1);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(10 * 60);
 const MAX_CONNECT_ATTEMPTS: u64 = 1_000;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(15);
-const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(10);
+// Keep transport probes slower than the application heartbeat. A short PING timeout can
+// turn transient proxy/backpressure delay into a full h2 stream reset.
+const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(60);
+const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub async fn run(
     config: Arc<Config>,

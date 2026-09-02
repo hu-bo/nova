@@ -192,7 +192,7 @@ function ConversationView({
   return (
     <div className="nova-chat nova-conversation-viewport flex min-h-0 overflow-hidden bg-slate-50">
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex min-h-14 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-5">
+        <header className="flex min-h-12 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-5">
           <Link
             to={project ? `/p/${project.id}` : "/app"}
             className="grid size-11 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 sm:size-9"
@@ -225,8 +225,8 @@ function ConversationView({
         <div
           className={`grid min-h-0 flex-1 overflow-hidden  bg-white ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}
         >
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white mx-auto ">
-            <div className="relative min-h-0 flex-1 overflow-hidden px-3 py-3 sm:px-5">
+          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
+            <div className="relative min-h-0 flex-1 overflow-hidden px-1 py-1 sm:px-0">
               {store.state.messages.length ? (
                 <MessageList messages={store.state.messages} onRetry={(messageId) => void mutations.retry(messageId)} />
               ) : (
@@ -244,7 +244,7 @@ function ConversationView({
               )}
             </div>
 
-            <div className="min-w-0 shrink-0 overflow-visible  border-slate-200 bg-white px-3 pb-2 pt-2 sm:px-4">
+            <div className="min-w-0 shrink-0 overflow-visible  border-slate-200 bg-white px-3 pb-0 pt-1 sm:px-4 sm:pb-1.5">
               {incompleteTodos > 0 && (
                 <div className="mb-2 xl:hidden">
                   <TodoPanel items={store.state.todos} collapsed />
