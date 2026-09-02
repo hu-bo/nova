@@ -12,7 +12,7 @@ import { Card } from "../../../components/ui/card.js";
 import { Dialog } from "../../../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../../../components/ui/feedback.js";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table.js";
-import { installCommand, runnerCommand } from "./commands.js";
+import {  runnerCommand } from "./commands.js";
 import { useRunnerCatalog, useRunnerConnection, useRunnerTokens } from "./use-runners.js";
 
 interface RunnerManagerDialogProps {
@@ -81,15 +81,6 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
           <div className="mb-6 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
             <p className="text-sm font-semibold text-slate-900">安装 Runner</p>
             <p className="mt-1 text-sm text-slate-500">可先执行 npm 安装，也可以直接使用下方 npx 命令启动 Runner。</p>
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200">
-              <code
-                className="min-w-0 truncate text-ellipsis whitespace-nowrap text-xs text-slate-700"
-                title={installCommand}
-              >
-                {installCommand}
-              </code>
-              <CopyButton value={installCommand} label="复制安装命令" compact />
-            </div>
           </div>
           <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
             <div>

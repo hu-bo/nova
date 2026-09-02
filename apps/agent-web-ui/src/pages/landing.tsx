@@ -11,11 +11,9 @@ import {
   MessageCircle,
   Server,
   Settings,
-  ShieldCheck,
   Sparkles,
   TerminalSquare,
-  TimerReset,
-  ListTodo,
+
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -23,7 +21,7 @@ import type { RunnerToken } from "@nova/protocol";
 import { useAuth } from "../auth/provider.js";
 import { Button } from "../components/ui/button.js";
 import { useQuickConversationCreate } from "./project/new-conversation.js";
-import { installCommand, runnerCommand } from "./settings/runner/commands.js";
+import { runnerCommand } from "./settings/runner/commands.js";
 import { useRunnerConnection, useRunnerTokens } from "./settings/runner/use-runners.js";
 
 export function LandingRoute() {
@@ -145,12 +143,7 @@ export function LandingRoute() {
               <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
                 <span className="select-none text-indigo-400">$</span>
                 <div className="min-w-0 flex-1 space-y-2 text-sm text-slate-200">
-                  <code
-                    className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap"
-                    title={installCommand}
-                  >
-                    {installCommand}
-                  </code>
+
                   <code
                     className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap text-slate-400"
                     title={runCommand}
@@ -159,18 +152,6 @@ export function LandingRoute() {
                   </code>
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
-                  <button
-                    type="button"
-                    onClick={() => void copyCommand(installCommand, "install")}
-                    className="grid size-9 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
-                    aria-label={copiedCommand === "install" ? "已复制安装命令" : "复制安装命令"}
-                  >
-                    {copiedCommand === "install" ? (
-                      <Check className="size-4 text-emerald-400" aria-hidden="true" />
-                    ) : (
-                      <Clipboard className="size-4" aria-hidden="true" />
-                    )}
-                  </button>
                   <button
                     type="button"
                     onClick={() => token && runnerConnection.data?.endpoint && void copyCommand(runCommand, "run")}
