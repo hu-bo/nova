@@ -376,6 +376,29 @@ describe("主流程", () => {
     expect(events.some((event) => event.type === "tool.end" && event.status === "error")).toBe(true);
   });
 
+  it("Runner 断连后结束当前 run，不把失败的 tool call 无限交回模型", async () => {
+    const { stream, requests } = scripted([
+      toolEvents([{ name: "remote", callId: "c1" }]),
+      toolEvents([{ name: "remote", callId: "c2" }]),
+    ]);
+    const { agent } = setup(stream, {
+      tools: [
+        localTestTool("remote", {
+          risk: "read",
+          status: "error",
+          details: { code: "RUNNER_UNAVAILABLE", message: "runner connection lost" },
+        }),
+      ],
+    });
+
+    const result = await agent.prompt("run command");
+
+    expect(result.stopReason).toBe("error");
+    expect(result.errorMessage).toContain("Runner connection lost");
+    expect(requests).toHaveLength(1);
+    expect(agent.state.isStreaming).toBe(false);
+  });
+
   it("未知工具 → 合成 error 结果，模型可见", async () => {
     const { stream } = scripted([toolEvents([{ name: "ghost" }]), textEvents("ok")]);
     const { agent, storage } = setup(stream);

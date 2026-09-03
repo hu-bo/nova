@@ -169,6 +169,19 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
     // tool 结果携带的 usage（如 sub-agent，§10 token 预算记父账）计入本 run
     for (const outcome of outcomes) if (outcome.usage) host.addUsage(outcome.usage);
 
+    // A disconnected Runner invalidates the session captured by this Agent.
+    // Do not feed the same failed tool call back to the model: it would keep
+    // issuing work against the dead session until maxTurns, and replaying a
+    // write/exec operation could duplicate side effects. The next user retry
+    // creates a runtime with the newly connected Runner session.
+    const runnerUnavailable = outcomes.some(isRunnerUnavailableOutcome);
+    if (runnerUnavailable) {
+      const message = "Runner connection lost; the tool call was not completed. Retry after the Runner reconnects.";
+      host.streaming({ errorMessage: message });
+      host.emit({ type: "error", code: "RUNNER_UNAVAILABLE", message });
+      return finish(host, "error", lastAssistant, message);
+    }
+
     // §9.4 todo_write 是 TodoState 唯一写入点
     const todoOutcome = [...outcomes]
       .reverse()
@@ -394,6 +407,27 @@ async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutc
         });
     },
   });
+}
+
+function isRunnerUnavailableOutcome(outcome: ToolOutcome): boolean {
+  if (outcome.status !== "error") return false;
+  const details = outcome.details;
+  const detailMessage =
+    details !== null && typeof details === "object" && "message" in details
+      ? String((details as { message?: unknown }).message)
+      : "";
+  return (
+    (details !== null &&
+      typeof details === "object" &&
+      "code" in details &&
+      (details as { code?: unknown }).code === "RUNNER_UNAVAILABLE") ||
+    detailMessage === "runner connection lost" ||
+    outcome.content.some(
+      (part) =>
+        part.type === "text" &&
+        (part.text.includes("RUNNER_UNAVAILABLE") || part.text.includes("runner connection lost")),
+    )
+  );
 }
 
 // §8 压缩：选 cut point → 摘要 → 写 compaction Entry。overflow 触发点留给 provider 错误分类接入。

@@ -111,6 +111,12 @@ body {
   height: calc(100vh - 3.5rem);
 }
 
+@media (min-width: 64rem) {
+  .nova-conversation-viewport {
+    height: 100vh;
+  }
+}
+
 .agent-scrollbar {
   scrollbar-color: rgb(148 163 184 / 0.45) transparent;
   scrollbar-width: thin;
@@ -139,6 +145,12 @@ body {
 @supports (height: 100dvh) {
   .nova-conversation-viewport {
     height: calc(100dvh - 3.5rem);
+  }
+
+  @media (min-width: 64rem) {
+    .nova-conversation-viewport {
+      height: 100dvh;
+    }
   }
 }
 

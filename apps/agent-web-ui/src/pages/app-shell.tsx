@@ -56,31 +56,15 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50">
       <RunnerLiveUpdates />
-      <header className="fixed inset-x-0 top-0 z-30 flex h-13 items-center border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur lg:left-64 lg:px-6">
-        <button
-          ref={menuButtonRef}
-          type="button"
-          className="mr-2 grid size-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
-          aria-label="打开导航"
-          onClick={() => setMobileOpen(true)}
-        >
-          <Menu className="size-5" aria-hidden="true" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-900">{pageName(location.pathname, projects.data)}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="hidden text-right sm:block">
-            <span className="block text-xs font-semibold text-slate-800">{auth.displayName ?? "Nova 用户"}</span>
-          </span>
-          <span
-            className="grid size-9 place-items-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700"
-            aria-hidden="true"
-          >
-            {(auth.displayName ?? auth.userId ?? "N").slice(0, 1).toUpperCase()}
-          </span>
-        </div>
-      </header>
+      <button
+        ref={menuButtonRef}
+        type="button"
+        className="fixed left-3 top-3 z-30 grid size-11 place-items-center rounded-xl border border-slate-200 bg-white/95 text-slate-600 shadow-sm backdrop-blur transition hover:bg-slate-100 lg:hidden"
+        aria-label="打开导航"
+        onClick={() => setMobileOpen(true)}
+      >
+        <Menu className="size-5" aria-hidden="true" />
+      </button>
 
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
         <SidebarContent
@@ -94,6 +78,8 @@ export function AppShell() {
             if (window.confirm(`删除“${conversation.title || "未命名会话"}”？此操作无法撤销。`))
               conversationMutations.remove.mutate(conversation.id);
           }}
+          displayName={auth.displayName}
+          userId={auth.userId}
           onLogout={auth.logout}
         />
       </aside>
@@ -136,12 +122,14 @@ export function AppShell() {
                 conversationMutations.remove.mutate(conversation.id);
             }}
             onNavigate={() => setMobileOpen(false)}
+            displayName={auth.displayName}
+            userId={auth.userId}
             onLogout={auth.logout}
           />
         </aside>
       </dialog>
 
-      <main className="min-h-screen pt-13 lg:pl-64">
+      <main className="min-h-screen pt-14 lg:pl-64 lg:pt-0">
         {createChat.error && (
           <div className="mx-5 pt-4 lg:mx-8" role="alert">
             <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200">
@@ -165,6 +153,8 @@ function SidebarContent({
   onEditProject,
   onDeleteConversation,
   onNavigate,
+  displayName,
+  userId,
   onLogout,
 }: {
   projects: { id: string; name: string; workspace: string | null; runnerId: string | null; runnerState: string }[];
@@ -175,9 +165,13 @@ function SidebarContent({
   onEditProject: (project: { id: string }) => void;
   onDeleteConversation: (conversation: { id: string; title: string }) => void;
   onNavigate?: () => void;
+  displayName: string | null;
+  userId: string | null;
   onLogout: () => void;
 }) {
   const location = useLocation();
+  const userLabel = displayName ?? "Nova 用户";
+  const avatarLabel = (displayName ?? userId ?? "N").slice(0, 1).toUpperCase();
 
   return (
     <>
@@ -307,15 +301,28 @@ function SidebarContent({
           </div>
         </div>
       </nav>
-      <div className="border-t border-slate-100 p-3">
-        <button
-          type="button"
-          onClick={onLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-        >
-          <LogOut className="size-4" aria-hidden="true" />
-          退出登录
-        </button>
+      <div className="border-t border-slate-100 px-3">
+        <div className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-2">
+          <span
+            className="grid size-9 shrink-0 place-items-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700"
+            aria-hidden="true"
+          >
+            {avatarLabel}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-slate-800">{userLabel}</p>
+            <p className="text-xs text-slate-400">已登录</p>
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+            aria-label="退出登录"
+            title="退出登录"
+          >
+            <LogOut className="size-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </>
   );
@@ -395,13 +402,4 @@ function runnerDot(state: string) {
   if (state === "ready") return "bg-emerald-500";
   if (state === "busy" || state === "draining") return "bg-amber-500";
   return "bg-rose-500";
-}
-
-function pageName(pathname: string, projects: { id: string; name: string }[] | undefined) {
-  if (pathname === "/app") return "工作台";
-  if (pathname === "/settings") return "设置";
-  const projectId = pathname.match(/^\/p\/([^/]+)/)?.[1];
-  if (projectId) return projects?.find((project) => project.id === projectId)?.name ?? "Project";
-  if (pathname.startsWith("/c/")) return "独立 Chat";
-  return "Nova";
 }
