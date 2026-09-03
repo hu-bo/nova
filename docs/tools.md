@@ -27,7 +27,7 @@ packages/tools
 | Planning / Task DAG / Retry policy | `agent-core` / `taskflow` |
 | Runner 调度 / 权限 | agent-server Runner Module |
 | gRPC 连接、消息关联 | `runner-sdk` |
-| **输出截断策略** | `agent-core/context/truncate.ts` |
+| **请求视图中的工具结果精简** | `agent-core/context/compaction.ts` |
 | UI 文案与渲染 | `chat-ui` |
 
 **依赖**：`ToolContext`（`agent-core.md` §3.4）+ `proto` 生成类型。

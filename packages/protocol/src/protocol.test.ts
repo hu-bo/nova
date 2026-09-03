@@ -95,18 +95,25 @@ describe("protocol schemas", () => {
   });
 
   it("validates context usage and compaction results", () => {
+    const context = {
+      estimatedInputTokens: 32_500,
+      lastMeasuredInputTokens: 32_000,
+      contextWindow: 128_000,
+      maxInputTokens: 109_056,
+      confidence: "high",
+    };
     expect(
       CompactConversationResultSchema.parse({
         compacted: true,
         summarized: true,
-        context: { inputTokens: null, contextWindow: 128_000 },
+        context,
       }).context,
-    ).toEqual({ inputTokens: null, contextWindow: 128_000 });
+    ).toEqual(context);
     expect(
       SseEnvelopeSchema.parse({
         id: "43",
-        event: { type: "context.updated", inputTokens: 32_000, contextWindow: 128_000 },
+        event: { type: "context.updated", ...context },
       }).event,
-    ).toMatchObject({ type: "context.updated", inputTokens: 32_000 });
+    ).toMatchObject({ type: "context.updated", estimatedInputTokens: 32_500 });
   });
 });

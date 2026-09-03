@@ -72,4 +72,16 @@ export type StreamFn = (request: ModelRequest, signal: AbortSignal) => AsyncIter
 export interface Model {
   info: ModelInfo;
   stream: StreamFn;
+  tokens: TokenEstimator;
+}
+
+export type TokenEstimateConfidence = "high" | "low";
+export interface TokenEstimate {
+  tokens: number;
+  estimated: true;
+  confidence: TokenEstimateConfidence;
+}
+export interface TokenEstimator {
+  estimateText(text: string): TokenEstimate;
+  estimateRequest(request: ModelRequest): TokenEstimate;
 }

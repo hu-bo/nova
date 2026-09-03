@@ -86,19 +86,26 @@ describe("conversationReducer", () => {
     expect(completed.queueReady).toBe(true);
   });
 
-  it("replaces context usage with the latest measured SSE value", () => {
+  it("replaces context usage with the latest estimated SSE value", () => {
+    const usage = {
+      estimatedInputTokens: 64_500,
+      lastMeasuredInputTokens: 64_000,
+      contextWindow: 128_000,
+      maxInputTokens: 109_056,
+      confidence: "high" as const,
+    };
     const measured = conversationReducer(initialConversationState, {
       type: "event",
       conversationId: "conversation-1",
-      event: { type: "context.updated", inputTokens: 64_000, contextWindow: 128_000 },
+      event: { type: "context.updated", ...usage },
     });
-    expect(measured.contextUsage).toEqual({ inputTokens: 64_000, contextWindow: 128_000 });
+    expect(measured.contextUsage).toEqual(usage);
 
     const compacted = conversationReducer(measured, {
       type: "context.set",
-      usage: { inputTokens: null, contextWindow: 128_000 },
+      usage: { ...usage, estimatedInputTokens: 12_000 },
     });
-    expect(compacted.contextUsage).toEqual({ inputTokens: null, contextWindow: 128_000 });
+    expect(compacted.contextUsage).toEqual({ ...usage, estimatedInputTokens: 12_000 });
   });
 
   it("keeps an in-memory streaming message when a returning route hydrates persisted history", () => {

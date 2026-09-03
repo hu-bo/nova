@@ -13,7 +13,7 @@ export type UiEvent =
   | { type: "decision.requested"; request: DecisionRequest }
   | { type: "decision.resolved"; decisionId: string }
   | { type: "todo.updated"; items: Todo[] }
-  | { type: "context.updated"; inputTokens: number | null; contextWindow: number }
+  | ({ type: "context.updated" } & import("./rest.js").ContextUsage)
   | { type: "run.end"; runId: string; stopReason: string }
   | { type: "error"; code: string; message: string };
 
@@ -49,8 +49,11 @@ export const UiEventSchema: z.ZodType<UiEvent> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("todo.updated"), items: z.array(TodoSchema) }),
   z.object({
     type: z.literal("context.updated"),
-    inputTokens: z.number().int().nonnegative().nullable(),
+    estimatedInputTokens: z.number().int().nonnegative(),
+    lastMeasuredInputTokens: z.number().int().nonnegative().nullable(),
     contextWindow: z.number().int().positive(),
+    maxInputTokens: z.number().int().positive(),
+    confidence: z.enum(["high", "low"]),
   }),
   z.object({ type: z.literal("run.end"), runId: z.string(), stopReason: z.string() }),
   z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),

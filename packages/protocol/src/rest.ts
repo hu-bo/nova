@@ -210,11 +210,27 @@ export type SendMessage = z.infer<typeof SendMessageSchema>;
 
 export const ContextUsageSchema = z
   .object({
-    inputTokens: z.number().int().nonnegative().nullable(),
+    estimatedInputTokens: z.number().int().nonnegative(),
+    lastMeasuredInputTokens: z.number().int().nonnegative().nullable(),
     contextWindow: z.number().int().positive(),
+    maxInputTokens: z.number().int().positive(),
+    confidence: z.enum(["high", "low"]),
   })
   .strict();
 export type ContextUsage = z.infer<typeof ContextUsageSchema>;
+
+export const EstimatePromptTokensSchema = z.object({ text: z.string().max(1_000_000) }).strict();
+export type EstimatePromptTokens = z.infer<typeof EstimatePromptTokensSchema>;
+
+export const PromptTokenEstimateSchema = z
+  .object({
+    tokens: z.number().int().nonnegative(),
+    estimated: z.literal(true),
+    confidence: z.enum(["high", "low"]),
+    model: z.string().min(1),
+  })
+  .strict();
+export type PromptTokenEstimate = z.infer<typeof PromptTokenEstimateSchema>;
 
 export const CompactConversationResultSchema = z
   .object({

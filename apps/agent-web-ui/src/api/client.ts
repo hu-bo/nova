@@ -16,6 +16,7 @@ import {
   deleteConversation,
   deleteRunner,
   deleteRunnerToken,
+  estimateConversationPromptTokens,
   createRunnerToken,
   compactConversation,
   clearConversationContext,
@@ -101,6 +102,8 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
     },
     abortConversation,
     getConversationContext,
+    estimateConversationPromptTokens: (conversationId: string, text: string) =>
+      estimateConversationPromptTokens(conversationId, { text }),
     compactConversation,
     clearConversationContext,
     resolveDecision: (decisionId: string, input: DecisionResponse) => {

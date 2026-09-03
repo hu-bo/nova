@@ -13,6 +13,14 @@ import { createAgentRuntime } from "./modules/runtime/create-agent-runtime.js";
 let app: FastifyInstance | undefined;
 afterEach(async () => app?.close());
 
+const measuredContext = {
+  estimatedInputTokens: 32_500,
+  lastMeasuredInputTokens: 32_000,
+  contextWindow: 128_000,
+  maxInputTokens: 109_056,
+  confidence: "high" as const,
+};
+
 it("creates an unbound standalone chat runtime with only self-contained tools", () => {
   const events = createEventHub();
   const agent = createAgentRuntime(
@@ -172,13 +180,16 @@ it("runs the authenticated project and conversation flow with ownership isolatio
       },
       async abort() {},
       async context() {
-        return { inputTokens: 32_000, contextWindow: 128_000 };
+        return measuredContext;
+      },
+      async estimatePrompt(_route, text) {
+        return { tokens: Math.ceil(text.length / 4), estimated: true, confidence: "high", model: "gpt-5" };
       },
       async compact() {
         return { trigger: "manual", summarized: true, replacedFrom: "entry-1", replacedTo: "entry-2" };
       },
       async clear() {
-        return { inputTokens: 32_000, contextWindow: 128_000 };
+        return measuredContext;
       },
       invalidate() {},
     },
@@ -374,7 +385,16 @@ it("runs the authenticated project and conversation flow with ownership isolatio
     headers: { authorization: "Bearer alice-token" },
   });
   expect(context.statusCode).toBe(200);
-  expect(context.json()).toEqual({ inputTokens: 32_000, contextWindow: 128_000 });
+  expect(context.json()).toEqual(measuredContext);
+
+  const estimate = await app.inject({
+    method: "POST",
+    url: `/api/conversations/${conversationId}/token-estimate`,
+    headers: { authorization: "Bearer alice-token" },
+    payload: { text: "estimate me" },
+  });
+  expect(estimate.statusCode).toBe(200);
+  expect(estimate.json()).toMatchObject({ estimated: true, confidence: "high", model: "gpt-5" });
 
   const compacted = await app.inject({
     method: "POST",
@@ -385,7 +405,7 @@ it("runs the authenticated project and conversation flow with ownership isolatio
   expect(compacted.json()).toEqual({
     compacted: true,
     summarized: true,
-    context: { inputTokens: 32_000, contextWindow: 128_000 },
+    context: measuredContext,
   });
 
   const cleared = await app.inject({
@@ -394,7 +414,7 @@ it("runs the authenticated project and conversation flow with ownership isolatio
     headers: { authorization: "Bearer alice-token" },
   });
   expect(cleared.statusCode).toBe(200);
-  expect(cleared.json()).toEqual({ context: { inputTokens: 32_000, contextWindow: 128_000 } });
+  expect(cleared.json()).toEqual({ context: measuredContext });
 
   const origin = await app.listen({ host: "127.0.0.1", port: 0 });
   const eventController = new AbortController();

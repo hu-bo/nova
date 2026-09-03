@@ -1,6 +1,6 @@
 // §4.1 主流程：组装上下文 → 调模型 → 执行 tool batch → 观察 → 判定续跑。
 // 状态 owner 在 agent.ts；loop 只经 LoopHost 读写，不持有任何自己的生命周期状态。
-import type { ModelRef, ModelRequest, StreamFn, ThinkingLevel, Usage } from "@nova/model-adapters";
+import type { ModelRef, ModelRequest, StreamFn, ThinkingLevel, TokenEstimator, Usage } from "@nova/model-adapters";
 import type {
   AgentEvent,
   AgentTaskResult,
@@ -19,10 +19,10 @@ import type {
 import type { Entry, EntryParts } from "../session/entry.js";
 import type { RecordParts } from "../session/record.js";
 import type { SessionStorage } from "../session/storage.js";
-import { toMessages } from "../session/tree.js";
+import { toContextMessages } from "../session/tree.js";
 import type { Queues } from "../queue/queues.js";
 import { renderTodoInjection } from "../context/todo.js";
-import { shouldCompact } from "../context/budget.js";
+import { compactionTarget, maxInputTokens, shouldCompact } from "../context/budget.js";
 import {
   planCompaction,
   type CompactionPlan,
@@ -46,6 +46,7 @@ export interface LoopHost {
   toolConcurrency: number;
   toolTimeoutMs: number;
   systemPrompt: string;
+  tokenEstimator: TokenEstimator;
   queues: Queues;
   // —— 状态归 agent 所有，loop 经这些方法读写 ——
   runId(): string;
@@ -60,8 +61,8 @@ export interface LoopHost {
   applyTurnConfig(change: { model?: string; thinkingLevel?: ThinkingLevel; activeTools?: string[] }): Promise<void>;
   todos(): TodoState | null;
   updateTodos(items: Todo[]): Promise<void>;
-  lastUsage(): Usage | null;
-  setLastUsage(usage: Usage | null): void;
+  contextUsage(): import("../types.js").ContextUsage;
+  setLastUsage(usage: Usage, estimatedInput: number): void;
   addUsage(usage: Usage): void;
   runUsage(): Usage;
   emit(event: AgentEvent): void;
@@ -96,19 +97,18 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
     // turn 边界：此刻历史是完整的（最后一条是 user message），abort 可以安全退出
     if (host.signal().aborted) return finish(host, "aborted", lastAssistant);
 
-    // §8 预算：超过 contextWindow * 0.8 先压缩再组装
-    if (shouldCompact(host.lastUsage(), host.contextWindow())) {
-      await compactNow(host, "threshold", host.signal());
-    }
+    await compactToBudget(host, host.signal());
 
     const model = host.modelRef().model;
     await host.rec({ kind: "turn-started", turn, model });
 
-    const streamed = await streamTurn(host, assemble(host));
+    const request = assembleRequest(host);
+    const estimatedInput = host.tokenEstimator.estimateRequest(request).tokens;
+    const streamed = await streamTurn(host, request);
     if (streamed.usage) {
       host.addUsage(streamed.usage);
-      host.setLastUsage(streamed.usage);
-      await host.rec({ kind: "usage", model, usage: streamed.usage });
+      host.setLastUsage(streamed.usage, estimatedInput);
+      await host.rec({ kind: "usage", model, usage: streamed.usage, estimatedInput });
     }
 
     if (streamed.finish === "error" && streamed.errorCode === "context_overflow") {
@@ -224,8 +224,13 @@ async function finish(
   };
 }
 
-function assemble(host: LoopHost): ModelRequest {
-  const messages = toMessages(host.view());
+export function assembleRequest(host: LoopHost): ModelRequest {
+  const messages = toContextMessages(
+    host.view(),
+    host.tokenEstimator,
+    4_096,
+    Math.max(1_024, Math.floor(maxInputTokens(host.modelRef()) * 0.5)),
+  );
   const injection = renderTodoInjection(host.todos());
   if (injection !== null) {
     // §9.4 注入位置紧邻最后一条 user message。例外：该 message 携带 tool_result 时放在它之后——
@@ -398,12 +403,26 @@ export async function compactNow(
   signal: AbortSignal,
   instruction?: string,
 ): Promise<CompactionResult> {
-  const plan = await planCompaction(host.view(), { stream: host.stream, signal }, instruction);
+  const plan = await planCompaction(
+    host.view(),
+    { stream: host.stream, signal, estimator: host.tokenEstimator, maxInputTokens: maxInputTokens(host.modelRef()) },
+    instruction,
+  );
   if (!plan) return { trigger, summarized: false, replacedFrom: null, replacedTo: null };
   await host.applyCompaction(plan);
   await host.rec({ kind: "context-compacted", trigger, summarized: plan.summarized });
-  host.setLastUsage(null);
   return { trigger, summarized: plan.summarized, replacedFrom: plan.replacedFrom, replacedTo: plan.replacedTo };
+}
+
+async function compactToBudget(host: LoopHost, signal: AbortSignal): Promise<void> {
+  const inputLimit = maxInputTokens(host.modelRef());
+  if (!shouldCompact(host.contextUsage().estimatedInputTokens, inputLimit)) return;
+  const target = compactionTarget(inputLimit);
+  const maxAttempts = Math.max(1, host.view().length);
+  for (let attempt = 0; attempt < maxAttempts && host.contextUsage().estimatedInputTokens > target; attempt += 1) {
+    const compacted = await compactNow(host, "threshold", signal);
+    if (compacted.replacedFrom === null) break;
+  }
 }
 
 // todo_write 已在工具侧校验过形状，这里只做防御性读取

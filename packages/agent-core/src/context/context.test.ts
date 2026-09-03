@@ -1,13 +1,12 @@
 // testing.md §2：agent-core/context 与 session 树的可单测部分。
 // 不启动任何进程：entry() 工厂 + 脚本化 StreamFn。
 import { describe, expect, it } from "vitest";
-import type { ModelEvent, StreamFn } from "@nova/model-adapters";
+import { createTokenEstimator, type ModelEvent, type StreamFn } from "@nova/model-adapters";
 import type { Message, Todo } from "../types.js";
 import { entry, type Entry } from "../session/entry.js";
-import { branchView, toMessages } from "../session/tree.js";
-import { truncateContent, DEFAULT_CONTENT_LIMIT } from "./truncate.js";
-import { COMPACT_THRESHOLD, shouldCompact } from "./budget.js";
-import { findCutPoint, planCompaction } from "./compaction.js";
+import { branchView, toContextMessages, toMessages } from "../session/tree.js";
+import { COMPACT_THRESHOLD, maxInputTokens, shouldCompact } from "./budget.js";
+import { planCompaction } from "./compaction.js";
 import { TODO_ENFORCE, TODO_SUGGEST, renderTodoInjection, unfinishedCount } from "./todo.js";
 
 function message(role: "user" | "assistant", blocks: Message["blocks"]): Message {
@@ -32,84 +31,14 @@ function toolResultEntry(callId: string): Entry {
   });
 }
 
-describe("truncateContent", () => {
-  it("短内容原样保留", () => {
-    const parts = truncateContent([{ type: "text", text: "short" }]);
-    expect(parts).toEqual([{ type: "text", text: "short" }]);
-  });
-
-  it("超长内容保头尾、中间省略并标注行数", () => {
-    const lines = Array.from({ length: 6000 }, (_, i) => `line-${i}`);
-    const parts = truncateContent([{ type: "text", text: lines.join("\n") }]);
-    const joined = parts.map((part) => (part.type === "text" ? part.text : "")).join("");
-    expect(joined.startsWith("line-0\n")).toBe(true);
-    expect(joined.endsWith("\nline-5999")).toBe(true);
-    expect(joined).toMatch(/中间省略 \d+ 行/);
-    expect(joined.length).toBeLessThan(DEFAULT_CONTENT_LIMIT + 100);
-  });
-
-  it("非文本 part 不参与截断", () => {
-    const image = { type: "image" as const, mimeType: "image/png", data: "AAA" };
-    const long = "x".repeat(DEFAULT_CONTENT_LIMIT + 5000);
-    const parts = truncateContent([{ type: "text", text: long }, image]);
-    expect(parts.some((part) => part.type === "image")).toBe(true);
-  });
-});
+const testEstimator = createTokenEstimator({ provider: "gateway", model: "test" });
 
 describe("shouldCompact", () => {
-  it(`input 超过 contextWindow * ${COMPACT_THRESHOLD} 才触发`, () => {
-    expect(shouldCompact({ input: 801, output: 0 }, 1000)).toBe(true);
-    expect(shouldCompact({ input: 800, output: 0 }, 1000)).toBe(false);
-    expect(shouldCompact(null, 1000)).toBe(false);
-    expect(shouldCompact({ input: 9999, output: 0 }, 0)).toBe(false);
-  });
-});
-
-describe("findCutPoint（不得切开 tool_call 与 tool_result）", () => {
-  it("优先切在最后一条干净 user message（新 turn 起点）", () => {
-    const entries = [userEntry("a"), assistantEntry("b"), userEntry("c")];
-    expect(findCutPoint(entries)).toBe(2);
-  });
-
-  it("只有 tool_result 边界时切在其后（assistant 回合已闭环）", () => {
-    const entries = [userEntry("a"), toolCallEntry("c1"), toolResultEntry("c1"), assistantEntry("b")];
-    expect(findCutPoint(entries)).toBe(3);
-  });
-
-  it("tool_result 是最后一条且后面没有内容 → 无处可切", () => {
-    expect(findCutPoint([userEntry("a"), toolCallEntry("c1"), toolResultEntry("c1")])).toBeNull();
-  });
-
-  it("单 turn 进行中 → 无处可切", () => {
-    expect(findCutPoint([userEntry("a"), assistantEntry("b")])).toBeNull();
-  });
-
-  it("切点之前的 tool_call 一定带着自己的 tool_result（或都不在保留段）", () => {
-    const entries = [
-      userEntry("a"),
-      toolCallEntry("c1"),
-      toolResultEntry("c1"),
-      toolCallEntry("c2"),
-      toolResultEntry("c2"),
-    ];
-    const cut = findCutPoint(entries);
-    // c2 的 result 是最后一条 → 只能切在 c1 的 result 之后
-    expect(cut).toBe(3);
-    const kept = entries.slice(cut!);
-    for (const item of kept) {
-      if (item.kind === "message" && item.message.role === "user") {
-        for (const block of item.message.blocks) {
-          if (block.type !== "tool_result") continue;
-          // 对应 tool_call 必须也在保留段里
-          const hasCall = kept.some(
-            (other) =>
-              other.kind === "message" &&
-              other.message.blocks.some((b) => b.type === "tool_call" && b.callId === block.callId),
-          );
-          expect(hasCall).toBe(true);
-        }
-      }
-    }
+  it(`input 达到 maxInputTokens * ${COMPACT_THRESHOLD} 触发`, () => {
+    expect(shouldCompact(850, 1000)).toBe(true);
+    expect(shouldCompact(849, 1000)).toBe(false);
+    expect(shouldCompact(9999, 0)).toBe(false);
+    expect(maxInputTokens({ provider: "gateway", model: "m", contextWindow: 10_000, maxOutput: 2_000 })).toBe(6_976);
   });
 });
 
@@ -134,44 +63,85 @@ describe("planCompaction", () => {
     };
   }
 
-  const entries = () => [userEntry("goal"), assistantEntry("work"), userEntry("next step"), assistantEntry("more")];
+  const entries = () => [
+    userEntry("goal"),
+    assistantEntry("work"),
+    userEntry("middle"),
+    assistantEntry("details"),
+    userEntry("next step"),
+    assistantEntry("more"),
+  ];
+  const estimator = createTokenEstimator({ provider: "gateway", model: "test" });
+  const deps = (stream: StreamFn) => ({
+    stream,
+    signal: new AbortController().signal,
+    estimator,
+    maxInputTokens: 10_000,
+  });
 
   it("摘要成功：cut point 之前的前缀被摘要替换", async () => {
     const { stream } = summarizerStream(["THE-SUMMARY"]);
     const list = entries();
-    const plan = await planCompaction(list, { stream, signal: new AbortController().signal });
+    const plan = await planCompaction(list, deps(stream));
     expect(plan).not.toBeNull();
     expect(plan!.summary).toBe("THE-SUMMARY");
     expect(plan!.summarized).toBe(true);
-    expect(plan!.cutIndex).toBe(2);
-    expect(plan!.replacedFrom).toBe(list[0]!.id);
-    expect(plan!.replacedTo).toBe(list[1]!.id);
+    expect(plan!.startIndex).toBe(2);
+    expect(plan!.endIndex).toBe(4);
+    expect(plan!.replacedFrom).toBe(list[2]!.id);
+    expect(plan!.replacedTo).toBe(list[3]!.id);
   });
 
   it("摘要失败重试 2 次后成功（共 3 次尝试）", async () => {
     const fake = summarizerStream(["error", "error", "LATE-SUMMARY"]);
-    const plan = await planCompaction(entries(), { stream: fake.stream, signal: new AbortController().signal });
+    const plan = await planCompaction(entries(), deps(fake.stream));
     expect(fake.calls).toBe(3);
     expect(plan!.summary).toBe("LATE-SUMMARY");
     expect(plan!.summarized).toBe(true);
   });
 
-  it("摘要始终失败 → 硬截断最早的完整 turn", async () => {
+  it("摘要始终失败 → 省略中段完整 turn", async () => {
     const fake = summarizerStream(["error", "error", "error"]);
-    const plan = await planCompaction(entries(), { stream: fake.stream, signal: new AbortController().signal });
+    const plan = await planCompaction(entries(), deps(fake.stream));
     expect(fake.calls).toBe(3);
     expect(plan!.summarized).toBe(false);
-    expect(plan!.summary).toContain("硬截断");
-    // findEarliestBoundary：第一个 user message（index 2）之前的两条 Entry 被硬截断
-    expect(plan!.cutIndex).toBe(2);
+    expect(plan!.summary).toContain("中间 1 个 turn");
+    expect(plan!.startIndex).toBe(2);
   });
 
-  it("无可切内容 → null", async () => {
+  it("摘要 context overflow 不重复相同请求，直接省略中段", async () => {
+    let calls = 0;
+    const stream: StreamFn = async function* (request) {
+      calls += 1;
+      expect(request.maxOutput).toBe(2_048);
+      yield { type: "finish", stopReason: "error", errorCode: "context_overflow" };
+    };
+    const plan = await planCompaction(entries(), deps(stream));
+    expect(calls).toBe(1);
+    expect(plan?.summarized).toBe(false);
+    expect(plan?.summary).toContain("原始记录仍保留");
+  });
+
+  it("中段 tool call、result 与最终回答作为完整 turn 一起替换", async () => {
+    const fake = summarizerStream(["TOOL-SUMMARY"]);
+    const list = [
+      userEntry("goal"),
+      assistantEntry("start"),
+      userEntry("inspect"),
+      toolCallEntry("call-1"),
+      toolResultEntry("call-1"),
+      assistantEntry("observed"),
+      userEntry("latest"),
+      assistantEntry("continue"),
+    ];
+    const plan = await planCompaction(list, deps(fake.stream));
+    expect(plan).toMatchObject({ startIndex: 2, endIndex: 6, summarized: true });
+    expect(list.slice(plan!.startIndex, plan!.endIndex)).toEqual(list.slice(2, 6));
+  });
+
+  it("未完成的单 turn → null", async () => {
     const { stream } = summarizerStream(["S"]);
-    const plan = await planCompaction([userEntry("only"), assistantEntry("reply")], {
-      stream,
-      signal: new AbortController().signal,
-    });
+    const plan = await planCompaction([userEntry("only")], deps(stream));
     expect(plan).toBeNull();
   });
 });
@@ -196,6 +166,60 @@ describe("branchView / toMessages", () => {
     expect(messages).toHaveLength(2);
     expect(messages[0]!.blocks[0]).toEqual({ type: "text", text: "[以下是早前对话的摘要]\nS" });
     expect(messages[1]!.role).toBe("user");
+  });
+
+  it("请求投影省略已完成旧 turn 的 thinking，但保留当前 tool turn 的 thinking", () => {
+    const oldThinking = entry({
+      kind: "message",
+      message: message("assistant", [
+        { type: "thinking", text: "old reasoning" },
+        { type: "text", text: "done" },
+      ]),
+    });
+    const currentThinking = entry({
+      kind: "message",
+      message: message("assistant", [
+        { type: "thinking", text: "current reasoning" },
+        { type: "tool_call", callId: "call-1", name: "read", args: {} },
+      ]),
+    });
+    const projected = toContextMessages(
+      [userEntry("first"), oldThinking, userEntry("second"), currentThinking, toolResultEntry("call-1")],
+      testEstimator,
+    );
+    expect(
+      projected
+        .flatMap((item) => item.blocks)
+        .some((block) => block.type === "thinking" && block.text === "old reasoning"),
+    ).toBe(false);
+    expect(
+      projected
+        .flatMap((item) => item.blocks)
+        .some((block) => block.type === "thinking" && block.text === "current reasoning"),
+    ).toBe(true);
+  });
+
+  it("工具结果仅在请求投影保留头尾，Entry 原文不变", () => {
+    const original = `HEAD-${"x".repeat(20_000)}-TAIL`;
+    const toolResult = entry({
+      kind: "message",
+      message: message("user", [
+        { type: "tool_result", callId: "call-1", status: "ok", content: [{ type: "text", text: original }] },
+      ]),
+    });
+    const projected = toContextMessages([toolCallEntry("call-1"), toolResult], testEstimator, 100);
+    const block = projected[1]!.blocks[0]!;
+    expect(block.type).toBe("tool_result");
+    if (block.type === "tool_result" && block.content[0]?.type === "text") {
+      expect(block.content[0].text).toContain("HEAD-");
+      expect(block.content[0].text).toContain("-TAIL");
+      expect(block.content[0].text).toContain("中段已省略");
+    }
+    expect(toolResult.kind).toBe("message");
+    if (toolResult.kind === "message") {
+      const stored = toolResult.message.blocks[0] as Extract<Message["blocks"][number], { type: "tool_result" }>;
+      expect(stored.content[0]).toEqual({ type: "text", text: original });
+    }
   });
 });
 

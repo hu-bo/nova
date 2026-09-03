@@ -140,7 +140,20 @@ function ConversationView({
   const incompleteTodos = store.state.todos.filter((todo) => todo.status !== "completed").length;
   const contextUsage =
     store.state.contextUsage ??
-    (selectedProfile ? { inputTokens: null, contextWindow: selectedProfile.contextWindow } : undefined);
+    (selectedProfile
+      ? {
+          estimatedInputTokens: 0,
+          lastMeasuredInputTokens: null,
+          contextWindow: selectedProfile.contextWindow,
+          maxInputTokens: Math.max(
+            1,
+            selectedProfile.contextWindow -
+              selectedProfile.maxOutput -
+              Math.max(1_024, Math.ceil(selectedProfile.contextWindow * 0.02)),
+          ),
+          confidence: "low" as const,
+        }
+      : undefined);
   const composerSkills = useMemo(
     () => [
       {

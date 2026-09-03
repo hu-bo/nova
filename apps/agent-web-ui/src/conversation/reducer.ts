@@ -157,7 +157,13 @@ function reduceEvent(state: ConversationState, event: UiEvent, conversationId: s
     case "context.updated":
       return {
         ...state,
-        contextUsage: { inputTokens: event.inputTokens, contextWindow: event.contextWindow },
+        contextUsage: {
+          estimatedInputTokens: event.estimatedInputTokens,
+          lastMeasuredInputTokens: event.lastMeasuredInputTokens,
+          contextWindow: event.contextWindow,
+          maxInputTokens: event.maxInputTokens,
+          confidence: event.confidence,
+        },
       };
     case "run.end":
       return {

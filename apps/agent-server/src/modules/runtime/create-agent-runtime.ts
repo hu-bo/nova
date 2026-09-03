@@ -48,6 +48,7 @@ export function createAgentRuntime(route: EntryRoute, dependencies: AgentRuntime
   return harness.createAgent({
     model: ref,
     stream: model.stream,
+    tokenEstimator: model.tokens,
     ...(ctx ? { ctx } : {}),
     storage: dependencies.storage(conversation.id),
     decide: dependencies.decisions.createDecide(conversation.id, userId),

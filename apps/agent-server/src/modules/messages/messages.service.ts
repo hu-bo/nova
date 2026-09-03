@@ -55,6 +55,10 @@ export function createMessagesService(
       const route = await store.routeConversation(userId, conversationId);
       return runtimes.context(route);
     },
+    async estimatePrompt(userId: string, conversationId: string, text: string) {
+      const route = await store.routeConversation(userId, conversationId);
+      return runtimes.estimatePrompt(route, text);
+    },
     async compact(userId: string, conversationId: string) {
       const route = await store.routeConversation(userId, conversationId);
       const result = await runtimes.compact(route);

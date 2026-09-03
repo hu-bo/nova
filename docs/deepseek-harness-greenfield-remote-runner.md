@@ -55,7 +55,6 @@ real workspace / process / operating system
 | Server 与 Runner 如何通信 | Runner 主动建立出站双向 gRPC 长连接 |
 | macOS / Windows / Linux 如何统一 | 统一协议，平台相关路径、Shell 和进程语义由 Runner 实现 |
 | 会话如何恢复 | DSH Session Event Log 持久化到 PostgreSQL，产品表是投影 |
-| 是否复用 Nova 包、Proto 或数据库 | 不复用；所有包、协议和表在新项目重新定义 |
 | 是否修改 DSH 上游 | 不修改；只使用公开 package export 和 Cordis seam |
 | 开发机是否安装 DSH / npm 插件 | 不安装；只安装新项目 Remote Runner |
 | DSH 与 Cordis 插件运行在哪里 | Control Server 的 Runtime Shard 内，统一安装和治理 |
@@ -71,7 +70,7 @@ DSH 的 `dsh-web-app` 是本地单用户 GUI 表层，不是互联网产品 Serv
 - 部分交互状态只存在于 Host 进程内，Host 重启后不能恢复；
 - Client 与 Host 一起发布，协议当前没有独立版本协商。
 
-因此 DSH Web 只能作为以下设计的参考：`ctx.agents` 驱动、Session Event 投影、连接 generation、历史尾页与实时事件的收敛。产品公网入口、认证、权限、稳定 API、跨设备 Runner 和数据库模型必须由新项目拥有。
+因此 DSH Web 只能作为以下设计的参考：`ctx.agents` 驱动、Session Event 投影、连接 generation、历史尾页与实时事件的收敛。产品公网入口、认证、权限、稳定 API、跨机器 Runner 和数据库模型必须由新项目拥有。
 
 ## 2. 产品模型与不变量
 
@@ -102,11 +101,9 @@ Runner 不负责：Agent Loop、Prompt、模型调用、会话持久化、任务
 | 对象 | 含义 | 持久性 |
 |---|---|---|
 | User | 登录用户与权限主体 | PostgreSQL |
-| Device | 用户的一台逻辑开发设备 | PostgreSQL |
-| Runner | 设备上的一个逻辑执行器身份 | PostgreSQL |
-| Runner Connection Generation | 一次真实 gRPC 连接生命周期 | Server 内存，必要事实入审计 |
-| Workspace Binding | Project 与某个 Runner workspace root 的显式绑定 | PostgreSQL |
-| Project | 产品中的代码项目 | PostgreSQL |
+| Runner | 一台机器上的逻辑执行器身份 | PostgreSQL |
+| Runner Token | 用于 Runner gRPC 鉴权的 token，每个 Runner 最多 3 个有效 token | PostgreSQL |
+| Project | 产品中的代码项目 + workspace| PostgreSQL |
 | Conversation | UI 会话，固定一个 DSH Session 与 Workspace Binding | PostgreSQL |
 | Harness Session | DSH 的事件日志与恢复事实 | PostgreSQL Event Log |
 | Runtime Shard | 绑定一个 Runner generation 的 DSH 运行环境 | Server 内存 |
@@ -125,6 +122,7 @@ Runner 不负责：Agent Loop、Prompt、模型调用、会话持久化、任务
 8. Server 不解析外部机器的路径语义；路径规范化、符号链接和 containment 由对应 Runner 判断。
 9. Runner 断线后不自动重放具有副作用的命令或写操作。
 10. DSH 上游目录只读，新项目代码只依赖公开 package root export。
+11. 每个 Runner 最多同时存在 3 个有效 Runner Token；明文只在创建时返回一次，数据库只保存 hash。
 
 ## 3. DSH 可直接复用的公开能力
 
@@ -375,15 +373,15 @@ Control Server 容器不挂载 `/srv/workspaces/project`。Runner 可以通过�
 ```text
 remote-runner connect \
   --server https://runner.example.com \
-  --token <one-time-or-device-token> \
+  --token-stdin \
   --workspace <local-workspace-root>
 ```
 
-Windows 使用 PowerShell 参数形式，协议与语义相同。Runner 主动建立出站连接，因此不要求家庭网络、公司网络、NAT、WSL 或开发服务器开放入站端口。
+Runner 从 stdin 或系统 keychain 读取创建时保存的 Runner Token，不把明文放入命令参数。Windows 使用 PowerShell 参数形式，协议与语义相同。Runner 主动建立出站连接，因此不要求家庭网络、公司网络、NAT、WSL 或开发服务器开放入站端口。
 
 连接注册至少上报：
 
-- logical runner id 与 device id；
+- logical runner id；
 - Runner 版本、协议版本范围；
 - `linux` / `darwin` / `windows`、CPU 架构；
 - 默认 Shell 与可选命令；
@@ -799,7 +797,7 @@ Server 只在存在兼容交集时接纳，并在 Accepted 中冻结本 generati
 /api/auth/*
 /api/me
 /api/runners
-/api/runners/tokens
+/api/runners/:id/tokens
 /api/runners/:id/directories
 /api/projects
 /api/projects/:id/workspace-bindings
@@ -809,6 +807,8 @@ Server 只在存在兼容交集时接纳，并在 Accepted 中冻结本 generati
 /api/conversations/:id/cancel
 /api/interactions/:id/answer
 ```
+
+`POST /api/runners/:id/tokens` 创建 token，并且只在这次响应中返回明文；`GET` 只返回 token 元数据；`DELETE /api/runners/:id/tokens/:tokenId` 撤销 token。创建操作必须在数据库事务中执行每个 Runner 最多 3 个有效 token 的约束。
 
 消息 POST 是异步准入：`202 + messageId`。SSE 是结果、状态和工具投影的主通道。浏览器重连提交 `Last-Event-ID`，Server 返回：
 
@@ -824,7 +824,6 @@ Server 只在存在兼容交集时接纳，并在 Accepted 中冻结本 generati
 
 ```text
 users
-devices
 runners
 runner_credentials
 projects
@@ -903,12 +902,13 @@ dsh_session_events
 
 ### 12.2 Runner 身份
 
-推荐两阶段凭据：
+Runner 创建后，用户通过 Web UI 或产品 API 为该 Runner 创建 gRPC 鉴权 token。每个 Runner 最多同时保留 3 个有效 token，用于多机器部署、平滑轮换或临时迁移；达到上限后必须先撤销一个旧 token，才能创建新 token。
 
-1. Web UI 创建短时、一次性 enrollment token；
-2. Runner 首次连接后换取可撤销、轮换的 device credential，或签发客户端证书。
+创建接口只返回一次完整 token，后续列表只显示 token id、名称、创建时间、最后使用时间、到期时间和撤销状态。Server 在同一数据库事务中锁定 Runner、统计有效 token 并执行“最多 3 个”的约束，不能只依赖 Web UI 限制。
 
-所有连接必须 TLS。token 在数据库中只存 hash，并绑定 user、runner、过期时间和允许的 workspace scope。Runner 日志不得打印 token。撤销后 Server 关闭对应 stream，并使 generation 失效。
+所有连接必须 TLS。数据库只保存 token hash，并绑定 token id、user、runner、过期时间和允许的 workspace scope。Runner 使用 token 建立 gRPC stream；Server 验证成功后为该连接签发仅存在于内存中的 generation。撤销 token 后，Server 关闭所有由该 token 鉴权的 stream，并使对应 generation 失效。
+
+connection generation 仍是每次真实 gRPC 连接的运行时 fencing 标识，但不再作为 PostgreSQL 领域对象持久化。Runner 重连会创建新 generation，不会创建新 Runner Token；token 轮换也不改变历史 Runner 身份。
 
 ### 12.3 Workspace 与命令
 
@@ -925,7 +925,7 @@ dsh_session_events
 
 | 威胁 | 控制 |
 |---|---|
-| 窃取 Runner token | TLS、短时 enrollment、hash 存储、轮换与撤销 |
+| 窃取 Runner token | TLS、明文只显示一次、hash 存储、到期、轮换与撤销 |
 | 用户访问他人 Runner | 每次 route 做 tenant + runner + binding 校验 |
 | 路径逃逸 | Runner 原生 realpath / containment，Server 不自行判断 |
 | 断线后重复副作用 | generation fencing，不自动重放 |
@@ -955,7 +955,7 @@ dsh_session_events
 | `SESSION_LEASE_TTL_MS` | SessionLeaseManager |
 | `DSH_VERSION` | Build / release metadata，不在运行时浮动解析 |
 
-凭据不进入前端 bundle、仓库、镜像层或 Runner 启动命令历史。Runner token 可通过 stdin、受限配置文件、系统 keychain 或一次性 device flow 交付。
+凭据不进入前端 bundle、仓库、镜像层或 Runner 启动命令历史。Runner Token 明文创建后只展示一次，可通过 stdin、受限配置文件或系统 keychain 交付；Web UI 不提供再次查看明文的能力。
 
 ### 13.2 健康检查
 
@@ -1067,7 +1067,7 @@ CI 至少验证：
 ### Phase 2：公网 Server 与 Web UI（2–3 周）
 
 - Auth、Project、Workspace Binding、Conversation；
-- Runner enrollment、Registry、目录选择与状态 SSE；
+- Runner 创建、最多 3 个有效 Token、Registry、目录选择与状态 SSE；
 - AgentRuntimeRegistry、Runtime Shard 和 Session lease；
 - PostgreSQL DSH Persistence；
 - Message POST、Session projection、SSE replay、cancel；
@@ -1081,7 +1081,7 @@ CI 至少验证：
 - Approval / User Question InteractionBroker；
 - Project 多 Workspace Binding；
 - Conversation fork 到另一机器；
-- Runner token 撤销、版本升级提示、drain；
+- Runner Token 创建、轮换、撤销、版本升级提示和 drain；
 - Git identity / branch / commit / dirty 状态提示。
 
 ### Phase 4：按产品需求扩展
@@ -1121,6 +1121,8 @@ CI 至少验证：
 - 用户 A 不能列出或选择用户 B 的 Runner；
 - `..`、symlink、junction、UNC 等越界被 Runner 拒绝；
 - 撤销 token 后长连接断开；
+- 第 4 个有效 Runner Token 创建失败；撤销一个旧 token 后可以创建新 token；
+- Token 列表和数据库都无法还原明文，轮换期间新旧 token 可以短时并存；
 - 未实现 sandbox 的 Runner 不显示或接受 sandboxed 执行；
 - Control Server 文件系统上没有任何产品代码 workspace；
 - 日志中不出现 OIDC token、Runner token、模型 key 或文件内容。
@@ -1159,6 +1161,7 @@ CI 至少验证：
 - [ ] Remote Shell 通过非零退出、超时、取消、截断和断线测试；
 - [ ] Linux、macOS、Windows 真实 Runner 均通过；
 - [ ] Runner generation 失效可完整清理对应 Shard；
+- [ ] Runner Token 满足每个 Runner 最多 3 个有效 token、明文只返回一次、hash 存储和撤销断流；
 - [ ] 生产组合中不存在本地 workspace Provider；
 - [ ] 至少一个官方 Host 插件无需修改即可在 Server 加载并通过 Remote Service 操作 Runner；
 - [ ] 插件安装具备精确版本、完整性校验、允许策略、审计和可回滚能力；

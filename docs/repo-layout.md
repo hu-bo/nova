@@ -152,9 +152,8 @@ packages/agent-core/
 ├── decision/             # 审批 + 反问的统一挂起机制（见 4.1.4）
 ├── queue/                # steering / follow-up / next-run 三队列与排空点
 ├── context/
-│   ├── budget.ts         # token 估算、context window 预算
-│   ├── compaction.ts     # manual / threshold / overflow、cut point、摘要
-│   └── truncate.ts       # tool 输出截断
+│   ├── budget.ts         # context window、输出与安全空间预算
+│   └── compaction.ts     # 请求视图精简、中段摘要与省略
 ├── session/
 │   ├── entry.ts          # 会话内容流（进模型上下文）
 │   ├── record.ts         # 运行事实流（不进上下文）

@@ -70,6 +70,7 @@ interface Agent {
   abort(): Promise<void>
   compact(opts?: { instruction?: string }): Promise<CompactionResult>
   contextUsage(): Promise<ContextUsage>
+  estimatePrompt(text: string): TokenEstimate & { model: string }
   fork(entryId: EntryId): Promise<Agent>
   resume(): Promise<void>         // 崩溃 / 重启后依据 Record 续跑
 
@@ -556,18 +557,18 @@ type QueueName = "steering" | "followUp" | "nextRun"
 
 | 关注点 | 内容 |
 |---|---|
-| 预算 | 从最近一次 assistant `usage` 估算已用 token，对比 model 的 `contextWindow` |
-| 压缩触发 | `manual`（`agent.compact()`）/ `threshold`（超过 `contextWindow * 0.8`）/ `overflow`（provider 报超限） |
-| cut point | **必须落在完整 turn 边界**：assistant message 及其全部 tool_result 之后。切开 tool_call 与 tool_result 会让请求非法 |
-| 压缩过程 | 选 cut point → 生成摘要 → 写 `CompactionEntry` → 重算 usage。摘要失败重试 2 次，仍失败则按 `overflow` 硬截断最早的完整 turn |
-| 输出截断 | 单个 tool 的 `content` 有上限（缺省 30_000 字符），超出则**保留头尾、中间省略并标注省略行数**。`details` 不截断 |
+| 预算 | 对完整待发送 `ModelRequest` 本地估算；有真实 usage 时用“上次实测 + 新旧请求估算差量”校准 |
+| 可用输入 | `contextWindow - maxOutput - max(1024, contextWindow × 2%)` |
+| 压缩触发 | `manual` / 达到可用输入 85% 的 `threshold` / provider `overflow`；自动压到 65% 目标水位 |
+| turn 边界 | assistant thinking、tool_call、tool_result 与随后回答是原子 turn，不得拆开 |
+| 压缩过程 | 旧 thinking / tool 输出请求投影 → 有界中段摘要 → 摘要失败时中段省略；保留首个目标与近期 turn |
+| 工具输出 | Entry 保存完整 `content`；模型请求投影按 4096 tokens 保留头尾并标注省略 |
 
 **截断策略在 agent-core，不在 tools。** 否则每个 tool 都要自己实现一遍，且策略无法统一调整。
 
-`ContextUsage` 只报告最近一次模型请求的真实 input token 与当前模型的 `contextWindow`；没有模型
-用量或刚完成压缩时 `inputTokens = null`，不伪造压缩后的 token 数。每次模型返回 usage 时发出
-`context.updated`，压缩成功后清空最近用量并再次发出该事件。`context-compacted` Record 与 usage
-Record 共同决定重建 runtime 后的最近状态，避免把压缩前的高水位误报为当前占用。
+`ContextUsage.estimatedInputTokens` 始终表示当前完整请求估算，`lastMeasuredInputTokens` 单独保留最近
+一次 provider 实测；UI 不再把陈旧实测冒充当前占用。`usage` Record 同时保存发送前估算值，runtime
+重建后可恢复差量锚点。压缩只改变模型请求视图，append-only Entry 中的原始历史仍可审计和 fork。
 
 > 长会话跑不下去，90% 的原因在这一组。`npm test` 一次输出就可能撑爆上下文。
 
@@ -780,7 +781,6 @@ packages/agent-core/
 ├── context/
 │   ├── budget.ts
 │   ├── compaction.ts
-│   ├── truncate.ts
 │   └── todo.ts           # §9.4 保活与注入
 ├── session/
 │   ├── entry.ts

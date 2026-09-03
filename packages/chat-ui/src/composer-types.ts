@@ -17,8 +17,8 @@ export interface ComposerSkill {
 }
 
 export interface ComposerContextUsage {
-  inputTokens: number | null;
-  contextWindow: number;
+  estimatedInputTokens: number;
+  maxInputTokens: number;
 }
 
 export type ComposerAttachment<TMetadata = unknown> = UploadAttachment<TMetadata>;

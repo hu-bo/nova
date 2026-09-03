@@ -184,7 +184,17 @@ describe("ConversationStream", () => {
     const opened = stream.ensureConnected();
     sources[0]!.open();
     await opened;
-    sources[0]!.message({ type: "context.updated", inputTokens: 1, contextWindow: 2 }, "656");
+    sources[0]!.message(
+      {
+        type: "context.updated",
+        estimatedInputTokens: 1,
+        lastMeasuredInputTokens: null,
+        contextWindow: 2_048,
+        maxInputTokens: 1_023,
+        confidence: "high",
+      },
+      "656",
+    );
     sources[0]!.message({ type: "error", code: "RESYNC", message: "replay expired" });
 
     await vi.waitFor(() => expect(sources).toHaveLength(2));
@@ -216,7 +226,17 @@ describe("ConversationStream", () => {
     const first = stream.ensureConnected();
     sources[0]!.open();
     await first;
-    sources[0]!.message({ type: "context.updated", inputTokens: 1, contextWindow: 2 }, "42");
+    sources[0]!.message(
+      {
+        type: "context.updated",
+        estimatedInputTokens: 1,
+        lastMeasuredInputTokens: null,
+        contextWindow: 2_048,
+        maxInputTokens: 1_023,
+        confidence: "high",
+      },
+      "42",
+    );
     stream.close();
 
     const second = stream.ensureConnected();

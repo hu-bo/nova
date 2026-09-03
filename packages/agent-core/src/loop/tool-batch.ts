@@ -3,14 +3,13 @@
 // 并发上限 = toolConcurrency（一个信号量）；结果按原始顺序回填。
 import { createFlow } from "@nova/taskflow";
 import type { AgentTool, ContentPart, Risk, ToolCall, ToolContext, Usage } from "../types.js";
-import { truncateContent } from "../context/truncate.js";
 import type { ApprovalOutcome } from "../decision/decision.js";
 
 export interface ToolOutcome {
   callId: string;
   name: string;
   status: "ok" | "error";
-  content: ContentPart[]; // 已截断
+  content: ContentPart[]; // 原始内容；请求投影在 context 层按 token 截断
   details: unknown;
   terminate: boolean;
   executed: boolean; // false = 未真正执行（未知工具 / 被拒 / 中断），结果是合成的 error
@@ -140,7 +139,7 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
       callId: call.callId,
       name: call.name,
       status: result.status,
-      content: truncateContent(result.content),
+      content: result.content,
       details: result.details,
       terminate: result.terminate ?? false,
       executed: true,

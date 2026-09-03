@@ -2,7 +2,9 @@ import { anthropicStream } from "./anthropic.js";
 import { openAiChatStream } from "./openai.js";
 import { openAiResponsesStream } from "./responses.js";
 import type { Model, ModelRef } from "./types.js";
+import { createTokenEstimator } from "./token-estimator.js";
 export type * from "./types.js";
+export { createTokenEstimator, estimateText } from "./token-estimator.js";
 export type { RetryConfig } from "./retry.js";
 export { ProviderError, retryStream } from "./retry.js";
 export { openAiChatStream, openAiStream } from "./openai.js";
@@ -28,5 +30,6 @@ export function createModel(ref: ModelRef): Model {
       inputModalities: ref.inputModalities ?? ["text", "image"],
     },
     stream,
+    tokens: createTokenEstimator(ref),
   };
 }

@@ -32,13 +32,24 @@ createModel(ref: ModelRef): Model
 interface Model {
   info: ModelInfo
   stream: StreamFn
+  tokens: TokenEstimator
 }
 
 type StreamFn = (req: ModelRequest, signal: AbortSignal) => AsyncIterable<ModelEvent>
 ```
 
-**`stream` 是 agent-core 唯一消费的东西。** agent-core 不 import 本包，
-由 composition root（agent-server 或集成测试）注入 `StreamFn`。
+`stream` 和 `tokens` 都由 composition root 注入 agent-core：前者执行请求，后者在发送前同步估算
+纯文本或完整 `ModelRequest`，不访问网络。
+
+```ts
+interface TokenEstimator {
+  estimateText(text: string): TokenEstimate
+  estimateRequest(request: ModelRequest): TokenEstimate
+}
+```
+
+首版对英文、CJK、代码与 JSON 使用保守字符启发式；图片预留固定 token 并返回低置信度。该结果明确
+标记 `estimated: true`，真实 usage 由 agent-core 用于增量校准，不冒充 provider 精确计数。
 
 ---
 

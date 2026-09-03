@@ -892,7 +892,7 @@ describe("上下文预算与压缩", () => {
     await expect(running).resolves.toMatchObject({ stopReason: "done" });
   });
 
-  it("reports measured usage, clears it after compaction, and restores the cleared state", async () => {
+  it("reports a current estimate anchored to measured usage and restores it", async () => {
     const { stream } = scripted([
       textEvents("first", { input: 300, output: 10 }),
       textEvents("second", { input: 800, output: 10 }),
@@ -902,36 +902,44 @@ describe("上下文预算与压缩", () => {
       ],
     ]);
     const storage = memoryStorage();
-    const { agent } = setup(stream, { storage, sessionId: "s-context", contextWindow: 1_000 });
+    const { agent } = setup(stream, {
+      storage,
+      sessionId: "s-context",
+      contextWindow: 10_000,
+      maxOutput: 1_000,
+    });
     const events = recordEvents(agent);
 
     await agent.prompt("first");
     await agent.prompt("second");
-    expect(await agent.contextUsage()).toEqual({ inputTokens: 800, contextWindow: 1_000 });
+    const measured = await agent.contextUsage();
+    expect(measured.lastMeasuredInputTokens).toBe(800);
+    expect(measured.estimatedInputTokens).toBeGreaterThanOrEqual(800);
+    expect(measured.maxInputTokens).toBe(7_976);
 
     const compacted = await agent.compact();
     expect(compacted.summarized).toBe(true);
-    expect(await agent.contextUsage()).toEqual({ inputTokens: null, contextWindow: 1_000 });
-    expect(events).toContainEqual({
-      type: "context.updated",
-      usage: { inputTokens: null, contextWindow: 1_000 },
-    });
+    const after = await agent.contextUsage();
+    expect(after.lastMeasuredInputTokens).toBe(800);
+    expect(after.estimatedInputTokens).toBeGreaterThan(0);
+    expect(
+      events.some(
+        (event) => event.type === "context.updated" && event.usage.estimatedInputTokens === after.estimatedInputTokens,
+      ),
+    ).toBe(true);
     expect((await storage.loadRecords(agent.sessionId)).at(-1)?.kind).toBe("context-compacted");
 
     const restored = setup(async function* () {}, {
       storage,
       sessionId: "s-context",
-      contextWindow: 1_000,
+      contextWindow: 10_000,
+      maxOutput: 1_000,
     }).agent;
-    expect(await restored.contextUsage()).toEqual({ inputTokens: null, contextWindow: 1_000 });
+    expect(await restored.contextUsage()).toEqual(after);
   });
 
-  it("usage 超过 contextWindow * 0.8 → 下一 turn 前先压缩，摘要进入后续请求", async () => {
-    const turns: ModelEvent[][] = [
-      toolEvents([{ name: "ping" }], { input: 100, output: 1 }),
-      toolEvents([{ name: "ping" }], { input: 900, output: 1 }),
-      textEvents("finished"),
-    ];
+  it("当前请求估算超过 maxInputTokens * 0.85 → 发送前压缩到目标水位", async () => {
+    const turns: ModelEvent[][] = [textEvents("first", { input: 7_000, output: 1 }), textEvents("finished")];
     const calls: ModelRequest[] = [];
     let turn = 0;
     const stream: StreamFn = async function* (request) {
@@ -944,21 +952,24 @@ describe("上下文预算与压缩", () => {
       for (const event of turns[turn++] ?? []) yield event;
     };
     const { agent, storage } = setup(stream, {
-      tools: [localTestTool("ping", { risk: "read" })],
-      contextWindow: 1000,
+      contextWindow: 10_000,
+      maxOutput: 1_000,
     });
-    const result = await agent.prompt("go");
+    const largeFirstPrompt = "a".repeat(28_000);
+    await agent.prompt(largeFirstPrompt);
+    const result = await agent.prompt("continue");
 
     expect(result.stopReason).toBe("done");
-    // 调用顺序：turn0 → turn1 → 摘要 → turn2
-    expect(calls).toHaveLength(4);
-    expect(calls[2]!.tools).toHaveLength(0);
-    expect(calls[2]!.system).toContain("压缩");
+    // 调用顺序：首个请求 → 摘要 → 第二个请求
+    expect(calls).toHaveLength(3);
+    expect(calls[1]!.tools).toHaveLength(0);
+    expect(calls[1]!.system).toContain("压缩");
 
-    const after = calls[3]!.messages;
+    const after = calls[2]!.messages;
     expect(textOf(after[0]!.blocks)).toContain("THE-SUMMARY");
     expect(textOf(after[0]!.blocks)).toContain("[以下是早前对话的摘要]");
-    expect(after.every((message) => !textOf(message.blocks).includes("go"))).toBe(true);
+    expect(after.some((message) => textOf(message.blocks).includes("continue"))).toBe(true);
+    expect(after.every((message) => !textOf(message.blocks).includes(largeFirstPrompt))).toBe(true);
 
     expect((await storage.loadEntries(agent.sessionId)).some((item) => item.kind === "compaction")).toBe(true);
   });

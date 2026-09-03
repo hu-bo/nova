@@ -82,6 +82,7 @@ interface Todo {
 | `GET`    | `/conversations/:id/messages` | `?before&limit`                                   | `Page<ChatMessage>`         |
 | `POST`   | `/conversations/:id/messages` | `SendMessage`                                     | `202`                       |
 | `GET`    | `/conversations/:id/context`  | —                                                 | `ContextUsage`              |
+| `POST`   | `/conversations/:id/token-estimate` | `{ text }`                                  | `PromptTokenEstimate`       |
 | `POST`   | `/conversations/:id/compact`  | —                                                 | `CompactConversationResult` |
 | `POST`   | `/conversations/:id/clear`    | —                                                 | `ClearConversationContextResult` |
 | `GET`    | `/runners/directories`        | `?runnerId&path?`                                 | `RunnerDirectory`           |
@@ -148,8 +149,18 @@ interface SendMessage {
 }
 
 interface ContextUsage {
-  inputTokens: number | null; // 最近一次真实模型输入；无数据或刚压缩后为 null
+  estimatedInputTokens: number;
+  lastMeasuredInputTokens: number | null;
   contextWindow: number;
+  maxInputTokens: number;
+  confidence: "high" | "low";
+}
+
+interface PromptTokenEstimate {
+  tokens: number;
+  estimated: true;
+  confidence: "high" | "low";
+  model: string;
 }
 
 interface CompactConversationResult {
@@ -208,7 +219,7 @@ type UiEvent =
   | { type: "decision.requested"; request: DecisionRequest }
   | { type: "decision.resolved"; decisionId: string }
   | { type: "todo.updated"; items: Todo[] }
-  | { type: "context.updated"; inputTokens: number | null; contextWindow: number }
+  | ({ type: "context.updated" } & ContextUsage)
   | { type: "run.end"; runId: string; stopReason: string }
   | { type: "error"; code: string; message: string };
 ```

@@ -7,7 +7,9 @@ import {
   ClearConversationContextResultSchema,
   CompactConversationResultSchema,
   ContextUsageSchema,
+  EstimatePromptTokensSchema,
   MessageQuerySchema,
+  PromptTokenEstimateSchema,
   SendMessageSchema,
   pageSchema,
 } from "@nova/protocol";
@@ -45,6 +47,21 @@ export function messageRoutes(
       },
     },
     (request) => messages.list(request.userId, request.params.id, request.query),
+  );
+
+  server.post(
+    "/conversations/:id/token-estimate",
+    {
+      schema: {
+        operationId: "estimateConversationPromptTokens",
+        tags: ["messages"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        body: EstimatePromptTokensSchema,
+        response: { 200: PromptTokenEstimateSchema, 400: ApiErrorSchema, 401: ApiErrorSchema, 404: ApiErrorSchema },
+      },
+    },
+    (request) => messages.estimatePrompt(request.userId, request.params.id, request.body.text),
   );
 
   server.post(

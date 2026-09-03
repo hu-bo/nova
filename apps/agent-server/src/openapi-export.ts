@@ -34,13 +34,16 @@ const app = await buildApp(
       async send() {},
       async abort() {},
       async context() {
-        return { inputTokens: null, contextWindow: 128_000 };
+        return contextUsage();
+      },
+      async estimatePrompt(_route, text) {
+        return { tokens: Math.ceil(text.length / 4), estimated: true, confidence: "high", model: "openapi" };
       },
       async compact() {
         return { trigger: "manual", summarized: false, replacedFrom: null, replacedTo: null };
       },
       async clear() {
-        return { inputTokens: null, contextWindow: 128_000 };
+        return contextUsage();
       },
       invalidate() {},
     },
@@ -67,6 +70,16 @@ const app = await buildApp(
   },
   false,
 );
+
+function contextUsage() {
+  return {
+    estimatedInputTokens: 0,
+    lastMeasuredInputTokens: null,
+    contextWindow: 128_000,
+    maxInputTokens: 109_056,
+    confidence: "high" as const,
+  };
+}
 
 try {
   const response = await app.inject({

@@ -1,5 +1,6 @@
 // §2 createAgent —— 唯一公开面。状态唯一 owner：本闭包；loop 经 LoopHost 读写。
 import type { ModelRef, ThinkingLevel, Usage } from "@nova/model-adapters";
+import { createTokenEstimator } from "@nova/model-adapters";
 import type {
   Agent,
   AgentConfig,
@@ -22,8 +23,9 @@ import { branchView } from "./session/tree.js";
 import { createQueues } from "./queue/queues.js";
 import { assembleSystem } from "./prompts/system.js";
 import { toTodoState } from "./context/todo.js";
+import { maxInputTokens } from "./context/budget.js";
 import type { CompactionPlan, CompactionResult } from "./context/compaction.js";
-import { compactNow, newMessage, runTurnLoop, type LoopHost } from "./loop/loop.js";
+import { assembleRequest, compactNow, newMessage, runTurnLoop, type LoopHost } from "./loop/loop.js";
 import { createSubAgentGate, spawnAgentTool, type SpawnedRun, type SubAgentGate } from "./sub-agent/spawn-agent.js";
 import { submitResultTool } from "./sub-agent/submit-result.js";
 import { askUserTool } from "./decision/ask-user.js";
@@ -65,6 +67,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   const maxDepth = config.subAgent?.maxDepth ?? 1;
   const gate = init?.gate ?? createSubAgentGate(config.subAgent?.maxConcurrent ?? 4);
   const userId = config.userId ?? "local";
+  const tokenEstimator = config.tokenEstimator ?? createTokenEstimator(config.model);
 
   const tools = new Map<string, AgentTool>();
   for (const tool of config.tools) tools.set(tool.name, tool);
@@ -85,6 +88,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   let loaded = false;
   let todos: TodoState | null = null;
   let lastUsage: Usage | null = null;
+  let usageAnchor: { model: string; measuredInput: number; estimatedInput: number } | null = null;
   let runUsage: Usage = { input: 0, output: 0 };
   let modelRef: ModelRef = { ...config.model };
   let runId = "idle";
@@ -116,6 +120,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     await config.storage.appendEntry(sessionId, next);
     view.push(next);
     leaf = next.id;
+    if (loaded) publishContext();
     return next;
   }
 
@@ -128,9 +133,12 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
       parentId: leaf,
     });
     await config.storage.appendEntry(sessionId, marker);
-    // 内存视图按 cut point 直接折叠；branchView 负责从存储重载时的折叠
-    view = [marker, ...view.slice(plan.cutIndex)];
+    const preservedConfig = view
+      .slice(plan.startIndex, plan.endIndex)
+      .filter((item) => item.kind === "model" || item.kind === "thinking-level" || item.kind === "active-tools");
+    view = [...view.slice(0, plan.startIndex), marker, ...preservedConfig, ...view.slice(plan.endIndex)];
     leaf = marker.id;
+    publishContext();
   }
 
   const decisionDeps: DecisionDeps = {
@@ -165,6 +173,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     todos = toTodoState(items);
     await rec({ kind: "todo-updated", items: todos.items });
     emit({ type: "todo.updated", items: todos.items });
+    publishContext();
   }
 
   async function applyTurnConfig(change: {
@@ -175,6 +184,8 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     // §4.3：每次变更都要落 Entry，否则 fork 与 resume 会拿到错误的模型配置
     if (change.model !== undefined && change.model !== modelRef.model) {
       modelRef = { ...modelRef, model: change.model };
+      lastUsage = null;
+      usageAnchor = null;
       state.model = change.model;
       await append({ kind: "model", model: change.model });
     }
@@ -212,6 +223,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     toolConcurrency: config.toolConcurrency ?? 8,
     toolTimeoutMs: config.toolTimeoutMs ?? 120_000,
     systemPrompt: assembleSystem(userId, config.systemPrompt),
+    tokenEstimator,
     queues,
     runId: () => runId,
     signal: () => runController.signal,
@@ -225,10 +237,11 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     applyTurnConfig,
     todos: () => todos,
     updateTodos,
-    lastUsage: () => lastUsage,
-    setLastUsage: (usage) => {
+    contextUsage: currentContextUsage,
+    setLastUsage: (usage, estimatedInput) => {
       lastUsage = usage;
-      emit({ type: "context.updated", usage: currentContextUsage() });
+      usageAnchor = { model: modelRef.model, measuredInput: usage.input, estimatedInput };
+      publishContext();
     },
     addUsage: (usage) => {
       runUsage = mergeUsage(runUsage, usage);
@@ -254,10 +267,16 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     const todoRecord = lastTodo[0];
     if (todoRecord && todoRecord.kind === "todo-updated") todos = toTodoState(todoRecord.items);
     const contextRecords = await config.storage.loadRecords(sessionId);
-    const lastContextRecord = [...contextRecords]
-      .reverse()
-      .find((item) => item.kind === "usage" || item.kind === "context-compacted");
+    const lastContextRecord = [...contextRecords].reverse().find((item) => item.kind === "usage");
     lastUsage = lastContextRecord?.kind === "usage" ? lastContextRecord.usage : null;
+    usageAnchor =
+      lastContextRecord?.kind === "usage" && lastContextRecord.estimatedInput !== undefined
+        ? {
+            model: lastContextRecord.model,
+            measuredInput: lastContextRecord.usage.input,
+            estimatedInput: lastContextRecord.estimatedInput,
+          }
+        : null;
     // 模型配置从 Entry 恢复（§4.3 变更落 Entry 的原因）
     for (const item of view) {
       if (item.kind === "model") {
@@ -344,12 +363,31 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   }
 
   function currentContextUsage(): ContextUsage {
-    return { inputTokens: lastUsage?.input ?? null, contextWindow: host.contextWindow() };
+    const raw = tokenEstimator.estimateRequest(assembleRequest(host));
+    const anchored =
+      usageAnchor?.model === modelRef.model
+        ? usageAnchor.measuredInput + raw.tokens - usageAnchor.estimatedInput
+        : raw.tokens;
+    return {
+      estimatedInputTokens: Math.max(0, Math.ceil(anchored)),
+      lastMeasuredInputTokens: lastUsage?.input ?? null,
+      contextWindow: host.contextWindow(),
+      maxInputTokens: maxInputTokens(modelRef),
+      confidence: raw.confidence,
+    };
+  }
+
+  function publishContext(): void {
+    emit({ type: "context.updated", usage: currentContextUsage() });
   }
 
   async function contextUsage(): Promise<ContextUsage> {
     await ensureLoaded();
     return currentContextUsage();
+  }
+
+  function estimatePrompt(text: string) {
+    return { ...tokenEstimator.estimateText(text), model: modelRef.model };
   }
 
   async function fork(entryId: EntryId): Promise<Agent> {
@@ -503,6 +541,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     abort,
     compact,
     contextUsage,
+    estimatePrompt,
     fork,
     resume,
     get state(): AgentState {

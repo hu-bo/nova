@@ -1,5 +1,12 @@
 // 核心类型。契约见 docs/agent-core.md §2/§3（Decision 见 §6）。
-import type { ModelRef, StreamFn, ThinkingLevel } from "@nova/model-adapters";
+import type {
+  ModelRef,
+  StreamFn,
+  ThinkingLevel,
+  TokenEstimate,
+  TokenEstimateConfidence,
+  TokenEstimator,
+} from "@nova/model-adapters";
 import type { AgentHooks } from "./loop/hooks.js";
 import type { SessionStorage } from "./session/storage.js";
 import type { EntryId } from "./session/entry.js";
@@ -66,8 +73,11 @@ export interface Usage {
 }
 
 export interface ContextUsage {
-  inputTokens: number | null;
+  estimatedInputTokens: number;
+  lastMeasuredInputTokens: number | null;
   contextWindow: number;
+  maxInputTokens: number;
+  confidence: TokenEstimateConfidence;
 }
 
 export type AgentTaskResult<T = unknown> =
@@ -223,6 +233,7 @@ export interface PromptAsset {
 export interface AgentConfig {
   model: ModelRef;
   stream: StreamFn;
+  tokenEstimator?: TokenEstimator;
   tools: AgentTool[];
   ctx?: ToolContext;
   storage: SessionStorage;
@@ -267,6 +278,7 @@ export interface Agent {
   abort(): Promise<void>;
   compact(opts?: { instruction?: string }): Promise<CompactionResult>;
   contextUsage(): Promise<ContextUsage>;
+  estimatePrompt(text: string): TokenEstimate & { model: string };
   fork(entryId: EntryId): Promise<Agent>;
   resume(): Promise<void>; // 崩溃 / 重启后依据 Record 续跑
   readonly state: AgentState;

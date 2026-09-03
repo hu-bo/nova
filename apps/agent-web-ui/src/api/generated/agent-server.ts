@@ -1992,6 +1992,49 @@ export type SendMessage503 = {
   requestId?: string;
 };
 
+export type EstimateConversationPromptTokensBody = {
+  /** @maxLength 1000000 */
+  text: string;
+};
+
+export type EstimateConversationPromptTokens200Confidence = typeof EstimateConversationPromptTokens200Confidence[keyof typeof EstimateConversationPromptTokens200Confidence];
+
+
+export const EstimateConversationPromptTokens200Confidence = {
+  high: 'high',
+  low: 'low',
+} as const;
+
+export type EstimateConversationPromptTokens200 = {
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  tokens: number;
+  estimated: true;
+  confidence: EstimateConversationPromptTokens200Confidence;
+  /** @minLength 1 */
+  model: string;
+};
+
+export type EstimateConversationPromptTokens400 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type EstimateConversationPromptTokens401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type EstimateConversationPromptTokens404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
 export type AbortConversation401 = {
   code: string;
   message: string;
@@ -2010,18 +2053,37 @@ export type AbortConversation409 = {
   requestId?: string;
 };
 
+export type GetConversationContext200Confidence = typeof GetConversationContext200Confidence[keyof typeof GetConversationContext200Confidence];
+
+
+export const GetConversationContext200Confidence = {
+  high: 'high',
+  low: 'low',
+} as const;
+
 export type GetConversationContext200 = {
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  estimatedInputTokens: number;
   /**
      * @minimum 0
      * @maximum 9007199254740991
      * @nullable
      */
-  inputTokens: number | null;
+  lastMeasuredInputTokens: number | null;
   /**
      * @maximum 9007199254740991
      * @exclusiveMinimum 0
      */
   contextWindow: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxInputTokens: number;
+  confidence: GetConversationContext200Confidence;
 };
 
 export type GetConversationContext401 = {
@@ -2036,18 +2098,37 @@ export type GetConversationContext404 = {
   requestId?: string;
 };
 
+export type CompactConversation200ContextConfidence = typeof CompactConversation200ContextConfidence[keyof typeof CompactConversation200ContextConfidence];
+
+
+export const CompactConversation200ContextConfidence = {
+  high: 'high',
+  low: 'low',
+} as const;
+
 export type CompactConversation200Context = {
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  estimatedInputTokens: number;
   /**
      * @minimum 0
      * @maximum 9007199254740991
      * @nullable
      */
-  inputTokens: number | null;
+  lastMeasuredInputTokens: number | null;
   /**
      * @maximum 9007199254740991
      * @exclusiveMinimum 0
      */
   contextWindow: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxInputTokens: number;
+  confidence: CompactConversation200ContextConfidence;
 };
 
 export type CompactConversation200 = {
@@ -2074,18 +2155,37 @@ export type CompactConversation409 = {
   requestId?: string;
 };
 
+export type ClearConversationContext200ContextConfidence = typeof ClearConversationContext200ContextConfidence[keyof typeof ClearConversationContext200ContextConfidence];
+
+
+export const ClearConversationContext200ContextConfidence = {
+  high: 'high',
+  low: 'low',
+} as const;
+
 export type ClearConversationContext200Context = {
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  estimatedInputTokens: number;
   /**
      * @minimum 0
      * @maximum 9007199254740991
      * @nullable
      */
-  inputTokens: number | null;
+  lastMeasuredInputTokens: number | null;
   /**
      * @maximum 9007199254740991
      * @exclusiveMinimum 0
      */
   contextWindow: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxInputTokens: number;
+  confidence: ClearConversationContext200ContextConfidence;
 };
 
 export type ClearConversationContext200 = {
@@ -4896,6 +4996,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getSendMessageMutationOptions(options), queryClient);
+    }
+
+export const getEstimateConversationPromptTokensUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/token-estimate`
+}
+
+export const estimateConversationPromptTokens = async (id: string,
+    estimateConversationPromptTokensBody: EstimateConversationPromptTokensBody, options?: Parameters<typeof apiMutator>[1]): Promise<EstimateConversationPromptTokens200> => {
+
+  return apiMutator<EstimateConversationPromptTokens200>(getEstimateConversationPromptTokensUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(estimateConversationPromptTokensBody)
+  }
+);}
+
+
+
+
+
+export const getEstimateConversationPromptTokensMutationOptions = <TError = ErrorType<EstimateConversationPromptTokens400 | EstimateConversationPromptTokens401 | EstimateConversationPromptTokens404>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof estimateConversationPromptTokens>>, TError,{id: string;data: BodyType<EstimateConversationPromptTokensBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
+): UseMutationOptions<Awaited<ReturnType<typeof estimateConversationPromptTokens>>, TError,{id: string;data: BodyType<EstimateConversationPromptTokensBody>}, TContext> => {
+
+const mutationKey = ['estimateConversationPromptTokens'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof estimateConversationPromptTokens>>, {id: string;data: BodyType<EstimateConversationPromptTokensBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  estimateConversationPromptTokens(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EstimateConversationPromptTokensMutationResult = NonNullable<Awaited<ReturnType<typeof estimateConversationPromptTokens>>>
+    export type EstimateConversationPromptTokensMutationBody = BodyType<EstimateConversationPromptTokensBody>
+    export type EstimateConversationPromptTokensMutationError = ErrorType<EstimateConversationPromptTokens400 | EstimateConversationPromptTokens401 | EstimateConversationPromptTokens404>
+
+    export const useEstimateConversationPromptTokens = <TError = ErrorType<EstimateConversationPromptTokens400 | EstimateConversationPromptTokens401 | EstimateConversationPromptTokens404>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof estimateConversationPromptTokens>>, TError,{id: string;data: BodyType<EstimateConversationPromptTokensBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof estimateConversationPromptTokens>>,
+        TError,
+        {id: string;data: BodyType<EstimateConversationPromptTokensBody>},
+        TContext
+      > => {
+      return useMutation(getEstimateConversationPromptTokensMutationOptions(options), queryClient);
     }
 
 export const getAbortConversationUrl = (id: string,) => {

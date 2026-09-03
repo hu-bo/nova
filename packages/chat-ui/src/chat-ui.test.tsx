@@ -217,19 +217,19 @@ describe("chat-ui", () => {
 
   it("renders measured context usage next to the composer actions", () => {
     const html = renderToStaticMarkup(
-      <Composer contextUsage={{ inputTokens: 72_000, contextWindow: 128_000 }} onSubmit={() => undefined} />,
+      <Composer contextUsage={{ estimatedInputTokens: 72_000, maxInputTokens: 128_000 }} onSubmit={() => undefined} />,
     );
-    expect(contextUsagePercent({ inputTokens: 72_000, contextWindow: 128_000 })).toBe(57);
-    expect(html).toContain("上下文 57%");
-    expect(html).toContain("72,000 / 128,000 tokens");
+    expect(contextUsagePercent({ estimatedInputTokens: 72_000, maxInputTokens: 128_000 })).toBe(57);
+    expect(html).toContain("上下文 ≈57%");
+    expect(html).toContain("≈72,000 / 128,000 tokens");
     expect(html).toContain("hidden");
     expect(html).toContain("sm:inline-flex");
   });
 
   it("does not display non-zero context usage as 0%", () => {
-    expect(contextUsagePercent({ inputTokens: 1, contextWindow: 128_000 })).toBe(1);
-    expect(contextUsagePercent({ inputTokens: 128_000, contextWindow: 128_000 })).toBe(100);
-    expect(contextUsagePercent({ inputTokens: 256_000, contextWindow: 128_000 })).toBe(100);
+    expect(contextUsagePercent({ estimatedInputTokens: 1, maxInputTokens: 128_000 })).toBe(1);
+    expect(contextUsagePercent({ estimatedInputTokens: 128_000, maxInputTokens: 128_000 })).toBe(100);
+    expect(contextUsagePercent({ estimatedInputTokens: 256_000, maxInputTokens: 128_000 })).toBe(100);
   });
 
   it("replaces the send button with an abort action while a run is active", () => {

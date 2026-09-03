@@ -1,4 +1,5 @@
 import type { Agent, CompactionResult, ContextUsage, QueueName } from "@nova/agent-core";
+import type { TokenEstimate } from "@nova/model-adapters";
 import type { ThinkingLevel } from "@nova/model-adapters";
 import { createLogger } from "@nova/logger";
 import type { EntryRoute } from "../../store.js";
@@ -10,6 +11,7 @@ export interface ConversationRuntimes {
   send(route: EntryRoute, text: string, queue?: QueueName, thinkingLevel?: ThinkingLevel): Promise<void>;
   abort(conversationId: string): Promise<void>;
   context(route: EntryRoute): Promise<ContextUsage>;
+  estimatePrompt(route: EntryRoute, text: string): Promise<TokenEstimate & { model: string }>;
   compact(route: EntryRoute): Promise<CompactionResult>;
   clear(route: EntryRoute, clearStorage: () => Promise<void>): Promise<ContextUsage>;
   invalidate(conversationId: string): void;
@@ -133,6 +135,9 @@ export function createRuntimeRegistry(
     },
     async context(route) {
       return get(route).agent.contextUsage();
+    },
+    async estimatePrompt(route, text) {
+      return get(route).agent.estimatePrompt(text);
     },
     async compact(route) {
       const { agent } = get(route);

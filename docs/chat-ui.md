@@ -85,7 +85,7 @@
   onReasoningEffortChange?={(effort: string) => void}
   skills?={ComposerSkill[]}
   onSkillInvoke?={(skill: ComposerSkill) => void | Promise<void>}
-  contextUsage?={{ inputTokens: number | null, contextWindow: number }}
+  contextUsage?={{ estimatedInputTokens: number, maxInputTokens: number }}
   accept?={string}
   attachments?={ComposerAttachment[]}
   onAttachmentsChange?={(attachments: ComposerAttachment[]) => void}
@@ -134,8 +134,8 @@ type BlockRenderers = Record<string, BlockRenderer>
 Skill 候选同样由宿主提供，`chat-ui` 不读取 Skill 注册表，也不执行 Skill。Composer 只在
 草稿以 `/` 开头时按 command / label 过滤并展示候选；正文中途出现 `/` 不触发。选择候选后
 清空该命令草稿并调用 `onSkillInvoke`，网络请求、运行中禁用规则和错误反馈仍由宿主负责。
-上下文占用只展示 `inputTokens / contextWindow`，不得在组件内估算 token；`inputTokens` 为 null
-时显示“待测量”。
+上下文占用展示 `≈ estimatedInputTokens / maxInputTokens`，估算和输入预算均由宿主传入；组件不自行
+计算 token。provider 最近一次实测值仅用于详情和校准，不作为当前占用展示。
 
 **所有交互通过 props 回调上抛，组件自己不发请求。** 这是“纯展示”的可检验定义：
 消息、Decision、Composer 和 RemoteExplorer 都只能调用各自声明的 props 回调，没有隐式对外通路。

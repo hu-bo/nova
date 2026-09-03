@@ -101,7 +101,7 @@ it("turns in-flight tool cards into cancelled terminal states when a run is abor
   });
 });
 
-it("projects measured and reset context usage without writing a chat message", () => {
+it("projects estimated context usage without writing a chat message", () => {
   const events = createEventHub();
   const project = projectAgentEvents("conversation-1", events, {
     async appendMessage(message) {
@@ -109,16 +109,19 @@ it("projects measured and reset context usage without writing a chat message", (
     },
   });
 
-  project({ type: "context.updated", usage: { inputTokens: 32_000, contextWindow: 128_000 } });
-  project({ type: "context.updated", usage: { inputTokens: null, contextWindow: 128_000 } });
+  const usage = {
+    estimatedInputTokens: 32_500,
+    lastMeasuredInputTokens: 32_000,
+    contextWindow: 128_000,
+    maxInputTokens: 109_056,
+    confidence: "high" as const,
+  };
+  project({ type: "context.updated", usage });
 
   const replay = events.replay("conversation-1", "0");
   expect(replay.kind).toBe("events");
   if (replay.kind === "events") {
-    expect(replay.events.map((item) => item.event)).toEqual([
-      { type: "context.updated", inputTokens: 32_000, contextWindow: 128_000 },
-      { type: "context.updated", inputTokens: null, contextWindow: 128_000 },
-    ]);
+    expect(replay.events.map((item) => item.event)).toEqual([{ type: "context.updated", ...usage }]);
   }
 });
 
