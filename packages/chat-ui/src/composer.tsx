@@ -135,7 +135,7 @@ export function Composer<TMetadata = unknown>({
   }
 
   return (
-    <Card className="nova-composer overflow-visible rounded-2xl mx-auto max-w-4xl w-full">
+    <Card className="nova-composer nova-chat-content overflow-visible rounded-2xl">
       <UploadCover
         files={files}
         onFilesChange={setFiles}

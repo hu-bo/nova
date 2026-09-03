@@ -1,4 +1,5 @@
 export * from "./block-view.js";
+export * from "./chat.js";
 export * from "./composer.js";
 export type * from "./composer-types.js";
 export { contextUsagePercent } from "./composer-context-usage.js";

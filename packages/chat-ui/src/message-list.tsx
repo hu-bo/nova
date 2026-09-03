@@ -84,7 +84,7 @@ const MessageRow = memo(function MessageRow({
       className={
         isUser
           ? "group ml-auto w-fit max-w-[min(88%,48rem)] rounded-2xl rounded-br-md bg-slate-100 px-3.5 py-2.5 text-slate-900 ring-1 ring-slate-200/70 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700/70"
-          : "group w-full max-w-4xl py-1 text-slate-900 dark:text-slate-100"
+          : "group w-full py-1 text-slate-900 dark:text-slate-100"
       }
     >
       <div className="mb-1.5 flex items-center justify-between gap-3">
@@ -141,7 +141,7 @@ export function MessageList({ messages, renderers, onRetry, onOpenPath }: Messag
       className="nova-message-list nova-scrollbar flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden overscroll-contain px-1 pb-2 [scrollbar-gutter:stable]"
       aria-live="polite"
     >
-      <div className="mx-auto w-full max-w-4xl space-y-3">
+      <div className="nova-chat-content space-y-3">
         {messages.map((message) => (
           <MessageRow
             message={message}

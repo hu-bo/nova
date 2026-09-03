@@ -110,8 +110,8 @@ Project                        独立 Chat
 
 配置保存只校验结构和目录边界，不依赖 Runner 在线。创建或重建 conversation runtime 时，Host
 才通过绑定的 Runner 读取文件。自动模式依次探测 workspace 根目录的 `AGENTS.md`、`CLAUDE.md`；
-两者都不存在是正常情况，不阻止运行。显式文件不存在、不是 UTF-8 文本、超过 64 KiB，或 Runner
-不可用时明确失败，不静默忽略项目约束。自定义提示词存于 Project，限制为 32 KiB。运行时把最终
+自动或显式配置的文件不存在都是正常情况，不阻止运行。文件不是 UTF-8 文本、超过 64 KiB，或 Runner
+不可用时明确失败。自定义提示词存于 Project，限制为 32 KiB。运行时把最终
 内容作为 `repository-instructions` 实例级 `PromptAsset` 注入；独立 Chat 不加载 Project 指令。
 
 > **TODO 不跨会话共享**（`agent-core.md` §9.6）：A 会话勾掉的项在 B 会话里凭空消失，

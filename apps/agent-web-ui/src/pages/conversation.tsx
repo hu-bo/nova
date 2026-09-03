@@ -1,21 +1,5 @@
-import {
-  Composer,
-  DecisionPrompt,
-  MessageList,
-  RemoteExplorer,
-  TodoPanel,
-  type ComposerAttachment,
-  type ComposerSubmission,
-} from "@nova/chat-ui";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CornerDownLeft,
-  CornerDownRight,
-  FolderKanban,
-  MessageCircle,
-  Trash2,
-} from "lucide-react";
+import { Chat, type ComposerAttachment, type ComposerSubmission, type ChatFeedback } from "@nova/chat-ui";
+import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
@@ -120,24 +104,6 @@ function ConversationView({
     [attachments, runnerId],
   );
   useEffect(() => setAttachmentOpen(false), [runnerId]);
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key !== "Escape" ||
-        event.repeat ||
-        event.defaultPrevented ||
-        !store.state.isRunning ||
-        mutations.abortMutation.isPending ||
-        document.querySelector('[role="dialog"]')
-      )
-        return;
-      event.preventDefault();
-      void mutations.abort();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mutations, store.state.isRunning]);
-  const incompleteTodos = store.state.todos.filter((todo) => todo.status !== "completed").length;
   const contextUsage =
     store.state.contextUsage ??
     (selectedProfile
@@ -202,8 +168,46 @@ function ConversationView({
     return mutations.send(submission);
   }
 
+  const feedback: ChatFeedback[] = [];
+  if (store.state.error)
+    feedback.push({ id: "conversation", message: store.state.error, tone: "error", dismissible: true });
+  if (mutations.sendMutation.error)
+    feedback.push({ id: "send", message: errorMessage(mutations.sendMutation.error), tone: "error" });
+  if (mutations.abortMutation.error)
+    feedback.push({ id: "abort", message: `中断失败：${errorMessage(mutations.abortMutation.error)}`, tone: "error" });
+  if (mutations.compactMutation.error)
+    feedback.push({
+      id: "compact-error",
+      message: `压缩失败：${errorMessage(mutations.compactMutation.error)}`,
+      tone: "error",
+    });
+  if (mutations.clearMutation.error)
+    feedback.push({
+      id: "clear-error",
+      message: `清除上下文失败：${errorMessage(mutations.clearMutation.error)}`,
+      tone: "error",
+    });
+  if (compactNotice) feedback.push({ id: "compact-notice", message: compactNotice, tone: "info", dismissible: true });
+  if (clearNotice) feedback.push({ id: "clear-notice", message: clearNotice, tone: "info", dismissible: true });
+  if (attachmentError)
+    feedback.push({ id: "attachment", message: attachmentError, tone: "warning", dismissible: true });
+  if (mutations.decisionMutation.error)
+    feedback.push({ id: "decision", message: errorMessage(mutations.decisionMutation.error), tone: "error" });
+  if (mutations.steerMutation.error)
+    feedback.push({
+      id: "steer",
+      message: `调整方向失败：${errorMessage(mutations.steerMutation.error)}`,
+      tone: "error",
+    });
+  if (mutations.queuedRunMutation.error)
+    feedback.push({
+      id: "queued-run",
+      message: `待处理消息发送失败：${errorMessage(mutations.queuedRunMutation.error)}`,
+      tone: "error",
+    });
+
   return (
-    <div className="nova-chat nova-conversation-viewport flex min-h-0 overflow-hidden bg-slate-50">
+    <div className="nova-conversation-viewport flex min-h-0 overflow-hidden bg-slate-50">
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex min-h-12 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-5">
           <Link
@@ -235,293 +239,124 @@ function ConversationView({
           </div>
         )}
 
-        <div
-          className={`grid min-h-0 flex-1 overflow-hidden  bg-white ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}
-        >
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
-            <div className="relative min-h-0 flex-1 overflow-hidden px-1 py-1 sm:px-0">
-              {store.state.messages.length ? (
-                <MessageList messages={store.state.messages} onRetry={(messageId) => void mutations.retry(messageId)} />
-              ) : (
-                <div className="grid h-full place-items-center">
-                  <EmptyState
-                    icon={project ? <FolderKanban className="size-5" /> : <MessageCircle className="size-5" />}
-                    title={project ? "告诉 Agent 想完成的目标" : "从一个问题开始"}
-                    description={
-                      project
-                        ? `Agent 将在 ${project.workspace ? displayWorkspacePath(project.workspace) : "当前 workspace"} 中工作，过程会实时显示在这里。`
-                        : "可以讨论方案、分析代码或制定多步计划。"
-                    }
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="min-w-0 shrink-0 overflow-visible  border-slate-200 bg-white px-3 pb-0 pt-1 sm:px-4 sm:pb-1.5">
-              {incompleteTodos > 0 && (
-                <div className="mb-2 xl:hidden">
-                  <TodoPanel items={store.state.todos} collapsed />
-                </div>
-              )}
-              {store.state.error && (
-                <div
-                  className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
-                  role="alert"
-                >
-                  <span>{store.state.error}</span>
-                  <button
-                    type="button"
-                    className="font-semibold"
-                    onClick={() => store.dispatch({ type: "clear-error" })}
-                  >
-                    关闭
-                  </button>
-                </div>
-              )}
-              {mutations.sendMutation.error && (
-                <div
-                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
-                  role="alert"
-                >
-                  {errorMessage(mutations.sendMutation.error)}
-                </div>
-              )}
-              {mutations.abortMutation.error && (
-                <div
-                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
-                  role="alert"
-                >
-                  中断失败：{errorMessage(mutations.abortMutation.error)}
-                </div>
-              )}
-              {mutations.compactMutation.error && (
-                <div
-                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
-                  role="alert"
-                >
-                  压缩失败：{errorMessage(mutations.compactMutation.error)}
-                </div>
-              )}
-              {mutations.clearMutation.error && (
-                <div
-                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
-                  role="alert"
-                >
-                  清除上下文失败：{errorMessage(mutations.clearMutation.error)}
-                </div>
-              )}
-              {compactNotice && (
-                <div
-                  className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm text-indigo-800 ring-1 ring-indigo-200"
-                  role="status"
-                >
-                  <span>{compactNotice}</span>
-                  <button type="button" className="font-semibold" onClick={() => setCompactNotice(null)}>
-                    关闭
-                  </button>
-                </div>
-              )}
-              {clearNotice && (
-                <div
-                  className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm text-indigo-800 ring-1 ring-indigo-200"
-                  role="status"
-                >
-                  <span>{clearNotice}</span>
-                  <button type="button" className="font-semibold" onClick={() => setClearNotice(null)}>
-                    关闭
-                  </button>
-                </div>
-              )}
-              {attachmentError && (
-                <div
-                  className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200"
-                  role="alert"
-                >
-                  <span>{attachmentError}</span>
-                  <button type="button" className="font-semibold" onClick={() => setAttachmentError(null)}>
-                    关闭
-                  </button>
-                </div>
-              )}
-              {mutations.decisionMutation.error && (
-                <div
-                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
-                  role="alert"
-                >
-                  {errorMessage(mutations.decisionMutation.error)}
-                </div>
-              )}
-              {mutations.steerMutation.error && (
-                <div
-                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
-                  role="alert"
-                >
-                  调整方向失败：{errorMessage(mutations.steerMutation.error)}
-                </div>
-              )}
-              {mutations.queuedRunMutation.error && (
-                <div
-                  className="mb-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 ring-1 ring-rose-200"
-                  role="alert"
-                >
-                  待处理消息发送失败：{errorMessage(mutations.queuedRunMutation.error)}
-                </div>
-              )}
-              {(store.state.connection === "connecting" || store.state.connection === "reconnecting") && (
-                <div
-                  className="mb-2 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200"
-                  role="status"
-                >
-                  {store.state.connection === "connecting" ? "正在连接实时消息流" : "实时消息流已断开，正在重连"}
-                </div>
-              )}
-              {store.state.pendingDecision && (
-                <div className="mb-2">
-                  <DecisionPrompt
-                    request={store.state.pendingDecision}
-                    disabled={mutations.decisionMutation.isPending}
-                    onResolve={mutations.resolveDecision}
-                    onAbort={() => mutations.abort()}
-                    isAborting={mutations.abortMutation.isPending}
-                  />
-                </div>
-              )}
-              {store.state.queuedMessages.length > 0 && (
-                <div className="relative z-0 mx-4 -mb-3 overflow-hidden rounded-t-2xl border border-b-0 border-slate-200 bg-white pb-3 shadow-sm sm:mx-5">
-                  <div className="agent-scrollbar max-h-44 overflow-x-hidden overflow-y-auto overscroll-contain">
-                    {store.state.queuedMessages.map((queued) => {
-                      const { message } = queued;
-                      const text = message.blocks.find((block) => block.type === "text")?.text ?? "待处理消息";
-                      const steering =
-                        mutations.steerMutation.isPending &&
-                        mutations.steerMutation.variables?.message.id === message.id;
-                      return (
-                        <div
-                          key={message.id}
-                          className="flex min-h-11 min-w-0 items-center gap-2 overflow-hidden border-b border-slate-100 px-3.5 text-sm last:border-b-0"
-                        >
-                          <CornerDownRight className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                          <span className="min-w-0 flex-1 truncate text-slate-800">{text}</span>
-                          <button
-                            type="button"
-                            disabled={mutations.steerMutation.isPending}
-                            onClick={() => void mutations.steerQueued(message.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-45"
-                          >
-                            <CornerDownLeft className="size-3" aria-hidden="true" />
-                            {steering ? "正在调整" : "调整方向"}
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="删除待处理消息"
-                            disabled={mutations.steerMutation.isPending}
-                            onClick={() => mutations.removeQueued(message.id)}
-                            className="grid size-7 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-45"
-                          >
-                            <Trash2 className="size-3.5" aria-hidden="true" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              <div className="relative z-10">
-                <Composer
-                  disabled={
-                    mutations.sendMutation.isPending ||
-                    mutations.compactMutation.isPending ||
-                    mutations.clearMutation.isPending
-                  }
-                  isRunning={store.state.isRunning}
-                  isAborting={mutations.abortMutation.isPending}
-                  onAbort={() => mutations.abort()}
-                  allowFiles
-                  attachments={attachments}
-                  onAttachmentsChange={setAttachments}
-                  onAttachmentButtonClick={() => {
-                    if (!runnerId) {
-                      setAttachmentError(
-                        "请先为当前会话选择 Runner，再从 Runner 中添加附件。你仍可将本地文件拖到输入框中。",
-                      );
-                      return;
-                    }
-                    setAttachmentError(null);
-                    setAttachmentOpen(true);
-                  }}
-                  placeholder={project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行"}
-                  models={modelOptions}
-                  model={modelProfileId}
-                  skills={composerSkills}
-                  contextUsage={contextUsage}
-                  onSkillInvoke={async (skill) => {
-                    if (skill.id === "compact") {
-                      setCompactNotice(null);
-                      const result = await mutations.compact();
-                      setCompactNotice(
-                        result.compacted ? "上下文已压缩，占用将在下一次模型请求后更新。" : "当前没有可压缩的上下文。",
-                      );
-                      return;
-                    }
-                    if (skill.id === "clear") {
-                      setClearNotice(null);
-                      await mutations.clear();
-                      setClearNotice("上下文已清除；历史消息仍保留在当前会话中。");
-                    }
-                  }}
-                  onModelChange={(id) => {
-                    SELECTED_MODEL_STORE.set(id);
-                    setStoredProfileId(id);
-                  }}
-                  reasoningEfforts={reasoningEfforts}
-                  reasoningEffort={reasoningEffort}
-                  onReasoningEffortChange={(value) => {
-                    SELECTED_REASONING_STORE.set(value);
-                    setStoredReasoning(value);
-                  }}
-                  onSubmit={submit}
-                />
-              </div>
-            </div>
-          </div>
-
-          {incompleteTodos > 0 && (
-            <aside className="agent-scrollbar hidden min-h-0 overflow-x-hidden overflow-y-auto border-l border-slate-200 bg-white p-3 xl:block">
-              <div className="sticky top-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">当前计划</p>
-                <TodoPanel items={store.state.todos} />
-              </div>
-            </aside>
-          )}
-        </div>
-      </section>
-
-      <RemoteExplorer
-        open={attachmentOpen}
-        onClose={() => setAttachmentOpen(false)}
-        loadDirectory={loadDirectory}
-        mode="file"
-        multiple
-        initialPath={project?.workspace ?? undefined}
-        selectedPaths={selectedRunnerAttachmentPaths}
-        onConfirm={(entries) => {
-          setAttachments((current) => {
-            const merged = new Map(current.map((attachment) => [attachment.id, attachment]));
-            for (const entry of entries) {
-              const id = `${runnerId}:${entry.path}`;
-              merged.set(id, {
-                id,
-                name: entry.name,
-                description: entry.path,
-                metadata: { runnerId, path: entry.path },
+        <Chat
+          state={{
+            messages: store.state.messages,
+            todos: store.state.todos,
+            queuedMessages: store.state.queuedMessages.map(({ message }) => ({
+              id: message.id,
+              text: message.blocks.find((block) => block.type === "text")?.text ?? "待处理消息",
+              isSteering:
+                mutations.steerMutation.isPending && mutations.steerMutation.variables?.message.id === message.id,
+            })),
+            pendingDecision: store.state.pendingDecision,
+            connection: store.state.connection,
+            isRunning: store.state.isRunning,
+            isAborting: mutations.abortMutation.isPending,
+            isResolvingDecision: mutations.decisionMutation.isPending,
+            isSteeringQueuedMessage: mutations.steerMutation.isPending,
+            feedback,
+          }}
+          composer={{
+            disabled:
+              mutations.sendMutation.isPending ||
+              mutations.compactMutation.isPending ||
+              mutations.clearMutation.isPending,
+            allowFiles: true,
+            attachments,
+            onAttachmentsChange: setAttachments,
+            onAttachmentButtonClick: () => {
+              if (!runnerId) {
+                setAttachmentError("请先为当前会话选择 Runner，再从 Runner 中添加附件。你仍可将本地文件拖到输入框中。");
+                return;
+              }
+              setAttachmentError(null);
+              setAttachmentOpen(true);
+            },
+            placeholder: project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行",
+            models: modelOptions,
+            model: modelProfileId,
+            skills: composerSkills,
+            contextUsage,
+            onSkillInvoke: async (skill) => {
+              if (skill.id === "compact") {
+                setCompactNotice(null);
+                const result = await mutations.compact();
+                setCompactNotice(
+                  result.compacted ? "上下文已压缩，占用将在下一次模型请求后更新。" : "当前没有可压缩的上下文。",
+                );
+                return;
+              }
+              if (skill.id === "clear") {
+                setClearNotice(null);
+                await mutations.clear();
+                setClearNotice("上下文已清除；历史消息仍保留在当前会话中。");
+              }
+            },
+            onModelChange: (id) => {
+              SELECTED_MODEL_STORE.set(id);
+              setStoredProfileId(id);
+            },
+            reasoningEfforts,
+            reasoningEffort,
+            onReasoningEffortChange: (value) => {
+              SELECTED_REASONING_STORE.set(value);
+              setStoredReasoning(value);
+            },
+          }}
+          actions={{
+            onSubmit: submit,
+            onAbort: mutations.abort,
+            onRetryMessage: (messageId) => void mutations.retry(messageId),
+            onResolveDecision: mutations.resolveDecision,
+            onRemoveQueuedMessage: mutations.removeQueued,
+            onSteerQueuedMessage: mutations.steerQueued,
+            onDismissFeedback: (id) => {
+              if (id === "conversation") store.dispatch({ type: "clear-error" });
+              if (id === "compact-notice") setCompactNotice(null);
+              if (id === "clear-notice") setClearNotice(null);
+              if (id === "attachment") setAttachmentError(null);
+            },
+          }}
+          emptyState={
+            <EmptyState
+              icon={project ? <FolderKanban className="size-5" /> : <MessageCircle className="size-5" />}
+              title={project ? "告诉 Agent 想完成的目标" : "从一个问题开始"}
+              description={
+                project
+                  ? `Agent 将在 ${project.workspace ? displayWorkspacePath(project.workspace) : "当前 workspace"} 中工作，过程会实时显示在这里。`
+                  : "可以讨论方案、分析代码或制定多步计划。"
+              }
+            />
+          }
+          explorer={{
+            open: attachmentOpen,
+            onClose: () => setAttachmentOpen(false),
+            loadDirectory,
+            mode: "file",
+            multiple: true,
+            initialPath: project?.workspace ?? undefined,
+            selectedPaths: selectedRunnerAttachmentPaths,
+            onConfirm: (entries) => {
+              setAttachments((current) => {
+                const merged = new Map(current.map((attachment) => [attachment.id, attachment]));
+                for (const entry of entries) {
+                  const id = `${runnerId}:${entry.path}`;
+                  merged.set(id, {
+                    id,
+                    name: entry.name,
+                    description: entry.path,
+                    metadata: { runnerId, path: entry.path },
+                  });
+                }
+                return [...merged.values()].slice(0, 10);
               });
-            }
-            return [...merged.values()].slice(0, 10);
-          });
-          setAttachmentOpen(false);
-        }}
-        title="从 Runner 添加附件"
-      />
+              setAttachmentOpen(false);
+            },
+            title: "从 Runner 添加附件",
+          }}
+        />
+      </section>
 
       <Dialog
         open={Boolean(runnerWarning)}

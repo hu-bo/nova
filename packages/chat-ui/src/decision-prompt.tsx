@@ -125,7 +125,7 @@ export function DecisionPrompt({
         : resolved.answers.join("、");
     return (
       <Card
-        className="nova-decision-resolved flex-row items-center gap-2.5 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 ring-emerald-200/80 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900"
+        className="nova-decision-resolved nova-chat-content flex-row items-center gap-2.5 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 ring-emerald-200/80 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900"
         aria-label="已处理的决定"
       >
         <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
@@ -142,7 +142,7 @@ export function DecisionPrompt({
     return (
       <Card
         data-kind="approval"
-        className="nova-decision-prompt nova-approval-prompt min-w-0 max-w-full overflow-hidden bg-indigo-50/80 text-indigo-950 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-50 dark:ring-indigo-800"
+        className="nova-decision-prompt nova-chat-content nova-approval-prompt min-w-0 overflow-hidden bg-indigo-50/80 text-indigo-950 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-50 dark:ring-indigo-800"
         role="region"
         aria-labelledby={`${request.decisionId}-title`}
       >
@@ -230,7 +230,7 @@ export function DecisionPrompt({
   return (
     <Card
       data-kind="question"
-      className="nova-decision-prompt"
+      className="nova-decision-prompt nova-chat-content"
       role="region"
       aria-labelledby={`${question.decisionId}-title`}
     >

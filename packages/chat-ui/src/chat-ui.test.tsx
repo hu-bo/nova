@@ -4,6 +4,7 @@ import type { ChatMessage } from "@nova/protocol";
 import { ComposerSkillMenu } from "./composer-skill-menu.js";
 import {
   BlockView,
+  Chat,
   Composer,
   DecisionPrompt,
   MessageList,
@@ -15,6 +16,56 @@ import {
 } from "./index.js";
 
 describe("chat-ui", () => {
+  it("composes the controlled chat surface on one shared content rail", () => {
+    const html = renderToStaticMarkup(
+      <Chat
+        state={{
+          messages: [
+            {
+              id: "message-1",
+              conversationId: "conversation-1",
+              role: "assistant",
+              status: "done",
+              createdAt: 1,
+              blocks: [{ type: "text", text: "已完成" }],
+            },
+          ],
+          todos: [{ id: "todo-1", text: "验证结果", status: "in_progress" }],
+          queuedMessages: [{ id: "queued-1", text: "继续处理", isSteering: true }],
+          pendingDecision: {
+            kind: "approval",
+            decisionId: "decision-1",
+            toolName: "write_file",
+            args: { path: "src/a.ts" },
+            risk: "write",
+          },
+          connection: "reconnecting",
+          isRunning: true,
+          feedback: [{ id: "notice-1", message: "上下文已压缩", tone: "info", dismissible: true }],
+        }}
+        composer={{ placeholder: "继续对话" }}
+        actions={{
+          onSubmit: () => undefined,
+          onAbort: () => undefined,
+          onResolveDecision: () => undefined,
+          onRemoveQueuedMessage: () => undefined,
+          onSteerQueuedMessage: () => undefined,
+          onDismissFeedback: () => undefined,
+        }}
+      />,
+    );
+
+    expect(html).toContain("nova-chat-view");
+    expect(html).toContain("nova-chat-content");
+    expect(html).toContain("已完成");
+    expect(html).toContain("需要授权");
+    expect(html).toContain("正在调整");
+    expect(html).toContain("验证结果");
+    expect(html).toContain("实时消息流已断开，正在重连");
+    expect(html).toContain("上下文已压缩");
+    expect(html).toContain("继续对话");
+  });
+
   it("renders markdown and structured code", () => {
     const markdown = renderToStaticMarkup(<BlockView block={{ type: "text", text: "**完成**" }} />);
     const fencedCode = renderToStaticMarkup(<BlockView block={{ type: "text", text: "```text\n.\n└── src/\n```" }} />);
@@ -104,6 +155,22 @@ describe("chat-ui", () => {
     expect(html).toContain("ship");
   });
 
+  it("shows the command and arguments in a bash tool summary", () => {
+    const html = renderToStaticMarkup(
+      <BlockView
+        block={{
+          type: "tool_call",
+          callId: "call-1",
+          name: "bash",
+          args: { command: "pnpm", args: ["test", "--runInBand"] },
+          status: "ok",
+        }}
+      />,
+    );
+
+    expect(html).toContain('title="pnpm test --runInBand">pnpm test --runInBand</span>');
+  });
+
   it("renders tool output as plain preformatted text instead of file controls", () => {
     const html = renderToStaticMarkup(
       <MessageList
@@ -127,7 +194,7 @@ describe("chat-ui", () => {
         ]}
       />,
     );
-    expect(html).toContain('<pre class="m-0 max-h-80');
+    expect(html).toContain('<pre class="nova-scrollbar m-0 max-h-80');
     expect(html).toContain("&quot;build.rs&quot;");
     expect(html).not.toContain("nova-file-block");
   });

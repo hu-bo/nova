@@ -153,6 +153,11 @@ interface ConversationState {
 `project` **不在这里** —— 它是路由参数派生的，属于上层的 project 上下文，
 不随对话变化。放进来就会出现"切会话时 project 短暂为 null"的闪烁。
 
+会话页面负责把 Query、Zustand 投影、mutation 状态、模型设置和 Runner 规则映射为
+`@nova/chat-ui` 的 `ChatState`、`ChatComposerConfig` 与 `ChatActions`。消息、Decision、队列、
+TODO、反馈和 Composer 的 DOM 组合及响应式布局由高层 `<Chat>` 统一拥有。页面不得重新拼装这些
+低层组件，也不得把业务 store、mutation 或 Runner 类型传入 `chat-ui`。
+
 **技术选型**：Zustand 维护按 conversation id 隔离的会话状态。路由只选择当前会话，
 不拥有流状态；切换路由时，运行中的会话 SSE 必须继续接收事件。不上 Redux / RTK / Saga。
 

@@ -1,6 +1,6 @@
 # chat-ui
 
-> `packages/chat-ui` — Block 渲染组件库。**纯展示：无网络、无存储、无全局状态。**
+> `packages/chat-ui` — 受控 Chat 展示组件与底层 Block 渲染组件库。**纯展示：无网络、无存储、无全局状态。**
 > 结构契约见 `repo-layout.md` §4.8。Phase 2。
 
 ---
@@ -17,6 +17,7 @@
 - Composer 文本草稿、提交编排、模型和推理强度选择
 - 仅在草稿第一个字符为 `/` 时展示宿主提供的 Skill 候选，并展示宿主提供的上下文占用
 - `RemoteExplorer`：由宿主提供目录数据的远程文件 / 目录选择弹窗
+- `Chat`：组合消息流、Decision、待处理消息、TODO、反馈与 Composer 的高层受控界面
 - **实例级渲染覆盖**：宿主可替换某种已知 block 的默认渲染
 
 **不负责**（全部属于宿主 `agent-web-ui`）
@@ -141,6 +142,15 @@ Skill 候选同样由宿主提供，`chat-ui` 不读取 Skill 注册表，也不
 **所有交互通过 props 回调上抛，组件自己不发请求。** 这是“纯展示”的可检验定义：
 消息、Decision、Composer 和 RemoteExplorer 都只能调用各自声明的 props 回调，没有隐式对外通路。
 
+高层 `Chat` 是宿主默认使用的组合边界。它拥有聊天区域的布局、响应式 TODO 区域、内容轨道、
+连接状态提示和各子组件间的交互分发；宿主传入 `ChatState`、`ChatComposerConfig` 与语义明确的
+`ChatActions`。`Chat` 不接收 query、mutation、store、Runner 或路由对象，也不通过一个宽泛的
+`onChange(nextState)` 反向接管业务状态。低层组件继续导出，用于独立测试和确有差异的组合场景。
+
+内容轨道由 `.nova-chat` 上的 `--nova-chat-content-max-width` 唯一控制，默认 `56rem`。
+`MessageList`、`DecisionPrompt` 与 `Composer` 统一消费 `.nova-chat-content`，宿主若需调整，只能在
+`.nova-chat` 边界覆盖变量，不能分别给子组件维护宽度。
+
 `TodoPanel` **没有 `onToggle`**：TODO 只能由 agent 通过 `todo_write` 修改
 （`agent-core.md` §9.4 的唯一 owner 规则）。给用户一个勾选框会立刻产生
 "用户勾了但模型不知道"的状态分裂。用户想改计划就直接说。
@@ -228,6 +238,7 @@ SSE ──► agent-web-ui 的 reducer ──► ChatMessage[] ──► <Messag
 ```text
 packages/chat-ui/src/
 ├── index.ts
+├── chat.tsx                # 高层受控 Chat 组合边界
 ├── types.ts
 ├── message-list.tsx
 ├── block-view.tsx        # 分发 + 注册表

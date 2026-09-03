@@ -51,6 +51,17 @@ function formatSize(chars: number): string {
   return `${(chars / 1024).toFixed(1)} KB`;
 }
 
+function getCallSummary(call: ExtractBlock<"tool_call">): string | undefined {
+  if (!call.args || typeof call.args !== "object") return undefined;
+
+  if (call.name === "bash" && "command" in call.args && typeof call.args.command === "string") {
+    const args = "args" in call.args && Array.isArray(call.args.args) ? call.args.args : [];
+    return [call.args.command, ...args.map(String)].join(" ");
+  }
+
+  return "path" in call.args && typeof call.args.path === "string" ? call.args.path : undefined;
+}
+
 function Section({
   label,
   badge,
@@ -111,10 +122,7 @@ export function ToolBlock({
   const argsText = formatArgs(call.args);
   const output = result ? truncateOutput(formatOutput(result.blocks)) : "";
   const isRunning = status === "running";
-  const path =
-    call.args && typeof call.args === "object" && "path" in call.args && typeof call.args.path === "string"
-      ? call.args.path
-      : undefined;
+  const summary = getCallSummary(call);
 
   return (
     <details
@@ -130,9 +138,9 @@ export function ToolBlock({
         <TerminalSquare className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <strong className="shrink-0 font-mono font-medium text-slate-700 dark:text-slate-300">{call.name}</strong>
-          {path && (
-            <span className="min-w-0 truncate font-mono text-[11px] text-slate-500 dark:text-slate-400" title={path}>
-              {path}
+          {summary && (
+            <span className="min-w-0 truncate font-mono text-[11px] text-slate-500 dark:text-slate-400" title={summary}>
+              {summary}
             </span>
           )}
         </div>

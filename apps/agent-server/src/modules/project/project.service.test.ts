@@ -73,3 +73,23 @@ it("auto-detects CLAUDE.md when the workspace root has no AGENTS.md", async () =
   ).resolves.toBe("Claude rules");
   expect(reads).toEqual(["/work/nova/AGENTS.md", "/work/nova/CLAUDE.md"]);
 });
+
+it("ignores a missing explicitly configured instruction file", async () => {
+  const store = createMemoryStore();
+  const runners = {
+    async readFileIfExists() {
+      return null;
+    },
+  } as unknown as RunnerRegistry;
+  const project = await store.createProject({ userId: "alice", name: "Nova" });
+  await store.bindProject({ userId: "alice", id: project.id, runnerId: "runner-1", workspace: "/work/nova" });
+  await store.updateProjectInstructions({
+    userId: "alice",
+    id: project.id,
+    instructions: { source: "agents", directory: "." },
+  });
+
+  await expect(
+    loadProjectInstructions(await store.getProject({ userId: "alice", id: project.id }), "alice", runners),
+  ).resolves.toBeUndefined();
+});

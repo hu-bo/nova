@@ -51,8 +51,8 @@ export async function loadProjectInstructions(
   if (project.instructions.source === "custom") return project.instructions.content;
   if (project.instructions.source === "auto") {
     return (
-      (await readInstructionFile(project, userId, runners, { source: "agents", directory: "." }, true)) ??
-      (await readInstructionFile(project, userId, runners, { source: "claude", directory: "." }, true))
+      (await readInstructionFile(project, userId, runners, { source: "agents", directory: "." })) ??
+      (await readInstructionFile(project, userId, runners, { source: "claude", directory: "." }))
     );
   }
   return readInstructionFile(project, userId, runners, project.instructions);
@@ -83,7 +83,6 @@ async function readInstructionFile(
   userId: string,
   runners: RunnerRegistry,
   instructions: Extract<ProjectInstructions, { source: "agents" | "claude" }>,
-  optional = false,
 ): Promise<string | undefined> {
   if (!project.runnerId || !project.workspace) throw runnerUnavailable("Bind a runner workspace before using a file");
   const flavor =
@@ -101,10 +100,7 @@ async function readInstructionFile(
     MAX_INSTRUCTION_FILE_SIZE,
     project.workspace,
   );
-  if (!file) {
-    if (optional) return undefined;
-    throw invalidInput(`${filename} was not found in the configured directory`);
-  }
+  if (!file) return undefined;
   let content: string;
   try {
     content = new TextDecoder("utf-8", { fatal: true }).decode(file.data);

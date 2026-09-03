@@ -1152,6 +1152,57 @@ describe("decision", () => {
     const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
     expect(textOf(results[0]!.content)).toBe("- alpha");
   });
+
+  it("同一批多个 ask_user 按顺序提问，后一个不覆盖前一个", async () => {
+    const seen: string[] = [];
+    const answer: Array<(value: string) => void> = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const { stream } = scripted([
+      toolEvents([
+        { name: "ask_user", args: { question: "first" } },
+        { name: "ask_user", args: { question: "second" } },
+        { name: "ask_user", args: { question: "third" } },
+      ]),
+      textEvents("thanks"),
+    ]);
+    const { agent, storage } = setup(stream, {
+      decide: (request) => {
+        if (request.kind !== "question") return Promise.resolve({ kind: "approval", decision: "deny" });
+        seen.push(request.question);
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        return new Promise<DecisionResponse>((resolve) => {
+          answer.push((value) => {
+            inFlight -= 1;
+            resolve({ kind: "question", answers: [value] });
+          });
+        });
+      },
+    });
+
+    const run = agent.prompt("go");
+    await waitFor(() => seen.length === 1);
+    expect(seen).toEqual(["first"]);
+    expect(agent.state.pendingDecision).toMatchObject({ kind: "question", question: "first" });
+
+    answer[0]!("one");
+    await waitFor(() => seen.length === 2);
+    expect(seen).toEqual(["first", "second"]);
+    expect(agent.state.pendingDecision).toMatchObject({ kind: "question", question: "second" });
+
+    answer[1]!("two");
+    await waitFor(() => seen.length === 3);
+    expect(seen).toEqual(["first", "second", "third"]);
+    expect(agent.state.pendingDecision).toMatchObject({ kind: "question", question: "third" });
+
+    answer[2]!("three");
+    const result = await run;
+    expect(result.stopReason).toBe("done");
+    expect(maxInFlight).toBe(1);
+    const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
+    expect(results.map((item) => textOf(item.content))).toEqual(["- one", "- two", "- three"]);
+  });
 });
 
 // —— Hooks（§4.3）——

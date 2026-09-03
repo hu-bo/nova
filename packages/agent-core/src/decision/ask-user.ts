@@ -23,6 +23,8 @@ export function askUserTool(
     description: "向用户提问并等待回答。只用于确实需要用户决策、你无法自行判断的情况；能自己判断的不要问。",
     schema: askInput,
     risk: "none",
+    // UI 与 AgentState 都只有一个 pendingDecision；同一批多个问题必须逐个展示，不能互相覆盖。
+    executionMode: "sequential",
     async execute(args, ctx) {
       const answers = await ask(
         { question: args.question, options: args.options, multiSelect: args.multiSelect },

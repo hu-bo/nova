@@ -490,6 +490,10 @@ type Decide = (req: DecisionRequest, signal: AbortSignal) => Promise<DecisionRes
 
 **agent-core 只依赖 `Decide` 这一个回调。** 这保证了无 server 也能完整跑通。
 
+同一 tool batch 中的人类提问必须按模型给出的顺序逐个执行。`ask_user` 是
+`sequential` tool：前一个问题解决后才发出下一个，保证 `pendingDecision` 始终只有一个 owner，
+也避免后发问题覆盖当前弹窗。
+
 | 场景 | `Decide` 实现 |
 |---|---|
 | 集成测试 / CLI | 自动策略：按 `risk` 放行，问题走预设答案 |

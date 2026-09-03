@@ -480,13 +480,15 @@ Runner Module 依赖 Runner SDK，反向依赖禁止。它不拥有第二套传�
 
 ### 4.8 `packages/chat-ui`
 
-Block 渲染组件库。**纯展示：无网络、无存储、无全局状态。**
+受控 Chat 展示组件与底层 Block 渲染组件库。**纯展示：无网络、无存储、无全局状态。**
 
 **负责**
 
 - Block 渲染器：`Text` / `Thinking` / `Code` / `ToolCall` / `ToolResult` / `Diff` / `File` / `Todo` / `Error`
+- 高层 `Chat`：统一组合消息、Decision、待处理消息、TODO、反馈、Composer 与 RemoteExplorer
 - Decision 交互组件：审批卡片、反问选项（对应 4.1.4 的 `DecisionRequest`）
 - 消息列表与流式增量渲染
+- 内容轨道与响应式布局；宽度由 `.nova-chat` 的 CSS 变量唯一控制
 - 实例级 `renderers?: BlockRenderers`：宿主显式注入自定义 block 渲染器
 
 **不负责**
@@ -501,6 +503,7 @@ Block 渲染组件库。**纯展示：无网络、无存储、无全局状态。
 **对外 API 面**
 
 ```tsx
+<Chat state={ChatState} composer={ChatComposerConfig} actions={ChatActions} explorer?={RemoteExplorerProps} />
 <MessageList messages={ChatMessage[]} renderers?={BlockRenderers} onOpenPath?={callback} />
 <BlockView block={Block} renderers?={BlockRenderers} onOpenPath?={callback} />
 <DecisionPrompt request={DecisionRequest} onResolve={(r: DecisionResponse) => void | Promise<void>} />
@@ -934,7 +937,7 @@ Runner 永远只报告事实（Failed / TimedOut），不做重试决策。
 ### Phase 2：产品链路
 
 - `packages/protocol`
-- `packages/chat-ui`：Block 渲染器 + Decision 交互组件 + 渲染注册表
+- `packages/chat-ui`：受控 Chat 组合界面 + Block 渲染器 + Decision 交互组件 + 实例级渲染覆盖
 - `apps/agent-server`：HTTP + SSE + Casdoor 鉴权 + PG 持久化 + Runner Module + Projection + Decide 实现
 - `apps/agent-web-ui`：应用外壳 + SSE 订阅 + 状态管理，Chat 渲染复用 `chat-ui`
 - `apps/model-gateway`：密钥托管 / 模型映射 / 计量 / 配额，暴露 OpenAI / Anthropic 兼容接口

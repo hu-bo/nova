@@ -212,6 +212,15 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     };
   }
 
+  const systemPrompt = (() => {
+    const prompt = assembleSystem(userId, config.systemPrompt);
+    if (process.env.NODE_ENV !== "production") {
+      const estimate = tokenEstimator.estimateText(prompt);
+      console.debug(`system prompt token estimate: ${estimate.tokens}`);
+    }
+    return prompt;
+  })();
+
   const host: LoopHost = {
     storage: config.storage,
     sessionId,
@@ -222,7 +231,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     maxTurns: config.maxTurns ?? 100,
     toolConcurrency: config.toolConcurrency ?? 8,
     toolTimeoutMs: config.toolTimeoutMs ?? 120_000,
-    systemPrompt: assembleSystem(userId, config.systemPrompt),
+    systemPrompt,
     tokenEstimator,
     queues,
     runId: () => runId,
