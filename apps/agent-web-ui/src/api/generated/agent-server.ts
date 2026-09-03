@@ -1378,6 +1378,26 @@ export type ListAvailableModels401 = {
   requestId?: string;
 };
 
+export type ListProjects200ItemInstructions = {
+  source: 'auto';
+} | {
+  source: 'none';
+} | {
+  source: 'agents' | 'claude';
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  directory: string;
+} | {
+  source: 'custom';
+  /**
+     * @minLength 1
+     * @maxLength 32768
+     */
+  content: string;
+};
+
 export type ListProjects200ItemRunnerState = typeof ListProjects200ItemRunnerState[keyof typeof ListProjects200ItemRunnerState];
 
 
@@ -1403,6 +1423,7 @@ export type ListProjects200Item = {
      * @nullable
      */
   runnerId: string | null;
+  instructions: ListProjects200ItemInstructions;
   runnerState: ListProjects200ItemRunnerState;
   /**
      * @minimum 0
@@ -1423,6 +1444,26 @@ export type CreateProjectBody = {
      * @maxLength 80
      */
   name: string;
+};
+
+export type CreateProject201Instructions = {
+  source: 'auto';
+} | {
+  source: 'none';
+} | {
+  source: 'agents' | 'claude';
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  directory: string;
+} | {
+  source: 'custom';
+  /**
+     * @minLength 1
+     * @maxLength 32768
+     */
+  content: string;
 };
 
 export type CreateProject201RunnerState = typeof CreateProject201RunnerState[keyof typeof CreateProject201RunnerState];
@@ -1450,6 +1491,7 @@ export type CreateProject201 = {
      * @nullable
      */
   runnerId: string | null;
+  instructions: CreateProject201Instructions;
   runnerState: CreateProject201RunnerState;
   /**
      * @minimum 0
@@ -1470,12 +1512,130 @@ export type CreateProject401 = {
   requestId?: string;
 };
 
+export type SetProjectInstructionsBody = {
+  source: 'auto';
+} | {
+  source: 'none';
+} | {
+  source: 'agents' | 'claude';
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  directory: string;
+} | {
+  source: 'custom';
+  /**
+     * @minLength 1
+     * @maxLength 32768
+     */
+  content: string;
+};
+
+export type SetProjectInstructions200Instructions = {
+  source: 'auto';
+} | {
+  source: 'none';
+} | {
+  source: 'agents' | 'claude';
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  directory: string;
+} | {
+  source: 'custom';
+  /**
+     * @minLength 1
+     * @maxLength 32768
+     */
+  content: string;
+};
+
+export type SetProjectInstructions200RunnerState = typeof SetProjectInstructions200RunnerState[keyof typeof SetProjectInstructions200RunnerState];
+
+
+export const SetProjectInstructions200RunnerState = {
+  ready: 'ready',
+  busy: 'busy',
+  draining: 'draining',
+  disconnected: 'disconnected',
+} as const;
+
+export type SetProjectInstructions200 = {
+  /** @minLength 1 */
+  id: string;
+  /** @minLength 1 */
+  name: string;
+  /**
+     * @minLength 1
+     * @nullable
+     */
+  workspace: string | null;
+  /**
+     * @minLength 1
+     * @nullable
+     */
+  runnerId: string | null;
+  instructions: SetProjectInstructions200Instructions;
+  runnerState: SetProjectInstructions200RunnerState;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  createdAt: number;
+};
+
+export type SetProjectInstructions400 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type SetProjectInstructions401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type SetProjectInstructions404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type SetProjectInstructions409 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
 export type UpdateProjectBody = {
   /**
      * @minLength 1
      * @maxLength 80
      */
   name: string;
+};
+
+export type UpdateProject200Instructions = {
+  source: 'auto';
+} | {
+  source: 'none';
+} | {
+  source: 'agents' | 'claude';
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  directory: string;
+} | {
+  source: 'custom';
+  /**
+     * @minLength 1
+     * @maxLength 32768
+     */
+  content: string;
 };
 
 export type UpdateProject200RunnerState = typeof UpdateProject200RunnerState[keyof typeof UpdateProject200RunnerState];
@@ -1503,6 +1663,7 @@ export type UpdateProject200 = {
      * @nullable
      */
   runnerId: string | null;
+  instructions: UpdateProject200Instructions;
   runnerState: UpdateProject200RunnerState;
   /**
      * @minimum 0
@@ -1554,6 +1715,26 @@ export type BindProjectWorkspaceBody = {
   path: string;
 };
 
+export type BindProjectWorkspace200Instructions = {
+  source: 'auto';
+} | {
+  source: 'none';
+} | {
+  source: 'agents' | 'claude';
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  directory: string;
+} | {
+  source: 'custom';
+  /**
+     * @minLength 1
+     * @maxLength 32768
+     */
+  content: string;
+};
+
 export type BindProjectWorkspace200RunnerState = typeof BindProjectWorkspace200RunnerState[keyof typeof BindProjectWorkspace200RunnerState];
 
 
@@ -1579,6 +1760,7 @@ export type BindProjectWorkspace200 = {
      * @nullable
      */
   runnerId: string | null;
+  instructions: BindProjectWorkspace200Instructions;
   runnerState: BindProjectWorkspace200RunnerState;
   /**
      * @minimum 0
@@ -4391,6 +4573,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateProjectMutationOptions(options), queryClient);
+    }
+
+export const getSetProjectInstructionsUrl = (id: string,) => {
+
+
+
+
+  return `/api/projects/${id}/instructions`
+}
+
+export const setProjectInstructions = async (id: string,
+    setProjectInstructionsBody: SetProjectInstructionsBody, options?: Parameters<typeof apiMutator>[1]): Promise<SetProjectInstructions200> => {
+
+  return apiMutator<SetProjectInstructions200>(getSetProjectInstructionsUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setProjectInstructionsBody)
+  }
+);}
+
+
+
+
+
+export const getSetProjectInstructionsMutationOptions = <TError = ErrorType<SetProjectInstructions400 | SetProjectInstructions401 | SetProjectInstructions404 | SetProjectInstructions409>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setProjectInstructions>>, TError,{id: string;data: BodyType<SetProjectInstructionsBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
+): UseMutationOptions<Awaited<ReturnType<typeof setProjectInstructions>>, TError,{id: string;data: BodyType<SetProjectInstructionsBody>}, TContext> => {
+
+const mutationKey = ['setProjectInstructions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setProjectInstructions>>, {id: string;data: BodyType<SetProjectInstructionsBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setProjectInstructions(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetProjectInstructionsMutationResult = NonNullable<Awaited<ReturnType<typeof setProjectInstructions>>>
+    export type SetProjectInstructionsMutationBody = BodyType<SetProjectInstructionsBody>
+    export type SetProjectInstructionsMutationError = ErrorType<SetProjectInstructions400 | SetProjectInstructions401 | SetProjectInstructions404 | SetProjectInstructions409>
+
+    export const useSetProjectInstructions = <TError = ErrorType<SetProjectInstructions400 | SetProjectInstructions401 | SetProjectInstructions404 | SetProjectInstructions409>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setProjectInstructions>>, TError,{id: string;data: BodyType<SetProjectInstructionsBody>}, TContext>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof setProjectInstructions>>,
+        TError,
+        {id: string;data: BodyType<SetProjectInstructionsBody>},
+        TContext
+      > => {
+      return useMutation(getSetProjectInstructionsMutationOptions(options), queryClient);
     }
 
 export const getUpdateProjectUrl = (id: string,) => {

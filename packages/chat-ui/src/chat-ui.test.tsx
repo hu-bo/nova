@@ -99,6 +99,7 @@ describe("chat-ui", () => {
     ];
     const html = renderToStaticMarkup(<MessageList messages={messages} />);
     expect(html.match(/read_file/g)).toHaveLength(1);
+    expect(html).toContain('title="a.ts">a.ts</span>');
     expect(html).not.toContain("todo_write");
     expect(html).toContain("ship");
   });

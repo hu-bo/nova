@@ -1,7 +1,7 @@
 import path from "node:path";
-import type { RunnerSession } from "@nova/runner-sdk";
+import { RunnerError, type RunnerSession } from "@nova/runner-sdk";
 import type { Project, RunnerDirectory, RunnerEvent } from "@nova/protocol";
-import { AppError, invalidInput, runnerUnavailable } from "../../errors.js";
+import { AppError, invalidInput, notFound, runnerUnavailable } from "../../errors.js";
 import type { AgentStore } from "../../store.js";
 import { createLogger } from "@nova/logger";
 
@@ -23,7 +23,15 @@ export interface RunnerRegistry {
     runnerId: string,
     requestedPath: string,
     maxSize: number,
+    scopeRoot?: string,
   ): Promise<{ name: string; size: number; data: Uint8Array }>;
+  readFileIfExists(
+    userId: string,
+    runnerId: string,
+    requestedPath: string,
+    maxSize: number,
+    scopeRoot?: string,
+  ): Promise<{ name: string; size: number; data: Uint8Array } | null>;
   subscribe(userId: string, listener: (event: RunnerEvent) => void): () => void;
 }
 
@@ -218,7 +226,7 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 1
         throw runnerUnavailable("Unable to read directories from the selected runner");
       }
     },
-    async readFile(userId, runnerId, requestedPath, maxSize) {
+    async readFile(userId, runnerId, requestedPath, maxSize, scopeRoot) {
       const registered = current(userId, runnerId);
       if (!registered || status(userId, runnerId) === "disconnected") throw runnerUnavailable();
       const root = registered.session.identity.workspace;
@@ -228,6 +236,15 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 1
       try {
         const info = await registered.session.fs.stat(selected);
         if ((info.kind as number) !== 1) throw invalidInput("The selected path is not a file");
+        if (scopeRoot) {
+          const scopeInfo = await registered.session.fs.stat(scopeRoot);
+          if ((scopeInfo.kind as number) !== 2) throw runnerUnavailable("The project workspace is not a directory");
+          const canonicalScope = flavor.resolve(root, scopeInfo.path);
+          const canonicalFile = flavor.resolve(root, info.path);
+          if (!withinRoot(canonicalScope, canonicalFile)) {
+            throw runnerUnavailable("The selected file escapes the project workspace");
+          }
+        }
         const declaredSize = Number(info.size);
         if (!Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > maxSize) {
           throw invalidInput(`The selected file exceeds the ${formatBytes(maxSize)} limit`);
@@ -239,11 +256,20 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 1
         return { name: flavor.basename(selected), size: result.data.byteLength, data: result.data };
       } catch (error) {
         if (error instanceof AppError) throw error;
+        if (error instanceof RunnerError && error.code === "NOT_FOUND") throw notFound("File");
         logger.warn(
           { err: error, component: "server", dependency: "runner", runnerId, path: selected },
           "runner file read failed",
         );
         throw runnerUnavailable("Unable to read the selected file from the runner");
+      }
+    },
+    async readFileIfExists(userId, runnerId, requestedPath, maxSize, scopeRoot) {
+      try {
+        return await this.readFile(userId, runnerId, requestedPath, maxSize, scopeRoot);
+      } catch (error) {
+        if (error instanceof AppError && error.code === "NOT_FOUND") return null;
+        throw error;
       }
     },
     subscribe(userId, listener) {

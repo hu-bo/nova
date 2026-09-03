@@ -118,11 +118,20 @@ export const CurrentUserSchema = z.object({
 });
 export type CurrentUser = z.infer<typeof CurrentUserSchema>;
 
+export const ProjectInstructionsSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("auto") }).strict(),
+  z.object({ source: z.literal("none") }).strict(),
+  z.object({ source: z.enum(["agents", "claude"]), directory: z.string().trim().min(1).max(4_096) }).strict(),
+  z.object({ source: z.literal("custom"), content: z.string().trim().min(1).max(32_768) }).strict(),
+]);
+export type ProjectInstructions = z.infer<typeof ProjectInstructionsSchema>;
+
 export const ProjectSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   workspace: z.string().min(1).nullable(),
   runnerId: z.string().min(1).nullable(),
+  instructions: ProjectInstructionsSchema,
   runnerState: RunnerStateSchema,
   createdAt: z.number().int().nonnegative(),
 });

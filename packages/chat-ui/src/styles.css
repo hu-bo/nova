@@ -177,8 +177,12 @@
     0 0 0 1px rgb(148 163 184 / 0.12);
 }
 
+/* 弹窗宽度与 message-list / composer 的内容列保持一致（max-w-4xl = 56rem）并居中。 */
 .nova-chat .nova-decision-prompt {
   position: relative;
+  width: 100%;
+  max-width: 56rem;
+  margin-inline: auto;
   overflow: hidden;
 }
 

@@ -10,6 +10,7 @@ import { runnerUnavailable } from "../../errors.js";
 import type { EntryRoute } from "../../store.js";
 import type { PendingDecisions } from "../decision/pending-decisions.js";
 import type { RunnerRegistry } from "../runner/registry.js";
+import { loadProjectInstructions } from "../project/project.service.js";
 
 const codingHarness = createHarness({ modules: [codingAgentModule] });
 const chatHarness = createHarness({ modules: [{ id: "nova.chat", tools: [readUrl, todoWrite] }] });
@@ -21,7 +22,7 @@ export interface AgentRuntimeDependencies {
   runners: RunnerRegistry;
 }
 
-export function createAgentRuntime(route: EntryRoute, dependencies: AgentRuntimeDependencies): Agent {
+export async function createAgentRuntime(route: EntryRoute, dependencies: AgentRuntimeDependencies): Promise<Agent> {
   const { conversation, project, userId } = route;
   const ref = resolveModelRef(conversation.modelConfig);
   logger.debug(
@@ -45,6 +46,9 @@ export function createAgentRuntime(route: EntryRoute, dependencies: AgentRuntime
       : undefined;
   const ctx = runner ? toToolContext(runner, { cwd: workspace ?? runner.identity.workspace }) : undefined;
   const harness = ctx ? codingHarness : chatHarness;
+  const projectInstructions = project
+    ? await loadProjectInstructions(project, userId, dependencies.runners)
+    : undefined;
   return harness.createAgent({
     model: ref,
     stream: model.stream,
@@ -54,6 +58,9 @@ export function createAgentRuntime(route: EntryRoute, dependencies: AgentRuntime
     decide: dependencies.decisions.createDecide(conversation.id, userId),
     sessionId: conversation.id,
     userId,
+    ...(projectInstructions
+      ? { systemPrompt: [{ name: "repository-instructions", content: projectInstructions }] }
+      : {}),
     approvalPolicy: { default: "ask", byRisk: { none: "auto", read: "auto", write: "ask", exec: "ask" } },
   });
 }

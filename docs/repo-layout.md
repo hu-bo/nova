@@ -362,7 +362,7 @@ interface ToolContext {
 
 `harness` 是可信内部 `AgentModule[]` 的静态组合层：创建时一次性校验并冻结 Tool、Prompt、Guard、Observer 快照；Guard 只能收紧审批，Observer 故障彼此隔离。它只依赖 `agent-core`，返回原始 `Agent`，不认识 Server、HTTP、SSE、Protocol 或 UI。
 
-`coding-agent` 只导出 `codingAgentModule`，直接选择 `packages/tools` 的 8 个现有 Tool 并贡献唯一的 `coding-workflow` Prompt。它不创建第二套 Agent，不依赖 runner-sdk，也不读取项目文件。项目指令、模型、Storage、Decision 和由 runner-sdk 生成的 `ToolContext` 都由 Host 按 Agent 实例注入。
+`coding-agent` 只导出 `codingAgentModule`，直接选择 `packages/tools` 的 8 个现有 Tool 并贡献唯一的 `coding-workflow` Prompt。它不创建第二套 Agent，不依赖 runner-sdk，也不读取项目文件。项目绑定的 `AGENTS.md` / `CLAUDE.md` 或自定义提示词、模型、Storage、Decision 和由 runner-sdk 生成的 `ToolContext` 都由 Host 按 Agent 实例注入；workspace 文件只能经 Runner 读取。
 
 未来 Server 以 `Agent.subscribe()` 作为事件投影入口；未来 Chat UI 只消费 Server Projection，并通过实例级 `renderers` 扩展渲染。两者都不反向进入 Harness 或 Coding Module。
 

@@ -1,6 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RemoteExplorer } from "@nova/chat-ui";
-import { ArrowRight, Folder, FolderKanban, MessageCircle, Pencil, Plus, Server, Trash2, Unplug } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpenText,
+  Folder,
+  FolderKanban,
+  MessageCircle,
+  Pencil,
+  Plus,
+  Server,
+  Trash2,
+  Unplug,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -19,6 +30,7 @@ import { RunnerManagerDialog } from "../settings/runner/runner-manager-dialog.js
 import { RunnerSelect } from "../settings/runner/runner-select.js";
 import { useRunnerDirectoryLoader } from "../settings/runner/use-runners.js";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table.js";
+import { ProjectInstructionsDialog } from "./project-instructions-dialog.js";
 
 export function ProjectRoute() {
   const { projectId } = useParams();
@@ -31,6 +43,7 @@ export function ProjectRoute() {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [runnerManagerOpen, setRunnerManagerOpen] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [deleteValue, setDeleteValue] = useState("");
 
   const renameForm = useForm<RenameProjectForm>({
@@ -98,6 +111,10 @@ export function ProjectRoute() {
     await mutations.bind.mutateAsync({ id: project!.id, runnerId: values.runnerId, path: values.workspace });
     setBindOpen(false);
   }
+  async function setInstructions(instructions: import("@nova/protocol").ProjectInstructions) {
+    await mutations.setInstructions.mutateAsync({ id: project!.id, instructions });
+    setInstructionsOpen(false);
+  }
   async function remove() {
     await mutations.remove.mutateAsync(project!.id);
     navigate("/app", { replace: true });
@@ -129,6 +146,12 @@ export function ProjectRoute() {
           </Button>
           <Button onClick={() => setBindOpen(true)} icon={<Server className="size-4" aria-hidden="true" />}>
             {project.workspace ? "更换绑定" : "绑定 workspace"}
+          </Button>
+          <Button
+            onClick={() => setInstructionsOpen(true)}
+            icon={<BookOpenText className="size-4" aria-hidden="true" />}
+          >
+            项目指令
           </Button>
           <Button
             variant="primary"
@@ -367,6 +390,15 @@ export function ProjectRoute() {
         open={runnerManagerOpen}
         onClose={() => setRunnerManagerOpen(false)}
         selectedRunnerId={project.runnerId ?? undefined}
+      />
+      <ProjectInstructionsDialog
+        open={instructionsOpen}
+        onClose={() => setInstructionsOpen(false)}
+        workspace={project.workspace}
+        instructions={project.instructions}
+        saving={mutations.setInstructions.isPending}
+        error={mutations.setInstructions.error}
+        onSave={setInstructions}
       />
       <RemoteExplorer
         open={workspaceOpen}

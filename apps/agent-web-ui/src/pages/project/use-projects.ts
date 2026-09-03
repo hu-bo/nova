@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../auth/provider.js";
 import { queryKeys } from "../../api/query-keys.js";
+import type { ProjectInstructions } from "@nova/protocol";
 
 export function useProjects() {
   const { api } = useAuth();
@@ -54,6 +55,11 @@ export function useProjectMutations() {
     bind: useMutation({
       mutationFn: ({ id, runnerId, path }: { id: string; runnerId: string; path: string }) =>
         api!.bindProject(id, { runnerId, path }),
+      onSuccess: refresh,
+    }),
+    setInstructions: useMutation({
+      mutationFn: ({ id, instructions }: { id: string; instructions: ProjectInstructions }) =>
+        api!.setProjectInstructions(id, instructions),
       onSuccess: refresh,
     }),
     remove: useMutation({

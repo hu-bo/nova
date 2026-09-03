@@ -3,6 +3,7 @@ import type {
   CreateConversation,
   CreateProject,
   DecisionResponse,
+  ProjectInstructions,
   SendMessage,
   UpdateProject,
 } from "@nova/protocol";
@@ -31,6 +32,7 @@ import {
   listRunnerTokens,
   resolveDecision,
   sendMessage,
+  setProjectInstructions,
   updateProject,
   uploadRunnerFile,
 } from "./generated/agent-server.js";
@@ -49,6 +51,7 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
     createProject: (input: CreateProject) => createProject(input),
     renameProject: (projectId: string, input: UpdateProject) => updateProject(projectId, input),
     bindProject: (projectId: string, input: BindProjectWorkspace) => bindProjectWorkspace(projectId, input),
+    setProjectInstructions: (projectId: string, input: ProjectInstructions) => setProjectInstructions(projectId, input),
     deleteProject: (projectId: string) => deleteProject(projectId, { headers: { "X-Confirm-Delete": projectId } }),
     deleteConversation,
     getRunnerConnectionInfo,

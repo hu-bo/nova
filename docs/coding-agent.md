@@ -219,7 +219,7 @@ Prompt 不应包含：
 - 与 Harness / Session 实现有关的内部细节；
 - “必须调用 N 次工具”之类机械指标。
 
-项目自身的 `AGENTS.md`、环境信息和用户指令由 Host 作为实例级 `PromptAsset` 注入，排在 Coding Prompt 之后。Coding Module 不自行读取本地文件，否则会绕过 Runner 和 Composition Root。
+项目默认在创建 Agent 实例时探测 workspace 根目录的 `AGENTS.md` / `CLAUDE.md`，也可显式绑定根目录或子目录中的一种文件，或保存一份自定义项目提示词。Host 经 Runner 读取 Markdown，或直接取得自定义内容，再作为实例级 `PromptAsset` 注入并排在 Coding Prompt 之后。Coding Module 不自行读取本地文件，否则会绕过 Runner 和 Composition Root。
 
 ---
 

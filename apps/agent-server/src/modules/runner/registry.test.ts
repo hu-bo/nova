@@ -1,4 +1,4 @@
-import type { RunnerSession } from "@nova/runner-sdk";
+import { RunnerError, type RunnerSession } from "@nova/runner-sdk";
 import { describe, expect, it, vi } from "vitest";
 import { createRunnerRegistry } from "./registry.js";
 
@@ -99,6 +99,50 @@ describe("runner file browsing", () => {
     await expect(registry.readFile("alice", "runner-1", "/workspace/large.bin", 20)).rejects.toMatchObject({
       code: "INVALID_INPUT",
     });
+  });
+
+  it("rejects a file whose canonical path escapes the project workspace", async () => {
+    const session = {
+      identity: { runnerId: "runner-1", workspace: "/workspace" },
+      generation: "generation-1",
+      lastHeartbeatAt: Date.now(),
+      state: 1,
+      running: 0,
+      onStatus: () => () => {},
+      close: async () => {},
+      fs: {
+        stat: async (selected: string) =>
+          selected === "/workspace/project"
+            ? { path: "project", kind: 2, size: 0n }
+            : { path: "other/AGENTS.md", kind: 1, size: 5n },
+        readFile: async () => ({ data: new TextEncoder().encode("rules"), totalSize: 5 }),
+      },
+    } as unknown as RunnerSession;
+    const registry = createRunnerRegistry();
+    await registry.register("alice", "token-1", session);
+
+    await expect(
+      registry.readFile("alice", "runner-1", "/workspace/project/link/AGENTS.md", 20, "/workspace/project"),
+    ).rejects.toMatchObject({ code: "RUNNER_UNAVAILABLE", message: "The selected file escapes the project workspace" });
+  });
+
+  it("treats a missing optional file as an empty probe result", async () => {
+    const session = {
+      identity: { runnerId: "runner-1", workspace: "/workspace" },
+      generation: "generation-1",
+      lastHeartbeatAt: Date.now(),
+      state: 1,
+      running: 0,
+      onStatus: () => () => {},
+      close: async () => {},
+      fs: { stat: async () => Promise.reject(new RunnerError("NOT_FOUND", "missing")) },
+    } as unknown as RunnerSession;
+    const registry = createRunnerRegistry();
+    await registry.register("alice", "token-1", session);
+
+    await expect(
+      registry.readFileIfExists("alice", "runner-1", "/workspace/AGENTS.md", 20, "/workspace"),
+    ).resolves.toBeNull();
   });
 });
 

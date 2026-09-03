@@ -24,7 +24,7 @@ type RuntimeEntry = {
 };
 
 export function createRuntimeRegistry(
-  create: (route: EntryRoute) => Agent,
+  create: (route: EntryRoute) => Promise<Agent>,
   onEvent: (conversationId: string, agent: Agent) => void,
   onRunFailure: (failure: {
     conversationId: string;
@@ -38,9 +38,10 @@ export function createRuntimeRegistry(
   idleMs = 30 * 60 * 1000,
 ): ConversationRuntimes {
   const entries = new Map<string, RuntimeEntry>();
+  const creating = new Map<string, Promise<RuntimeEntry>>();
   const clearing = new Set<string>();
 
-  const get = (route: EntryRoute): RuntimeEntry => {
+  const get = async (route: EntryRoute): Promise<RuntimeEntry> => {
     const id = route.conversation.id;
     const signature = runtimeSignature(route);
     const existing = entries.get(id);
@@ -49,12 +50,24 @@ export function createRuntimeRegistry(
       return existing;
     }
     if (existing?.agent.state.isStreaming) return existing;
-    const agent = create(route);
-    logger.debug({ conversationId: id, runnerId: route.conversation.runnerId }, "created conversation runtime");
-    onEvent(id, agent);
-    const entry = { agent, signature, lastUsedAt: Date.now() };
-    entries.set(id, entry);
-    return entry;
+    const pending = creating.get(id);
+    if (pending) {
+      await pending;
+      return get(route);
+    }
+    const creation = create(route).then((agent) => {
+      logger.debug({ conversationId: id, runnerId: route.conversation.runnerId }, "created conversation runtime");
+      onEvent(id, agent);
+      const entry = { agent, signature, lastUsedAt: Date.now() };
+      entries.set(id, entry);
+      return entry;
+    });
+    creating.set(id, creation);
+    try {
+      return await creation;
+    } finally {
+      if (creating.get(id) === creation) creating.delete(id);
+    }
   };
 
   const interval = setInterval(
@@ -71,7 +84,7 @@ export function createRuntimeRegistry(
   return {
     async send(route, text, queue, thinkingLevel) {
       if (clearing.has(route.conversation.id)) throw conflict("Conversation context is being cleared");
-      const { agent } = get(route);
+      const { agent } = await get(route);
       if (agent.state.isStreaming) {
         logger.debug(
           { conversationId: route.conversation.id, queue: queue ?? "steering" },
@@ -134,13 +147,13 @@ export function createRuntimeRegistry(
       await entry.agent.abort();
     },
     async context(route) {
-      return get(route).agent.contextUsage();
+      return (await get(route)).agent.contextUsage();
     },
     async estimatePrompt(route, text) {
-      return get(route).agent.estimatePrompt(text);
+      return (await get(route)).agent.estimatePrompt(text);
     },
     async compact(route) {
-      const { agent } = get(route);
+      const { agent } = await get(route);
       if (agent.state.isStreaming) throw conflict("Conversation is running");
       try {
         return await agent.compact();
@@ -160,7 +173,7 @@ export function createRuntimeRegistry(
       entries.delete(conversationId);
       try {
         await clearStorage();
-        return get(route).agent.contextUsage();
+        return (await get(route)).agent.contextUsage();
       } finally {
         clearing.delete(conversationId);
       }
@@ -188,5 +201,6 @@ function runtimeSignature(route: EntryRoute): string {
     modelConfig: route.conversation.modelConfig,
     runnerId: route.conversation.runnerId ?? route.project?.runnerId ?? null,
     workspace: route.project?.workspace ?? null,
+    instructions: route.project?.instructions ?? null,
   });
 }

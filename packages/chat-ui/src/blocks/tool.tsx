@@ -1,4 +1,5 @@
 import { CheckCircle2, ChevronRight, CircleOff, LoaderCircle, TerminalSquare, XCircle } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Block } from "@nova/protocol";
 import type { ExtractBlock } from "../types.js";
 
@@ -45,6 +46,46 @@ function truncateOutput(output: string): string {
   return `${output.slice(0, MAX_OUTPUT_CHARS)}\n\n… 已省略 ${output.length - MAX_OUTPUT_CHARS} 个字符`;
 }
 
+function formatSize(chars: number): string {
+  if (chars < 1024) return `${chars} 字符`;
+  return `${(chars / 1024).toFixed(1)} KB`;
+}
+
+function Section({
+  label,
+  badge,
+  defaultOpen,
+  forceOpen,
+  children,
+}: {
+  label: string;
+  badge?: string;
+  defaultOpen: boolean;
+  forceOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      open={forceOpen || defaultOpen}
+      className="nova-tool-section group/section border-t border-slate-200/70 first:border-t-0 dark:border-slate-800/80"
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 bg-slate-100/60 px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-500 uppercase select-none hover:bg-slate-200/60 hover:text-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800/60 dark:hover:text-slate-300 [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          className="size-3 shrink-0 text-slate-400 transition-transform duration-200 group-open/section:rotate-90"
+          aria-hidden="true"
+        />
+        <span>{label}</span>
+        {badge && (
+          <span className="rounded bg-white/80 px-1.5 py-px font-mono text-[10px] normal-case text-slate-500 ring-1 ring-slate-200/70 dark:bg-slate-950/60 dark:text-slate-400 dark:ring-slate-700/70">
+            {badge}
+          </span>
+        )}
+      </summary>
+      <div>{children}</div>
+    </details>
+  );
+}
+
 export function ToolBlock({
   call,
   result,
@@ -66,7 +107,14 @@ export function ToolBlock({
         : status === "cancelled"
           ? "text-slate-400"
           : "text-rose-500";
+
+  const argsText = formatArgs(call.args);
   const output = result ? truncateOutput(formatOutput(result.blocks)) : "";
+  const isRunning = status === "running";
+  const path =
+    call.args && typeof call.args === "object" && "path" in call.args && typeof call.args.path === "string"
+      ? call.args.path
+      : undefined;
 
   return (
     <details
@@ -80,9 +128,14 @@ export function ToolBlock({
           aria-hidden="true"
         />
         <TerminalSquare className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-        <strong className="min-w-0 flex-1 truncate font-mono font-medium text-slate-700 dark:text-slate-300">
-          {call.name}
-        </strong>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <strong className="shrink-0 font-mono font-medium text-slate-700 dark:text-slate-300">{call.name}</strong>
+          {path && (
+            <span className="min-w-0 truncate font-mono text-[11px] text-slate-500 dark:text-slate-400" title={path}>
+              {path}
+            </span>
+          )}
+        </div>
         <span
           aria-label={`状态：${call.status}`}
           className={`inline-flex shrink-0 items-center gap-1.5 text-[11px] ${statusColor}`}
@@ -94,16 +147,25 @@ export function ToolBlock({
           {statusLabel}
         </span>
       </summary>
-      <div className="border-t border-slate-200/70 dark:border-slate-800">
+
+      <Section label="参数" badge={formatSize(argsText.length)} defaultOpen={false}>
         <pre className="nova-scrollbar m-0 max-h-56 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300">
-          {formatArgs(call.args)}
+          {argsText}
         </pre>
-        {output && (
-          <pre className="m-0 max-h-80 overflow-auto border-t border-white/10 bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300 nova-scrollbar">
+      </Section>
+
+      {output && (
+        <Section
+          label={result?.status === "error" ? "错误输出" : "输出"}
+          badge={formatSize(output.length)}
+          defaultOpen={false}
+          forceOpen={isRunning || status === "error"}
+        >
+          <pre className="nova-scrollbar m-0 max-h-80 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300">
             {output}
           </pre>
-        )}
-      </div>
+        </Section>
+      )}
     </details>
   );
 }

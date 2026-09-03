@@ -59,7 +59,7 @@ export function AppShell() {
       <button
         ref={menuButtonRef}
         type="button"
-        className="fixed left-3 top-3 z-30 grid size-11 place-items-center rounded-xl border border-slate-200 bg-white/95 text-slate-600 shadow-sm backdrop-blur transition hover:bg-slate-100 lg:hidden"
+        className="fixed left-3 top-3 z-30 grid size-11 place-items-center rounded-xl border border-slate-200/70 bg-white/65 text-slate-600 shadow-sm backdrop-blur transition hover:bg-white/85 lg:hidden"
         aria-label="打开导航"
         onClick={() => setMobileOpen(true)}
       >
@@ -129,7 +129,7 @@ export function AppShell() {
         </aside>
       </dialog>
 
-      <main className="min-h-screen pt-14 lg:pl-64 lg:pt-0">
+      <main className="min-h-screen lg:pl-64">
         {createChat.error && (
           <div className="mx-5 pt-4 lg:mx-8" role="alert">
             <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200">

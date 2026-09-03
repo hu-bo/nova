@@ -12,6 +12,7 @@
 - Block 渲染器：`text` / `thinking` / `code` / `diff` / `file` / `tool_call` / `tool_result` / `error`
 - Decision 交互组件：审批卡片、反问选项
 - 消息列表与流式增量渲染
+- 用户消息复制复用，以及 Markdown / 结构化代码块的代码复制
 - `UploadCover` 文件拖放、文件选择、剪贴板截图和附件列表交互
 - Composer 文本草稿、提交编排、模型和推理强度选择
 - 仅在草稿第一个字符为 `/` 时展示宿主提供的 Skill 候选，并展示宿主提供的上下文占用
@@ -182,6 +183,9 @@ SSE ──► agent-web-ui 的 reducer ──► ChatMessage[] ──► <Messag
 | `tool_result` | 挂在对应 `tool_call` 卡片内展开，递归渲染 `blocks` |
 | `todo` | 只读清单，`[ ] [~] [x] [!]` 四态；出现在消息流里表示"当时的计划" |
 | `error` | 醒目样式，展示 `code` 与 `message` |
+
+用户消息头部提供复制图标，只复制消息中的文本 block，便于复用原始提示词；助手 Markdown
+围栏代码和结构化 `code` block 都在代码头部提供复制图标，只复制代码正文。
 
 **`tool_call` 与 `tool_result` 用 `callId` 配对渲染成一个卡片**，不是两条独立消息。
 这是最影响可读性的一处 —— 分开显示会让对话被工具噪音淹没。

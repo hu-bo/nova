@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "instructions" jsonb DEFAULT '{"source":"none"}'::jsonb NOT NULL;

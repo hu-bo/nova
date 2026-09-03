@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Block, ModelConfig, Page } from "@nova/protocol";
+import type { Block, ModelConfig, Page, ProjectInstructions } from "@nova/protocol";
 import { conflict, notFound } from "./errors.js";
 
 export interface UserProfile {
@@ -48,6 +48,7 @@ export interface ProjectRow {
   name: string;
   workspace: string | null;
   runnerId: string | null;
+  instructions: ProjectInstructions;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -100,7 +101,13 @@ export interface AgentStore {
   deleteRunner(input: { userId: string; id: string }): Promise<void>;
   createProject(input: { userId: string; name: string }): Promise<ProjectRow>;
   listProjects(userId: string): Promise<ProjectRow[]>;
+  getProject(input: { userId: string; id: string }): Promise<ProjectRow>;
   updateProject(input: { userId: string; id: string; name: string }): Promise<ProjectRow>;
+  updateProjectInstructions(input: {
+    userId: string;
+    id: string;
+    instructions: ProjectInstructions;
+  }): Promise<ProjectRow>;
   bindProject(input: { userId: string; id: string; runnerId: string; workspace: string }): Promise<ProjectRow>;
   deleteProject(input: { userId: string; id: string }): Promise<void>;
   createConversation(input: {
@@ -261,6 +268,7 @@ export function createMemoryStore(): AgentStore {
         name: input.name,
         workspace: null,
         runnerId: null,
+        instructions: { source: "auto" },
         createdAt: now,
         updatedAt: now,
       };
@@ -272,9 +280,18 @@ export function createMemoryStore(): AgentStore {
         .filter((project) => project.userId === userId)
         .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
     },
+    async getProject(input) {
+      return ownedProject(input.userId, input.id);
+    },
     async updateProject(input) {
       const project = ownedProject(input.userId, input.id);
       const updated = { ...project, name: input.name, updatedAt: new Date() };
+      state.projects.set(project.id, updated);
+      return updated;
+    },
+    async updateProjectInstructions(input) {
+      const project = ownedProject(input.userId, input.id);
+      const updated = { ...project, instructions: input.instructions, updatedAt: new Date() };
       state.projects.set(project.id, updated);
       return updated;
     },

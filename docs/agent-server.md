@@ -103,7 +103,16 @@ Project                        独立 Chat
 **Project 是 workspace 的容器，不是会话的容器。** 创建 Project 时不立即绑定 Runner；
 用户必须从自己已连接设备的根目录中选择工作目录，绑定完成后才能开始 coding。
 它存在的唯一理由是"同一份代码要聊很多次，不该每次重新指定路径"。
-除了 `workspace` 和它绑定的设备 Runner，project 不持有任何会话状态。
+除了 `workspace`、它绑定的设备 Runner 和项目级指令来源，project 不持有任何会话状态。
+项目级指令来源只有一个 owner，取值为自动探测、关闭、workspace 中指定目录的 `AGENTS.md`、
+指定目录的 `CLAUDE.md`，或一份自定义文本；目录以 Project workspace 为基准保存，禁止绝对路径
+和 `..` 逃逸。
+
+配置保存只校验结构和目录边界，不依赖 Runner 在线。创建或重建 conversation runtime 时，Host
+才通过绑定的 Runner 读取文件。自动模式依次探测 workspace 根目录的 `AGENTS.md`、`CLAUDE.md`；
+两者都不存在是正常情况，不阻止运行。显式文件不存在、不是 UTF-8 文本、超过 64 KiB，或 Runner
+不可用时明确失败，不静默忽略项目约束。自定义提示词存于 Project，限制为 32 KiB。运行时把最终
+内容作为 `repository-instructions` 实例级 `PromptAsset` 注入；独立 Chat 不加载 Project 指令。
 
 > **TODO 不跨会话共享**（`agent-core.md` §9.6）：A 会话勾掉的项在 B 会话里凭空消失，
 > 这种行为无法解释。project 级的长期待办是 issue tracker，不是这里。
@@ -191,7 +200,7 @@ const chatHarness = createHarness({
 });
 
 // src/modules/runtime/create-agent-runtime.ts
-function createAgentRuntime(conv: Conversation, project: Project | null, userId: string): Agent {
+async function createAgentRuntime(conv: Conversation, project: Project | null, userId: string): Promise<Agent> {
   // Chat 模式：project 为 null → 不连 Runner，不注入 ctx
   const ctx = project
     ? toToolContext(registry.pick(userId, project.runnerId, project.workspace), { cwd: project.workspace })
@@ -199,6 +208,7 @@ function createAgentRuntime(conv: Conversation, project: Project | null, userId:
 
   const ref = resolveModelRef(conv.modelConfig);
   const model = createModel(ref);
+  const projectInstructions = project ? await loadProjectInstructions(project, registry) : undefined;
   return (project ? codingHarness : chatHarness).createAgent({
     model: ref,
     stream: model.stream,
@@ -206,6 +216,9 @@ function createAgentRuntime(conv: Conversation, project: Project | null, userId:
     storage: pgSessionStorage(db, conv.id),
     decide: sseDecide(conv.id), // §6
     userId,
+    systemPrompt: projectInstructions
+      ? [{ name: "repository-instructions", content: projectInstructions }]
+      : undefined,
   });
 }
 ```
@@ -340,6 +353,7 @@ projects                                // §1.2。可选：独立 Chat 不属�
   user_id     text        not null
   name        text        not null
   workspace   text        null          // 绑定 Runner 后确定的设备目录
+  instructions jsonb      not null      // 关闭 / AGENTS.md / CLAUDE.md / 自定义文本
   runner_id   text        null          // 绑定的设备 Runner
   created_at  timestamptz not null
   updated_at  timestamptz not null

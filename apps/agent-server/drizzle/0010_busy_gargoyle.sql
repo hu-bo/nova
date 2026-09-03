@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ALTER COLUMN "instructions" SET DEFAULT '{"source":"auto"}'::jsonb;

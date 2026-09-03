@@ -5,6 +5,7 @@ import {
   ApiErrorSchema,
   BindProjectWorkspaceSchema,
   CreateProjectSchema,
+  ProjectInstructionsSchema,
   ProjectSchema,
   UpdateProjectSchema,
 } from "@nova/protocol";
@@ -45,6 +46,27 @@ export function projectRoutes(app: FastifyInstance, store: AgentStore, runners: 
       },
     },
     async (request, reply) => reply.code(201).send(await projects.create(request.userId, request.body.name)),
+  );
+
+  server.put(
+    "/projects/:id/instructions",
+    {
+      schema: {
+        operationId: "setProjectInstructions",
+        tags: ["projects"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        body: ProjectInstructionsSchema,
+        response: {
+          200: ProjectSchema,
+          400: ApiErrorSchema,
+          401: ApiErrorSchema,
+          404: ApiErrorSchema,
+          409: ApiErrorSchema,
+        },
+      },
+    },
+    (request) => projects.setInstructions(request.userId, request.params.id, request.body),
   );
 
   server.patch(

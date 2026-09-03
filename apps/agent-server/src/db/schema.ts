@@ -15,7 +15,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import type { Block, ModelConfig } from "@nova/protocol";
+import type { Block, ModelConfig, ProjectInstructions } from "@nova/protocol";
 import type { Entry, Record as AgentRecord } from "@nova/agent-core";
 
 export const users = pgTable("users", {
@@ -154,6 +154,7 @@ export const projects = pgTable(
     name: text("name").notNull(),
     workspace: text("workspace"),
     runnerId: text("runner_id"),
+    instructions: jsonb("instructions").$type<ProjectInstructions>().notNull().default({ source: "auto" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

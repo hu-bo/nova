@@ -21,9 +21,9 @@ const measuredContext = {
   confidence: "high" as const,
 };
 
-it("creates an unbound standalone chat runtime with only self-contained tools", () => {
+it("creates an unbound standalone chat runtime with only self-contained tools", async () => {
   const events = createEventHub();
-  const agent = createAgentRuntime(
+  const agent = await createAgentRuntime(
     {
       userId: "alice",
       project: null,
@@ -60,7 +60,7 @@ it("creates an unbound standalone chat runtime with only self-contained tools", 
   expect(agent.state.activeTools).not.toContain("bash");
 });
 
-it("creates a runner-bound standalone chat runtime with coding tools", () => {
+it("creates a runner-bound standalone chat runtime with coding tools", async () => {
   const events = createEventHub();
   const picks: unknown[][] = [];
   const pick = (...args: unknown[]) => {
@@ -70,7 +70,7 @@ it("creates a runner-bound standalone chat runtime with coding tools", () => {
   const runners = {
     pick,
   } as unknown as ReturnType<typeof createRunnerRegistry>;
-  const agent = createAgentRuntime(
+  const agent = await createAgentRuntime(
     {
       userId: "alice",
       project: null,
@@ -359,8 +359,22 @@ it("runs the authenticated project and conversation flow with ownership isolatio
     payload: { name: "Nova" },
   });
   expect(createdProject.statusCode).toBe(201);
-  expect(createdProject.json()).toMatchObject({ name: "Nova", workspace: null, runnerState: "disconnected" });
+  expect(createdProject.json()).toMatchObject({
+    name: "Nova",
+    workspace: null,
+    instructions: { source: "auto" },
+    runnerState: "disconnected",
+  });
   const projectId = createdProject.json().id as string;
+
+  const customInstructions = await app.inject({
+    method: "PUT",
+    url: `/api/projects/${projectId}/instructions`,
+    headers: { authorization: "Bearer alice-token" },
+    payload: { source: "custom", content: "Keep changes focused." },
+  });
+  expect(customInstructions.statusCode).toBe(200);
+  expect(customInstructions.json().instructions).toEqual({ source: "custom", content: "Keep changes focused." });
 
   const hiddenFromOtherUser = await app.inject({
     method: "PATCH",

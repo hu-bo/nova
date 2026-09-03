@@ -199,10 +199,28 @@ export function createPgStore(databaseUrl: string): PgStore {
         .where(eq(projects.userId, userId))
         .orderBy(desc(projects.updatedAt), desc(projects.id));
     },
+    async getProject(input) {
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(and(eq(projects.id, input.id), eq(projects.userId, input.userId)))
+        .limit(1);
+      if (!project) throw notFound("Project");
+      return project;
+    },
     async updateProject(input) {
       const [project] = await db
         .update(projects)
         .set({ name: input.name, updatedAt: new Date() })
+        .where(and(eq(projects.id, input.id), eq(projects.userId, input.userId)))
+        .returning();
+      if (!project) throw notFound("Project");
+      return project;
+    },
+    async updateProjectInstructions(input) {
+      const [project] = await db
+        .update(projects)
+        .set({ instructions: input.instructions, updatedAt: new Date() })
         .where(and(eq(projects.id, input.id), eq(projects.userId, input.userId)))
         .returning();
       if (!project) throw notFound("Project");
