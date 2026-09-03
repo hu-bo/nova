@@ -27,6 +27,34 @@ describe("chat-ui", () => {
     expect(fencedCode).toContain(".\n└── src/");
     expect(code).toContain("src/a.ts:4");
     expect(code).toContain("const");
+    expect(code).toContain('aria-label="复制代码"');
+    expect(fencedCode).toContain('aria-label="复制代码"');
+  });
+
+  it("offers message reuse only for user text", () => {
+    const html = renderToStaticMarkup(
+      <MessageList
+        messages={[
+          {
+            id: "user-message",
+            conversationId: "conversation-1",
+            role: "user",
+            status: "done",
+            createdAt: 1,
+            blocks: [{ type: "text", text: "复用这条消息" }],
+          },
+          {
+            id: "assistant-message",
+            conversationId: "conversation-1",
+            role: "assistant",
+            status: "done",
+            createdAt: 2,
+            blocks: [{ type: "text", text: "回答" }],
+          },
+        ]}
+      />,
+    );
+    expect(html.match(/aria-label="复制消息"/g)).toHaveLength(1);
   });
 
   it("renders diff blocks through git-diff-view", () => {

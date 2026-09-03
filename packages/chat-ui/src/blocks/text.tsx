@@ -1,5 +1,33 @@
+import { isValidElement, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { CopyButton } from "../components/copy-button.js";
+
+function textContent(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textContent).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return textContent(node.props.children);
+  return "";
+}
+
+function MarkdownCode({ children }: { children?: ReactNode }) {
+  const child = isValidElement<{ className?: string; children?: ReactNode }>(children) ? children : undefined;
+  const className = child?.props.className;
+  const language = className?.startsWith("language-") ? className.slice("language-".length) : "text";
+  const code = textContent(child?.props.children ?? children).replace(/\n$/, "");
+
+  return (
+    <section className="nova-code-block my-3 min-w-0 overflow-hidden rounded-xl bg-slate-950 shadow-sm ring-1 ring-slate-800">
+      <header className="flex min-h-9 items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-3">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">{language}</span>
+        <CopyButton text={code} label="复制代码" className="text-slate-400 hover:bg-white/5 hover:text-white" />
+      </header>
+      <pre className="nova-scrollbar m-0 overflow-x-auto p-3 font-mono text-xs leading-5 text-slate-200">
+        {children}
+      </pre>
+    </section>
+  );
+}
 
 export function TextBlock({ text }: { text: string }) {
   return (
@@ -12,11 +40,7 @@ export function TextBlock({ text }: { text: string }) {
               {children}
             </a>
           ),
-          pre: ({ children }) => (
-            <pre className="nova-scrollbar overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-200">
-              {children}
-            </pre>
-          ),
+          pre: MarkdownCode,
           table: ({ children }) => (
             <div className="nova-scrollbar my-3 overflow-x-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-800">
               <table className="w-full border-collapse text-left text-sm [&_td]:border-t [&_td]:border-slate-200 [&_td]:px-3 [&_td]:py-1.5 [&_th]:bg-slate-50 [&_th]:px-3 [&_th]:py-1.5 [&_th]:font-semibold dark:[&_td]:border-slate-800 dark:[&_th]:bg-slate-900">

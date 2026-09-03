@@ -1,8 +1,6 @@
-import { Check, Copy, FileCode2 } from "lucide-react";
-import { useState } from "react";
+import { FileCode2 } from "lucide-react";
 import { Highlight, themes, type Language } from "prism-react-renderer";
-import { Button } from "../components/ui/button.js";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip.js";
+import { CopyButton } from "../components/copy-button.js";
 
 export interface CodeBlockProps {
   language: string;
@@ -13,15 +11,6 @@ export interface CodeBlockProps {
 }
 
 export function CodeBlock({ language, code, path, startLine = 1, onOpenPath }: CodeBlockProps) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    if (!globalThis.navigator?.clipboard) return;
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    globalThis.setTimeout(() => setCopied(false), 1_500);
-  }
-
   return (
     <section className="nova-code-block min-w-0 overflow-hidden rounded-xl bg-slate-950 shadow-sm ring-1 ring-slate-800">
       <header className="flex min-h-9 items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-3">
@@ -42,26 +31,7 @@ export function CodeBlock({ language, code, path, startLine = 1, onOpenPath }: C
             {language || "text"}
           </span>
         )}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void copy()}
-                  aria-label="复制代码"
-                  className="text-slate-400 hover:bg-white/5 hover:text-white"
-                />
-              }
-            >
-              {copied ? <Check className="text-emerald-400" aria-hidden="true" /> : <Copy aria-hidden="true" />}
-              {copied ? "已复制" : "复制"}
-            </TooltipTrigger>
-            <TooltipContent>{copied ? "已复制到剪贴板" : "复制代码"}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <CopyButton text={code} label="复制代码" className="text-slate-400 hover:bg-white/5 hover:text-white" />
       </header>
       <Highlight theme={themes.nightOwl} code={code} language={(language || "plain") as Language}>
         {({ className, style, tokens, getLineProps, getTokenProps }) => (

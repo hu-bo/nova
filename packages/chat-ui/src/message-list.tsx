@@ -5,6 +5,7 @@ import { BlockView } from "./block-view.js";
 import { ToolBlock } from "./blocks/tool.js";
 import type { BlockRenderers, ExtractBlock } from "./types.js";
 import { Button } from "./components/ui/button.js";
+import { CopyButton } from "./components/copy-button.js";
 
 export interface MessageListProps {
   messages: ChatMessage[];
@@ -68,6 +69,12 @@ const MessageRow = memo(function MessageRow({
 }) {
   const isUser = message.role === "user";
   const hasFailed = message.status === "error" || message.status === "aborted";
+  const userText = isUser
+    ? message.blocks
+        .filter((block): block is ExtractBlock<"text"> => block.type === "text")
+        .map((block) => block.text)
+        .join("\n\n")
+    : "";
 
   return (
     <article
@@ -80,14 +87,21 @@ const MessageRow = memo(function MessageRow({
           : "group w-full max-w-4xl py-1 text-slate-900 dark:text-slate-100"
       }
     >
-      <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-        <span className="grid size-5 place-items-center rounded-md bg-white ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
-          {isUser ? <UserRound className="size-3" aria-hidden="true" /> : <Bot className="size-3" aria-hidden="true" />}
-        </span>
-        <span>{isUser ? "You" : "Nova"}</span>
-        {message.status === "streaming" && (
-          <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" aria-label="正在生成" />
-        )}
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          <span className="grid size-5 place-items-center rounded-md bg-white ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+            {isUser ? (
+              <UserRound className="size-3" aria-hidden="true" />
+            ) : (
+              <Bot className="size-3" aria-hidden="true" />
+            )}
+          </span>
+          <span>{isUser ? "You" : "Nova"}</span>
+          {message.status === "streaming" && (
+            <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" aria-label="正在生成" />
+          )}
+        </div>
+        {userText && <CopyButton text={userText} label="复制消息" className="-my-1 text-slate-400" />}
       </div>
       <div className="grid min-w-0 gap-2">{renderBlocks(message.blocks, renderers, onOpenPath)}</div>
       {hasFailed && (
