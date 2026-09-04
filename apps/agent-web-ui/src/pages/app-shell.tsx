@@ -1,4 +1,15 @@
-import { LayoutDashboard, LogOut, Menu, MessageCircle, Plus, Settings, Sparkles, Trash2, X } from "lucide-react";
+import {
+  LayoutDashboard,
+  LoaderCircle,
+  LogOut,
+  Menu,
+  MessageCircle,
+  Plus,
+  Settings,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/provider.js";
@@ -8,6 +19,7 @@ import { useQuickConversationCreate } from "./project/new-conversation.js";
 import { NewProjectDrawer } from "./project/new-project.js";
 import { errorMessage } from "../api/client.js";
 import { ProjectDetailsPopover } from "../components/project-details-popover.js";
+import { useConversationStore } from "../conversation/store.js";
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -339,11 +351,22 @@ function ConversationNavItem({
   onClick?: (() => void) | undefined;
   onDelete: (conversation: { id: string; title: string }) => void;
 }) {
+  const { state } = useConversationStore(conversation.id);
+
   return (
     <div className="group relative">
       <NavItem
         to={to}
-        icon={<MessageCircle className="size-4" aria-hidden="true" />}
+        icon={
+          state.isRunning ? (
+            <span className="relative flex size-4 items-center justify-center">
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+              <span className="sr-only">正在处理中</span>
+            </span>
+          ) : (
+            <MessageCircle className="size-4" aria-hidden="true" />
+          )
+        }
         label={conversation.title || "未命名会话"}
         onClick={onClick}
         className="pr-11"
