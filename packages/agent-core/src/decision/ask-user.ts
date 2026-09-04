@@ -5,12 +5,12 @@ import { z } from "../tool-schema.js";
 
 export interface AskInput {
   question: string;
-  options?: string[];
+  options: string[];
   multiSelect?: boolean;
 }
 const askInput = z.object({
   question: z.string().trim().min(1).describe("要问用户的问题"),
-  options: z.array(z.string()).optional().describe("候选选项（可选）"),
+  options: z.array(z.string().trim().min(1)).min(1).describe("候选选项（至少一个）"),
   multiSelect: z.boolean().optional().describe("是否允许多选"),
 });
 

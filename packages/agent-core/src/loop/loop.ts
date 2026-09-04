@@ -445,6 +445,7 @@ export async function compactNow(
   if (!plan) return { trigger, summarized: false, replacedFrom: null, replacedTo: null };
   await host.applyCompaction(plan);
   await host.rec({ kind: "context-compacted", trigger, summarized: plan.summarized });
+  host.emit({ type: "context.compacted", trigger, summarized: plan.summarized });
   return { trigger, summarized: plan.summarized, replacedFrom: plan.replacedFrom, replacedTo: plan.replacedTo };
 }
 

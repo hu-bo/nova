@@ -950,6 +950,7 @@ describe("上下文预算与压缩", () => {
         (event) => event.type === "context.updated" && event.usage.estimatedInputTokens === after.estimatedInputTokens,
       ),
     ).toBe(true);
+    expect(events).toContainEqual({ type: "context.compacted", trigger: "manual", summarized: true });
     expect((await storage.loadRecords(agent.sessionId)).at(-1)?.kind).toBe("context-compacted");
 
     const restored = setup(async function* () {}, {
@@ -1153,6 +1154,28 @@ describe("decision", () => {
     expect(textOf(results[0]!.content)).toBe("- alpha");
   });
 
+  it("ask_user 缺少候选项时返回工具参数错误，不进入 Decision 等待", async () => {
+    let decided = false;
+    const { stream } = scripted([
+      toolEvents([{ name: "ask_user", args: { question: "pick one" } }]),
+      textEvents("recovered"),
+    ]);
+    const { agent, storage } = setup(stream, {
+      decide: async () => {
+        decided = true;
+        return { kind: "question", answers: ["unexpected"] };
+      },
+    });
+
+    const result = await agent.prompt("go");
+
+    expect(result.stopReason).toBe("done");
+    expect(decided).toBe(false);
+    expect(textOf(toolResultBlocks(await storage.loadEntries(agent.sessionId))[0]!.content)).toContain(
+      "invalid arguments",
+    );
+  });
+
   it("同一批多个 ask_user 按顺序提问，后一个不覆盖前一个", async () => {
     const seen: string[] = [];
     const answer: Array<(value: string) => void> = [];
@@ -1160,9 +1183,9 @@ describe("decision", () => {
     let maxInFlight = 0;
     const { stream } = scripted([
       toolEvents([
-        { name: "ask_user", args: { question: "first" } },
-        { name: "ask_user", args: { question: "second" } },
-        { name: "ask_user", args: { question: "third" } },
+        { name: "ask_user", args: { question: "first", options: ["one"] } },
+        { name: "ask_user", args: { question: "second", options: ["two"] } },
+        { name: "ask_user", args: { question: "third", options: ["three"] } },
       ]),
       textEvents("thanks"),
     ]);

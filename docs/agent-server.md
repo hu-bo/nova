@@ -209,6 +209,9 @@ async function createAgentRuntime(conv: Conversation, project: Project | null, u
   const ref = resolveModelRef(conv.modelConfig);
   const model = createModel(ref);
   const projectInstructions = project ? await loadProjectInstructions(project, registry) : undefined;
+  const environment = runner
+    ? createRunnerEnvironmentPrompt({ platform: runner.identity.platform, workspace: ctx.cwd })
+    : undefined;
   return (project ? codingHarness : chatHarness).createAgent({
     model: ref,
     stream: model.stream,
@@ -216,12 +219,17 @@ async function createAgentRuntime(conv: Conversation, project: Project | null, u
     storage: pgSessionStorage(db, conv.id),
     decide: sseDecide(conv.id), // §6
     userId,
-    systemPrompt: projectInstructions
-      ? [{ name: "repository-instructions", content: projectInstructions }]
-      : undefined,
+    systemPrompt: [
+      ...(projectInstructions ? [{ name: "repository-instructions", content: projectInstructions }] : []),
+      ...(environment ? [environment] : []),
+    ],
   });
 }
 ```
+
+Runner 注册中的 `platform` 是执行环境的唯一事实源。Composition Root 在创建绑定 Runner 的 runtime 时，
+将当前 session 的平台和实际 `cwd` 注入实例级 system prompt；不把它冗余保存到 Project / Conversation。
+因此 Runner 在另一平台重连后，新建 runtime 会自然得到新环境，未绑定 Runner 的普通 Chat 则不注入该提示。
 
 `todoWrite` 是未绑定 Runner 的 Chat 唯一额外 Module 能力，`risk === "none"`，因此仍有会话级
 TODO。普通 Chat 绑定 READY Runner 后使用 coding Harness，并以 Runner 的 `root_workspace` 作为

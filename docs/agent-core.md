@@ -490,8 +490,9 @@ type Decide = (req: DecisionRequest, signal: AbortSignal) => Promise<DecisionRes
 
 **agent-core 只依赖 `Decide` 这一个回调。** 这保证了无 server 也能完整跑通。
 
-同一 tool batch 中的人类提问必须按模型给出的顺序逐个执行。`ask_user` 是
-`sequential` tool：前一个问题解决后才发出下一个，保证 `pendingDecision` 始终只有一个 owner，
+同一 tool batch 中的人类提问必须按模型给出的顺序逐个执行。`ask_user` 是选择型问题，
+`options` 必填且至少包含一个非空选项；无效参数作为普通 tool error 返回模型，不进入 Decision 等待。
+它是 `sequential` tool：前一个问题解决后才发出下一个，保证 `pendingDecision` 始终只有一个 owner，
 也避免后发问题覆盖当前弹窗。
 
 | 场景 | `Decide` 实现 |
@@ -566,6 +567,7 @@ type QueueName = "steering" | "followUp" | "nextRun"
 | 压缩触发 | `manual` / 达到可用输入 85% 的 `threshold` / provider `overflow`；自动压到 65% 目标水位 |
 | turn 边界 | assistant thinking、tool_call、tool_result 与随后回答是原子 turn，不得拆开 |
 | 压缩过程 | 旧 thinking / tool 输出请求投影 → 有界中段摘要 → 摘要失败时中段省略；保留首个目标与近期 turn |
+| 压缩可见性 | 每次实际压缩后发送 `context.compacted { trigger, summarized }`，供宿主明确告知用户占用下降原因 |
 | 工具输出 | Entry 保存完整 `content`；模型请求投影按 4096 tokens 保留头尾并标注省略 |
 
 **截断策略在 agent-core，不在 tools。** 否则每个 tool 都要自己实现一遍，且策略无法统一调整。

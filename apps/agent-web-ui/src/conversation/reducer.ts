@@ -10,6 +10,7 @@ export interface ConversationState {
   queuedMessages: QueuedMessage[];
   todos: Todo[];
   contextUsage: ContextUsage | null;
+  contextCompaction: Extract<UiEvent, { type: "context.compacted" }> | null;
   pendingDecision: Extract<UiEvent, { type: "decision.requested" }>["request"] | null;
   connection: "connecting" | "open" | "reconnecting" | "closed";
   isRunning: boolean;
@@ -28,13 +29,15 @@ export type ConversationAction =
   | { type: "optimistic.retry"; messageId: string }
   | { type: "queue.start"; messageId: string }
   | { type: "queue.remove"; messageId: string }
-  | { type: "clear-error" };
+  | { type: "clear-error" }
+  | { type: "clear-context-compaction" };
 
 export const initialConversationState: ConversationState = {
   messages: [],
   queuedMessages: [],
   todos: [],
   contextUsage: null,
+  contextCompaction: null,
   pendingDecision: null,
   connection: "closed",
   isRunning: false,
@@ -104,6 +107,8 @@ export function conversationReducer(state: ConversationState, action: Conversati
       };
     case "clear-error":
       return { ...state, error: null };
+    case "clear-context-compaction":
+      return { ...state, contextCompaction: null };
     case "event":
       return reduceEvent(state, action.event, action.conversationId);
   }
@@ -165,6 +170,8 @@ function reduceEvent(state: ConversationState, event: UiEvent, conversationId: s
           confidence: event.confidence,
         },
       };
+    case "context.compacted":
+      return { ...state, contextCompaction: event };
     case "run.end":
       return {
         ...state,

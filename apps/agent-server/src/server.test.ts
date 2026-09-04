@@ -1,5 +1,6 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import type { ModelRequest } from "@nova/model-adapters";
 import { createApp, registerApp } from "./app/app.js";
 import { createMemoryStore } from "./store.js";
 import { createEventHub } from "./modules/runtime/event-hub.js";
@@ -10,8 +11,29 @@ import { createMemoryModelConfigStore } from "./modules/model-config/model-confi
 import { memoryStorage } from "@nova/agent-core";
 import { createAgentRuntime } from "./modules/runtime/create-agent-runtime.js";
 
+const modelRequests = vi.hoisted(() => [] as ModelRequest[]);
+
+vi.mock("@nova/model-adapters", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nova/model-adapters")>();
+  return {
+    ...actual,
+    createModel(ref: Parameters<typeof actual.createModel>[0]) {
+      return {
+        ...actual.createModel(ref),
+        stream: async function* (request: ModelRequest) {
+          modelRequests.push(request);
+          yield { type: "finish" as const, stopReason: "stop" as const };
+        },
+      };
+    },
+  };
+});
+
 let app: FastifyInstance | undefined;
-afterEach(async () => app?.close());
+afterEach(async () => {
+  modelRequests.length = 0;
+  await app?.close();
+});
 
 const measuredContext = {
   estimatedInputTokens: 32_500,
@@ -65,7 +87,7 @@ it("creates a runner-bound standalone chat runtime with coding tools", async () 
   const picks: unknown[][] = [];
   const pick = (...args: unknown[]) => {
     picks.push(args);
-    return { identity: { workspace: "E:\\workspace" } };
+    return { identity: { platform: "windows-x86_64", workspace: "E:\\workspace" } };
   };
   const runners = {
     pick,
@@ -105,6 +127,12 @@ it("creates a runner-bound standalone chat runtime with coding tools", async () 
 
   expect(agent.state.activeTools).toContain("bash");
   expect(picks).toEqual([["alice", "runner-1"]]);
+
+  await agent.prompt("Inspect the workspace");
+  expect(modelRequests).toHaveLength(1);
+  expect(modelRequests[0]!.system).toContain('Platform: "windows-x86_64"');
+  expect(modelRequests[0]!.system).toContain('Working directory: "E:\\\\workspace"');
+  expect(modelRequests[0]!.system).toContain("不要默认使用 ls、cat、grep、rm 等 Unix 命令");
 });
 
 it("runs the authenticated project and conversation flow with ownership isolation", async () => {

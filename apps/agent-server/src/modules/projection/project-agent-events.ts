@@ -75,8 +75,8 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
           type: "tool_result",
           callId: event.callId,
           status: event.status,
-        blocks: projectToolDetails(name, event.details, toolCodeChanges.get(event.callId)),
-      };
+          blocks: projectToolDetails(name, event.details, toolCodeChanges.get(event.callId)),
+        };
         toolCodeChanges.delete(event.callId);
         message.blocks[index] = block;
         publish({ type: "block.end", messageId: message.id, index, block });
@@ -87,6 +87,9 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
         return;
       case "context.updated":
         publish({ type: "context.updated", ...event.usage });
+        return;
+      case "context.compacted":
+        publish(event);
         return;
       case "decision.requested":
         if (event.request.kind === "approval" && event.request.codeChanges && "callId" in event.request) {

@@ -1,4 +1,5 @@
 import { Chat, type ComposerAttachment, type ComposerSubmission, type ChatFeedback } from "@nova/chat-ui";
+import type { UiEvent } from "@nova/protocol";
 import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -188,6 +189,13 @@ function ConversationView({
       tone: "error",
     });
   if (compactNotice) feedback.push({ id: "compact-notice", message: compactNotice, tone: "info", dismissible: true });
+  if (store.state.contextCompaction)
+    feedback.push({
+      id: "context-compaction",
+      message: contextCompactionMessage(store.state.contextCompaction),
+      tone: store.state.contextCompaction.summarized ? "info" : "warning",
+      dismissible: true,
+    });
   if (clearNotice) feedback.push({ id: "clear-notice", message: clearNotice, tone: "info", dismissible: true });
   if (attachmentError)
     feedback.push({ id: "attachment", message: attachmentError, tone: "warning", dismissible: true });
@@ -282,9 +290,7 @@ function ConversationView({
               if (skill.id === "compact") {
                 setCompactNotice(null);
                 const result = await mutations.compact();
-                setCompactNotice(
-                  result.compacted ? "上下文已压缩，占用将在下一次模型请求后更新。" : "当前没有可压缩的上下文。",
-                );
+                if (!result.compacted) setCompactNotice("当前没有可压缩的上下文。");
                 return;
               }
               if (skill.id === "clear") {
@@ -314,6 +320,7 @@ function ConversationView({
             onDismissFeedback: (id) => {
               if (id === "conversation") store.dispatch({ type: "clear-error" });
               if (id === "compact-notice") setCompactNotice(null);
+              if (id === "context-compaction") store.dispatch({ type: "clear-context-compaction" });
               if (id === "clear-notice") setClearNotice(null);
               if (id === "attachment") setAttachmentError(null);
             },
@@ -379,4 +386,12 @@ function ConversationView({
       </Dialog>
     </div>
   );
+}
+
+function contextCompactionMessage(event: Extract<UiEvent, { type: "context.compacted" }>) {
+  if (!event.summarized) return "上下文摘要生成失败，已从模型输入中省略较早的中段内容；页面中的历史消息仍然保留。";
+  if (event.trigger === "threshold")
+    return "上下文达到自动压缩阈值，已压缩较早内容以继续对话；页面中的历史消息仍然保留。";
+  if (event.trigger === "overflow") return "模型报告上下文超限，已自动压缩较早内容并重试；页面中的历史消息仍然保留。";
+  return "上下文已压缩；页面中的历史消息仍然保留。";
 }

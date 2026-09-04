@@ -10,7 +10,7 @@ import type {
 import type { AgentHooks } from "./loop/hooks.js";
 import type { SessionStorage } from "./session/storage.js";
 import type { EntryId } from "./session/entry.js";
-import type { CompactionResult } from "./context/compaction.js";
+import type { CompactionResult, CompactionTrigger } from "./context/compaction.js";
 import type { ZodType } from "./tool-schema.js";
 
 // §3.1 Message / Block —— Agent 内部对话表示，不与 packages/protocol 的 UI 类型共享定义
@@ -217,6 +217,7 @@ export type AgentEvent =
   | { type: "decision.resolved"; decisionId: string }
   | { type: "todo.updated"; items: Todo[] }
   | { type: "context.updated"; usage: ContextUsage }
+  | { type: "context.compacted"; trigger: CompactionTrigger; summarized: boolean }
   | { type: "run.end"; runId: string; stopReason: StopReason; usage: Usage }
   | { type: "error"; code: string; message: string };
 

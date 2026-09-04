@@ -115,5 +115,11 @@ describe("protocol schemas", () => {
         event: { type: "context.updated", ...context },
       }).event,
     ).toMatchObject({ type: "context.updated", estimatedInputTokens: 32_500 });
+    expect(
+      SseEnvelopeSchema.parse({
+        id: "event-2",
+        event: { type: "context.compacted", trigger: "threshold", summarized: true },
+      }).event,
+    ).toEqual({ type: "context.compacted", trigger: "threshold", summarized: true });
   });
 });

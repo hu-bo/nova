@@ -152,9 +152,10 @@ async function buildCodeChanges(
     if (!current.ok) return undefined;
     const occurrences = current.value.text.split(args.oldText).length - 1;
     if (occurrences === 0 || (occurrences > 1 && args.replaceAll !== true)) return undefined;
-    const newText = args.replaceAll === true
-      ? current.value.text.split(args.oldText).join(args.newText)
-      : current.value.text.replace(args.oldText, args.newText);
+    const newText =
+      args.replaceAll === true
+        ? current.value.text.split(args.oldText).join(args.newText)
+        : current.value.text.replace(args.oldText, args.newText);
     return [{ path: args.path, oldText: current.value.text, newText }];
   }
 
@@ -169,7 +170,7 @@ async function buildCodeChanges(
 
 // 反问（ask_user）：返回答案；超时 / abort / 拒绝 → null
 export async function askQuestion(
-  question: { question: string; options?: string[]; multiSelect?: boolean },
+  question: { question: string; options: string[]; multiSelect?: boolean },
   deps: DecisionDeps,
   signal: AbortSignal,
 ): Promise<string[] | "aborted" | null> {
@@ -177,7 +178,7 @@ export async function askQuestion(
     kind: "question",
     decisionId: newDecisionId(),
     question: question.question,
-    options: question.options ?? [],
+    options: question.options,
     multiSelect: question.multiSelect ?? false,
   };
   const response = await requestDecision(request, deps, signal);

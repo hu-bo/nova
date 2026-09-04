@@ -18,6 +18,10 @@ class FakeEventSource implements EventSourceLike {
     this.onmessage?.({ data: JSON.stringify(event), lastEventId } as MessageEvent<string>);
   }
 
+  rawMessage(data: string, lastEventId = "") {
+    this.onmessage?.({ data, lastEventId } as MessageEvent<string>);
+  }
+
   fail() {
     this.readyState = 0;
     this.onerror?.({} as Event);
@@ -145,6 +149,35 @@ describe("ConversationStream", () => {
     await second;
     stream.close();
     expect(sources[0]!.closeCount).toBe(1);
+  });
+
+  it("skips an invalid event and still receives the terminal event", async () => {
+    const { stream, sources, events, onRunEnd } = setup();
+    const opened = stream.ensureConnected();
+    sources[0]!.open();
+    await opened;
+
+    sources[0]!.rawMessage(
+      JSON.stringify({
+        type: "decision.requested",
+        request: {
+          kind: "question",
+          decisionId: "decision-1",
+          question: "Choose",
+          options: [],
+          multiSelect: false,
+        },
+      }),
+      "10",
+    );
+    const runEnd = { type: "run.end", runId: "run-1", stopReason: "aborted" } as const;
+    sources[0]!.message(runEnd, "11");
+
+    expect(events).toContainEqual(expect.objectContaining({ type: "error", code: "INVALID_SSE_EVENT" }));
+    expect(events).toContainEqual(runEnd);
+    expect(onRunEnd).toHaveBeenCalledOnce();
+    expect(sources[0]!.closeCount).toBe(0);
+    stream.close();
   });
 
   it("reloads the snapshot before replacing a stream that requests RESYNC", async () => {

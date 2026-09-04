@@ -31,6 +31,31 @@ const CODING_WORKFLOW_PROMPT = `## Coding workflow
 - Evaluate the real constraints on security, performance, reliability, maintainability, cost, and consistency, and explain tradeoffs with evidence. Do not introduce complexity solely in the name of best practices, technology trends, or hypothetical future needs.
 - Design evolution paths to be compatible, migratable, reversible, and removable. For changes across boundaries, update contracts, consumers, documentation, and verification together; avoid permanent dual writes, dual reads, or long-lived old and new implementations.`;
 
+export interface RunnerEnvironment {
+  platform: string;
+  workspace: string;
+}
+
+export function createRunnerEnvironmentPrompt(environment: RunnerEnvironment) {
+  const platform = environment.platform.toLowerCase();
+  const shellGuidance =
+    platform.startsWith("windows-") || platform.startsWith("win32-")
+      ? "- 这是 Windows 环境。不要默认使用 ls、cat、grep、rm 等 Unix 命令；需要管道、重定向或 shell 内建命令时，显式执行 `powershell.exe`（若不可用再用 `cmd.exe`），并把参数分别放入 args。"
+      : platform.startsWith("linux-") || platform.startsWith("macos-") || platform.startsWith("darwin-")
+        ? "- 这是 Unix 类环境。需要管道、重定向或其他 shell 语法时，显式执行 `sh`，并通过 args 传入 `-lc` 和脚本。"
+        : "- 不要假定它是 Linux；先用已有结构化工具或轻量命令确认可用能力，再选择平台兼容的可执行程序。";
+
+  return Object.freeze({
+    name: "runner-environment",
+    content: `## Runner execution environment
+- Platform: ${JSON.stringify(environment.platform)}
+- Working directory: ${JSON.stringify(environment.workspace)}
+- 选择与该平台兼容的可执行程序和路径格式。
+- \`bash\` 工具虽然沿用这个名称，但它直接启动 command，不经过 shell 解析；command 只能放可执行程序名，参数必须逐项放入 args。
+${shellGuidance}`,
+  });
+}
+
 export const codingAgentModule: AgentModule = Object.freeze({
   id: "nova.coding-agent",
   tools: Object.freeze([readFile, readDocument, readUrl, grep, listDir, gitDiff, writeFile, editFile, bash, todoWrite]),

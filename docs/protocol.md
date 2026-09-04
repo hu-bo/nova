@@ -156,6 +156,12 @@ interface ContextUsage {
   confidence: "high" | "low";
 }
 
+type ContextCompactedEvent = {
+  type: "context.compacted";
+  trigger: "manual" | "threshold" | "overflow";
+  summarized: boolean;
+};
+
 interface PromptTokenEstimate {
   tokens: number;
   estimated: true;

@@ -14,6 +14,7 @@ export type UiEvent =
   | { type: "decision.resolved"; decisionId: string }
   | { type: "todo.updated"; items: Todo[] }
   | ({ type: "context.updated" } & import("./rest.js").ContextUsage)
+  | { type: "context.compacted"; trigger: "manual" | "threshold" | "overflow"; summarized: boolean }
   | { type: "run.end"; runId: string; stopReason: string }
   | { type: "error"; code: string; message: string };
 
@@ -54,6 +55,11 @@ export const UiEventSchema: z.ZodType<UiEvent> = z.discriminatedUnion("type", [
     contextWindow: z.number().int().positive(),
     maxInputTokens: z.number().int().positive(),
     confidence: z.enum(["high", "low"]),
+  }),
+  z.object({
+    type: z.literal("context.compacted"),
+    trigger: z.enum(["manual", "threshold", "overflow"]),
+    summarized: z.boolean(),
   }),
   z.object({ type: z.literal("run.end"), runId: z.string(), stopReason: z.string() }),
   z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),

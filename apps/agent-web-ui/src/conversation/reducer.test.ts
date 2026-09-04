@@ -108,6 +108,21 @@ describe("conversationReducer", () => {
     expect(compacted.contextUsage).toEqual({ ...usage, estimatedInputTokens: 12_000 });
   });
 
+  it("keeps compaction reason visible until the user dismisses it", () => {
+    const compacted = conversationReducer(initialConversationState, {
+      type: "event",
+      conversationId: "conversation-1",
+      event: { type: "context.compacted", trigger: "overflow", summarized: false },
+    });
+    expect(compacted.contextCompaction).toEqual({
+      type: "context.compacted",
+      trigger: "overflow",
+      summarized: false,
+    });
+
+    expect(conversationReducer(compacted, { type: "clear-context-compaction" }).contextCompaction).toBeNull();
+  });
+
   it("keeps an in-memory streaming message when a returning route hydrates persisted history", () => {
     const streaming = conversationReducer(initialConversationState, {
       type: "event",

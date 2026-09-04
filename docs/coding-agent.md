@@ -394,6 +394,11 @@ const agent = codingHarness.createAgent({
 })
 ```
 
+`environmentSummary` 必须在 Composition Root 中由当前已选中的 `RunnerSession.identity` 生成，至少包含
+`platform`、实际工作目录，以及 `bash` 工具“直接启动 executable、不会解析 shell 语法”的语义。Windows
+Runner 要明确使用 Windows 可用命令；只有显式启动对应 shell 时才使用管道、重定向或 shell 内建语法。
+该信息不复制进 Project 或 Conversation，Runner 重连后重建 runtime 时始终读取当前注册事实。
+
 通用 Chat 不使用 Coding Module：
 
 ```ts

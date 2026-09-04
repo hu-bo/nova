@@ -290,7 +290,8 @@ Composer 的 Skill 菜单提供 `/compact` 与 `/clear`。只有输入首字符�
 Loop 同时改 Entry 分支。`/clear` 清空后续模型上下文，但保留 UI 可见的消息历史。
 
 页面通过 `GET /conversations/:id/context` 获取初始 `ContextUsage`，之后由 SSE
-`context.updated` 覆盖。Composer 底部与模型选择并列展示
+`context.updated` 覆盖。自动或手动压缩成功后，SSE `context.compacted` 明确展示压缩原因；摘要失败而
+回退到省略中段时也会如实告知，避免上下文百分比下降却没有解释。Composer 底部与模型选择并列展示
 `≈ estimatedInputTokens / maxInputTokens` 的整数百分比；波浪号明确表示本地估算，最近一次 provider
 实测只用于服务端差量校准。独立文本估算使用 `POST /conversations/:id/token-estimate`，并复用会话
 当前模型，不向客户端暴露模型凭据。

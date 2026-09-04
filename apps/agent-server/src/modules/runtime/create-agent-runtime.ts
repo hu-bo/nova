@@ -1,6 +1,6 @@
 import type { Agent, SessionStorage } from "@nova/agent-core";
 import { createHarness } from "@nova/harness";
-import { codingAgentModule } from "@nova/coding-agent";
+import { codingAgentModule, createRunnerEnvironmentPrompt } from "@nova/coding-agent";
 import { createLogger } from "@nova/logger";
 import { readUrl, todoWrite } from "@nova/tools";
 import { createModel } from "@nova/model-adapters";
@@ -49,6 +49,17 @@ export async function createAgentRuntime(route: EntryRoute, dependencies: AgentR
   const projectInstructions = project
     ? await loadProjectInstructions(project, userId, dependencies.runners)
     : undefined;
+  const systemPrompt = [
+    ...(projectInstructions ? [{ name: "repository-instructions", content: projectInstructions }] : []),
+    ...(runner
+      ? [
+          createRunnerEnvironmentPrompt({
+            platform: runner.identity.platform,
+            workspace: workspace ?? runner.identity.workspace,
+          }),
+        ]
+      : []),
+  ];
   return harness.createAgent({
     model: ref,
     stream: model.stream,
@@ -58,9 +69,7 @@ export async function createAgentRuntime(route: EntryRoute, dependencies: AgentR
     decide: dependencies.decisions.createDecide(conversation.id, userId),
     sessionId: conversation.id,
     userId,
-    ...(projectInstructions
-      ? { systemPrompt: [{ name: "repository-instructions", content: projectInstructions }] }
-      : {}),
+    ...(systemPrompt.length > 0 ? { systemPrompt } : {}),
     approvalPolicy: { default: "ask", byRisk: { none: "auto", read: "auto", write: "ask", exec: "ask" } },
   });
 }

@@ -125,6 +125,23 @@ it("projects estimated context usage without writing a chat message", () => {
   }
 });
 
+it("projects context compaction so the page can explain a usage drop", () => {
+  const events = createEventHub();
+  const project = projectAgentEvents("conversation-1", events, {
+    async appendMessage(message) {
+      return { ...message, seq: 1 };
+    },
+  });
+
+  project({ type: "context.compacted", trigger: "threshold", summarized: true });
+
+  const replay = events.replay("conversation-1", "0");
+  expect(replay).toMatchObject({
+    kind: "events",
+    events: [expect.objectContaining({ event: { type: "context.compacted", trigger: "threshold", summarized: true } })],
+  });
+});
+
 it("keeps approved file changes as diff blocks after the tool completes", async () => {
   const saved: MessageRow[] = [];
   const project = projectAgentEvents("conversation-1", createEventHub(), {

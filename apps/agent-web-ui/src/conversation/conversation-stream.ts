@@ -134,6 +134,10 @@ export class ConversationStream {
   }
 
   private handleMessage(source: EventSourceLike, message: MessageEvent<string>): void {
+    // Advance past a malformed event as well. Otherwise reconnecting would replay the
+    // same poison event forever and prevent a later run.end from reaching the UI.
+    if (message.lastEventId) this.lastEventId = message.lastEventId;
+
     let event: UiEvent;
     try {
       event = UiEventSchema.parse(JSON.parse(message.data));
@@ -143,11 +147,8 @@ export class ConversationStream {
         code: "INVALID_SSE_EVENT",
         message: error instanceof Error ? error.message : "收到无效的实时消息",
       });
-      this.close(error instanceof Error ? error : undefined);
       return;
     }
-
-    if (message.lastEventId) this.lastEventId = message.lastEventId;
 
     if (event.type === "error" && event.code === "RESYNC") {
       const task = this.resync(source);
