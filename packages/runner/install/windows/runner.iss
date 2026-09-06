@@ -43,8 +43,9 @@ var
 
 function TomlEscape(Value: String): String;
 begin
-  Result := StringChangeEx(Value, '\', '\\', True);
-  Result := StringChangeEx(Result, '"', '\"', True);
+  Result := Value;
+  StringChangeEx(Result, '\', '\\', True);
+  StringChangeEx(Result, '"', '\"', True);
 end;
 
 function HasLineBreak(Value: String): Boolean;
