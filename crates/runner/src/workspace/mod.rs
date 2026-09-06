@@ -77,6 +77,42 @@ impl Workspace {
         Ok(result)
     }
 
+    /// Resolve an existing directory entry without following its final symlink.
+    ///
+    /// Destructive operations need this distinction: resolving `link` with `resolve()`
+    /// produces the link target, so removing that path would remove the target instead of
+    /// the link. Canonicalizing only the parent still validates containment while preserving
+    /// the final directory entry that the caller named.
+    pub fn resolve_entry(&self, input: &str) -> Result<PathBuf, RunnerError> {
+        let candidate = if Path::new(input).is_absolute() {
+            PathBuf::from(input)
+        } else {
+            self.root.join(input)
+        };
+        let normalized = normalize_lexically(&candidate);
+        if normalized == self.root {
+            return Ok(self.root.clone());
+        }
+
+        let Some(parent) = normalized.parent() else {
+            return Err(RunnerError::out_of_workspace(format!(
+                "{input:?} does not resolve within the workspace"
+            )));
+        };
+        let Some(name) = normalized.file_name() else {
+            return Err(RunnerError::out_of_workspace(format!(
+                "{input:?} does not name a workspace entry"
+            )));
+        };
+        let canonical_parent = std::fs::canonicalize(parent)?;
+        if !canonical_parent.starts_with(&self.root) {
+            return Err(RunnerError::out_of_workspace(format!(
+                "{input:?} escapes the workspace root"
+            )));
+        }
+        Ok(canonical_parent.join(name))
+    }
+
     /// Portable, forward-slash-normalized path relative to the workspace root, used for
     /// values handed back to the client (`FileInfo.path`, `GrepMatch.file`, ...) so they
     /// stay stable regardless of how the caller originally phrased the request or which OS

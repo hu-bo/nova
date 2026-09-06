@@ -1,7 +1,7 @@
 //! File operations. Runner-side implementation of docs/agent-core.md §3.4's `FileSystem`
 //! surface, exposed over the wire as `ReadFile` / `WriteFile` / `FileOp` (proto.md §4.2).
-//! All paths are resolved through `Workspace::resolve` first — this module never touches a
-//! path the caller handed it directly.
+//! All paths are resolved through `Workspace` first — this module never touches a path the
+//! caller handed it directly. Destructive operations preserve the final symlink entry.
 
 use std::fs::File as StdFile;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
@@ -103,7 +103,10 @@ fn walk(
 }
 
 pub fn remove(workspace: &Workspace, path: &str, recursive: bool) -> Result<(), RunnerError> {
-    let resolved = workspace.resolve(path)?;
+    let resolved = workspace.resolve_entry(path)?;
+    if resolved == workspace.root() {
+        return Err(RunnerError::invalid("workspace root cannot be removed"));
+    }
     let metadata = std::fs::symlink_metadata(&resolved).map_err(RunnerError::from)?;
     if metadata.is_dir() {
         if recursive {
@@ -117,9 +120,17 @@ pub fn remove(workspace: &Workspace, path: &str, recursive: bool) -> Result<(), 
 }
 
 pub fn rename(workspace: &Workspace, from: &str, to: &str) -> Result<(), RunnerError> {
-    // `to` commonly doesn't exist yet — resolve() already handles non-existent leaves.
-    let from = workspace.resolve(from)?;
-    let to = workspace.resolve(to)?;
+    let from = workspace.resolve_entry(from)?;
+    let to = workspace.resolve_entry(to)?;
+    if from == workspace.root() {
+        return Err(RunnerError::invalid("workspace root cannot be renamed"));
+    }
+    if std::fs::symlink_metadata(&to).is_ok() {
+        return Err(RunnerError::new(
+            crate::pb::common::ErrorCode::Exists,
+            format!("rename destination {to:?} already exists"),
+        ));
+    }
     std::fs::rename(&from, &to).map_err(RunnerError::from)
 }
 
@@ -444,5 +455,70 @@ mod tests {
 
         assert_eq!(names, ["a", "a/nested", "a/nested/source.rs", "z.txt"]);
         assert!(list(&workspace, "", MAX_LIST_DEPTH + 1).is_err());
+    }
+
+    #[test]
+    fn refuses_to_remove_or_rename_the_workspace_root() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace = Workspace::new(directory.path().to_path_buf()).unwrap();
+
+        assert!(remove(&workspace, "", true).is_err());
+        assert!(rename(&workspace, "", "renamed").is_err());
+        assert!(workspace.root().is_dir());
+    }
+
+    fn symlink_file(original: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(original, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(original, link).is_ok()
+        }
+    }
+
+    #[test]
+    fn removing_a_symlink_does_not_remove_its_target() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("target.txt");
+        let link = directory.path().join("link.txt");
+        std::fs::write(&target, "keep me").unwrap();
+        if !symlink_file(&target, &link) {
+            eprintln!("skipping: this environment can't create symlinks");
+            return;
+        }
+        let workspace = Workspace::new(directory.path().to_path_buf()).unwrap();
+
+        remove(&workspace, "link.txt", false).unwrap();
+
+        assert!(!link.exists());
+        assert_eq!(std::fs::read_to_string(target).unwrap(), "keep me");
+    }
+
+    #[test]
+    fn rename_does_not_overwrite_or_follow_a_symlink() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("target.txt");
+        let link = directory.path().join("link.txt");
+        let moved = directory.path().join("moved-link.txt");
+        std::fs::write(&target, "keep me").unwrap();
+        if !symlink_file(&target, &link) {
+            eprintln!("skipping: this environment can't create symlinks");
+            return;
+        }
+        let workspace = Workspace::new(directory.path().to_path_buf()).unwrap();
+
+        assert!(rename(&workspace, "link.txt", "target.txt").is_err());
+        rename(&workspace, "link.txt", "moved-link.txt").unwrap();
+
+        assert!(!link.exists());
+        assert!(
+            std::fs::symlink_metadata(moved)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read_to_string(target).unwrap(), "keep me");
     }
 }
