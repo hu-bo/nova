@@ -183,6 +183,7 @@ message FileOpRequest {
     MkdirOp   mkdir   = 5;
     TempDirOp temp_dir = 6;
     GrepOp    grep    = 7;
+    ReadTextOp read_text = 8;
   }
 }
 
@@ -193,6 +194,12 @@ message RenameOp  { string from = 1; string to = 2; }
 message MkdirOp   { string path = 1; }
 message TempDirOp { string prefix = 1; }
 message GrepOp    { string pattern = 1; string path = 2; string glob = 3; uint32 max_results = 4; }
+message ReadTextOp {
+  string path      = 1;
+  uint64 offset    = 2; // 1-based 行号，0 = 1
+  uint32 limit     = 3; // 0 = Runner 缺省值
+  uint32 max_bytes = 4; // 0 = Runner 缺省值
+}
 
 message FileOpResponse {
   oneof result {
@@ -201,6 +208,7 @@ message FileOpResponse {
     google.protobuf.Empty ok = 3;   // remove / rename / mkdir
     string      path     = 4;       // temp_dir
     GrepResult  grep     = 5;
+    ReadTextResult read_text = 6;
   }
 }
 
@@ -209,12 +217,26 @@ message ListResult { repeated DirEntry entries = 1; }
 message DirEntry   { string name = 1; FileKind kind = 2; }
 message GrepResult { repeated GrepMatch matches = 1; uint32 total = 2; bool truncated = 3; }
 message GrepMatch  { string file = 1; uint32 line = 2; string text = 3; }
+message ReadTextResult {
+  string text                 = 1;
+  uint64 start_line           = 2;
+  uint64 end_line             = 3;
+  optional uint64 total_lines = 4; // 读到 EOF 时才可知
+  uint64 total_size           = 5;
+  bool truncated              = 6;
+  bool line_truncated         = 7;
+}
 
 enum FileKind { FILE_KIND_UNSPECIFIED = 0; FILE_KIND_FILE = 1; FILE_KIND_DIR = 2; FILE_KIND_SYMLINK = 3; }
 ```
 
 **`GrepOp` 放在文件面**而不是让 `grep` tool 拼 shell：跨平台（Windows 无 `grep`）、
 转义安全、结果结构化。见 `tools.md` §3。
+
+`ReadFileRequest` 保留字节范围语义，供二进制文档和底层传输使用；Agent 的源码读取使用
+`ReadTextOp`。行选择在 Runner 内完成，单次同时受 `limit` 和 `max_bytes` 约束，因此读取大文件
+的一小段不会先把整文件传给 Node.js。`total_lines` 只有本次扫描到 EOF 时才返回；不得为了填充
+这个统计值继续扫描剩余文件。
 
 **错误分两级**：
 

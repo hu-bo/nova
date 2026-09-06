@@ -21,12 +21,12 @@ export function useProject(projectId: string | undefined) {
   };
 }
 
-export function useConversations(projectId?: string) {
+export function useConversations(projectId?: string, enabled = true) {
   const { api } = useAuth();
   return useQuery({
     queryKey: queryKeys.conversations(projectId),
     queryFn: () => api!.listConversations(projectId),
-    enabled: Boolean(api),
+    enabled: Boolean(api) && enabled,
     staleTime: 5_000,
   });
 }
@@ -55,7 +55,9 @@ export function useProjectMutations() {
     bind: useMutation({
       mutationFn: ({ id, runnerId, path }: { id: string; runnerId: string; path: string }) =>
         api!.bindProject(id, { runnerId, path }),
-      onSuccess: refresh,
+      onSuccess: async () => {
+        await Promise.all([refresh(), queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists })]);
+      },
     }),
     setInstructions: useMutation({
       mutationFn: ({ id, instructions }: { id: string; instructions: ProjectInstructions }) =>

@@ -11,6 +11,7 @@ services:
       RUNNER_HOST: 0.0.0.0
       RUNNER_PORT: 9204
       RUNNER_PUBLIC_URL: http://nova-grpc.8and1.cn
+      LOG_DIR: /data/app/agent-server/logs
     ports:
       - "9203:9203"
       - "9204:9204"

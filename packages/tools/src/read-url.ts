@@ -13,9 +13,9 @@ export const readUrl: Tool<z.output<typeof schema>> = {
   schema,
   risk: "read",
   requiresContext: false,
-  async execute({ url }, ctx) {
+  async execute({ url }, ctx, signal) {
     try {
-      const response = await safeFetch(url, ctx?.signal);
+      const response = await safeFetch(url, ctx?.signal ?? signal);
       const bytes = new Uint8Array(await response.arrayBuffer());
       if (bytes.byteLength > MAX_DOCUMENT_BYTES) return errorResult({ code: "TOO_LARGE" }, "URL content exceeds 20 MB");
       const contentType =

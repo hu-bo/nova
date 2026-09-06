@@ -4,13 +4,14 @@ import { fileURLToPath } from "node:url";
 
 const configSchema = {
   type: "object",
-  required: ["DATABASE_URL", "AUTH_SERVICE_URL", "MODEL_CONFIG_ENCRYPTION_KEY"],
+  required: ["DATABASE_URL", "AUTH_SERVICE_URL", "MODEL_CONFIG_ENCRYPTION_KEY", "TAVILY_API_KEY"],
   properties: {
     HOST: { type: "string", default: "127.0.0.1" },
     PORT: { type: "integer", minimum: 1, maximum: 65_535, default: 9203 },
     DATABASE_URL: { type: "string", minLength: 1 },
     AUTH_SERVICE_URL: { type: "string", pattern: "^https?://\\S+$", default: "http://auth.8and1.cn" },
     MODEL_CONFIG_ENCRYPTION_KEY: { type: "string", minLength: 43, maxLength: 44 },
+    TAVILY_API_KEY: { type: "string", minLength: 1 },
     RUNNER_HOST: { type: "string", default: "127.0.0.1" },
     RUNNER_PORT: { type: "integer", minimum: 1, maximum: 65_535, default: 9204 },
     RUNNER_PUBLIC_URL: { type: "string", pattern: "^https?://\\S+$" },
@@ -29,6 +30,7 @@ export interface ServerConfig {
   DATABASE_URL: string;
   AUTH_SERVICE_URL: string;
   MODEL_CONFIG_ENCRYPTION_KEY: string;
+  TAVILY_API_KEY: string;
   RUNNER_HOST: string;
   RUNNER_PORT: number;
   RUNNER_PUBLIC_URL: string;

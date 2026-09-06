@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import type { ToolContext } from "@nova/agent-core";
 import { bash } from "./bash.js";
 import { editFile } from "./edit-file.js";
+import { grep } from "./grep.js";
+import { listDir } from "./list-dir.js";
 import { readDocument } from "./read-document.js";
 import { readFile } from "./read-file.js";
 import { readUrl } from "./read-url.js";
@@ -25,7 +27,18 @@ it("maps Runner failures and non-zero command exits to error", async () => {
 
 it("reports edit semantic failures explicitly", async () => {
   const runtime = ctx({ ok: true, value: { exitCode: 0, stdout: "", stderr: "", truncated: false, durationMs: 1 } });
-  runtime.fs.read = async () => ({ ok: true, value: { text: "hello", totalLines: 1, truncated: false } });
+  runtime.fs.read = async () => ({
+    ok: true,
+    value: {
+      text: "hello",
+      startLine: 1,
+      endLine: 1,
+      totalLines: 1,
+      totalSize: 5,
+      truncated: false,
+      lineTruncated: false,
+    },
+  });
   const result = await editFile.execute({ path: "a.txt", oldText: "missing", newText: "new" }, runtime);
   expect(result.status).toBe("error");
   expect(result.details).toMatchObject({ reason: "not_found" });
@@ -43,6 +56,50 @@ it("rejects binary content from read_file", async () => {
   const result = await readFile.execute({ path: "report.pdf" }, runtime);
   expect(result.status).toBe("error");
   expect(result.details).toMatchObject({ code: "BINARY_FILE", path: "report.pdf" });
+});
+
+it("uses Runner-side bounded line reads", async () => {
+  const runtime = ctx({ ok: true, value: { exitCode: 0, stdout: "", stderr: "", truncated: false, durationMs: 1 } });
+  runtime.fs.read = async (path, opts) => {
+    expect(path).toBe("large.log");
+    expect(opts).toEqual({ offset: 500, limit: 25 });
+    return {
+      ok: true,
+      value: {
+        text: "alpha\nbeta\n",
+        startLine: 500,
+        endLine: 501,
+        totalSize: 50_000_000,
+        truncated: true,
+        lineTruncated: false,
+      },
+    };
+  };
+
+  const result = await readFile.execute({ path: "large.log", offset: 500, limit: 25 }, runtime);
+
+  expect(result.content).toEqual([
+    { type: "text", text: "500: alpha\n501: beta\n… more content available from line 502" },
+  ]);
+  expect(result.details).toMatchObject({ totalSize: 50_000_000, truncated: true });
+});
+
+it("preserves grep truncation facts and list depth", async () => {
+  const runtime = ctx({ ok: true, value: { exitCode: 0, stdout: "", stderr: "", truncated: false, durationMs: 1 } });
+  runtime.fs.grep = async () => ({
+    ok: true,
+    value: { matches: [{ file: "src/a.ts", line: 3, text: "needle" }], total: 2, truncated: true },
+  });
+  runtime.fs.list = async (_path, opts) => {
+    expect(opts).toEqual({ depth: 3 });
+    return { ok: true, value: [{ name: "src/a.ts", kind: "file" }] };
+  };
+
+  const grepResult = await grep.execute({ pattern: "needle" }, runtime);
+  const listResult = await listDir.execute({ depth: 3 }, runtime);
+
+  expect(grepResult.details).toMatchObject({ total: 2, truncated: true });
+  expect(listResult.status).toBe("ok");
 });
 
 it("extracts workbook sheets through read_document", async () => {

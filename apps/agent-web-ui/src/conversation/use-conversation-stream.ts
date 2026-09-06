@@ -5,8 +5,9 @@ import { conversationStore } from "./store.js";
 
 interface UseConversationStreamOptions {
   conversationId: string;
-  loadSnapshot: () => Promise<ChatMessage[]>;
+  loadSnapshot: (conversationId: string) => Promise<ChatMessage[]>;
   onRunEnd: () => void;
+  enabled?: boolean;
 }
 
 interface StreamEntry {
@@ -25,7 +26,7 @@ function streamFor(conversationId: string, options: UseConversationStreamOptions
     onEvent: (event) => conversationStore.dispatch(conversationId, { type: "event", event, conversationId }),
     onOpen: () => conversationStore.dispatch(conversationId, { type: "clear-error" }),
     onResync: async () => {
-      const messages = await options.loadSnapshot();
+      const messages = await options.loadSnapshot(conversationId);
       conversationStore.dispatch(conversationId, { type: "hydrate", messages });
     },
     onRunEnd: () => {
@@ -45,6 +46,7 @@ export function useConversationStream(options: UseConversationStreamOptions) {
   optionsRef.current = options;
 
   useEffect(() => {
+    if (options.enabled === false) return;
     const entry = streamFor(options.conversationId, optionsRef.current);
     entry.mounted += 1;
     void entry.stream.ensureConnected().catch(() => undefined);
@@ -54,12 +56,26 @@ export function useConversationStream(options: UseConversationStreamOptions) {
       entry.stream.close();
       streams.delete(options.conversationId);
     };
-  }, [options.conversationId]);
+  }, [options.conversationId, options.enabled]);
 
   return {
     ensureConnected: useCallback(
-      () => streamFor(options.conversationId, optionsRef.current).stream.ensureConnected(),
-      [options.conversationId],
+      (conversationId?: string) => {
+        const targetConversationId = conversationId ?? options.conversationId;
+        return options.enabled === false && !conversationId
+          ? Promise.reject(new Error("临时会话尚未创建，无法连接消息流"))
+          : streamFor(targetConversationId, {
+              ...optionsRef.current,
+              conversationId: targetConversationId,
+            }).stream.ensureConnected();
+      },
+      [options.conversationId, options.enabled],
     ),
+    release: useCallback((conversationId: string) => {
+      const entry = streams.get(conversationId);
+      if (!entry || entry.mounted || conversationStore.state(conversationId).isRunning) return;
+      entry.stream.close();
+      streams.delete(conversationId);
+    }, []),
   };
 }

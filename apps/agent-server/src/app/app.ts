@@ -1,6 +1,6 @@
 import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import pino from "pino";
 import { createDailyFileStream, createLogger } from "@nova/logger";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
@@ -69,7 +69,7 @@ export function createApp(logger = true): FastifyInstance {
       err: pino.stdSerializers.err,
     },
   };
-  const file = createDailyFileStream(fileURLToPath(new URL("../../logs/", import.meta.url)));
+  const file = createDailyFileStream(resolve(process.env.LOG_DIR ?? "logs"));
   const loggerInstance: FastifyBaseLogger = createLogger("agent-server", {
     ...options,
     stream: pino.multistream([{ stream: process.stdout }, { stream: file }]),

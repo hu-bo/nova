@@ -14,7 +14,7 @@ const binary = process.env.NOVA_RUNNER_BIN ?? join(packageRoot, "vendor", target
 try {
   accessSync(binary, constants.X_OK);
 } catch {
-  console.error(`@nova/runner: no nova-runner binary is available for ${target}.`);
+  console.error(`@nnova/runner: no nova-runner binary is available for ${target}.`);
   console.error(`Expected: ${binary}`);
   console.error("Install a package version containing this platform or set NOVA_RUNNER_BIN to a compatible binary.");
   process.exit(1);
@@ -22,7 +22,7 @@ try {
 
 const child = spawn(binary, process.argv.slice(2), { stdio: "inherit", windowsHide: false });
 child.on("error", (error) => {
-  console.error(`@nova/runner: failed to start ${binary}: ${error.message}`);
+  console.error(`@nnova/runner: failed to start ${binary}: ${error.message}`);
   process.exit(1);
 });
 child.on("exit", (code, signal) => {

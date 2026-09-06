@@ -7,29 +7,21 @@ on:
 
 jobs:
   build-linux:
-    name: Build linux-x64 (Rocky Linux 9)
+    name: Build linux-x64 (musl)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Build with glibc 2.34
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace \
-            rockylinux:9 \
-            bash -lc '
-              set -euo pipefail
-              dnf install -y gcc gcc-c++ make perl pkg-config openssl-devel
-              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-              source "$HOME/.cargo/env"
-              cargo build -p nova-runner --release
-            '
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - name: Install musl toolchain
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Build static Linux binary
+        run: cargo build -p nova-runner --release --target x86_64-unknown-linux-musl
       - uses: actions/upload-artifact@v6
         with:
           name: nova-runner-linux-x64
-          path: target/release/nova-runner
+          path: target/x86_64-unknown-linux-musl/release/nova-runner
           if-no-files-found: error
 
   build-native:
@@ -51,6 +43,83 @@ jobs:
           name: nova-runner-${{ matrix.target }}
           path: ${{ matrix.binary }}
           if-no-files-found: error
+
+  package-windows:
+    name: Package Windows installer
+    needs: build-native
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v6
+        with:
+          name: nova-runner-win32-x64
+          path: artifacts/nova-runner-win32-x64
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+      - name: Build setup executable
+        shell: powershell
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^runner-v', ''
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $binary = (Resolve-Path "artifacts\nova-runner-win32-x64\nova-runner.exe").Path
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & $compiler "/DMyAppVersion=$version" "/DRunnerBinary=$binary" "/O$PWD\dist" "packages\runner\install\windows\runner.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v6
+        with:
+          name: nova-runner-windows-setup
+          path: dist/nova-runner-setup.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-linux, build-native, package-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: nova-runner-*
+          path: artifacts
+          merge-multiple: false
+      - name: Package release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          chmod +x artifacts/nova-runner-linux-x64/nova-runner
+          chmod +x artifacts/nova-runner-darwin-x64/nova-runner
+          chmod +x artifacts/nova-runner-darwin-arm64/nova-runner
+
+          tar -C artifacts/nova-runner-linux-x64 -czf dist/nova-runner-linux-x64.tar.gz nova-runner
+          tar -C artifacts/nova-runner-darwin-x64 -czf dist/nova-runner-darwin-x64.tar.gz nova-runner
+          tar -C artifacts/nova-runner-darwin-arm64 -czf dist/nova-runner-darwin-arm64.tar.gz nova-runner
+          cp artifacts/nova-runner-windows-setup/nova-runner-setup.exe dist/
+          cp packages/runner/install/linux/install.sh dist/install-runner.sh
+
+          cd dist
+          sha256sum \
+            nova-runner-linux-x64.tar.gz \
+            nova-runner-darwin-x64.tar.gz \
+            nova-runner-darwin-arm64.tar.gz \
+            nova-runner-setup.exe \
+            install-runner.sh > SHA256SUMS
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#runner-v}"
+          gh release create "$GITHUB_REF_NAME" \
+            dist/* \
+            --verify-tag \
+            --generate-notes \
+            --title "Nova Runner $version"
 
   publish:
     needs: [build-linux, build-native]

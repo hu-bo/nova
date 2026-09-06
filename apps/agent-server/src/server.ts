@@ -6,7 +6,7 @@ import { pgSessionStorage } from "./db/pg-session-storage.js";
 import { createPendingDecisions } from "./modules/decision/pending-decisions.js";
 import { projectAgentEvents } from "./modules/projection/project-agent-events.js";
 import { createRunnerRegistry } from "./modules/runner/registry.js";
-import { createAgentRuntime } from "./modules/runtime/create-agent-runtime.js";
+import { createAgentRuntimeFactory } from "./modules/runtime/create-agent-runtime.js";
 import { createEventHub } from "./modules/runtime/event-hub.js";
 import { createRuntimeRegistry } from "./modules/runtime/runtime-registry.js";
 import { createRunnerSdk } from "@nova/runner-sdk";
@@ -14,6 +14,7 @@ import { createCredentialCipher } from "./modules/model-config/credential.js";
 import { createPgModelConfigStore } from "./modules/model-config/model-config.store.js";
 import { createMinioUploadStorage } from "./modules/uploads/upload-storage.js";
 import { createLogger } from "@nova/logger";
+import { createWebSearch } from "@nova/tools";
 
 const logger = createLogger("agent-server").child("server");
 
@@ -79,13 +80,14 @@ logger.info(
   "runner gRPC listener started",
 );
 const decisions = createPendingDecisions(events);
+const createAgentRuntime = createAgentRuntimeFactory({
+  storage: (conversationId) => pgSessionStorage(database.db, conversationId),
+  decisions,
+  runners,
+  webSearch: createWebSearch({ apiKey: config.TAVILY_API_KEY }),
+});
 const runtimes = createRuntimeRegistry(
-  (route) =>
-    createAgentRuntime(route, {
-      storage: (conversationId) => pgSessionStorage(database.db, conversationId),
-      decisions,
-      runners,
-    }),
+  createAgentRuntime,
   (conversationId, agent) => agent.subscribe(projectAgentEvents(conversationId, events, database.store)),
   (failure) => {
     logger.error(

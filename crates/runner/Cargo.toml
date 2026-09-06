@@ -25,6 +25,8 @@ globset = "0.4"
 regex = "1.11"
 ignore = "0.4"
 tempfile = "3.14"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

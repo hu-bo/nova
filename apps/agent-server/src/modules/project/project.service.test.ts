@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import type { ModelConfig } from "@nova/protocol";
 import { createMemoryStore } from "../../store.js";
 import type { RunnerRegistry } from "../runner/registry.js";
 import { createProjectService, loadProjectInstructions } from "./project.service.js";
@@ -52,6 +53,61 @@ it("stores custom project instructions without requiring a runner", async () => 
   });
 
   expect(updated.instructions).toEqual({ source: "custom", content: "Keep changes small." });
+});
+
+it("moves only unbound or disconnected project conversations to a newly bound online runner", async () => {
+  const store = createMemoryStore();
+  const project = await store.createProject({ userId: "alice", name: "Nova" });
+  const modelConfig: ModelConfig = {
+    provider: "openai",
+    endpoint: "https://api.openai.com/v1",
+    model: "gpt-5",
+    credential: "test-secret",
+    contextWindow: 128_000,
+    maxOutput: 16_384,
+    thinkingLevels: ["off", "high"],
+    parallelToolCalls: true,
+    reasoningFormat: "openai",
+    inputModalities: ["text"],
+  };
+  const unbound = await store.createConversation({
+    userId: "alice",
+    projectId: project.id,
+    runnerId: null,
+    title: "Unbound",
+    modelConfig,
+  });
+  const disconnected = await store.createConversation({
+    userId: "alice",
+    projectId: project.id,
+    runnerId: "runner-offline",
+    title: "Disconnected",
+    modelConfig,
+  });
+  const connected = await store.createConversation({
+    userId: "alice",
+    projectId: project.id,
+    runnerId: "runner-online",
+    title: "Connected",
+    modelConfig,
+  });
+  const runners = {
+    state: () => "ready",
+    verifyWorkspace: async () => {},
+    isOnline: (_userId: string, runnerId: string) => runnerId === "runner-new" || runnerId === "runner-online",
+  } as unknown as RunnerRegistry;
+
+  await createProjectService(store, runners).bind("alice", project.id, "runner-new", "/work/nova");
+
+  await expect(store.routeConversation("alice", unbound.id)).resolves.toMatchObject({
+    conversation: { runnerId: "runner-new" },
+  });
+  await expect(store.routeConversation("alice", disconnected.id)).resolves.toMatchObject({
+    conversation: { runnerId: "runner-new" },
+  });
+  await expect(store.routeConversation("alice", connected.id)).resolves.toMatchObject({
+    conversation: { runnerId: "runner-online" },
+  });
 });
 
 it("auto-detects CLAUDE.md when the workspace root has no AGENTS.md", async () => {

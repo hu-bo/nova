@@ -6,7 +6,18 @@ const required = {
   DATABASE_URL: "postgres://test",
   AUTH_SERVICE_URL: "http://auth.example.com",
   MODEL_CONFIG_ENCRYPTION_KEY: "a".repeat(43),
+  TAVILY_API_KEY: "tvly-test",
 };
+
+describe("required provider configuration", () => {
+  it("rejects startup without a Tavily API key", async () => {
+    const app = Fastify();
+    const { TAVILY_API_KEY: _, ...withoutTavily } = required;
+
+    await expect(loadConfig(app, withoutTavily)).rejects.toThrow(/TAVILY_API_KEY/);
+    await app.close();
+  });
+});
 
 describe("runner public endpoint configuration", () => {
   it("derives the public endpoint from the listening port", async () => {

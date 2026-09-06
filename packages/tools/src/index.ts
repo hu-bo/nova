@@ -8,3 +8,4 @@ export { listDir } from "./list-dir.js";
 export { gitDiff } from "./git-diff.js";
 export { todoWrite } from "./todo-write.js";
 export { readUrl } from "./read-url.js";
+export { createWebSearch } from "./web-search.js";

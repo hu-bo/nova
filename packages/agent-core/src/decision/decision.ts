@@ -149,7 +149,7 @@ async function buildCodeChanges(
 
   if (call.name === "edit_file" && typeof args.oldText === "string" && typeof args.newText === "string") {
     const current = await fs.read(args.path);
-    if (!current.ok) return undefined;
+    if (!current.ok || current.value.truncated || current.value.lineTruncated) return undefined;
     const occurrences = current.value.text.split(args.oldText).length - 1;
     if (occurrences === 0 || (occurrences > 1 && args.replaceAll !== true)) return undefined;
     const newText =
@@ -162,6 +162,7 @@ async function buildCodeChanges(
   if (call.name === "write_file" && typeof args.content === "string") {
     const current = await fs.read(args.path);
     if (!current.ok && current.error.code !== "NOT_FOUND") return undefined;
+    if (current.ok && (current.value.truncated || current.value.lineTruncated)) return undefined;
     return [{ path: args.path, oldText: current.ok ? current.value.text : "", newText: args.content }];
   }
 

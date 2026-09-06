@@ -411,9 +411,14 @@ TaskFlow 是本仓库**风险最高的抽象**。原退出条件：若 agent-cor
 |---|---|---|
 | RunnerTool | `bash` `read_file` `write_file` `grep` `git_diff` | `packages/tools` |
 | StateTool | `todo_write` | `packages/tools`；不访问 FS / OS |
-| RemoteTool | `web_search` `github` `jira` | `packages/tools` |
+| RemoteTool | `read_url`、`web_search`（Phase 2）；`github` `jira`（按需） | `packages/tools` |
 | AgentTool | `spawn_agent` `delegate_task` `ask_user` | **`agent-core`**，不在此包 |
 | CompositeTool | 多 Tool / Model 组合 | Phase 3 |
+
+`web_search` 是首个 RemoteTool：通过 `createWebSearch({ apiKey })` 接收 Host 注入的服务端凭据，
+直接调用固定的 Tavily HTTP endpoint，声明 `requiresContext: false`，因此 Chat 与 Project 均可使用。
+RemoteTool 自己拥有 provider timeout、响应校验与错误映射；Agent Loop 始终传递 call-level
+`AbortSignal`，即使当前会话没有 Workspace。
 
 **不负责**：Planning、Task DAG、Retry policy、Runner 调度、输出截断策略、UI 文案。
 
@@ -665,7 +670,7 @@ Execution Plane。**单 crate**，内部分模块：
 ```text
 crates/runner/src/
 ├── main.rs
-├── config.rs
+├── config.rs        # CLI + typed TOML config; CLI values override file values
 ├── connection/    # 主动建立出站持久双向 gRPC 流
 ├── protocol/      # Protobuf 转换与消息路由
 ├── execution/     # Execution 状态机、并发上限、超时、取消
@@ -695,8 +700,18 @@ packages/runner-sdk ──► agent-server Runner Module
 **安全默认值**
 
 - `--server` 和 Runner 连接凭据缺失时拒绝启动
+- 后台托管从受限权限的配置文件读取凭据，不把 token 放进登录启动命令或 systemd unit
 - Runner 连接身份与用户使用权限由 Runner Module 判定
 - 不提供对用户机器的入站执行 RPC
+
+**安装与托管**
+
+- Windows 由 `packages/runner/install/windows` 把同一 Rust binary 制作为用户级
+  `nova-runner-setup.exe`，安装后交给 Task Scheduler 在用户登录时启动并在异常退出后重启。
+- Linux 由 `packages/runner/install/linux/install.sh` 从 GitHub Release 下载同一 binary，
+  校验 SHA-256，安装为 systemd system service；unit 明确指定发起安装的普通用户，
+  因此可在开机时启动但不会以 root 执行 workspace 命令。
+- 安装器只负责分发、配置和 OS 托管；不实现 Execution，不进入 Runner 的 gRPC 数据路径。
 
 **Phase 1 范围**：出站连接、注册/心跳、process spawn、输出流式转发、文件操作、
 timeout、cancel、workspace 和并发上限。
@@ -786,6 +801,8 @@ process / socket / Protobuf / gRPC streaming / cancellation / timeout 边界。
 
 Runner 领域只保留 `crates/runner`、`packages/runner-sdk` 和 agent-server Runner Module。
 `nova-runner` 是 Rust binary / 产品命令，不产生新的 TypeScript package 或 launcher 层。
+`packages/runner` 作为已有的纯分发边界，可以产生 npm 包、Windows 安装器和 Linux
+安装脚本；这些产物都只安装 `crates/runner` 生成的同一 binary。
 
 ### 6.2 `model-gateway` 与 `model-gateway-client` 全部保留
 

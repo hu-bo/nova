@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { Page } from "@nova/protocol";
@@ -228,13 +228,27 @@ export function createPgStore(databaseUrl: string): PgStore {
     },
     async bindProject(input) {
       try {
-        const [project] = await db
-          .update(projects)
-          .set({ runnerId: input.runnerId, workspace: input.workspace, updatedAt: new Date() })
-          .where(and(eq(projects.id, input.id), eq(projects.userId, input.userId)))
-          .returning();
-        if (!project) throw notFound("Project");
-        return project;
+        return await db.transaction(async (tx) => {
+          const [project] = await tx
+            .update(projects)
+            .set({ runnerId: input.runnerId, workspace: input.workspace, updatedAt: new Date() })
+            .where(and(eq(projects.id, input.id), eq(projects.userId, input.userId)))
+            .returning();
+          if (!project) throw notFound("Project");
+          if (input.rebindConversationIds?.length) {
+            await tx
+              .update(conversations)
+              .set({ runnerId: input.runnerId })
+              .where(
+                and(
+                  eq(conversations.userId, input.userId),
+                  eq(conversations.projectId, input.id),
+                  inArray(conversations.id, [...input.rebindConversationIds]),
+                ),
+              );
+          }
+          return project;
+        });
       } catch (error) {
         if (isUniqueViolation(error)) throw conflict("A project already uses this runner workspace");
         throw error;

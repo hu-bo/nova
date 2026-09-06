@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
 export const file_execution: GenFile =
   /*@__PURE__*/
   fileDesc(
-    "Cg9leGVjdXRpb24ucHJvdG8SEW5vdmEuZXhlY3V0aW9uLnYxIr0CCg5FeGVjdXRlUmVxdWVzdBIUCgxleGVjdXRpb25faWQYASABKAkSDwoHY29tbWFuZBgCIAEoCRIMCgRhcmdzGAMgAygJEgsKA2N3ZBgEIAEoCRI3CgNlbnYYBSADKAsyKi5ub3ZhLmV4ZWN1dGlvbi52MS5FeGVjdXRlUmVxdWVzdC5FbnZFbnRyeRISCgp0aW1lb3V0X21zGAYgASgNEg0KBXN0ZGluGAcgASgMEjQKCXJlc291cmNlcxgIIAEoCzIhLm5vdmEuZXhlY3V0aW9uLnYxLlJlc291cmNlTGltaXRzEisKB3NhbmRib3gYCSABKAsyGi5ub3ZhLmV4ZWN1dGlvbi52MS5TYW5kYm94GioKCEVudkVudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiOgoOUmVzb3VyY2VMaW1pdHMSEgoKY3B1X21pbGxpcxgBIAEoDRIUCgxtZW1vcnlfYnl0ZXMYAiABKAQiLwoHU2FuZGJveBIPCgduZXR3b3JrGAEgASgIEhMKC3JlYWRvbmx5X2ZzGAIgASgIIvYBCg5FeGVjdXRpb25FdmVudBIUCgxleGVjdXRpb25faWQYASABKAkSEAoIc2VxdWVuY2UYAiABKAQSJgoCdHMYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi0KB3N0YXJ0ZWQYCiABKAsyGi5ub3ZhLmV4ZWN1dGlvbi52MS5TdGFydGVkSAASKwoGb3V0cHV0GAsgASgLMhkubm92YS5leGVjdXRpb24udjEuT3V0cHV0SAASLwoIZmluaXNoZWQYDCABKAsyGy5ub3ZhLmV4ZWN1dGlvbi52MS5GaW5pc2hlZEgAQgcKBWV2ZW50IhYKB1N0YXJ0ZWQSCwoDcGlkGAEgASgFIkcKBk91dHB1dBIvCgZzdHJlYW0YASABKA4yHy5ub3ZhLmV4ZWN1dGlvbi52MS5PdXRwdXRTdHJlYW0SDAoEZGF0YRgCIAEoDCKMAQoIRmluaXNoZWQSMgoGc3RhdHVzGAEgASgOMiIubm92YS5leGVjdXRpb24udjEuRXhlY3V0aW9uU3RhdHVzEhEKCWV4aXRfY29kZRgCIAEoBRIkCgVlcnJvchgDIAEoCzIVLm5vdmEuY29tbW9uLnYxLkVycm9yEhMKC2R1cmF0aW9uX21zGAQgASgEIiUKDUNhbmNlbFJlcXVlc3QSFAoMZXhlY3V0aW9uX2lkGAEgASgJIh8KDkNhbmNlbFJlc3BvbnNlEg0KBWZvdW5kGAEgASgIIj4KD1JlYWRGaWxlUmVxdWVzdBIMCgRwYXRoGAEgASgJEg4KBm9mZnNldBgCIAEoBBINCgVsaW1pdBgDIAEoBCI6CglGaWxlQ2h1bmsSDAoEZGF0YRgBIAEoDBILCgNlb2YYAiABKAgSEgoKdG90YWxfc2l6ZRgDIAEoBCJLChBXcml0ZUZpbGVSZXF1ZXN0EgwKBHBhdGgYASABKAkSDAoEZGF0YRgCIAEoDBIOCgZhcHBlbmQYAyABKAgSCwoDZW9mGAQgASgIIjsKEVdyaXRlRmlsZVJlc3BvbnNlEhUKDWJ5dGVzX3dyaXR0ZW4YASABKAQSDwoHY3JlYXRlZBgCIAEoCCLTAgoNRmlsZU9wUmVxdWVzdBIpCgRzdGF0GAEgASgLMhkubm92YS5leGVjdXRpb24udjEuU3RhdE9wSAASKQoEbGlzdBgCIAEoCzIZLm5vdmEuZXhlY3V0aW9uLnYxLkxpc3RPcEgAEi0KBnJlbW92ZRgDIAEoCzIbLm5vdmEuZXhlY3V0aW9uLnYxLlJlbW92ZU9wSAASLQoGcmVuYW1lGAQgASgLMhsubm92YS5leGVjdXRpb24udjEuUmVuYW1lT3BIABIrCgVta2RpchgFIAEoCzIaLm5vdmEuZXhlY3V0aW9uLnYxLk1rZGlyT3BIABIwCgh0ZW1wX2RpchgGIAEoCzIcLm5vdmEuZXhlY3V0aW9uLnYxLlRlbXBEaXJPcEgAEikKBGdyZXAYByABKAsyGS5ub3ZhLmV4ZWN1dGlvbi52MS5HcmVwT3BIAEIECgJvcCIWCgZTdGF0T3ASDAoEcGF0aBgBIAEoCSIlCgZMaXN0T3ASDAoEcGF0aBgBIAEoCRINCgVkZXB0aBgCIAEoDSIrCghSZW1vdmVPcBIMCgRwYXRoGAEgASgJEhEKCXJlY3Vyc2l2ZRgCIAEoCCIkCghSZW5hbWVPcBIMCgRmcm9tGAEgASgJEgoKAnRvGAIgASgJIhcKB01rZGlyT3ASDAoEcGF0aBgBIAEoCSIbCglUZW1wRGlyT3ASDgoGcHJlZml4GAEgASgJIkoKBkdyZXBPcBIPCgdwYXR0ZXJuGAEgASgJEgwKBHBhdGgYAiABKAkSDAoEZ2xvYhgDIAEoCRITCgttYXhfcmVzdWx0cxgEIAEoDSLbAQoORmlsZU9wUmVzcG9uc2USKwoEaW5mbxgBIAEoCzIbLm5vdmEuZXhlY3V0aW9uLnYxLkZpbGVJbmZvSAASLQoEbGlzdBgCIAEoCzIdLm5vdmEuZXhlY3V0aW9uLnYxLkxpc3RSZXN1bHRIABIkCgJvaxgDIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5FbXB0eUgAEg4KBHBhdGgYBCABKAlIABItCgRncmVwGAUgASgLMh0ubm92YS5leGVjdXRpb24udjEuR3JlcFJlc3VsdEgAQggKBnJlc3VsdCJgCghGaWxlSW5mbxIMCgRwYXRoGAEgASgJEikKBGtpbmQYAiABKA4yGy5ub3ZhLmV4ZWN1dGlvbi52MS5GaWxlS2luZBIMCgRzaXplGAMgASgEEg0KBW10aW1lGAQgASgDIjoKCkxpc3RSZXN1bHQSLAoHZW50cmllcxgBIAMoCzIbLm5vdmEuZXhlY3V0aW9uLnYxLkRpckVudHJ5IkMKCERpckVudHJ5EgwKBG5hbWUYASABKAkSKQoEa2luZBgCIAEoDjIbLm5vdmEuZXhlY3V0aW9uLnYxLkZpbGVLaW5kIl0KCkdyZXBSZXN1bHQSLQoHbWF0Y2hlcxgBIAMoCzIcLm5vdmEuZXhlY3V0aW9uLnYxLkdyZXBNYXRjaBINCgV0b3RhbBgCIAEoDRIRCgl0cnVuY2F0ZWQYAyABKAgiNQoJR3JlcE1hdGNoEgwKBGZpbGUYASABKAkSDAoEbGluZRgCIAEoDRIMCgR0ZXh0GAMgASgJKmEKDE91dHB1dFN0cmVhbRIdChlPVVRQVVRfU1RSRUFNX1VOU1BFQ0lGSUVEEAASGAoUT1VUUFVUX1NUUkVBTV9TVERPVVQQARIYChRPVVRQVVRfU1RSRUFNX1NUREVSUhACKrABCg9FeGVjdXRpb25TdGF0dXMSIAocRVhFQ1VUSU9OX1NUQVRVU19VTlNQRUNJRklFRBAAEh4KGkVYRUNVVElPTl9TVEFUVVNfQ09NUExFVEVEEAESGwoXRVhFQ1VUSU9OX1NUQVRVU19GQUlMRUQQAhIeChpFWEVDVVRJT05fU1RBVFVTX0NBTkNFTExFRBADEh4KGkVYRUNVVElPTl9TVEFUVVNfVElNRURfT1VUEAQqYwoIRmlsZUtpbmQSGQoVRklMRV9LSU5EX1VOU1BFQ0lGSUVEEAASEgoORklMRV9LSU5EX0ZJTEUQARIRCg1GSUxFX0tJTkRfRElSEAISFQoRRklMRV9LSU5EX1NZTUxJTksQA2IGcHJvdG8z",
+    "Cg9leGVjdXRpb24ucHJvdG8SEW5vdmEuZXhlY3V0aW9uLnYxIr0CCg5FeGVjdXRlUmVxdWVzdBIUCgxleGVjdXRpb25faWQYASABKAkSDwoHY29tbWFuZBgCIAEoCRIMCgRhcmdzGAMgAygJEgsKA2N3ZBgEIAEoCRI3CgNlbnYYBSADKAsyKi5ub3ZhLmV4ZWN1dGlvbi52MS5FeGVjdXRlUmVxdWVzdC5FbnZFbnRyeRISCgp0aW1lb3V0X21zGAYgASgNEg0KBXN0ZGluGAcgASgMEjQKCXJlc291cmNlcxgIIAEoCzIhLm5vdmEuZXhlY3V0aW9uLnYxLlJlc291cmNlTGltaXRzEisKB3NhbmRib3gYCSABKAsyGi5ub3ZhLmV4ZWN1dGlvbi52MS5TYW5kYm94GioKCEVudkVudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiOgoOUmVzb3VyY2VMaW1pdHMSEgoKY3B1X21pbGxpcxgBIAEoDRIUCgxtZW1vcnlfYnl0ZXMYAiABKAQiLwoHU2FuZGJveBIPCgduZXR3b3JrGAEgASgIEhMKC3JlYWRvbmx5X2ZzGAIgASgIIvYBCg5FeGVjdXRpb25FdmVudBIUCgxleGVjdXRpb25faWQYASABKAkSEAoIc2VxdWVuY2UYAiABKAQSJgoCdHMYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi0KB3N0YXJ0ZWQYCiABKAsyGi5ub3ZhLmV4ZWN1dGlvbi52MS5TdGFydGVkSAASKwoGb3V0cHV0GAsgASgLMhkubm92YS5leGVjdXRpb24udjEuT3V0cHV0SAASLwoIZmluaXNoZWQYDCABKAsyGy5ub3ZhLmV4ZWN1dGlvbi52MS5GaW5pc2hlZEgAQgcKBWV2ZW50IhYKB1N0YXJ0ZWQSCwoDcGlkGAEgASgFIkcKBk91dHB1dBIvCgZzdHJlYW0YASABKA4yHy5ub3ZhLmV4ZWN1dGlvbi52MS5PdXRwdXRTdHJlYW0SDAoEZGF0YRgCIAEoDCKMAQoIRmluaXNoZWQSMgoGc3RhdHVzGAEgASgOMiIubm92YS5leGVjdXRpb24udjEuRXhlY3V0aW9uU3RhdHVzEhEKCWV4aXRfY29kZRgCIAEoBRIkCgVlcnJvchgDIAEoCzIVLm5vdmEuY29tbW9uLnYxLkVycm9yEhMKC2R1cmF0aW9uX21zGAQgASgEIiUKDUNhbmNlbFJlcXVlc3QSFAoMZXhlY3V0aW9uX2lkGAEgASgJIh8KDkNhbmNlbFJlc3BvbnNlEg0KBWZvdW5kGAEgASgIIj4KD1JlYWRGaWxlUmVxdWVzdBIMCgRwYXRoGAEgASgJEg4KBm9mZnNldBgCIAEoBBINCgVsaW1pdBgDIAEoBCI6CglGaWxlQ2h1bmsSDAoEZGF0YRgBIAEoDBILCgNlb2YYAiABKAgSEgoKdG90YWxfc2l6ZRgDIAEoBCJLChBXcml0ZUZpbGVSZXF1ZXN0EgwKBHBhdGgYASABKAkSDAoEZGF0YRgCIAEoDBIOCgZhcHBlbmQYAyABKAgSCwoDZW9mGAQgASgIIjsKEVdyaXRlRmlsZVJlc3BvbnNlEhUKDWJ5dGVzX3dyaXR0ZW4YASABKAQSDwoHY3JlYXRlZBgCIAEoCCKHAwoNRmlsZU9wUmVxdWVzdBIpCgRzdGF0GAEgASgLMhkubm92YS5leGVjdXRpb24udjEuU3RhdE9wSAASKQoEbGlzdBgCIAEoCzIZLm5vdmEuZXhlY3V0aW9uLnYxLkxpc3RPcEgAEi0KBnJlbW92ZRgDIAEoCzIbLm5vdmEuZXhlY3V0aW9uLnYxLlJlbW92ZU9wSAASLQoGcmVuYW1lGAQgASgLMhsubm92YS5leGVjdXRpb24udjEuUmVuYW1lT3BIABIrCgVta2RpchgFIAEoCzIaLm5vdmEuZXhlY3V0aW9uLnYxLk1rZGlyT3BIABIwCgh0ZW1wX2RpchgGIAEoCzIcLm5vdmEuZXhlY3V0aW9uLnYxLlRlbXBEaXJPcEgAEikKBGdyZXAYByABKAsyGS5ub3ZhLmV4ZWN1dGlvbi52MS5HcmVwT3BIABIyCglyZWFkX3RleHQYCCABKAsyHS5ub3ZhLmV4ZWN1dGlvbi52MS5SZWFkVGV4dE9wSABCBAoCb3AiFgoGU3RhdE9wEgwKBHBhdGgYASABKAkiJQoGTGlzdE9wEgwKBHBhdGgYASABKAkSDQoFZGVwdGgYAiABKA0iKwoIUmVtb3ZlT3ASDAoEcGF0aBgBIAEoCRIRCglyZWN1cnNpdmUYAiABKAgiJAoIUmVuYW1lT3ASDAoEZnJvbRgBIAEoCRIKCgJ0bxgCIAEoCSIXCgdNa2Rpck9wEgwKBHBhdGgYASABKAkiGwoJVGVtcERpck9wEg4KBnByZWZpeBgBIAEoCSJKCgZHcmVwT3ASDwoHcGF0dGVybhgBIAEoCRIMCgRwYXRoGAIgASgJEgwKBGdsb2IYAyABKAkSEwoLbWF4X3Jlc3VsdHMYBCABKA0iTAoKUmVhZFRleHRPcBIMCgRwYXRoGAEgASgJEg4KBm9mZnNldBgCIAEoBBINCgVsaW1pdBgDIAEoDRIRCgltYXhfYnl0ZXMYBCABKA0ikwIKDkZpbGVPcFJlc3BvbnNlEisKBGluZm8YASABKAsyGy5ub3ZhLmV4ZWN1dGlvbi52MS5GaWxlSW5mb0gAEi0KBGxpc3QYAiABKAsyHS5ub3ZhLmV4ZWN1dGlvbi52MS5MaXN0UmVzdWx0SAASJAoCb2sYAyABKAsyFi5nb29nbGUucHJvdG9idWYuRW1wdHlIABIOCgRwYXRoGAQgASgJSAASLQoEZ3JlcBgFIAEoCzIdLm5vdmEuZXhlY3V0aW9uLnYxLkdyZXBSZXN1bHRIABI2CglyZWFkX3RleHQYBiABKAsyIS5ub3ZhLmV4ZWN1dGlvbi52MS5SZWFkVGV4dFJlc3VsdEgAQggKBnJlc3VsdCJgCghGaWxlSW5mbxIMCgRwYXRoGAEgASgJEikKBGtpbmQYAiABKA4yGy5ub3ZhLmV4ZWN1dGlvbi52MS5GaWxlS2luZBIMCgRzaXplGAMgASgEEg0KBW10aW1lGAQgASgDIjoKCkxpc3RSZXN1bHQSLAoHZW50cmllcxgBIAMoCzIbLm5vdmEuZXhlY3V0aW9uLnYxLkRpckVudHJ5IkMKCERpckVudHJ5EgwKBG5hbWUYASABKAkSKQoEa2luZBgCIAEoDjIbLm5vdmEuZXhlY3V0aW9uLnYxLkZpbGVLaW5kIl0KCkdyZXBSZXN1bHQSLQoHbWF0Y2hlcxgBIAMoCzIcLm5vdmEuZXhlY3V0aW9uLnYxLkdyZXBNYXRjaBINCgV0b3RhbBgCIAEoDRIRCgl0cnVuY2F0ZWQYAyABKAgiNQoJR3JlcE1hdGNoEgwKBGZpbGUYASABKAkSDAoEbGluZRgCIAEoDRIMCgR0ZXh0GAMgASgJIq0BCg5SZWFkVGV4dFJlc3VsdBIMCgR0ZXh0GAEgASgJEhIKCnN0YXJ0X2xpbmUYAiABKAQSEAoIZW5kX2xpbmUYAyABKAQSGAoLdG90YWxfbGluZXMYBCABKARIAIgBARISCgp0b3RhbF9zaXplGAUgASgEEhEKCXRydW5jYXRlZBgGIAEoCBIWCg5saW5lX3RydW5jYXRlZBgHIAEoCEIOCgxfdG90YWxfbGluZXMqYQoMT3V0cHV0U3RyZWFtEh0KGU9VVFBVVF9TVFJFQU1fVU5TUEVDSUZJRUQQABIYChRPVVRQVVRfU1RSRUFNX1NURE9VVBABEhgKFE9VVFBVVF9TVFJFQU1fU1RERVJSEAIqsAEKD0V4ZWN1dGlvblN0YXR1cxIgChxFWEVDVVRJT05fU1RBVFVTX1VOU1BFQ0lGSUVEEAASHgoaRVhFQ1VUSU9OX1NUQVRVU19DT01QTEVURUQQARIbChdFWEVDVVRJT05fU1RBVFVTX0ZBSUxFRBACEh4KGkVYRUNVVElPTl9TVEFUVVNfQ0FOQ0VMTEVEEAMSHgoaRVhFQ1VUSU9OX1NUQVRVU19USU1FRF9PVVQQBCpjCghGaWxlS2luZBIZChVGSUxFX0tJTkRfVU5TUEVDSUZJRUQQABISCg5GSUxFX0tJTkRfRklMRRABEhEKDUZJTEVfS0lORF9ESVIQAhIVChFGSUxFX0tJTkRfU1lNTElOSxADYgZwcm90bzM",
     [file_google_protobuf_empty, file_google_protobuf_timestamp, file_common],
   );
 
@@ -462,6 +462,13 @@ export type FileOpRequest = Message<"nova.execution.v1.FileOpRequest"> & {
         value: GrepOp;
         case: "grep";
       }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.ReadTextOp read_text = 8;
+         */
+        value: ReadTextOp;
+        case: "readText";
+      }
     | { case: undefined; value?: undefined };
 };
 
@@ -614,6 +621,47 @@ export type GrepOp = Message<"nova.execution.v1.GrepOp"> & {
 export const GrepOpSchema: GenMessage<GrepOp> = /*@__PURE__*/ messageDesc(file_execution, 20);
 
 /**
+ * Bounded UTF-8 text window for Agent-facing source reads. Unlike ReadFileRequest,
+ * this operation performs line selection inside Runner so a small window never
+ * transfers or allocates the whole file. Zero values select Runner defaults.
+ *
+ * @generated from message nova.execution.v1.ReadTextOp
+ */
+export type ReadTextOp = Message<"nova.execution.v1.ReadTextOp"> & {
+  /**
+   * @generated from field: string path = 1;
+   */
+  path: string;
+
+  /**
+   * 1-based line number; 0 = 1
+   *
+   * @generated from field: uint64 offset = 2;
+   */
+  offset: bigint;
+
+  /**
+   * maximum returned lines; 0 = default
+   *
+   * @generated from field: uint32 limit = 3;
+   */
+  limit: number;
+
+  /**
+   * maximum returned UTF-8 bytes; 0 = default
+   *
+   * @generated from field: uint32 max_bytes = 4;
+   */
+  maxBytes: number;
+};
+
+/**
+ * Describes the message nova.execution.v1.ReadTextOp.
+ * Use `create(ReadTextOpSchema)` to create a new message.
+ */
+export const ReadTextOpSchema: GenMessage<ReadTextOp> = /*@__PURE__*/ messageDesc(file_execution, 21);
+
+/**
  * @generated from message nova.execution.v1.FileOpResponse
  */
 export type FileOpResponse = Message<"nova.execution.v1.FileOpResponse"> & {
@@ -660,6 +708,13 @@ export type FileOpResponse = Message<"nova.execution.v1.FileOpResponse"> & {
         value: GrepResult;
         case: "grep";
       }
+    | {
+        /**
+         * @generated from field: nova.execution.v1.ReadTextResult read_text = 6;
+         */
+        value: ReadTextResult;
+        case: "readText";
+      }
     | { case: undefined; value?: undefined };
 };
 
@@ -667,7 +722,7 @@ export type FileOpResponse = Message<"nova.execution.v1.FileOpResponse"> & {
  * Describes the message nova.execution.v1.FileOpResponse.
  * Use `create(FileOpResponseSchema)` to create a new message.
  */
-export const FileOpResponseSchema: GenMessage<FileOpResponse> = /*@__PURE__*/ messageDesc(file_execution, 21);
+export const FileOpResponseSchema: GenMessage<FileOpResponse> = /*@__PURE__*/ messageDesc(file_execution, 22);
 
 /**
  * @generated from message nova.execution.v1.FileInfo
@@ -698,7 +753,7 @@ export type FileInfo = Message<"nova.execution.v1.FileInfo"> & {
  * Describes the message nova.execution.v1.FileInfo.
  * Use `create(FileInfoSchema)` to create a new message.
  */
-export const FileInfoSchema: GenMessage<FileInfo> = /*@__PURE__*/ messageDesc(file_execution, 22);
+export const FileInfoSchema: GenMessage<FileInfo> = /*@__PURE__*/ messageDesc(file_execution, 23);
 
 /**
  * @generated from message nova.execution.v1.ListResult
@@ -714,7 +769,7 @@ export type ListResult = Message<"nova.execution.v1.ListResult"> & {
  * Describes the message nova.execution.v1.ListResult.
  * Use `create(ListResultSchema)` to create a new message.
  */
-export const ListResultSchema: GenMessage<ListResult> = /*@__PURE__*/ messageDesc(file_execution, 23);
+export const ListResultSchema: GenMessage<ListResult> = /*@__PURE__*/ messageDesc(file_execution, 24);
 
 /**
  * @generated from message nova.execution.v1.DirEntry
@@ -735,7 +790,7 @@ export type DirEntry = Message<"nova.execution.v1.DirEntry"> & {
  * Describes the message nova.execution.v1.DirEntry.
  * Use `create(DirEntrySchema)` to create a new message.
  */
-export const DirEntrySchema: GenMessage<DirEntry> = /*@__PURE__*/ messageDesc(file_execution, 24);
+export const DirEntrySchema: GenMessage<DirEntry> = /*@__PURE__*/ messageDesc(file_execution, 25);
 
 /**
  * @generated from message nova.execution.v1.GrepResult
@@ -761,7 +816,7 @@ export type GrepResult = Message<"nova.execution.v1.GrepResult"> & {
  * Describes the message nova.execution.v1.GrepResult.
  * Use `create(GrepResultSchema)` to create a new message.
  */
-export const GrepResultSchema: GenMessage<GrepResult> = /*@__PURE__*/ messageDesc(file_execution, 25);
+export const GrepResultSchema: GenMessage<GrepResult> = /*@__PURE__*/ messageDesc(file_execution, 26);
 
 /**
  * @generated from message nova.execution.v1.GrepMatch
@@ -787,7 +842,59 @@ export type GrepMatch = Message<"nova.execution.v1.GrepMatch"> & {
  * Describes the message nova.execution.v1.GrepMatch.
  * Use `create(GrepMatchSchema)` to create a new message.
  */
-export const GrepMatchSchema: GenMessage<GrepMatch> = /*@__PURE__*/ messageDesc(file_execution, 26);
+export const GrepMatchSchema: GenMessage<GrepMatch> = /*@__PURE__*/ messageDesc(file_execution, 27);
+
+/**
+ * @generated from message nova.execution.v1.ReadTextResult
+ */
+export type ReadTextResult = Message<"nova.execution.v1.ReadTextResult"> & {
+  /**
+   * @generated from field: string text = 1;
+   */
+  text: string;
+
+  /**
+   * @generated from field: uint64 start_line = 2;
+   */
+  startLine: bigint;
+
+  /**
+   * @generated from field: uint64 end_line = 3;
+   */
+  endLine: bigint;
+
+  /**
+   * known only when the read reaches EOF
+   *
+   * @generated from field: optional uint64 total_lines = 4;
+   */
+  totalLines?: bigint | undefined;
+
+  /**
+   * @generated from field: uint64 total_size = 5;
+   */
+  totalSize: bigint;
+
+  /**
+   * unread file content remains
+   *
+   * @generated from field: bool truncated = 6;
+   */
+  truncated: boolean;
+
+  /**
+   * at least one returned line exceeded max_bytes
+   *
+   * @generated from field: bool line_truncated = 7;
+   */
+  lineTruncated: boolean;
+};
+
+/**
+ * Describes the message nova.execution.v1.ReadTextResult.
+ * Use `create(ReadTextResultSchema)` to create a new message.
+ */
+export const ReadTextResultSchema: GenMessage<ReadTextResult> = /*@__PURE__*/ messageDesc(file_execution, 28);
 
 /**
  * @generated from enum nova.execution.v1.OutputStream

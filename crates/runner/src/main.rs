@@ -12,7 +12,7 @@ use std::sync::Arc;
 use clap::Parser;
 use tokio::sync::watch;
 
-use config::{Args, Config, ConfigError};
+use config::{Args, Config};
 use execution::Executor;
 use workspace::Workspace;
 
@@ -26,13 +26,8 @@ async fn main() -> anyhow::Result<()> {
         Ok(config) => Arc::new(config),
         Err(err) => {
             eprintln!("nova-runner: {err}");
-            match err {
-                // These are documented, expected refusals (docs/runner.md §8/§10.4), not bugs —
-                // exit cleanly rather than dumping a panic backtrace at the user.
-                ConfigError::WorkspaceMissing(_) | ConfigError::ServerMissing => {
-                    std::process::exit(1)
-                }
-            }
+            // Startup configuration failures are expected refusals, not panics.
+            std::process::exit(1)
         }
     };
 
@@ -54,10 +49,27 @@ async fn main() -> anyhow::Result<()> {
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            tracing::info!("shutting down");
-            let _ = shutdown_tx.send(true);
-        }
+        shutdown_signal().await;
+        tracing::info!("shutting down");
+        let _ = shutdown_tx.send(true);
     });
     connection::run(config, workspace, executor, shutdown_rx).await
+}
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+
+        let mut terminate = signal(SignalKind::terminate()).expect("SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = terminate.recv() => {}
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
 }

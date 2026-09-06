@@ -12,6 +12,7 @@ import {
   ListOpSchema,
   MkdirOpSchema,
   ReadFileRequestSchema,
+  ReadTextOpSchema,
   RemoveOpSchema,
   RenameOpSchema,
   StatOpSchema,
@@ -25,6 +26,7 @@ import type {
   FileInfo,
   FileOpResponse,
   GrepResult,
+  ReadTextResult,
   WriteFileResponse,
 } from "./gen/execution_pb.js";
 import { RunnerState } from "./gen/runner_pb.js";
@@ -87,6 +89,7 @@ export interface FileSystemOps {
   mkdir(path: string): Promise<void>;
   tempDir(prefix?: string): Promise<string>;
   grep(pattern: string, opts?: { path?: string; glob?: string; maxResults?: number }): Promise<GrepResult>;
+  readText(path: string, opts?: { offset?: number; limit?: number; maxBytes?: number }): Promise<ReadTextResult>;
   readFile(path: string, opts?: { offset?: number; limit?: number }): Promise<{ data: Uint8Array; totalSize: number }>;
   writeFile(path: string, data: Uint8Array, opts?: { append?: boolean }): Promise<WriteFileResponse>;
 }
@@ -312,6 +315,18 @@ export class RunnerSessionImpl implements RunnerSession {
             }),
           })
         ).result.value as GrepResult,
+      readText: async (path, opts) =>
+        (
+          await this.fileOp({
+            case: "readText",
+            value: create(ReadTextOpSchema, {
+              path,
+              offset: BigInt(opts?.offset ?? 0),
+              limit: opts?.limit ?? 0,
+              maxBytes: opts?.maxBytes ?? 0,
+            }),
+          })
+        ).result.value as ReadTextResult,
       readFile: (path, opts) => this.readFile(path, opts?.offset ?? 0, opts?.limit ?? 0),
       writeFile: (path, data, opts) => this.writeFile(path, data, opts?.append ?? false),
     };

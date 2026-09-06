@@ -44,30 +44,34 @@ cargo build -p nova-runner --release
 
 ### 安装可执行包
 
+面向最终用户时，Windows 使用 GitHub Release 的 `nova-runner-setup.exe`，Linux x64
+使用同一 Release 的一行安装脚本，详见 `packages/runner/README.md`。下面的 npm 方式
+保留给开发调试。
+
 需要在 macOS、Windows 或 Linux 上直接运行时，推荐安装发布包：
 
 macOS / Linux：
 
 ```bash
-pnpm add -g @nova/runner
+pnpm add -g @nnova/runner
 npx nova-runner --server http://127.0.0.1:50051 --token <runner_token> --workspace /path/to/project
 ```
 
 Windows PowerShell：
 
 ```powershell
-pnpm add -g @nova/runner
+pnpm add -g @nnova/runner
 nova-runner.exe --server http://127.0.0.1:50051 --token <runner_token> --workspace E:\Project\my-project
 ```
 
 更新已安装的 Runner：
 
 ```bash
-pnpm update -g @nova/runner
+pnpm update -g @nnova/runner
 nova-runner --version
 ```
 
-`@nova/runner` 只分发并启动本 crate 构建出的 `nova-runner`，不包含第二套执行实现。
+`@nnova/runner` 只分发并启动本 crate 构建出的 `nova-runner`，不包含第二套执行实现。
 支持 Linux x64、macOS x64/arm64 和 Windows x64；本地开发仍可直接使用下面的 Cargo
 命令。若使用自定义构建，可设置 `NOVA_RUNNER_BIN` 覆盖已发布的二进制。
 
@@ -82,33 +86,46 @@ target/debug/nova-runner \
 
 本地开发时必须把 Runner 参数放在 Cargo 的双横线之后，否则参数会被 Cargo 自己解析：
 
-~~~bash
+```bash
 cargo run -p nova-runner -- \
   --server http://127.0.0.1:50051 \
   --token <agent-web-ui 中显示的 runner_token> \
   --workspace /path/to/project
-~~~
+```
 
 PowerShell：
 
-~~~powershell
+```powershell
 cargo run -p nova-runner -- --server http://127.0.0.1:50051 --token <runner_token> --workspace E:\Project\my-project
-~~~
+```
 
 agent-server 本地需保持 RUNNER_PORT=50051，远程部署时用 RUNNER_HOST=0.0.0.0
 监听并把 RUNNER_PUBLIC_URL 设置成 Runner 能访问的公网 HTTP 或 HTTPS 地址。
 
 ## CLI 参数
 
-| 参数 | 缺省 | 说明 |
-|---|---|---|
-| `--server` | 必填 | runner-sdk 的 `http://` 或 `https://` 地址 |
-| `--token` | 必填 | 作为 `authorization: Bearer ...` 元数据发送的连接令牌 |
-| `--runner-id` | 主机名 + workspace 哈希 | 稳定 Runner ID；同一 workspace 重启后保持不变 |
-| `--workspace` | 当前目录 | 目录不存在则拒绝启动 |
-| `--max-concurrency` | CPU 核数 | 同时 `running` 的执行数上限 |
-| `--queue-size` | `4 × max-concurrency` | 排队等待的执行数上限,超出立即返回 `BUSY` |
-| `--default-timeout-ms` | `120000` | 请求未指定 `timeout_ms` 时使用 |
+| 参数                   | 缺省                    | 说明                                                  |
+| ---------------------- | ----------------------- | ----------------------------------------------------- |
+| `--server`             | 必填                    | runner-sdk 的 `http://` 或 `https://` 地址            |
+| `--token`              | 必填                    | 作为 `authorization: Bearer ...` 元数据发送的连接令牌 |
+| `--config`             | 无                      | TOML 配置文件；显式 CLI 参数覆盖文件值                |
+| `--runner-id`          | 主机名 + workspace 哈希 | 稳定 Runner ID；同一 workspace 重启后保持不变         |
+| `--workspace`          | 当前目录                | 目录不存在则拒绝启动                                  |
+| `--max-concurrency`    | CPU 核数                | 同时 `running` 的执行数上限                           |
+| `--queue-size`         | `4 × max-concurrency`   | 排队等待的执行数上限,超出立即返回 `BUSY`              |
+| `--default-timeout-ms` | `120000`                | 请求未指定 `timeout_ms` 时使用                        |
+
+后台托管示例：
+
+```toml
+server = "https://agent.example.com/runner-connect"
+token = "<runner-token>"
+workspace = "/home/user"
+```
+
+```bash
+nova-runner --config ~/.config/nova-runner/config.toml
+```
 
 ## 目录结构
 

@@ -56,7 +56,7 @@ export interface AgentTool<A = unknown, D = unknown> {
   executionMode?: "parallel" | "sequential";
   risk?: Risk;
   requiresContext?: boolean;
-  execute(args: A, ctx?: ToolContext): Promise<AgentToolResult<D>>;
+  execute(args: A, ctx?: ToolContext, signal?: AbortSignal): Promise<AgentToolResult<D>>;
 }
 export interface AgentToolResult<D = unknown> {
   status: "ok" | "error";
@@ -105,11 +105,11 @@ export interface FileSystem {
   rename(from: string, to: string): Promise<Result<void, FsError>>;
   remove(path: string, opts?: { recursive?: boolean }): Promise<Result<void, FsError>>;
   mkdir(path: string): Promise<Result<void, FsError>>;
-  list(path: string): Promise<Result<DirEntry[], FsError>>;
+  list(path: string, opts?: { depth?: number }): Promise<Result<DirEntry[], FsError>>;
   stat(path: string): Promise<Result<FileInfo, FsError>>; // 不存在 → error(NOT_FOUND)
   tempDir(prefix?: string): Promise<Result<string, FsError>>;
   // proto.md §4.2 GrepOp：Runner 侧结构化搜索原语，tools.md §3 `grep` 工具的落点，不拼 shell
-  grep(pattern: string, opts?: GrepOptions): Promise<Result<GrepMatch[], FsError>>;
+  grep(pattern: string, opts?: GrepOptions): Promise<Result<GrepResult, FsError>>;
 }
 export interface GrepOptions {
   path?: string;
@@ -121,11 +121,20 @@ export interface GrepMatch {
   line: number;
   text: string;
 }
+export interface GrepResult {
+  matches: GrepMatch[];
+  total: number;
+  truncated: boolean;
+}
 
 export interface TextFile {
   text: string;
-  totalLines: number;
+  startLine: number;
+  endLine: number;
+  totalLines?: number;
+  totalSize: number;
   truncated: boolean;
+  lineTruncated: boolean;
 }
 export interface FileInfo {
   path: string;

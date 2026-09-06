@@ -3,7 +3,7 @@ const schema = z.object({
   pattern: z.string(),
   path: z.string().optional(),
   glob: z.string().optional(),
-  maxResults: z.number().optional(),
+  maxResults: z.number().int().min(1).max(1_000).optional(),
 });
 export const grep: Tool<z.output<typeof schema>> = {
   name: "grep",
@@ -20,12 +20,12 @@ export const grep: Tool<z.output<typeof schema>> = {
     return {
       status: "ok",
       content: text(
-        result.value
+        result.value.matches
           .slice(0, 50)
           .map((match) => `${match.file}:${match.line}: ${match.text}`)
           .join("\n") || "No matches",
       ),
-      details: { matches: result.value, total: result.value.length },
+      details: result.value,
     };
   },
 };

@@ -181,6 +181,18 @@ Runner 断线时必须终止或明确接管已运行进程，不得留下孤儿�
 
 越界必须返回 `OUT_OF_WORKSPACE`。workspace 不存在时拒绝启动，不自动创建。
 
+Project workspace 只作为 Agent 相对路径和命令的默认 `cwd`，不是额外的读取权限边界。Agent 可以
+读取设备 root 内的 sibling 路径；大文件读取的行数、字节数和搜索结果上限属于资源保护，不得被
+解释成读取 ACL。删除是独立的高风险操作，其审批语义由 Tool / Decision 拥有，Runner 仍负责拒绝
+root 越界和根目录删除。
+
+Agent 源码读取必须使用 Runner 侧的有界文本窗口：缺省 200 行，同时限制返回字节数；不得先把
+整个文件读入 Runner 内存或传给 Node.js 后再切行。跨文件搜索逐行处理，达到结果上限并确认仍有
+后续匹配后立即停止，不为精确计数继续遍历整个 workspace。
+
+文件元数据、文本读取和搜索在连接路由循环之外执行，共用 4 个有界槽位；满时返回 `BUSY`，不得
+无界排队。这样慢磁盘或大仓库搜索不会阻塞 Execute、Cancel、heartbeat、drain 和 shutdown 消息。
+
 Sandbox 和 Resource Limit 是 Runner 领域概念。未实现的能力必须返回
 `UNSUPPORTED`，不得静默忽略。
 
@@ -189,23 +201,47 @@ Sandbox 和 Resource Limit 是 Runner 领域概念。未实现的能力必须返
 ## 9. `nova-runner` 命令
 
 `nova-runner` 只启动常驻 worker；所有 Execution 都从已建立的 gRPC 连接到达。
+交互运行可直接传参，OS 后台托管应使用 TOML 配置文件；显式 CLI 值覆盖配置文件。
 
 ```bash
 nova-runner \
   --server https://agent.example.com/runner-connect \
   --token <runner-token> \
-  --root ./ \
+  --workspace ./ \
   --max-concurrency 16 \
   --queue-size 64 \
   --default-timeout-ms 120000
 ```
 
-- `--server` 和凭据是建立出站连接的必需配置。
+```bash
+nova-runner --config ~/.config/nova-runner/config.toml
+```
+
+```toml
+server = "https://agent.example.com/runner-connect"
+token = "<runner-token>"
+workspace = "/home/user"
+max_concurrency = 16
+queue_size = 64
+default_timeout_ms = 120000
+```
+
+- `--server` 和凭据是建立出站连接的必需配置，可来自 CLI 或 `--config`。
+- 配置文件中未指定的字段使用 CLI 的同一缺省值；未知字段和无法解析的文件必须拒绝启动。
 - Runner 启动后立即尝试连接；连接失败或断开后继续注册，重试间隔从 1 分钟按 2 倍递增，最大 10 分钟，最多尝试 1000 次。达到上限后进程退出并记录错误。
 - token 只用于 Runner 连接身份；用户权限判定在 Runner Module。
 - 日志可输出到终端或文件，但 stdio 不得成为 Execution transport。
 - Rust binary 的安装和发布可以由 `packages/runner` 这个纯分发包完成，但它不得进入
   Node.js 运行时架构，也不得提供 Node.js 执行 fallback。
+
+### 9.1 用户安装形态
+
+- Windows Release 提供 `nova-runner-setup.exe`。安装器收集 server、token 和 workspace，
+  写入当前用户可读的配置，注册用户登录计划任务并立即启动。
+- Linux Release 提供 `nova-runner-linux-x64.tar.gz`、`SHA256SUMS` 和
+  `install-runner.sh`。安装脚本按需通过 sudo 写入 binary、配置和 systemd system unit，
+  但 unit 必须使用发起安装的普通用户运行 Runner，不得以 root 执行 workspace 操作。
+- OS 托管负责开机/登录启动和进程异常拉起；Runner 自身仍是网络重连的唯一 owner。
 
 ---
 

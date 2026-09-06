@@ -1,12 +1,17 @@
 //! CLI/config surface. See docs/runner.md §8 (workspace) and §9 (command).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
+use serde::Deserialize;
 
 #[derive(Debug, Parser)]
 #[command(name = "nova-runner", version)]
 pub struct Args {
+    /// TOML configuration file. Explicit CLI values override file values.
+    #[arg(long)]
+    pub config: Option<PathBuf>,
+
     /// Server URL to open the outbound gRPC connection to, e.g. http://127.0.0.1:54321.
     #[arg(long)]
     pub server: Option<String>,
@@ -32,8 +37,8 @@ pub struct Args {
     pub queue_size: Option<usize>,
 
     /// Default execution timeout when a request doesn't specify one.
-    #[arg(long, default_value_t = 120_000)]
-    pub default_timeout_ms: u32,
+    #[arg(long)]
+    pub default_timeout_ms: Option<u32>,
 }
 
 pub struct Config {
@@ -52,41 +57,68 @@ pub enum ConfigError {
         "workspace {0:?} does not exist (it is never created automatically — see docs/runner.md §8)"
     )]
     WorkspaceMissing(PathBuf),
-    #[error(
-        "--server <url> and --token <t> are required to open the outbound connection (docs/runner.md §9)"
-    )]
+    #[error("runner server is missing; set --server or server in --config (docs/runner.md §9)")]
     ServerMissing,
+    #[error("runner token is missing; set --token or token in --config (docs/runner.md §9)")]
+    TokenMissing,
+    #[error("failed to read runner config {path:?}: {source}")]
+    ConfigRead {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to parse runner config {path:?}: {source}")]
+    ConfigParse {
+        path: PathBuf,
+        #[source]
+        source: Box<toml::de::Error>,
+    },
 }
 
 impl Config {
     pub fn from_args(args: Args) -> Result<Self, ConfigError> {
-        let server = args
-            .server
-            .filter(|s| !s.is_empty())
-            .ok_or(ConfigError::ServerMissing)?;
-        let token = args
-            .token
-            .filter(|t| !t.is_empty())
-            .ok_or(ConfigError::ServerMissing)?;
+        let config_path = args.config.as_deref();
+        let file = config_path
+            .map(FileConfig::load)
+            .transpose()?
+            .unwrap_or_default();
 
-        let workspace = args.workspace.unwrap_or(
-            std::env::current_dir()
+        let server = non_empty(args.server)
+            .or_else(|| non_empty(file.server))
+            .ok_or(ConfigError::ServerMissing)?;
+        let token = non_empty(args.token)
+            .or_else(|| non_empty(file.token))
+            .ok_or(ConfigError::TokenMissing)?;
+
+        let workspace = match (args.workspace, file.workspace) {
+            (Some(workspace), _) => workspace,
+            (None, Some(workspace)) => resolve_config_path(config_path, workspace),
+            (None, None) => std::env::current_dir()
                 .map_err(|_| ConfigError::WorkspaceMissing(PathBuf::from(".")))?,
-        );
+        };
         if !workspace.is_dir() {
             return Err(ConfigError::WorkspaceMissing(workspace));
         }
-        let runner_id = args
-            .runner_id
-            .filter(|value| !value.trim().is_empty())
+        let runner_id = non_empty(args.runner_id)
+            .or_else(|| non_empty(file.runner_id))
             .unwrap_or_else(|| default_runner_id(&workspace));
 
-        let max_concurrency = args.max_concurrency.unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(4)
-        });
-        let queue_size = args.queue_size.unwrap_or(max_concurrency * 4);
+        let max_concurrency = args
+            .max_concurrency
+            .or(file.max_concurrency)
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism()
+                    .map(|n| n.get())
+                    .unwrap_or(4)
+            });
+        let queue_size = args
+            .queue_size
+            .or(file.queue_size)
+            .unwrap_or(max_concurrency * 4);
+        let default_timeout_ms = args
+            .default_timeout_ms
+            .or(file.default_timeout_ms)
+            .unwrap_or(120_000);
 
         Ok(Config {
             server,
@@ -95,9 +127,47 @@ impl Config {
             workspace,
             max_concurrency,
             queue_size,
-            default_timeout_ms: args.default_timeout_ms,
+            default_timeout_ms,
         })
     }
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileConfig {
+    server: Option<String>,
+    token: Option<String>,
+    runner_id: Option<String>,
+    workspace: Option<PathBuf>,
+    max_concurrency: Option<usize>,
+    queue_size: Option<usize>,
+    default_timeout_ms: Option<u32>,
+}
+
+impl FileConfig {
+    fn load(path: &Path) -> Result<Self, ConfigError> {
+        let source = std::fs::read_to_string(path).map_err(|source| ConfigError::ConfigRead {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        toml::from_str(&source).map_err(|source| ConfigError::ConfigParse {
+            path: path.to_path_buf(),
+            source: Box::new(source),
+        })
+    }
+}
+
+fn non_empty(value: Option<String>) -> Option<String> {
+    value.filter(|value| !value.trim().is_empty())
+}
+
+fn resolve_config_path(config_path: Option<&Path>, path: PathBuf) -> PathBuf {
+    if path.is_absolute() {
+        return path;
+    }
+    config_path
+        .and_then(Path::parent)
+        .map_or(path.clone(), |parent| parent.join(path))
 }
 
 fn default_runner_id(workspace: &std::path::Path) -> String {
@@ -120,4 +190,98 @@ fn default_runner_id(workspace: &std::path::Path) -> String {
         hash = hash.wrapping_mul(0x100000001b3);
     }
     format!("runner-{}-{hostname}-{hash:08x}", std::env::consts::OS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Args, Config, ConfigError};
+    use std::fs;
+
+    fn args(config: std::path::PathBuf) -> Args {
+        Args {
+            config: Some(config),
+            server: None,
+            token: None,
+            runner_id: None,
+            workspace: None,
+            max_concurrency: None,
+            queue_size: None,
+            default_timeout_ms: None,
+        }
+    }
+
+    #[test]
+    fn loads_service_configuration_and_resolves_relative_workspace() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace = directory.path().join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        let path = directory.path().join("config.toml");
+        fs::write(
+            &path,
+            r#"
+server = "https://runner.example.com"
+token = "runner-secret"
+workspace = "workspace"
+runner_id = "desktop"
+max_concurrency = 3
+queue_size = 9
+default_timeout_ms = 4567
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_args(args(path)).unwrap();
+
+        assert_eq!(config.server, "https://runner.example.com");
+        assert_eq!(config.token, "runner-secret");
+        assert_eq!(config.workspace, workspace);
+        assert_eq!(config.runner_id, "desktop");
+        assert_eq!(config.max_concurrency, 3);
+        assert_eq!(config.queue_size, 9);
+        assert_eq!(config.default_timeout_ms, 4567);
+    }
+
+    #[test]
+    fn explicit_cli_values_override_file_values() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace = directory.path().join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        let path = directory.path().join("config.toml");
+        fs::write(
+            &path,
+            format!(
+                "server = \"https://old.example.com\"\ntoken = \"old\"\nworkspace = {:?}\nmax_concurrency = 2\n",
+                workspace.to_string_lossy()
+            ),
+        )
+        .unwrap();
+        let mut input = args(path);
+        input.server = Some("https://new.example.com".into());
+        input.token = Some("new".into());
+        input.max_concurrency = Some(5);
+
+        let config = Config::from_args(input).unwrap();
+
+        assert_eq!(config.server, "https://new.example.com");
+        assert_eq!(config.token, "new");
+        assert_eq!(config.max_concurrency, 5);
+    }
+
+    #[test]
+    fn rejects_unknown_file_fields() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs::write(
+            &path,
+            "server = \"https://runner.example.com\"\ntypo = true\n",
+        )
+        .unwrap();
+
+        let error = match Config::from_args(args(path)) {
+            Ok(_) => panic!("unknown config field was accepted"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, ConfigError::ConfigParse { .. }));
+    }
 }

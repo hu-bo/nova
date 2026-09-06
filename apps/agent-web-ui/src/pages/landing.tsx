@@ -1,44 +1,56 @@
 import {
   ArrowRight,
   Check,
+  ChevronLeft,
   ChevronRight,
   Clipboard,
   Code2,
+  Download,
   FolderKanban,
   Github,
   LayoutDashboard,
+  Laptop,
   MonitorCog,
   MessageCircle,
+  Pause,
+  Play,
   Server,
   Settings,
   Sparkles,
   TerminalSquare,
-
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { RunnerToken } from "@nova/protocol";
 import { useAuth } from "../auth/provider.js";
 import { Button } from "../components/ui/button.js";
-import { useQuickConversationCreate } from "./project/new-conversation.js";
-import { runnerCommand } from "./settings/runner/commands.js";
+import { useOpenNewConversation } from "./project/new-conversation.js";
+import {
+  linuxRunnerCommand,
+  npxRunnerCommand,
+  runnerReleasesPageUrl,
+  windowsRunnerInstallerUrl,
+} from "./settings/runner/commands.js";
 import { useRunnerConnection, useRunnerTokens } from "./settings/runner/use-runners.js";
 
 export function LandingRoute() {
   const auth = useAuth();
   const navigate = useNavigate();
-  const createConversation = useQuickConversationCreate();
+  const openNewConversation = useOpenNewConversation();
   const runnerTokens = useRunnerTokens(auth.isAuthenticated);
   const runnerConnection = useRunnerConnection(auth.isAuthenticated);
-  const [copiedCommand, setCopiedCommand] = useState<"install" | "run" | null>(null);
+  const [copiedCommand, setCopiedCommand] = useState<"binary" | "npx" | null>(null);
   const [copyFailed, setCopyFailed] = useState(false);
   const token = (runnerTokens.data?.[0] as RunnerToken | undefined)?.token;
-  const runCommand =
+  const commandPlaceholder = auth.isAuthenticated ? "正在生成连接命令…" : "登录后生成带 Token 的连接命令";
+  const linuxInstallCommand =
     token && runnerConnection.data?.endpoint
-      ? runnerCommand(runnerConnection.data.endpoint, token)
-      : auth.isAuthenticated
-        ? "正在生成启动命令…"
-        : "登录后生成带 Token 的启动命令";
+      ? linuxRunnerCommand(runnerConnection.data.endpoint, token)
+      : commandPlaceholder;
+  const npxCommand =
+    token && runnerConnection.data?.endpoint
+      ? npxRunnerCommand(runnerConnection.data.endpoint, token)
+      : commandPlaceholder;
 
   function openWorkspace(to: string) {
     if (!auth.isAuthenticated) {
@@ -53,10 +65,10 @@ export function LandingRoute() {
       void auth.login();
       return;
     }
-    createConversation.mutate(undefined);
+    openNewConversation();
   }
 
-  async function copyCommand(command: string, kind: "install" | "run") {
+  async function copyCommand(command: string, kind: "binary" | "npx") {
     try {
       await navigator.clipboard.writeText(command);
       setCopiedCommand(kind);
@@ -112,14 +124,18 @@ export function LandingRoute() {
           <div className="relative">
             <span className="inline-flex items-center gap-2 rounded-full bg-indigo-400/10 px-3 py-1.5 text-xs font-semibold text-indigo-200 ring-1 ring-indigo-300/20">
               <span className="size-1.5 rounded-full bg-emerald-400" />
-              开源 · 运行在你的设备上
+              远程 Runner · Windows / Linux / macOS
             </span>
             <h1 className="mt-7 max-w-3xl text-balance text-4xl font-semibold leading-[1.08] tracking-[-0.04em] text-white sm:text-6xl lg:text-[3.7rem]">
-              AI Coding Agent，<span className="text-indigo-300">直接在真实 workspace 中工作</span>
+              一个工作台，<span className="text-indigo-300">连接多台远程 Runner</span>
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
-              连接你的 Linux 服务器或 Windows PC，让 Agent
-              看见真实代码、执行命令并持续汇报进度。设备归你，边界清晰，随时可以中断。
+              让 Windows、Linux 和 macOS 设备同时在线，在同一个 Web UI 中为不同会话选择不同 Runner 和 workspace。Agent
+              在真实环境里读写代码、执行命令并持续汇报进度。
+            </p>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">
+              原生 Runner 单文件运行，无需 Node.js、npm 等运行时依赖；也可以用 npx 快速体验。Runner
+              主动连接服务端，不必为远程设备开放入站端口。
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button
@@ -139,27 +155,96 @@ export function LandingRoute() {
               </a> */}
             </div>
 
-            <div id="install" className="mt-10 max-w-xl rounded-2xl bg-black/30 p-2 ring-1 ring-white/10 backdrop-blur">
-              <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
-                <span className="select-none text-indigo-400">$</span>
-                <div className="min-w-0 flex-1 space-y-2 text-sm text-slate-200">
-
-                  <code
-                    className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap text-slate-400"
-                    title={runCommand}
+            <div
+              id="install"
+              className="mt-10 max-w-2xl overflow-hidden rounded-2xl bg-black/30 ring-1 ring-white/10 backdrop-blur"
+            >
+              <div className="p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-white">原生二进制</span>
+                      <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-400/20">
+                        推荐
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      后台常驻、开机自启，运行时无需 Node.js / npm。
+                    </p>
+                  </div>
+                  <a
+                    href={windowsRunnerInstallerUrl}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-400"
                   >
-                    {runCommand}
-                  </code>
+                    <Download className="size-3.5" aria-hidden="true" />
+                    下载 Windows 安装器
+                  </a>
                 </div>
-                <div className="flex shrink-0 flex-col gap-1">
+                <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Linux 一行安装
+                </p>
+                <div className="mt-2 flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
+                  <span className="select-none text-indigo-400">$</span>
+                  <div className="min-w-0 flex-1 text-sm text-slate-200">
+                    <code
+                      className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap text-slate-400"
+                      title={linuxInstallCommand}
+                    >
+                      {linuxInstallCommand}
+                    </code>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => token && runnerConnection.data?.endpoint && void copyCommand(runCommand, "run")}
+                    onClick={() =>
+                      token && runnerConnection.data?.endpoint && void copyCommand(linuxInstallCommand, "binary")
+                    }
                     disabled={!token || !runnerConnection.data?.endpoint}
-                    className="grid size-9 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
-                    aria-label={copiedCommand === "run" ? "已复制启动命令" : "复制启动命令"}
+                    className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={copiedCommand === "binary" ? "已复制 Linux 安装命令" : "复制 Linux 安装命令"}
                   >
-                    {copiedCommand === "run" ? (
+                    {copiedCommand === "binary" ? (
+                      <Check className="size-4 text-emerald-400" aria-hidden="true" />
+                    ) : (
+                      <Clipboard className="size-4" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+                <a
+                  href={runnerReleasesPageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-indigo-300 transition hover:text-indigo-200"
+                >
+                  查看 macOS 与全部平台二进制
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                </a>
+              </div>
+
+              <div className="border-t border-white/10 p-4 sm:p-5">
+                <div>
+                  <span className="text-sm font-semibold text-white">npx 快速运行</span>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    适合临时体验和开发调试，需要本机已安装 Node.js。
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
+                  <span className="select-none text-indigo-400">$</span>
+                  <div className="min-w-0 flex-1 text-sm text-slate-200">
+                    <code
+                      className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap text-slate-400"
+                      title={npxCommand}
+                    >
+                      {npxCommand}
+                    </code>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => token && runnerConnection.data?.endpoint && void copyCommand(npxCommand, "npx")}
+                    disabled={!token || !runnerConnection.data?.endpoint}
+                    className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={copiedCommand === "npx" ? "已复制 npx 命令" : "复制 npx 命令"}
+                  >
+                    {copiedCommand === "npx" ? (
                       <Check className="size-4 text-emerald-400" aria-hidden="true" />
                     ) : (
                       <Clipboard className="size-4" aria-hidden="true" />
@@ -181,48 +266,42 @@ export function LandingRoute() {
         <section id="workflow" className="bg-slate-50 py-24 text-slate-900">
           <div className="mx-auto max-w-7xl px-5 sm:px-8">
             <div className="max-w-2xl">
-              <p className="text-sm font-semibold text-indigo-600">从设备到结果</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">三步开始一次可控的 coding 会话</h2>
+              <p className="text-sm font-semibold text-indigo-600">一处登录，多端执行</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                把不同平台的真实设备接入同一个工作台
+              </h2>
               <p className="mt-4 text-base leading-7 text-slate-500">
-                一个 web-ui 可以同时控不同平台Runner工作
+                多台 Windows、Linux、macOS Runner 可以同时在线，不同会话分别连接需要的设备与 workspace。
               </p>
             </div>
             <div className="mt-12 grid gap-6 md:grid-cols-3">
               <Feature
                 icon={<Server className="size-5" aria-hidden="true" />}
                 step="01"
-                title="连接 Runner"
-                description="在 Linux 或 Windows 设备启动 Runner，保持资源归属明确。"
+                title="安装远程 Runner"
+                description="使用无 Node.js 运行时依赖的原生二进制长期运行，也可以用 npx 快速接入。"
                 action="前往 Runner 管理"
                 onClick={() => openWorkspace("/settings/runners")}
               />
               <Feature
                 icon={<MonitorCog className="size-5" aria-hidden="true" />}
                 step="02"
-                title="选择 workspace"
-                description="为 Project 绑定唯一工作目录，路径边界在服务端校验。"
+                title="选择设备与 workspace"
+                description="为不同 Project 和会话选择在线 Runner，并把操作限制在明确的工作目录内。"
                 action="创建 Project"
                 onClick={() => openWorkspace("/app?createProject=1")}
               />
               <Feature
                 icon={<Code2 className="size-5" aria-hidden="true" />}
                 step="03"
-                title="开始 coding"
-                description="实时查看消息、工具输出和 TODO，长任务可以随时中断。"
-                action={createConversation.isPending ? "正在创建…" : "开始普通 Chat"}
+                title="跨设备开始对话"
+                description="在一个 Web UI 中查看消息、工具输出和 TODO，让多台设备各自在真实环境中工作。"
+                action="开始普通 Chat"
                 onClick={startCoding}
-                disabled={createConversation.isPending}
               />
             </div>
-            {createConversation.error && (
-              <p className="mt-5 text-sm text-rose-600" role="alert">
-                无法创建会话，请先在设置中配置可用模型。
-              </p>
-            )}
           </div>
         </section>
-
-   
       </main>
 
       <footer className="border-t border-white/10 bg-slate-950">
@@ -235,7 +314,7 @@ export function LandingRoute() {
               <span className="font-semibold tracking-tight text-white">Nova</span>
             </Link>
             <p className="mt-4 text-sm leading-6 text-slate-400">
-              让 AI 在你明确授权的真实 workspace 中可靠地完成工作。
+              一个 Web UI 连接多台远程 Runner，让 AI 在你授权的真实设备与 workspace 中完成工作。
             </p>
           </div>
           <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm sm:flex sm:gap-7">
@@ -269,7 +348,62 @@ export function LandingRoute() {
   );
 }
 
+const terminalDemoSlides = ["对话执行", "多端 Runner"] as const;
+
 function TerminalDemo() {
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setTimeout(
+      () => setActiveSlide((current) => (current + 1) % terminalDemoSlides.length),
+      5_500,
+    );
+    return () => window.clearTimeout(timer);
+  }, [activeSlide, paused]);
+
+  function showSlide(index: number) {
+    setActiveSlide((index + terminalDemoSlides.length) % terminalDemoSlides.length);
+  }
+
+  return (
+    <div className="relative mx-auto w-full max-w-2xl lg:mx-0" aria-label="Nova 功能演示" aria-roledescription="轮播">
+      <div key={activeSlide} className="animate-in fade-in duration-300 motion-reduce:animate-none">
+        {activeSlide === 0 ? <WorkspaceConversationDemo /> : <RunnerFleetDemo />}
+      </div>
+      <div className="relative mt-4 flex items-center justify-center gap-2" aria-label="切换演示画面">
+        <DemoControl label="上一张演示" onClick={() => showSlide(activeSlide - 1)}>
+          <ChevronLeft className="size-4" aria-hidden="true" />
+        </DemoControl>
+        {terminalDemoSlides.map((slide, index) => (
+          <button
+            key={slide}
+            type="button"
+            onClick={() => showSlide(index)}
+            className={`h-2 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+              activeSlide === index ? "w-7 bg-indigo-400" : "w-2 bg-slate-700 hover:bg-slate-500"
+            }`}
+            aria-label={`显示${slide}演示`}
+            aria-current={activeSlide === index ? "true" : undefined}
+          />
+        ))}
+        <DemoControl label={paused ? "继续自动轮播" : "暂停自动轮播"} onClick={() => setPaused((value) => !value)}>
+          {paused ? (
+            <Play className="size-3.5" aria-hidden="true" />
+          ) : (
+            <Pause className="size-3.5" aria-hidden="true" />
+          )}
+        </DemoControl>
+        <DemoControl label="下一张演示" onClick={() => showSlide(activeSlide + 1)}>
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </DemoControl>
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceConversationDemo() {
   return (
     <div className="relative mx-auto w-full max-w-2xl lg:mx-0" aria-label="Nova 运行效果演示">
       <div className="absolute -inset-10 rounded-full bg-indigo-500/15 blur-3xl" aria-hidden="true" />
@@ -322,7 +456,7 @@ function TerminalDemo() {
               <div className="min-w-0">
                 <p className="truncate text-[11px] font-semibold text-slate-200">Nova workspace</p>
                 <p className="mt-0.5 flex items-center gap-1.5 text-[9px] text-slate-600">
-                  <span className="size-1.5 rounded-full bg-emerald-400" /> Runner 已就绪 · Windows PC
+                  <span className="size-1.5 rounded-full bg-emerald-400" /> Windows PC · 另有 2 台 Runner 在线
                 </p>
               </div>
               <span className="shrink-0 rounded-full bg-emerald-400/10 px-2 py-1 text-[9px] font-semibold text-emerald-300">
@@ -360,6 +494,127 @@ function TerminalDemo() {
         </div>
       </div>
     </div>
+  );
+}
+
+function RunnerFleetDemo() {
+  const runners = [
+    {
+      name: "studio-windows",
+      platform: "Windows 11 · x64",
+      workspace: "E:\\Project\\nova",
+      state: "在线",
+      stateClass: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/15",
+      icon: <Laptop className="size-4" aria-hidden="true" />,
+    },
+    {
+      name: "build-linux",
+      platform: "Ubuntu 24.04 · x64",
+      workspace: "/srv/nova",
+      state: "忙碌 · 2",
+      stateClass: "bg-amber-400/10 text-amber-300 ring-amber-400/15",
+      icon: <Server className="size-4" aria-hidden="true" />,
+    },
+    {
+      name: "macbook-pro",
+      platform: "macOS · arm64",
+      workspace: "/Users/nova/workspace",
+      state: "在线",
+      stateClass: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/15",
+      icon: <MonitorCog className="size-4" aria-hidden="true" />,
+    },
+  ] as const;
+
+  return (
+    <div className="relative mx-auto w-full max-w-2xl lg:mx-0" aria-label="多平台 Runner 管理演示">
+      <div className="absolute -inset-10 rounded-full bg-indigo-500/15 blur-3xl" aria-hidden="true" />
+      <div className="relative overflow-hidden rounded-2xl bg-[#0a0f1d] ring-1 ring-white/15 shadow-2xl shadow-indigo-950/50">
+        <div className="flex h-11 items-center border-b border-white/10 px-4">
+          <div className="flex gap-1.5" aria-hidden="true">
+            <span className="size-2.5 rounded-full bg-rose-400" />
+            <span className="size-2.5 rounded-full bg-amber-300" />
+            <span className="size-2.5 rounded-full bg-emerald-400" />
+          </div>
+          <span className="mx-auto flex items-center gap-2 text-[11px] text-slate-500">
+            <TerminalSquare className="size-3.5" aria-hidden="true" />
+            nova / runners
+          </span>
+        </div>
+        <div className="min-h-[400px] p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-100">已注册 Runner</p>
+              <p className="mt-1 text-[10px] text-slate-500">设备启动后自动注册，状态通过服务端实时刷新</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[9px] font-semibold text-emerald-300 ring-1 ring-emerald-400/15">
+              3 台设备在线
+            </span>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-xl bg-white/[0.025] ring-1 ring-white/10">
+            <div className="hidden grid-cols-[1.1fr_0.75fr_1fr_auto] gap-3 border-b border-white/10 px-4 py-2.5 text-[9px] font-semibold uppercase tracking-wider text-slate-600 sm:grid">
+              <span>Runner</span>
+              <span>状态</span>
+              <span>Workspace</span>
+              <span>操作</span>
+            </div>
+            {runners.map((runner, index) => (
+              <div
+                key={runner.name}
+                className={`grid gap-3 px-4 py-3.5 sm:grid-cols-[1.1fr_0.75fr_1fr_auto] sm:items-center ${
+                  index ? "border-t border-white/[0.07]" : ""
+                }`}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-indigo-400/10 text-indigo-300 ring-1 ring-indigo-400/10">
+                    {runner.icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[11px] font-semibold text-slate-200">{runner.name}</p>
+                    <p className="mt-0.5 truncate text-[9px] text-slate-600">{runner.platform}</p>
+                  </div>
+                </div>
+                <div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-semibold ring-1 ${runner.stateClass}`}
+                  >
+                    <span className="size-1.5 rounded-full bg-current" />
+                    {runner.state}
+                  </span>
+                </div>
+                <p className="truncate font-mono text-[9px] text-slate-500" title={runner.workspace}>
+                  {runner.workspace}
+                </p>
+                <span
+                  className={`w-fit rounded-lg px-2.5 py-1.5 text-[9px] font-semibold ring-1 ${
+                    index === 0 ? "bg-indigo-400/15 text-indigo-200 ring-indigo-400/20" : "text-slate-500 ring-white/10"
+                  }`}
+                >
+                  {index === 0 ? "当前" : "选择"}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center gap-2 rounded-lg bg-indigo-400/5 px-3 py-2.5 text-[10px] text-indigo-200 ring-1 ring-indigo-400/10">
+            <Server className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">一个账号管理多平台 Runner，为不同会话选择执行设备</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DemoControl({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-white/5 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+      aria-label={label}
+    >
+      {children}
+    </button>
   );
 }
 

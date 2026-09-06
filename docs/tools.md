@@ -44,7 +44,7 @@ packages/tools
 |---|---|---|
 | RunnerTool | `bash` `read_file` `write_file` `edit_file` `grep` `list_dir` `git_diff` | **本包** |
 | StateTool | `todo_write` | **本包**；只产出 Agent 状态数据，不访问 FS / OS |
-| RemoteTool | `web_search` `github` `jira` | 本包，Phase 3 |
+| RemoteTool | `read_url` `web_search` | **本包**；直接调用受信任的远端 HTTP endpoint，不依赖 Runner |
 | AgentTool | `spawn_agent` `ask_user` | **`agent-core`**，不在此包 |
 | CompositeTool | 多 Tool / Model 组合 | Phase 3 |
 
@@ -64,6 +64,7 @@ packages/tools
 | risk | 工具 | Chat 模式 | Project 模式 |
 |---|---|---|---|
 | `none` | `todo_write` | ✅ | ✅ |
+| `read`（`requiresContext: false`） | `read_url` `web_search` | ✅ | ✅ |
 | `read` | `read_file` `read_document` `grep` `list_dir` `git_diff` | ❌ | ✅ |
 | `write` | `write_file` `edit_file` | ❌ | ✅ |
 | `exec` | `bash` | ❌ | ✅ |
@@ -74,13 +75,15 @@ packages/tools
 ### `read_file`
 
 ```ts
-args:    { path: string; offset?: number; limit?: number }   // 行号，1-based
-content: 带行号的文本；截断时标注 "... N lines omitted"
-details: { path, totalLines, offset, limit, truncated }
+args:    { path: string; offset?: number; limit?: number }   // 行号，1-based；缺省读 200 行
+content: 带行号的文本；有后续内容或超长单行被截断时明确标注
+details: { path, startLine, endLine, totalLines?, totalSize, truncated, lineTruncated }
 risk:    "read"
 ```
 
 仅接受 UTF-8 文本。二进制文件（包括 PDF、Office 文档）返回 `BINARY_FILE`，调用方必须改用 `read_document`，不得把原始字节解码后返回给模型。
+行切片由 Runner 直接完成，单次最多 2,000 行且受 1 MiB 硬上限保护。Agent 可以继续调整
+`offset` 读取整个文件；该上限只防止一次调用耗尽内存和上下文，不限制 Runner root 内的读取范围。
 
 ### `read_document`
 
@@ -140,6 +143,8 @@ risk:    "read"
 ```
 
 由 Runner 侧执行（ripgrep 或等价实现），**不拼 shell 命令** —— 拼 shell 会有转义与跨平台问题。
+搜索达到结果上限后只再确认存在下一条匹配便停止；`truncated: true` 时 `total` 是已确认匹配数的
+下界，不为计算精确总数继续扫描整个仓库。
 
 ### `list_dir`
 
@@ -181,6 +186,31 @@ risk:    "none"        // 不碰 workspace，Chat 模式也可用
 本 tool 只负责**校验并写入**：id 唯一、`blocked` 必须带 `note`、`in_progress` 至多 1 项。
 最后一条是刻意的 —— 同时"正在做"三件事的 agent 通常是在瞎跑。
 
+### `web_search`
+
+```ts
+args: {
+  query: string;
+  topic?: "general" | "news" | "finance";
+  searchDepth?: "basic" | "advanced";
+  timeRange?: "day" | "week" | "month" | "year";
+  maxResults?: number;
+  includeDomains?: string[];
+  excludeDomains?: string[];
+}
+content: 编号结果列表，每项包含 title、URL 和相关摘要
+details: { query, results, responseTime, requestId, credits }
+risk: "read"   requiresContext: false
+```
+
+`web_search` 由 `createWebSearch({ apiKey })` 创建，使用原生 `fetch` 直接调用 Tavily Search API。
+API Key 只由 Host 在 Composition Root 注入，不读取全局环境变量、不写入 Tool 结果或日志。
+首版固定关闭 Tavily answer、raw content、images 和 auto parameters；默认 basic、5 条结果，advanced
+必须由模型显式选择。Tool 不在 429 后自行等待重试，而是返回结构化 `retryAfterSeconds`。
+
+搜索摘要是不可信外部内容。Agent 只能把它作为事实来源，不得把摘要中的文本当作系统指令；
+需要阅读全文时复用 `read_url`，不在本 Tool 内叠加 Extract / Crawl 能力。
+
 ---
 
 ## 4. 相对 repo-layout 的调整
@@ -214,7 +244,7 @@ parameters: JSONSchema      // 同时喂给模型和用于校验
 **一份 schema 两个用途**，不维护第二份校验代码。校验失败返回 `status: "error"` 的结果喂回模型，
 **不 throw** —— 模型传错参数是常态，它自己会改。
 
-### 5.2 一律走 `ToolContext`
+### 5.2 RunnerTool 一律走 `ToolContext`
 
 ```text
 ✅  ctx.fs.read(path)
@@ -228,6 +258,10 @@ Tool 里出现 `node:fs` / `node:child_process` 的 import 一律视为设计错
 `ToolContext` 的生产实现只有 `runner-sdk.toToolContext(RunnerSession, ...)`。Tool 本身不得直接依赖 `runner-sdk`，否则 Tool 会认识传输层；由 Host 用 runner-sdk 创建 `ToolContext` 后注入，既保证所有 OS 操作远程执行，也保持 Agent / Tool 与 gRPC 解耦。
 
 允许单元测试注入纯内存 fake 来验证参数和错误分支，但 fake 不能成为产品运行模式，也不能调用测试机的真实 FS / Shell。集成测试必须启动真实 Remote Runner。
+
+RemoteTool 不访问 Workspace，因此声明 `requiresContext: false`，直接调用固定的受信任 provider endpoint。
+它必须自行负责请求参数边界、provider timeout、错误映射和凭据脱敏，并使用 agent-core 传入的
+call-level `AbortSignal` 响应 Chat 与 Project 模式下的取消。
 
 ### 5.3 `content` 要省 token，`details` 要完整
 
@@ -256,6 +290,8 @@ packages/tools/src/
 ├── grep.ts
 ├── list-dir.ts
 ├── git-diff.ts
+├── read-url.ts
+├── web-search.ts
 └── todo-write.ts
 ```
 
@@ -269,7 +305,8 @@ packages/tools/src/
 | Phase | 内容 |
 |---|---|
 | 1 | §3 的 8 个 Tool；其中 7 个 FS / OS / Shell Tool 只通过 Remote Runner 执行，`todo_write` 不访问 OS |
-| 3 | RemoteTool（`web_search` / `github`）、CompositeTool |
+| 2 | RemoteTool `web_search`：Tavily 搜索、服务端统一凭据、Chat / Project 共享 |
+| 3 | 其他 RemoteTool（`github` / `jira`）、CompositeTool |
 
-RemoteTool 推到 Phase 3 的理由：它走 HTTP 而非 `ToolContext`，会引入本包的第一个运行时依赖和
-凭据管理问题。核心闭环不需要它。
+`web_search` 随产品链路进入 Phase 2；凭据由 agent-server 启动配置统一拥有，Tool 只接收构造参数。
+其他 RemoteTool 仍按真实需求进入 Phase 3。

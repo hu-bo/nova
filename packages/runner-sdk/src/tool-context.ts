@@ -2,10 +2,10 @@
 // 这里是"协议事件/错误 → Result<T, FsError|ExecError>"的唯一转换点：
 // fs / exec 绝不 throw（agent-core.md §3.3）。
 //
-// 语义注意：ToolContext.fs.read 的 offset/limit 是 1-based 行语义（read_file
-// 工具按行编号），而 proto ReadFileRequest 是字节偏移 —— 所以这里整读文件、
-// 解码后按行切片，不做字节级透传。
+// 语义注意：ToolContext.fs.read 的 offset/limit 是 1-based 行语义，直接映射
+// Runner 的 ReadTextOp；readBytes 才映射字节范围 ReadFileRequest。
 import { randomUUID } from "node:crypto";
+import { posix, win32, type PlatformPath } from "node:path";
 import { create } from "@bufbuild/protobuf";
 import { ErrorCode } from "./gen/common_pb.js";
 import { ExecuteRequestSchema, ExecutionStatus, FileKind, OutputStream } from "./gen/execution_pb.js";
@@ -18,7 +18,7 @@ import type {
   FileInfo as CoreFileInfo,
   FileSystem,
   FsError,
-  GrepMatch as CoreGrepMatch,
+  GrepResult as CoreGrepResult,
   GrepOptions,
   OutputChunk,
   Result,
@@ -30,12 +30,13 @@ import { Utf8Decoder } from "./decode.js";
 import type { RunnerSession } from "./session.js";
 
 export function toToolContext(session: RunnerSession, opts: { cwd: string; signal?: AbortSignal }): ToolContext {
+  const paths = remotePaths(session.identity.platform, session.identity.workspace, opts.cwd);
   return {
-    fs: mapFs(session),
-    cwd: opts.cwd,
+    fs: mapFs(session, paths),
+    cwd: paths.cwd,
     signal: opts.signal ?? new AbortController().signal,
     exec(cmd: string, execOpts?: ExecOptions): Promise<Result<ExecOutput, ExecError>> {
-      return runExec(session, cmd, execOpts, opts.signal);
+      return runExec(session, cmd, execOpts, opts.signal, paths);
     },
   };
 }
@@ -47,6 +48,7 @@ async function runExec(
   cmd: string,
   execOpts: ExecOptions | undefined,
   ctxSignal: AbortSignal | undefined,
+  paths: RemotePaths,
 ): Promise<Result<ExecOutput, ExecError>> {
   const signals = [ctxSignal, execOpts?.signal].filter((s): s is AbortSignal => s !== undefined);
   // session.execute 内部已处理 abort → CancelRequest；这里只负责组合信号
@@ -55,7 +57,7 @@ async function runExec(
     executionId: `execution-${randomUUID()}`,
     command: cmd,
     args: execOpts?.args ?? [],
-    cwd: execOpts?.cwd ?? "", // 相对 workspace root，空 = root
+    cwd: paths.resolve(execOpts?.cwd ?? "."),
     env: execOpts?.env ?? {},
     timeoutMs: execOpts?.timeoutMs ?? 0, // 0 = Runner 默认值
   });
@@ -127,7 +129,10 @@ function toRunnerError(err: unknown): RunnerError {
 
 // —— fs：session.fs（抛 RunnerError）→ Result<T, FsError>（不 throw）——
 
-function mapFs(session: RunnerSession): FileSystem {
+const WHOLE_TEXT_MAX_LINES = 2_000;
+const TEXT_MAX_BYTES = 1024 * 1024;
+
+function mapFs(session: RunnerSession, paths: RemotePaths): FileSystem {
   const wrap = async <T>(path: string | undefined, op: () => Promise<T>): Promise<Result<T, FsError>> => {
     try {
       return { ok: true, value: await op() };
@@ -138,42 +143,88 @@ function mapFs(session: RunnerSession): FileSystem {
   return {
     read: (path, opts) =>
       wrap(path, async (): Promise<TextFile> => {
-        const { data } = await session.fs.readFile(path);
-        const lines = new TextDecoder("utf-8").decode(data).split("\n");
-        const start = Math.max(1, opts?.offset ?? 1);
-        const end = opts?.limit === undefined ? lines.length : Math.min(lines.length, start - 1 + opts.limit);
+        const result = await session.fs.readText(paths.resolve(path), {
+          offset: opts?.offset ?? 1,
+          limit: opts?.limit ?? WHOLE_TEXT_MAX_LINES,
+          maxBytes: TEXT_MAX_BYTES,
+        });
         return {
-          text: lines.slice(start - 1, end).join("\n"),
-          totalLines: lines.length,
-          truncated: end < lines.length,
+          text: result.text,
+          startLine: Number(result.startLine),
+          endLine: Number(result.endLine),
+          ...(result.totalLines === undefined ? {} : { totalLines: Number(result.totalLines) }),
+          totalSize: Number(result.totalSize),
+          truncated: result.truncated,
+          lineTruncated: result.lineTruncated,
         };
       }),
-    readBytes: (path) => wrap(path, async () => (await session.fs.readFile(path)).data),
+    readBytes: (path) => wrap(path, async () => (await session.fs.readFile(paths.resolve(path))).data),
     write: (path, content, opts) =>
       wrap(path, async () => {
-        await session.fs.writeFile(path, new TextEncoder().encode(content), { append: opts?.append ?? false });
+        await session.fs.writeFile(paths.resolve(path), new TextEncoder().encode(content), {
+          append: opts?.append ?? false,
+        });
       }),
-    rename: (from, to) => wrap(from, () => session.fs.rename(from, to)),
-    remove: (path, opts) => wrap(path, () => session.fs.remove(path, { recursive: opts?.recursive ?? false })),
-    mkdir: (path) => wrap(path, () => session.fs.mkdir(path)),
-    list: (path) =>
+    rename: (from, to) => wrap(from, () => session.fs.rename(paths.resolve(from), paths.resolve(to))),
+    remove: (path, opts) =>
+      wrap(path, () => session.fs.remove(paths.resolve(path), { recursive: opts?.recursive ?? false })),
+    mkdir: (path) => wrap(path, () => session.fs.mkdir(paths.resolve(path))),
+    list: (path, opts) =>
       wrap(path, async (): Promise<CoreDirEntry[]> =>
-        (await session.fs.list(path)).map((entry) => ({ name: entry.name, kind: kindToString(entry.kind) })),
+        (await session.fs.list(paths.resolve(path), opts?.depth)).map((entry) => ({
+          name: entry.name,
+          kind: kindToString(entry.kind),
+        })),
       ),
     stat: (path) =>
       wrap(path, async (): Promise<CoreFileInfo> => {
-        const info = await session.fs.stat(path);
-        return { path: info.path, kind: kindToString(info.kind), size: Number(info.size), mtime: Number(info.mtime) };
+        const info = await session.fs.stat(paths.resolve(path));
+        return {
+          path: paths.display(info.path),
+          kind: kindToString(info.kind),
+          size: Number(info.size),
+          mtime: Number(info.mtime),
+        };
       }),
-    tempDir: (prefix) => wrap(undefined, () => session.fs.tempDir(prefix)),
+    tempDir: (prefix) => wrap(undefined, async () => paths.display(await session.fs.tempDir(prefix))),
     grep: (pattern: string, opts?: GrepOptions) =>
-      wrap(opts?.path, async (): Promise<CoreGrepMatch[]> =>
-        (await session.fs.grep(pattern, opts)).matches.map((match) => ({
-          file: match.file,
-          line: match.line,
-          text: match.text,
-        })),
-      ),
+      wrap(opts?.path, async (): Promise<CoreGrepResult> => {
+        const result = await session.fs.grep(pattern, {
+          ...opts,
+          path: paths.resolve(opts?.path ?? "."),
+        });
+        return {
+          matches: result.matches.map((match) => ({
+            file: paths.display(match.file),
+            line: match.line,
+            text: match.text,
+          })),
+          total: result.total,
+          truncated: result.truncated,
+        };
+      }),
+  };
+}
+
+interface RemotePaths {
+  cwd: string;
+  resolve(path: string): string;
+  display(path: string): string;
+}
+
+function remotePaths(platform: string, root: string, cwd: string): RemotePaths {
+  const paths: PlatformPath = platform.startsWith("windows") ? win32 : posix;
+  const normalizedRoot = paths.resolve(root);
+  const normalizedCwd = paths.isAbsolute(cwd) ? paths.normalize(cwd) : paths.resolve(normalizedRoot, cwd);
+  return {
+    cwd: normalizedCwd,
+    resolve(path) {
+      return paths.isAbsolute(path) ? paths.normalize(path) : paths.resolve(normalizedCwd, path);
+    },
+    display(path) {
+      const absolute = paths.isAbsolute(path) ? paths.normalize(path) : paths.resolve(normalizedRoot, path);
+      return paths.relative(normalizedCwd, absolute) || ".";
+    },
   };
 }
 

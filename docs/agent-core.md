@@ -192,7 +192,7 @@ interface AgentTool<A = unknown, D = unknown> {
   parameters: JSONSchema
   executionMode?: "parallel" | "sequential"        // 缺省 parallel
   risk?: "none" | "read" | "write" | "exec"        // 缺省 exec
-  execute(args: A, ctx?: ToolContext): Promise<AgentToolResult<D>>
+  execute(args: A, ctx?: ToolContext, signal?: AbortSignal): Promise<AgentToolResult<D>>
 }
 
 interface AgentToolResult<D> {
@@ -254,17 +254,26 @@ interface FileSystem {
   rename(from: string, to: string): Promise<Result<void, FsError>>
   remove(path: string, opts?: { recursive?: boolean }): Promise<Result<void, FsError>>
   mkdir(path: string): Promise<Result<void, FsError>>
-  list(path: string): Promise<Result<DirEntry[], FsError>>
+  list(path: string, opts?: { depth?: number }): Promise<Result<DirEntry[], FsError>>
   stat(path: string): Promise<Result<FileInfo, FsError>>   // 不存在 → error(NOT_FOUND)
   tempDir(prefix?: string): Promise<Result<string, FsError>>
   // proto.md §4.2 GrepOp：Runner 侧结构化搜索原语，tools.md §3 `grep` 工具的落点，不拼 shell。
-  grep(pattern: string, opts?: GrepOptions): Promise<Result<GrepMatch[], FsError>>
+  grep(pattern: string, opts?: GrepOptions): Promise<Result<GrepResult, FsError>>
 }
 
 interface GrepOptions { path?: string; glob?: string; maxResults?: number }
 interface GrepMatch   { file: string; line: number; text: string }
+interface GrepResult  { matches: GrepMatch[]; total: number; truncated: boolean }
 
-interface TextFile  { text: string; totalLines: number; truncated: boolean }
+interface TextFile  {
+  text: string
+  startLine: number
+  endLine: number
+  totalLines?: number // 只有读取到 EOF 时可知
+  totalSize: number
+  truncated: boolean
+  lineTruncated: boolean
+}
 interface FileInfo  { path: string; kind: "file" | "dir" | "symlink"; size: number; mtime: number }
 interface DirEntry  { name: string; kind: "file" | "dir" | "symlink" }
 
@@ -284,9 +293,15 @@ type FsError   = { code: FsErrorCode;   message: string; path?: string }
 type ExecError = { code: ExecErrorCode; message: string; exitCode?: number }
 ```
 
+`ToolContext.cwd` 是相对路径的默认基准，不是额外的读取 ACL。调用方仍可使用 `..` 或绝对路径
+读取 Runner root 内其他位置；最终越界判断只由 Runner root 拥有。`read()` 的行窗口在 Runner 内
+完成，并有独立字节上限；这里的有界是资源约束，不是读取权限限制。
+
 Agent 每个 tool call 也有总时限：`AgentConfig.toolTimeoutMs`，缺省 120 秒。该时限由 TaskFlow
-持有，并会 abort 传入工具的 `ToolContext.signal`；Runner 执行因此会收到取消请求。工具未能自行响应
-abort 时，Agent 仍会将该调用收敛为 timeout 结果，不会让整个 run 永久停在 loading。
+持有，并会把同一个 call-level `AbortSignal` 作为 `execute` 第三个参数传给所有工具；存在 Workspace
+时也会放进 `ToolContext.signal`，Runner 执行因此会收到取消请求。没有 Workspace 的 RemoteTool 仍能
+通过第三个参数响应取消。工具未能自行响应 abort 时，Agent 仍会将该调用收敛为 timeout 结果，不会让
+整个 run 永久停在 loading。
 
 > **联动点**：`fs` 面的存在要求 `proto/execution.proto` 除 `Execute` 外必须有文件操作 RPC。
 > 若只有 `command / args`，`read_file` 就只能拼 `cat` —— 不可接受。见 `proto.md` §4。

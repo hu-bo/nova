@@ -15,13 +15,13 @@ import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { displayWorkspacePath } from "../lib/workspace-path.js";
-import { useQuickConversationCreate } from "./project/new-conversation.js";
+import { useOpenNewConversation } from "./project/new-conversation.js";
 import { useConversations, useProjects } from "./project/use-projects.js";
 import { useRunnerCatalog } from "./settings/runner/use-runners.js";
 
 export function HomeRoute() {
   const navigate = useNavigate();
-  const createConversation = useQuickConversationCreate();
+  const openNewConversation = useOpenNewConversation();
   const projects = useProjects();
   const conversations = useConversations();
   const runners = useRunnerCatalog();
@@ -47,17 +47,11 @@ export function HomeRoute() {
 
   const projectItems = projects.data ?? [];
   const conversationItems = conversations.data?.items ?? [];
-  const createError = createConversation.error;
   const online = runners.runners.filter((runner) => runner.state === "ready" || runner.state === "busy").length;
   const recentConversations = conversationItems.slice(0, 5);
 
   return (
     <div className="mx-auto max-w-[1500px] p-5 sm:p-6 lg:p-8">
-      {createError && (
-        <p className="mb-6 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200" role="alert">
-          新建会话失败：{errorMessage(createError)}
-        </p>
-      )}
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-semibold text-indigo-600">今天想完成什么？</p>
@@ -70,11 +64,10 @@ export function HomeRoute() {
         </div>
         <Button
           variant="primary"
-          disabled={createConversation.isPending}
           icon={<Plus className="size-4" aria-hidden="true" />}
-          onClick={() => createConversation.mutate(undefined)}
+          onClick={() => openNewConversation()}
         >
-          {createConversation.isPending ? "正在创建…" : "新建会话"}
+          新建会话
         </Button>
       </div>
 

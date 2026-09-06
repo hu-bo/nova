@@ -2,7 +2,7 @@ import { Chat, type ComposerAttachment, type ComposerSubmission, type ChatFeedba
 import type { UiEvent } from "@nova/protocol";
 import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Dialog } from "../components/ui/dialog.js";
@@ -21,8 +21,9 @@ const SELECTED_REASONING_STORE = new LocalStore("nova_selected_reasoning_effort"
 
 export function ConversationRoute() {
   const { projectId, conversationId } = useParams();
-  const conversations = useConversations(projectId);
+  const conversations = useConversations(projectId, conversationId !== "new");
   const projectQuery = useProject(projectId);
+  const isDraft = conversationId === "new";
 
   if (!conversationId)
     return (
@@ -30,7 +31,41 @@ export function ConversationRoute() {
         <ErrorState message="会话路径无效" />
       </div>
     );
-  if (conversations.isLoading || (projectId && projectQuery.isLoading))
+  if (projectId && projectQuery.isLoading)
+    return (
+      <div className="p-6 lg:p-8">
+        <LoadingState label="正在打开会话" />
+      </div>
+    );
+  if (projectId && projectQuery.error)
+    return (
+      <div className="p-6 lg:p-8">
+        <ErrorState message={errorMessage(projectQuery.error)} onRetry={() => void projectQuery.refetch()} />
+      </div>
+    );
+  if (projectId && !projectQuery.project)
+    return (
+      <div className="p-6 lg:p-8">
+        <ErrorState title="Project 不存在" message="它可能已被删除，或你没有访问权限。" />
+      </div>
+    );
+  if (isDraft) {
+    const draftId = `draft:${projectId ?? "chat"}`;
+    return (
+      <ConversationView
+        key={draftId}
+        conversation={{
+          id: draftId,
+          title: "新会话",
+          runnerId: projectQuery.project?.runnerId ?? null,
+          projectId: projectId ?? null,
+          isDraft: true,
+        }}
+        project={projectQuery.project}
+      />
+    );
+  }
+  if (conversations.isLoading)
     return (
       <div className="p-6 lg:p-8">
         <LoadingState label="正在打开会话" />
@@ -57,11 +92,18 @@ function ConversationView({
   conversation,
   project,
 }: {
-  conversation: { id: string; title: string; runnerId: string | null; projectId: string | null };
+  conversation: {
+    id: string;
+    title: string;
+    runnerId: string | null;
+    projectId: string | null;
+    isDraft?: boolean;
+  };
   project?:
     { id: string; name: string; workspace: string | null; runnerId: string | null; runnerState: string } | undefined;
 }) {
   const models = useModelSettings();
+  const navigate = useNavigate();
   const [storedProfileId, setStoredProfileId] = useState(() => SELECTED_MODEL_STORE.get());
   const [storedReasoning, setStoredReasoning] = useState(() => SELECTED_REASONING_STORE.get());
   // 存储的模型可能已被删除或不在当前用户的服务端目录里，此时回落到默认值
@@ -70,11 +112,10 @@ function ConversationView({
     : models.defaultProfileId || models.profiles[0]?.id || "";
   const [runnerWarning, setRunnerWarning] = useState<ComposerSubmission<RunnerAttachmentMetadata> | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [compactNotice, setCompactNotice] = useState<string | null>(null);
   const [clearNotice, setClearNotice] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<ComposerAttachment<RunnerAttachmentMetadata>[]>([]);
-  const session = useConversationSession(conversation.id);
+  const session = useConversationSession(conversation.id, !conversation.isDraft);
   const store = useConversationStore(conversation.id);
   const runnerId = conversation.runnerId ?? project?.runnerId ?? "";
   const selectedProfile = models.profiles.find((profile) => profile.id === modelProfileId);
@@ -90,12 +131,31 @@ function ConversationView({
   const reasoningEffort = reasoningEfforts.some((e) => e.value === storedReasoning)
     ? storedReasoning
     : (reasoningEfforts[0]?.value ?? "");
-  const mutations = useConversationMutations(
-    conversation.id,
+  const mutations = useConversationMutations({
+    ...(conversation.isDraft ? {} : { conversationId: conversation.id }),
+    stateId: conversation.id,
     modelProfileId,
-    session.ensureStreamConnected,
+    ensureStreamConnected: session.ensureStreamConnected,
+    releaseStream: session.releaseStream,
     reasoningEffort,
-  );
+    ...(conversation.isDraft
+      ? {
+          draft: {
+            ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+            ...(runnerId ? { runnerId } : {}),
+            onCreated: (created: { id: string; projectId: string | null }) =>
+              navigate(created.projectId ? `/p/${created.projectId}/c/${created.id}` : `/c/${created.id}`, {
+                replace: true,
+              }),
+          },
+        }
+      : {}),
+  });
+  const openRunnerAttachmentExplorer = runnerId
+    ? () => {
+        setAttachmentOpen(true);
+      }
+    : undefined;
   const loadDirectory = useRunnerDirectoryLoader(runnerId);
   const selectedRunnerAttachmentPaths = useMemo(
     () =>
@@ -122,21 +182,29 @@ function ConversationView({
         }
       : undefined);
   const composerSkills = useMemo(
-    () => [
-      {
-        id: "compact",
-        command: "compact",
-        label: "压缩上下文",
-        disabled: store.state.isRunning || mutations.compactMutation.isPending,
-      },
-      {
-        id: "clear",
-        command: "clear",
-        label: "清除上下文",
-        disabled: store.state.isRunning || mutations.clearMutation.isPending,
-      },
+    () =>
+      conversation.isDraft
+        ? []
+        : [
+            {
+              id: "compact",
+              command: "compact",
+              label: "压缩上下文",
+              disabled: store.state.isRunning || mutations.compactMutation.isPending,
+            },
+            {
+              id: "clear",
+              command: "clear",
+              label: "清除上下文",
+              disabled: store.state.isRunning || mutations.clearMutation.isPending,
+            },
+          ],
+    [
+      conversation.isDraft,
+      mutations.clearMutation.isPending,
+      mutations.compactMutation.isPending,
+      store.state.isRunning,
     ],
-    [mutations.clearMutation.isPending, mutations.compactMutation.isPending, store.state.isRunning],
   );
 
   const modelOptions = useMemo(
@@ -197,8 +265,6 @@ function ConversationView({
       dismissible: true,
     });
   if (clearNotice) feedback.push({ id: "clear-notice", message: clearNotice, tone: "info", dismissible: true });
-  if (attachmentError)
-    feedback.push({ id: "attachment", message: attachmentError, tone: "warning", dismissible: true });
   if (mutations.decisionMutation.error)
     feedback.push({ id: "decision", message: errorMessage(mutations.decisionMutation.error), tone: "error" });
   if (mutations.steerMutation.error)
@@ -273,14 +339,7 @@ function ConversationView({
             allowFiles: true,
             attachments,
             onAttachmentsChange: setAttachments,
-            onAttachmentButtonClick: () => {
-              if (!runnerId) {
-                setAttachmentError("请先为当前会话选择 Runner，再从 Runner 中添加附件。你仍可将本地文件拖到输入框中。");
-                return;
-              }
-              setAttachmentError(null);
-              setAttachmentOpen(true);
-            },
+            onAttachmentButtonClick: openRunnerAttachmentExplorer,
             placeholder: project ? "让 Agent 做点什么，Shift+Enter 换行" : "问点什么，Shift+Enter 换行",
             models: modelOptions,
             model: modelProfileId,
@@ -322,7 +381,6 @@ function ConversationView({
               if (id === "compact-notice") setCompactNotice(null);
               if (id === "context-compaction") store.dispatch({ type: "clear-context-compaction" });
               if (id === "clear-notice") setClearNotice(null);
-              if (id === "attachment") setAttachmentError(null);
             },
           }}
           emptyState={

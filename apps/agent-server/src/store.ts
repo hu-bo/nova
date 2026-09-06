@@ -108,7 +108,13 @@ export interface AgentStore {
     id: string;
     instructions: ProjectInstructions;
   }): Promise<ProjectRow>;
-  bindProject(input: { userId: string; id: string; runnerId: string; workspace: string }): Promise<ProjectRow>;
+  bindProject(input: {
+    userId: string;
+    id: string;
+    runnerId: string;
+    workspace: string;
+    rebindConversationIds?: readonly string[];
+  }): Promise<ProjectRow>;
   deleteProject(input: { userId: string; id: string }): Promise<void>;
   createConversation(input: {
     userId: string;
@@ -307,6 +313,12 @@ export function createMemoryStore(): AgentStore {
       const project = ownedProject(input.userId, input.id);
       const updated = { ...project, runnerId: input.runnerId, workspace: input.workspace, updatedAt: new Date() };
       state.projects.set(project.id, updated);
+      for (const conversationId of input.rebindConversationIds ?? []) {
+        const conversation = state.conversations.get(conversationId);
+        if (conversation?.userId === input.userId && conversation.projectId === input.id) {
+          state.conversations.set(conversationId, { ...conversation, runnerId: input.runnerId });
+        }
+      }
       return updated;
     },
     async deleteProject(input) {

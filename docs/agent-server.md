@@ -13,7 +13,7 @@
 - 登录鉴权（调用独立 auth-service）
 - 托管 agent-core 运行时
 - 保存和校验会话的模型配置，并将配置组装为 `ModelRef`
-- **组装依赖**：注入 `ToolContext` / `Decide` / `SessionStorage`，选择 Runner
+- **组装依赖**：注入 `ToolContext` / `Decide` / `SessionStorage` / RemoteTool 凭据，选择 Runner
 - Runner Registry：注册 / 心跳 / 状态
 - 持久化：Conversation / Entry / Record / Runner
 - **Projection**：内部事件 → `protocol` 的 UI 事件
@@ -95,9 +95,9 @@ Project                        独立 Chat
 | -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `conversations.project_id` | `null`                                                                                 | project 的 id                                                                         |
 | workspace                  | 未绑定 Runner 时无；绑定后为 Runner 的 `root_workspace`                                | `projects.workspace`                                                                  |
-| Runner                     | 不要求绑定；绑定后仅使用该 Runner 的 root                                              | 优先使用 conversation 的 `runner_id`，否则使用 Project 的绑定，并校验 workspace（§8） |
+| Runner                     | 不要求绑定；绑定后仅使用该 Runner 的 root                                              | 使用 conversation 的 `runner_id`；Project 绑定在线 Runner 时会补齐未绑定或原 Runner 已离线的会话（§8） |
 | 注入的 `ctx`               | 未绑定时 `undefined`；绑定且 READY 时 `toToolContext(runner, { cwd: root_workspace })` | `toToolContext(runner, ...)`                                                          |
-| 工具集                     | 未绑定时 `risk === "none"`；绑定且 READY 时全部                                        | 全部                                                                                  |
+| 工具集                     | 未绑定时 `read_url` / `web_search` / `todo_write`；绑定且 READY 时增加 Coding Tools      | Coding Tools + `web_search`                                                           |
 | TODO                       | 有，属于该 conversation                                                                | 有，属于该 conversation（**不跨会话共享**）                                           |
 
 **Project 是 workspace 的容器，不是会话的容器。** 创建 Project 时不立即绑定 Runner；
@@ -194,13 +194,23 @@ Registry 是 root 边界与在线状态的 owner；HTTP handler 不自行拼接�
 这是本 app **唯一不可替代**的职责。其余都是围绕它的传输层。
 
 ```ts
-const codingHarness = createHarness({ modules: [codingAgentModule] });
-const chatHarness = createHarness({
-  modules: [{ id: "nova.chat", tools: [todoWrite] }],
-});
-
 // src/modules/runtime/create-agent-runtime.ts
-async function createAgentRuntime(conv: Conversation, project: Project | null, userId: string): Promise<Agent> {
+function createAgentRuntimeFactory(webSearch: AgentTool) {
+  const webSearchModule = {
+    id: "nova.web-search",
+    tools: [webSearch],
+    prompts: [{ name: "web-search", content: WEB_SEARCH_PROMPT }],
+  };
+  const codingHarness = createHarness({ modules: [codingAgentModule, webSearchModule] });
+  const chatHarness = createHarness({
+    modules: [{ id: "nova.chat", tools: [readUrl, todoWrite] }, webSearchModule],
+  });
+
+  return async function createAgentRuntime(
+    conv: Conversation,
+    project: Project | null,
+    userId: string,
+  ): Promise<Agent> {
   // Chat 模式：project 为 null → 不连 Runner，不注入 ctx
   const ctx = project
     ? toToolContext(registry.pick(userId, project.runnerId, project.workspace), { cwd: project.workspace })
@@ -212,18 +222,19 @@ async function createAgentRuntime(conv: Conversation, project: Project | null, u
   const environment = runner
     ? createRunnerEnvironmentPrompt({ platform: runner.identity.platform, workspace: ctx.cwd })
     : undefined;
-  return (project ? codingHarness : chatHarness).createAgent({
-    model: ref,
-    stream: model.stream,
-    ctx,
-    storage: pgSessionStorage(db, conv.id),
-    decide: sseDecide(conv.id), // §6
-    userId,
-    systemPrompt: [
-      ...(projectInstructions ? [{ name: "repository-instructions", content: projectInstructions }] : []),
-      ...(environment ? [environment] : []),
-    ],
-  });
+    return (ctx ? codingHarness : chatHarness).createAgent({
+      model: ref,
+      stream: model.stream,
+      ctx,
+      storage: pgSessionStorage(db, conv.id),
+      decide: sseDecide(conv.id), // §6
+      userId,
+      systemPrompt: [
+        ...(projectInstructions ? [{ name: "repository-instructions", content: projectInstructions }] : []),
+        ...(environment ? [environment] : []),
+      ],
+    });
+  };
 }
 ```
 
@@ -231,9 +242,14 @@ Runner 注册中的 `platform` 是执行环境的唯一事实源。Composition R
 将当前 session 的平台和实际 `cwd` 注入实例级 system prompt；不把它冗余保存到 Project / Conversation。
 因此 Runner 在另一平台重连后，新建 runtime 会自然得到新环境，未绑定 Runner 的普通 Chat 则不注入该提示。
 
-`todoWrite` 是未绑定 Runner 的 Chat 唯一额外 Module 能力，`risk === "none"`，因此仍有会话级
-TODO。普通 Chat 绑定 READY Runner 后使用 coding Harness，并以 Runner 的 `root_workspace` 作为
-`cwd`；这不会创建或关联 Project。不要用空 Harness 后再在 handler 中临时塞 Tool。
+未绑定 Runner 的 Chat 使用 `read_url`、`web_search` 和 `todo_write`；其中两个 RemoteTool 都声明
+`requiresContext: false`，不因缺少 Workspace 被过滤。普通 Chat 绑定 READY Runner 后使用 coding
+Harness，并以 Runner 的 `root_workspace` 作为 `cwd`；这不会创建或关联 Project。
+
+agent-server 启动时从必填 `TAVILY_API_KEY` 创建唯一的 `web_search` Tool，并通过共享 Web Search
+Module 同时装入 Chat 与 Coding Harness。Module 的 Prompt 要求把搜索结果视为不可信外部内容、
+在回答中引用来源 URL，并在确需全文时调用 `read_url`。密钥不进入 Prompt、Tool details、日志、
+数据库或浏览器；缺失时配置校验 fail-fast。
 
 Provider 与场景选择都在这里（`agent-core.md` §2）。**除了这个文件，没有第二处知道
 agent-core / Runner Module / runner-sdk / model-adapters 同时存在。**
@@ -243,8 +259,8 @@ agent-core / Runner Module / runner-sdk / model-adapters 同时存在。**
 模型配置的唯一 owner 是 conversation。创建会话时可写入默认配置；首次发送消息时 UI 必须下发完整配置。首次发送前切换模型仍按首次对话处理；已有消息后的切换更新 conversation，后续新 run 使用新配置，正在运行的 run 不切换。
 
 **两种模式的差别是一份静态 Module 能力快照。** 没有 `ChatRuntime` / `ProjectRuntime`
-两个类，没有 `RuntimeFactory`。模式不是一种运行时类型，是一次 Harness 选择 ——
-一旦它变成两个类，两条路径就会开始各自演化，然后就再也合不回来了。
+两个类。Composition Root 可以用一个闭包工厂在启动时绑定共享依赖并创建两份 Harness，但工厂内部
+仍复用同一条 Agent 创建路径；模式只决定选择哪份 Harness，不能演化成两套 Runtime 类型。
 
 **运行时生命周期**：一个 conversation 一个 `Agent` 实例，进程内 Map 缓存，
 空闲 30 分钟回收。重启后靠 `agent.resume()` 从 Record 续跑（`agent-core.md` §5.2）。
@@ -670,7 +686,7 @@ server 根据当前认证的 `userId` 生成一次性高熵设备 token，持久
 已脱敏的引导状态，用户明确重新生成时旧 token 立即失效。
 
 ```text
-nova-runner --server https://<agent-server>/runner-connect --token <runner-token> --root /home/user
+nova-runner --server https://<agent-server>/runner-connect --token <runner-token> --workspace /home/user
 ```
 
 Runner 使用 token 通过 gRPC metadata 建立连接。server 在接纳连接前校验 token digest、过期时间、
@@ -685,7 +701,11 @@ Project 绑定设备目录是单独的流程。创建 Project 后，UI 请求该
 通过 Runner 的文件能力从 `root_workspace` 开始浏览目录；用户选择目录后调用
 `POST /api/projects/:projectId/workspace { runnerId, path }`。server 必须校验 Runner 属于当前用户、
 path 位于该 Runner 的 root 内且目录存在，然后原子写入 `projects.runner_id` 与 `projects.workspace`。
-未完成绑定的 Project 可以保存草稿，但不允许创建 coding conversation 或启动 Agent。
+如果本次选择的 Runner 在线，同一事务还要把该 Project 下 `runner_id` 为空或所指 Runner 已离线的
+conversation 更新为新 Runner；仍绑定在线 Runner 的 conversation 保持不变。这样用户可以修复尚未获得
+可用执行环境的历史会话，又不会让正常会话随着 Project 设置任意漂移。该迁移只由显式的 Project 绑定
+操作触发，不是 `pick` 的隐式回落策略。
+未完成绑定的 Project 可以保存草稿和创建 coding conversation，但在完成绑定前不允许启动 Agent。
 
 ```ts
 interface Registry {

@@ -122,6 +122,7 @@ message FileOpRequest {
     MkdirOp mkdir = 5;
     TempDirOp temp_dir = 6;
     GrepOp grep = 7;
+    ReadTextOp read_text = 8;
   }
 }
 
@@ -159,6 +160,16 @@ message GrepOp {
   uint32 max_results = 4;
 }
 
+// Bounded UTF-8 text window for Agent-facing source reads. Unlike ReadFileRequest,
+// this operation performs line selection inside Runner so a small window never
+// transfers or allocates the whole file. Zero values select Runner defaults.
+message ReadTextOp {
+  string path = 1;
+  uint64 offset = 2; // 1-based line number; 0 = 1
+  uint32 limit = 3; // maximum returned lines; 0 = default
+  uint32 max_bytes = 4; // maximum returned UTF-8 bytes; 0 = default
+}
+
 message FileOpResponse {
   oneof result {
     FileInfo info = 1;
@@ -166,6 +177,7 @@ message FileOpResponse {
     google.protobuf.Empty ok = 3; // remove / rename / mkdir
     string path = 4; // temp_dir
     GrepResult grep = 5;
+    ReadTextResult read_text = 6;
   }
 }
 
@@ -195,6 +207,16 @@ message GrepMatch {
   string file = 1;
   uint32 line = 2;
   string text = 3;
+}
+
+message ReadTextResult {
+  string text = 1;
+  uint64 start_line = 2;
+  uint64 end_line = 3;
+  optional uint64 total_lines = 4; // known only when the read reaches EOF
+  uint64 total_size = 5;
+  bool truncated = 6; // unread file content remains
+  bool line_truncated = 7; // at least one returned line exceeded max_bytes
 }
 
 enum FileKind {

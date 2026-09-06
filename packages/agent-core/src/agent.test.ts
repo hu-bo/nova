@@ -235,6 +235,59 @@ describe("装配校验（§1.1）", () => {
     expect(result.stopReason).toBe("done");
     expect(textOf(result.message!.blocks)).toBe("hi");
   });
+
+  it("无 Workspace 的 RemoteTool 仍收到 call-level AbortSignal", async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const remoteTool: AgentTool<Record<string, unknown>> = {
+      name: "remote_read",
+      description: "remote read",
+      schema: z.record(z.string(), z.unknown()),
+      risk: "read",
+      requiresContext: false,
+      async execute(_args, ctx, signal) {
+        expect(ctx).toBeUndefined();
+        receivedSignal = signal;
+        return { status: "ok", content: [{ type: "text", text: "done" }], details: null };
+      },
+    };
+    const { stream } = scripted([toolEvents([{ name: "remote_read" }]), textEvents("complete")]);
+    const { agent } = setup(stream, { chat: true, tools: [remoteTool] });
+
+    await agent.prompt("search");
+
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    expect(receivedSignal?.aborted).toBe(false);
+  });
+
+  it("abort 会传递到无 Workspace RemoteTool 并结束其后台工作", async () => {
+    let started = false;
+    let observedAbort = false;
+    const remoteTool: AgentTool<Record<string, unknown>> = {
+      name: "remote_read",
+      description: "remote read",
+      schema: z.record(z.string(), z.unknown()),
+      risk: "read",
+      requiresContext: false,
+      async execute(_args, _ctx, signal) {
+        started = true;
+        if (signal && !signal.aborted) {
+          await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+        }
+        observedAbort = signal?.aborted ?? false;
+        return { status: "error", content: [{ type: "text", text: "cancelled" }], details: null };
+      },
+    };
+    const { stream } = scripted([toolEvents([{ name: "remote_read" }]), textEvents("unused")]);
+    const { agent } = setup(stream, { chat: true, tools: [remoteTool] });
+
+    const run = agent.prompt("search");
+    await waitFor(() => started);
+    await agent.abort();
+    const result = await run;
+
+    await waitFor(() => observedAbort);
+    expect(result.stopReason).toBe("aborted");
+  });
 });
 
 describe("结构化任务结果", () => {

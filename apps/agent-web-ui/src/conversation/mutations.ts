@@ -1,7 +1,7 @@
 import type { ComposerSubmission } from "@nova/chat-ui";
 import type { ChatMessage, DecisionResponse } from "@nova/protocol";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { ApiClientError, errorMessage } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAuth } from "../auth/provider.js";
@@ -16,16 +16,29 @@ export interface RunnerAttachmentMetadata {
 }
 type ReasoningEffort = "off" | "low" | "medium" | "high" | "max";
 
-export function useConversationMutations(
-  conversationId: string,
-  modelProfileId: string,
-  ensureStreamConnected: () => Promise<void>,
-  reasoningEffort?: string,
-) {
+interface ConversationMutationOptions {
+  conversationId?: string;
+  stateId: string;
+  modelProfileId: string;
+  ensureStreamConnected: (conversationId?: string) => Promise<void>;
+  releaseStream: (conversationId: string) => void;
+  reasoningEffort?: string;
+  draft?: {
+    projectId?: string;
+    runnerId?: string;
+    onCreated: (conversation: { id: string; projectId: string | null }) => void;
+  };
+}
+
+export function useConversationMutations(options: ConversationMutationOptions) {
+  const { conversationId, stateId, modelProfileId, ensureStreamConnected, releaseStream, reasoningEffort, draft } =
+    options;
   const { api } = useAuth();
   const models = useModelSettings();
   const queryClient = useQueryClient();
-  const { state, dispatch } = useConversationStore(conversationId);
+  const { state, dispatch } = useConversationStore(stateId);
+  const activeConversationId = useRef(conversationId);
+  const pendingCreatedConversation = useRef<{ id: string; projectId: string | null } | undefined>(undefined);
 
   const refreshLists = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists, refetchType: "none" });
@@ -49,6 +62,20 @@ export function useConversationMutations(
         .map((file) => `[附件：${file.name.replaceAll("[", "\\[").replaceAll("]", "\\]")}](${file.url})`)
         .join("\n");
       const text = [submission.text, attachmentText].filter(Boolean).join("\n\n");
+      let targetConversationId = activeConversationId.current;
+      let createdConversation = pendingCreatedConversation.current;
+      if (!targetConversationId) {
+        if (!draft) throw new Error("临时会话缺少创建信息");
+        createdConversation = await api!.createConversation({
+          ...(draft.projectId ? { projectId: draft.projectId } : {}),
+          ...(draft.runnerId ? { runnerId: draft.runnerId } : {}),
+          ...model,
+        });
+        targetConversationId = createdConversation.id;
+        activeConversationId.current = targetConversationId;
+        pendingCreatedConversation.current = createdConversation;
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists });
+      }
       const wasRunning = state.isRunning;
       const messageId = retryId ?? createUuid();
       // reasoningEffort is a UI-only selection for now. The message API does
@@ -64,7 +91,7 @@ export function useConversationMutations(
       } else {
         const message: ChatMessage = {
           id: messageId,
-          conversationId,
+          conversationId: targetConversationId,
           role: "user",
           blocks: [{ type: "text", text }],
           status: "done",
@@ -77,28 +104,39 @@ export function useConversationMutations(
         dispatch({ type: "optimistic.add", message });
       }
       try {
-        await ensureStreamConnected();
-        await api!.sendMessage(conversationId, request);
+        await ensureStreamConnected(targetConversationId);
+        await api!.sendMessage(targetConversationId, request);
+        return { createdConversation };
       } catch (error) {
+        if (!conversationId) releaseStream(targetConversationId);
         dispatch({ type: "optimistic.fail", messageId, keepRunning: wasRunning, message: errorMessage(error) });
         throw error;
       }
     },
-    onSuccess: refreshLists,
+    onSuccess: async (result) => {
+      const createdConversation = result?.createdConversation;
+      if (createdConversation) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists });
+        pendingCreatedConversation.current = undefined;
+        draft?.onCreated(createdConversation);
+        return;
+      }
+      refreshLists();
+    },
   });
 
   const abortMutation = useMutation({
-    mutationFn: () => api!.abortConversation(conversationId),
+    mutationFn: () => api!.abortConversation(requireConversationId(activeConversationId.current)),
     onSuccess: refreshLists,
   });
 
   const compactMutation = useMutation({
-    mutationFn: () => api!.compactConversation(conversationId),
+    mutationFn: () => api!.compactConversation(requireConversationId(activeConversationId.current)),
     onSuccess: (result) => dispatch({ type: "context.set", usage: result.context }),
   });
 
   const clearMutation = useMutation({
-    mutationFn: () => api!.clearConversationContext(conversationId),
+    mutationFn: () => api!.clearConversationContext(requireConversationId(activeConversationId.current)),
     onSuccess: (result) => dispatch({ type: "context.set", usage: result.context }),
   });
 
@@ -107,7 +145,10 @@ export function useConversationMutations(
       dispatch({ type: "queue.start", messageId: queued.message.id });
       try {
         await ensureStreamConnected();
-        await api!.sendMessage(conversationId, { ...queued.request, queue: "steering" });
+        await api!.sendMessage(requireConversationId(activeConversationId.current), {
+          ...queued.request,
+          queue: "steering",
+        });
       } catch (error) {
         dispatch({
           type: "optimistic.fail",
@@ -126,7 +167,7 @@ export function useConversationMutations(
       dispatch({ type: "queue.start", messageId: queued.message.id });
       try {
         await ensureStreamConnected();
-        await api!.sendMessage(conversationId, queued.request);
+        await api!.sendMessage(requireConversationId(activeConversationId.current), queued.request);
       } catch (error) {
         dispatch({
           type: "optimistic.fail",
@@ -162,7 +203,9 @@ export function useConversationMutations(
   });
 
   return {
-    send: (submission: ComposerSubmission<RunnerAttachmentMetadata>) => sendMutation.mutateAsync({ submission }),
+    send: async (submission: ComposerSubmission<RunnerAttachmentMetadata>) => {
+      await sendMutation.mutateAsync({ submission });
+    },
     retry: (messageId: string) => {
       const index = state.messages.findIndex((item) => item.id === messageId);
       const message = state.messages[index];
@@ -211,4 +254,9 @@ export function useConversationMutations(
 
 function isReasoningEffort(value: string | undefined): value is ReasoningEffort {
   return value === "off" || value === "low" || value === "medium" || value === "high" || value === "max";
+}
+
+function requireConversationId(conversationId: string | undefined) {
+  if (!conversationId) throw new Error("会话尚未创建");
+  return conversationId;
 }

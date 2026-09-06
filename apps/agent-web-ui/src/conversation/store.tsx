@@ -45,21 +45,21 @@ export const conversationStore = {
   },
 };
 
-export function useConversationSession(conversationId: string) {
+export function useConversationSession(conversationId: string, enabled = true) {
   const { api } = useAuth();
   const queryClient = useQueryClient();
   const { dispatch } = useConversationStore(conversationId);
   const history = useQuery({
     queryKey: queryKeys.messages(conversationId),
     queryFn: () => api!.listMessages(conversationId),
-    enabled: Boolean(api),
+    enabled: Boolean(api) && enabled,
     refetchOnWindowFocus: false,
     retry: 1,
   });
   const context = useQuery({
     queryKey: queryKeys.context(conversationId),
     queryFn: () => api!.getConversationContext(conversationId),
-    enabled: Boolean(api),
+    enabled: Boolean(api) && enabled,
     refetchOnWindowFocus: false,
     retry: 1,
   });
@@ -71,23 +71,27 @@ export function useConversationSession(conversationId: string) {
     if (context.data) dispatch({ type: "context.set", usage: context.data });
   }, [context.data, dispatch]);
 
-  const loadSnapshot = useCallback(async (): Promise<ChatMessage[]> => {
-    const snapshot = await api!.listMessages(conversationId);
-    queryClient.setQueryData(queryKeys.messages(conversationId), snapshot);
-    return snapshot.items;
-  }, [api, conversationId, queryClient]);
+  const loadSnapshot = useCallback(
+    async (targetConversationId: string): Promise<ChatMessage[]> => {
+      const snapshot = await api!.listMessages(targetConversationId);
+      queryClient.setQueryData(queryKeys.messages(targetConversationId), snapshot);
+      return snapshot.items;
+    },
+    [api, queryClient],
+  );
   const onRunEnd = useCallback(() => {
     void Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists, refetchType: "none" }),
       queryClient.invalidateQueries({ queryKey: queryKeys.projects, refetchType: "none" }),
     ]);
   }, [queryClient]);
-  const stream = useConversationStream({ conversationId, loadSnapshot, onRunEnd });
+  const stream = useConversationStream({ conversationId, loadSnapshot, onRunEnd, enabled });
 
   return {
-    isLoading: history.isLoading,
+    isLoading: enabled && history.isLoading,
     historyError: history.error,
     retryHistory: () => void history.refetch(),
     ensureStreamConnected: stream.ensureConnected,
+    releaseStream: stream.release,
   };
 }

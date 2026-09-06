@@ -34,12 +34,28 @@ export function createProjectService(store: AgentStore, runners: RunnerRegistry)
     },
     async bind(userId: string, id: string, runnerId: string, workspace: string) {
       await runners.verifyWorkspace(userId, runnerId, workspace);
-      return view(await store.bindProject({ userId, id, runnerId, workspace }));
+      const rebindConversationIds = runners.isOnline(userId, runnerId)
+        ? (await listProjectConversations(store, userId, id))
+            .filter((conversation) => !conversation.runnerId || !runners.isOnline(userId, conversation.runnerId))
+            .map((conversation) => conversation.id)
+        : [];
+      return view(await store.bindProject({ userId, id, runnerId, workspace, rebindConversationIds }));
     },
     async remove(userId: string, id: string) {
       await store.deleteProject({ userId, id });
     },
   };
+}
+
+async function listProjectConversations(store: AgentStore, userId: string, projectId: string) {
+  const conversations = [];
+  let cursor: string | undefined;
+  do {
+    const page = await store.listConversations({ userId, projectId, limit: 100, ...(cursor ? { cursor } : {}) });
+    conversations.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return conversations;
 }
 
 export async function loadProjectInstructions(

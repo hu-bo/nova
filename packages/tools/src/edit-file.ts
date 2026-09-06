@@ -15,6 +15,9 @@ export const editFile: Tool<z.output<typeof schema>> = {
     const runtime = context(ctx);
     const read = await runtime.fs.read(input.path);
     if (!read.ok) return errorResult(read.error, `${read.error.code}: ${read.error.message}`);
+    if (read.value.truncated || read.value.lineTruncated) {
+      return errorResult({ code: "TOO_LARGE", path: input.path }, "File is too large for exact whole-file editing");
+    }
     const occurrences = read.value.text.split(input.oldText).length - 1;
     if (!occurrences)
       return errorResult({ path: input.path, replacements: 0, reason: "not_found" }, "oldText was not found");

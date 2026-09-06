@@ -134,7 +134,7 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
 
   try {
     const toolCtx = deps.ctx ? withSignal(deps.ctx, deps.signal) : undefined;
-    const result = await awaitTool(tool.execute(parsed.data, toolCtx), deps.signal);
+    const result = await awaitTool(tool.execute(parsed.data, toolCtx, deps.signal), deps.signal);
     return await end({
       callId: call.callId,
       name: call.name,

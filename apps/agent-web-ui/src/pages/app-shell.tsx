@@ -15,7 +15,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { useAuth } from "../auth/provider.js";
 import { useConversationListMutations, useConversations, useProjects } from "./project/use-projects.js";
 import { RunnerLiveUpdates } from "./settings/runner/live-updates.js";
-import { useQuickConversationCreate } from "./project/new-conversation.js";
+import { newConversationPath, useOpenNewConversation } from "./project/new-conversation.js";
 import { NewProjectDrawer } from "./project/new-project.js";
 import { errorMessage } from "../api/client.js";
 import { ProjectDetailsPopover } from "../components/project-details-popover.js";
@@ -31,13 +31,13 @@ export function AppShell() {
   const conversations = useConversations();
   const location = useLocation();
   const navigate = useNavigate();
-  const createChat = useQuickConversationCreate();
+  const openNewConversation = useOpenNewConversation();
   const conversationMutations = useConversationListMutations();
 
   function openCreator(kind: "chat" | "project") {
     setMobileOpen(false);
     if (kind === "chat") {
-      createChat.mutate(undefined);
+      openNewConversation();
       return;
     }
     setProjectCreatorOpen(true);
@@ -65,6 +65,19 @@ export function AppShell() {
     );
   }, [location.pathname, location.search, navigate]);
 
+  async function removeConversation(conversation: { id: string; title: string; projectId: string | null }) {
+    if (!window.confirm(`删除“${conversation.title || "未命名会话"}”？此操作无法撤销。`)) return;
+    try {
+      await conversationMutations.remove.mutateAsync(conversation.id);
+    } catch {
+      return;
+    }
+    setMobileOpen(false);
+    navigate(newConversationPath(conversation.projectId ? { id: conversation.projectId } : undefined), {
+      replace: true,
+    });
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <RunnerLiveUpdates />
@@ -84,12 +97,9 @@ export function AppShell() {
           conversations={conversations.data?.items ?? []}
           onNewProject={() => openCreator("project")}
           onNewChat={() => openCreator("chat")}
-          onNewProjectChat={(project) => createChat.mutate(project)}
+          onNewProjectChat={openNewConversation}
           onEditProject={(project) => navigate(`/p/${project.id}`)}
-          onDeleteConversation={(conversation) => {
-            if (window.confirm(`删除“${conversation.title || "未命名会话"}”？此操作无法撤销。`))
-              conversationMutations.remove.mutate(conversation.id);
-          }}
+          onDeleteConversation={(conversation) => void removeConversation(conversation)}
           displayName={auth.displayName}
           userId={auth.userId}
           onLogout={auth.logout}
@@ -123,16 +133,13 @@ export function AppShell() {
             onNewChat={() => openCreator("chat")}
             onNewProjectChat={(project) => {
               setMobileOpen(false);
-              createChat.mutate(project);
+              openNewConversation(project);
             }}
             onEditProject={(project) => {
               setMobileOpen(false);
               navigate(`/p/${project.id}`);
             }}
-            onDeleteConversation={(conversation) => {
-              if (window.confirm(`删除“${conversation.title || "未命名会话"}”？此操作无法撤销。`))
-                conversationMutations.remove.mutate(conversation.id);
-            }}
+            onDeleteConversation={(conversation) => void removeConversation(conversation)}
             onNavigate={() => setMobileOpen(false)}
             displayName={auth.displayName}
             userId={auth.userId}
@@ -142,10 +149,10 @@ export function AppShell() {
       </dialog>
 
       <main className="min-h-screen lg:pl-64">
-        {createChat.error && (
+        {conversationMutations.remove.error && (
           <div className="mx-5 pt-4 lg:mx-8" role="alert">
             <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200">
-              新建会话失败：{errorMessage(createChat.error)}
+              删除会话失败：{errorMessage(conversationMutations.remove.error)}
             </p>
           </div>
         )}
@@ -175,7 +182,7 @@ function SidebarContent({
   onNewChat: () => void;
   onNewProjectChat: (project: { id: string; runnerId: string | null }) => void;
   onEditProject: (project: { id: string }) => void;
-  onDeleteConversation: (conversation: { id: string; title: string }) => void;
+  onDeleteConversation: (conversation: { id: string; title: string; projectId: string | null }) => void;
   onNavigate?: () => void;
   displayName: string | null;
   userId: string | null;
@@ -346,10 +353,10 @@ function ConversationNavItem({
   onClick,
   onDelete,
 }: {
-  conversation: { id: string; title: string };
+  conversation: { id: string; title: string; projectId: string | null };
   to: string;
   onClick?: (() => void) | undefined;
-  onDelete: (conversation: { id: string; title: string }) => void;
+  onDelete: (conversation: { id: string; title: string; projectId: string | null }) => void;
 }) {
   const { state } = useConversationStore(conversation.id);
 

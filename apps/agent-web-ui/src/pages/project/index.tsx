@@ -22,7 +22,7 @@ import { Dialog } from "../../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui/feedback.js";
 import { FieldLabel, Input } from "../../components/ui/form.js";
 import { displayWorkspacePath } from "../../lib/workspace-path.js";
-import { useQuickConversationCreate } from "./new-conversation.js";
+import { useOpenNewConversation } from "./new-conversation.js";
 import { bindWorkspaceSchema, renameProjectSchema, type BindWorkspaceForm, type RenameProjectForm } from "./schemas.js";
 import { useConversations, useProject, useProjectMutations } from "./use-projects.js";
 import { RunnerBadge } from "../home.js";
@@ -55,7 +55,7 @@ export function ProjectRoute() {
     defaultValues: { runnerId: "", workspace: "" },
   });
   const project = projectQuery.project;
-  const createConversation = useQuickConversationCreate();
+  const openNewConversation = useOpenNewConversation();
   const bindRunnerId = bindForm.watch("runnerId");
   const bindWorkspace = bindForm.watch("workspace");
   const loadDirectory = useRunnerDirectoryLoader(bindRunnerId);
@@ -155,20 +155,13 @@ export function ProjectRoute() {
           </Button>
           <Button
             variant="primary"
-            disabled={createConversation.isPending}
-            onClick={() => createConversation.mutate({ id: project.id, runnerId: project.runnerId })}
+            onClick={() => openNewConversation(project)}
             icon={<Plus className="size-4" aria-hidden="true" />}
           >
-            {createConversation.isPending ? "正在创建…" : "新建会话"}
+            新建会话
           </Button>
         </div>
       </div>
-
-      {createConversation.error && (
-        <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200" role="alert">
-          新建会话失败：{errorMessage(createConversation.error)}
-        </p>
-      )}
 
       {project.runnerState === "disconnected" && (
         <section className="mt-8 rounded-xl bg-amber-50 p-5 ring-1 ring-amber-200" aria-labelledby="runner-guide-title">
@@ -255,17 +248,11 @@ export function ProjectRoute() {
               <div className="flex flex-col items-center gap-3">
                 <Button
                   variant="primary"
-                  disabled={createConversation.isPending}
-                  onClick={() => createConversation.mutate({ id: project.id, runnerId: project.runnerId })}
+                  onClick={() => openNewConversation(project)}
                   icon={<Plus className="size-4" />}
                 >
-                  {createConversation.isPending ? "正在创建…" : "新建会话"}
+                  新建会话
                 </Button>
-                {createConversation.error && (
-                  <p className="max-w-sm text-center text-sm text-rose-600" role="alert">
-                    {errorMessage(createConversation.error)}
-                  </p>
-                )}
               </div>
             }
           />

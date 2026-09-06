@@ -102,6 +102,10 @@ agent-server Composition Root 共用这一份桥接（testing.md §3.1 要求两
 （`ToolContext` / `Result` / 错误类型），先例是 `tools` 对 agent-core 的类型依赖；
 不构成运行时循环（repo-layout.md §3.1 禁止的是 agent-core → runner-sdk 方向）。
 
+`opts.cwd` 是 `ToolContext` 内所有相对文件路径和命令 cwd 的默认基准。SDK 按 Runner 报告的平台
+使用对应的 Windows / POSIX 路径规则解析；绝对路径保持不变，因此不会把 Project cwd 误实现成
+额外读取 ACL。`FileSystem.read` 走 Runner 的有界文本窗口，`readBytes` 才走字节分块读取。
+
 `RunnerSessionCandidate` 只暴露协议上的连接身份。是否接纳、身份属于哪个用户、
 如何进入 Registry，由 Runner Module 决定。`onSession` 只允许注册一个接纳处理器：
 Runner Module 是接纳决策的唯一 owner，不允许多个订阅者竞争 `accept()` / `reject()`。

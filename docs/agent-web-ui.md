@@ -90,13 +90,17 @@ const queryKeys = {
 /                          开源工具产品首页（未登录）
 /app                       Project 列表 + 最近会话 + 新建入口
 /p/:projectId              该 project 的会话列表
+/p/:projectId/c/new        Project 模式临时对话页（首次发送后创建）
 /p/:projectId/c/:convId    Project 模式对话页
+/c/new                     独立 Chat 临时对话页（首次发送后创建）
 /c/:convId                 独立 Chat 对话页（无 project）
 /settings                  模型选择、默认配置
 /callback                  Casdoor 回调承接
 ```
 
-七条路由。两个对话页**复用同一个组件**，差别只在有没有 project 上下文
+`new` 是对话路由保留的临时标识，不是 conversation id，也不会进入会话列表、历史消息 Query
+或 SSE 注册表。首次发送时，页面先用当前模型和 Project/Runner 上下文创建 conversation，建好 SSE
+连接后再发送消息，并用真实 id 替换当前 URL。两个对话页**复用同一个组件**，差别只在有没有 project 上下文
 （`agent-server.md` §1.1）—— 不是两个页面。
 
 **没有** `/tasks` / `/runners` / `/executions` 页面 ——
@@ -126,7 +130,7 @@ TODO 面板**常驻右侧，不在消息流里滚走**。它是"现在的计划"
 模型选择由 `agent-web-ui` 负责。UI 只选择并下发模型配置，不把模型请求转发给
 `agent-server`，也不经 `model-gateway` 代理推理或 SSE。
 
-- 创建会话时可保存默认模型，但首次发送消息时必须再次带上当前模型配置；这一步是首次对话的模型配置下发。
+- 点击“新建会话”只进入临时对话页，不调用创建 API；首次发送时才用当时选中的模型创建会话，并在消息请求中再次下发该模型配置。
 - 如果用户在会话尚未发送消息前切换模型，切换后的配置在首次发送消息时下发，仍视为该会话的首次对话配置。
 - 如果会话已经有消息，切换模型时立即向 `agent-server` 下发新的模型配置；下一次发送使用新配置。切换不回写历史消息，也不重建会话。
 - `agent-server` 保存会话当前模型配置，并在新建或恢复 Agent 时将其转换为 `ModelRef`。模型 adapter 根据配置直接连接官方或中转商。
@@ -161,11 +165,15 @@ TODO、反馈和 Composer 的 DOM 组合及响应式布局由高层 `<Chat>` 统
 **技术选型**：Zustand 维护按 conversation id 隔离的会话状态。路由只选择当前会话，
 不拥有流状态；切换路由时，运行中的会话 SSE 必须继续接收事件。不上 Redux / RTK / Saga。
 
+临时对话使用按 Project 隔离的本地 state id，仅承载发送期间的 UI 状态，不能被当成服务端 id 发往 API。
+首次发送创建成功后，真实 conversation id 成为 Query、reducer 与 SSE 的唯一 key；发送失败则保留输入和已创建的
+id 供重试，避免一次用户消息产生多个空会话。
+
 `messages` 是唯一真相，`chat-ui` 是它的纯函数投影。
 
 ### 3.1 会话 Runner 绑定
 
-Runner 选择发生在 Project 的 workspace 绑定或新建 Conversation 时，不属于
+Runner 选择发生在 Project 的 workspace 绑定或首次发送创建 Conversation 时，不属于
 `packages/chat-ui`。新建普通 Chat 或 Project 会话直接进入会话页面，不为 Runner 弹窗。
 独立 Chat 不需要 Runner；Project 尚未绑定 Runner/workspace 时，用户首次发送才提示完成绑定。
 已有 Conversation 不展示 Runner 切换控件，也没有对应的 server mutation，确保其执行环境不变。
@@ -276,10 +284,11 @@ onSubmit(text) {
 
 Composer 接受两种附件来源。浏览器拖入 / 粘贴的本地 `File` 先调用
 `POST /api/uploads { name }`，再直接 `PUT` 到返回的 `upload` 地址；MinIO 请求不携带 Nova Bearer token。
-点击附件按钮时，宿主打开 `chat-ui` 的 `RemoteExplorer`，通过 `GET /api/runners/directories`
-浏览当前 Runner 并支持多选，提交时对每个远程路径调用 `POST /api/uploads/runner`。两条结果统一成
-附件 Markdown。提交后 Composer 立即清空可见草稿并显示发送中状态；任一上传或发送失败都恢复
-提交前的草稿和附件，避免用户重新输入。
+已绑定 Runner 时，点击附件按钮由宿主打开 `chat-ui` 的 `RemoteExplorer`，通过
+`GET /api/runners/directories` 浏览当前 Runner 并支持多选，提交时对每个远程路径调用
+`POST /api/uploads/runner`。未绑定 Runner 时，宿主不接管附件按钮，由 `UploadCover` 打开浏览器原生
+文件选择器并走本地 `File` 上传链路。两条结果统一成附件 Markdown。提交后 Composer 立即清空可见
+草稿并显示发送中状态；任一上传或发送失败都恢复提交前的草稿和附件，避免用户重新输入。
 
 Project workspace 绑定也复用同一个 `RemoteExplorer`，但使用 `mode="directory"` 和单选。
 Runner id、目录请求、已选路径和上传 mutation 全部由 `agent-web-ui` 持有；`chat-ui` 不知道 Runner。
@@ -367,14 +376,16 @@ queue 选项，也不立即请求 server。每个待处理项提供“调整方�
 `Project.runnerState === "disconnected"` 时（`protocol.md` §3）：
 
 - 侧栏状态灯变红，hover 显示 workspace 路径
-- 用户首次访问时，UI 请求 Runner 引导信息；页面展示安装命令、启动命令和一次性设备 token。命令和 token 都提供“复制”按钮，token 只显示一次，刷新后不再返回明文
+- 用户首次访问时，UI 请求 Runner 引导信息；Windows 展示 GitHub Release
+  中的 `nova-runner-setup.exe` 下载入口，Linux 展示包含 server 和 token 的一行安装命令。
+  保留前台 `npx` 命令作为开发调试入口，不再作为默认用户安装方式。
 - token 只绑定当前登录用户和设备 Runner，不绑定 Project 或 workspace；谁使用该命令启动 Runner，设备 Runner 就归谁所有
 - Composer **不禁用**，但发送前弹提示，附上启动命令：
   ```
 
   ```
 
-nova-runner --server https://<agent-server>/runner-connect --token <runner-token> --root /home/user
+nova-runner --server https://<agent-server>/runner-connect --token <runner-token> --workspace /home/user
 
 ````
 - 若用户仍要发，请求会返回明确错误（`agent-server.md` §8），展示为 `error` block
@@ -470,7 +481,7 @@ apps/agent-web-ui/src/
 
 ### 9.1 表单、可访问性与视觉约定
 
-所有会提交用户输入的交互（新建 project、创建会话、设置、Decision）使用
+所有会提交用户输入的表单交互（新建 project、设置、Decision）使用
 React Hook Form 管理，Zod schema 同时提供字段校验和提交前解析：
 
 ```ts
@@ -490,11 +501,14 @@ const newProjectSchema = z.object({
 
 | 事件                           | 立即更新                                                   | 同步 / 失效策略                                                                                            |
 | ------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 点击新建会话                   | 进入对应的 `/c/new` 临时页                                 | 不创建 conversation，不请求历史消息，也不注册 SSE                                                         |
+| 临时会话首次发送               | 创建 conversation，并把用户消息乐观写入临时 reducer       | 用真实 id 建流后 POST 消息；成功后替换 URL 并标记会话列表 stale；创建或发送失败时保留草稿供重试             |
 | 进入会话                       | `GET /messages` 作为 reducer 的初始快照                    | 不创建 SSE；空闲连接状态为 `closed`，Composer 可立即输入和提交                                             |
 | 发送消息                       | reducer 乐观插入用户消息；controller 首次建流并等待 `open` | `open` 后才 POST；后续发送复用该流；成功后只把会话列表标记 stale，不立即 GET；失败按 §6 标红               |
 | 收到 `message.end` / `run.end` | reducer 结束当前 run 状态                                  | SSE 跨 run 保持连接，避免紧接的 `nextRun` 丢事件；只把会话列表与 project runner 状态标记 stale，不立即 GET |
 | 提交 Decision / 中断           | mutation pending 驱动按钮状态                              | 成功后失效当前会话与相关列表；SSE 仍是进行中界面的即时来源                                                 |
 | Runner 状态轮询或推送改变      | project query 更新                                         | 只刷新 project / conversations 范围，不清空对话 reducer                                                    |
+| 删除 conversation 成功         | 从会话列表失效并进入同范围的临时对话页                     | Project 会话替换到 `/p/:projectId/c/new`，独立 Chat 替换到 `/c/new`，旧 id 不再参与页面查询                 |
 | `RESYNC`                       | 停止应用后续增量                                           | 按 §4 全量拉取、重建 reducer 基线后再恢复订阅                                                              |
 
 `QueryClient` 应在应用根部只创建一次。默认缓存时间、重试次数和窗口聚焦刷新需按

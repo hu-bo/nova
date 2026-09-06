@@ -6,7 +6,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
-use tokio::sync::mpsc;
+use tokio::sync::{Semaphore, mpsc};
+use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
 use tonic::Streaming;
 
@@ -21,6 +22,7 @@ use crate::pb::runner::{RunnerEnvelope, ServerEnvelope, runner_envelope, server_
 use crate::workspace::{Workspace, file, grep};
 
 const FILE_CHUNK_BYTES: usize = 256 * 1024;
+const MAX_FILE_OPERATIONS: usize = 4;
 
 #[derive(Default)]
 pub struct ConnectionState {
@@ -50,8 +52,26 @@ pub async fn serve(
     state: Arc<ConnectionState>,
 ) -> Result<SessionEnd, tonic::Status> {
     let mut writes: HashMap<String, file::WriteHandle> = HashMap::new();
+    let file_slots = Arc::new(Semaphore::new(MAX_FILE_OPERATIONS));
+    let mut file_tasks = JoinSet::new();
 
-    while let Some(envelope) = inbound.message().await? {
+    let session_end = loop {
+        let envelope = tokio::select! {
+            message = inbound.message() => match message? {
+                Some(envelope) => envelope,
+                None => break SessionEnd::Disconnected,
+            },
+            completed = file_tasks.join_next(), if !file_tasks.is_empty() => {
+                if let Some(Err(error)) = completed {
+                    tracing::warn!(
+                        category = if error.is_panic() { "panic" } else { "task_join_error" },
+                        error = ?error,
+                        "file operation task failed"
+                    );
+                }
+                continue;
+            }
+        };
         let request_id = envelope.request_id;
         match envelope.payload {
             Some(server_envelope::Payload::Execute(request)) => {
@@ -75,22 +95,57 @@ pub async fn serve(
                 .map_err(|_| tonic::Status::unavailable("connection closed"))?;
             }
             Some(server_envelope::Payload::FileOp(request)) => {
-                match handle_file_op(&workspace, request) {
-                    Ok(response) => send(
-                        &outbound,
-                        request_id,
-                        runner_envelope::Payload::FileOpResponse(response),
-                    )
-                    .await
-                    .map_err(|_| tonic::Status::unavailable("connection closed"))?,
-                    Err(error) => send_error(&outbound, request_id, error).await?,
+                match file_slots.clone().try_acquire_owned() {
+                    Ok(permit) => {
+                        let workspace = workspace.clone();
+                        let outbound = outbound.clone();
+                        file_tasks.spawn(async move {
+                            let result = tokio::task::spawn_blocking(move || {
+                                let _permit = permit;
+                                handle_file_op(&workspace, request)
+                            })
+                            .await;
+                            let result = match result {
+                                Ok(result) => result,
+                                Err(error) => Err(RunnerError::io(format!(
+                                    "file operation task failed: {error}"
+                                ))),
+                            };
+                            send_file_op_result(&outbound, request_id, result).await;
+                        });
+                    }
+                    Err(_) => {
+                        send_error(
+                            &outbound,
+                            request_id,
+                            RunnerError::busy("Runner file operations are at capacity"),
+                        )
+                        .await?;
+                    }
                 }
             }
             Some(server_envelope::Payload::ReadFile(request)) => {
-                if let Err(error) =
-                    handle_read_file(&outbound, &workspace, &request_id, request).await
-                {
-                    send_error(&outbound, request_id, error).await?;
+                match file_slots.clone().try_acquire_owned() {
+                    Ok(permit) => {
+                        let workspace = workspace.clone();
+                        let outbound = outbound.clone();
+                        file_tasks.spawn(async move {
+                            let _permit = permit;
+                            if let Err(error) =
+                                handle_read_file(&outbound, &workspace, &request_id, request).await
+                            {
+                                let _ = send_error(&outbound, request_id, error).await;
+                            }
+                        });
+                    }
+                    Err(_) => {
+                        send_error(
+                            &outbound,
+                            request_id,
+                            RunnerError::busy("Runner file operations are at capacity"),
+                        )
+                        .await?;
+                    }
                 }
             }
             Some(server_envelope::Payload::WriteFile(request)) => {
@@ -106,7 +161,7 @@ pub async fn serve(
             Some(server_envelope::Payload::Shutdown(_)) => {
                 state.drain();
                 executor.cancel_all();
-                return Ok(SessionEnd::Shutdown);
+                break SessionEnd::Shutdown;
             }
             Some(server_envelope::Payload::Accepted(_)) | None => {
                 send_error(
@@ -117,9 +172,31 @@ pub async fn serve(
                 .await?;
             }
         }
-    }
+    };
 
-    Ok(SessionEnd::Disconnected)
+    file_tasks.abort_all();
+    while file_tasks.join_next().await.is_some() {}
+    Ok(session_end)
+}
+
+async fn send_file_op_result(
+    outbound: &mpsc::Sender<RunnerEnvelope>,
+    request_id: String,
+    result: Result<FileOpResponse, RunnerError>,
+) {
+    match result {
+        Ok(response) => {
+            let _ = send(
+                outbound,
+                request_id,
+                runner_envelope::Payload::FileOpResponse(response),
+            )
+            .await;
+        }
+        Err(error) => {
+            let _ = send_error(outbound, request_id, error).await;
+        }
+    }
 }
 
 async fn handle_execute(
@@ -270,41 +347,45 @@ fn handle_file_op(
     workspace: &Workspace,
     request: FileOpRequest,
 ) -> Result<FileOpResponse, RunnerError> {
-    let result = match request
-        .op
-        .ok_or_else(|| RunnerError::invalid("missing file operation"))?
-    {
-        file_op_request::Op::Stat(op) => {
-            file_op_response::Result::Info(file::stat(workspace, &op.path)?)
-        }
-        file_op_request::Op::List(op) => file_op_response::Result::List(ListResult {
-            entries: file::list(workspace, &op.path, op.depth)?,
-        }),
-        file_op_request::Op::Remove(op) => {
-            file::remove(workspace, &op.path, op.recursive)?;
-            file_op_response::Result::Ok(())
-        }
-        file_op_request::Op::Rename(op) => {
-            file::rename(workspace, &op.from, &op.to)?;
-            file_op_response::Result::Ok(())
-        }
-        file_op_request::Op::Mkdir(op) => {
-            file::mkdir(workspace, &op.path)?;
-            file_op_response::Result::Ok(())
-        }
-        file_op_request::Op::TempDir(op) => {
-            file_op_response::Result::Path(file::temp_dir(workspace, &op.prefix)?)
-        }
-        file_op_request::Op::Grep(op) => {
-            let (matches, total, truncated) =
-                grep::grep(workspace, &op.pattern, &op.path, &op.glob, op.max_results)?;
-            file_op_response::Result::Grep(crate::pb::execution::GrepResult {
-                matches,
-                total,
-                truncated,
-            })
-        }
-    };
+    let result =
+        match request
+            .op
+            .ok_or_else(|| RunnerError::invalid("missing file operation"))?
+        {
+            file_op_request::Op::Stat(op) => {
+                file_op_response::Result::Info(file::stat(workspace, &op.path)?)
+            }
+            file_op_request::Op::List(op) => file_op_response::Result::List(ListResult {
+                entries: file::list(workspace, &op.path, op.depth)?,
+            }),
+            file_op_request::Op::Remove(op) => {
+                file::remove(workspace, &op.path, op.recursive)?;
+                file_op_response::Result::Ok(())
+            }
+            file_op_request::Op::Rename(op) => {
+                file::rename(workspace, &op.from, &op.to)?;
+                file_op_response::Result::Ok(())
+            }
+            file_op_request::Op::Mkdir(op) => {
+                file::mkdir(workspace, &op.path)?;
+                file_op_response::Result::Ok(())
+            }
+            file_op_request::Op::TempDir(op) => {
+                file_op_response::Result::Path(file::temp_dir(workspace, &op.prefix)?)
+            }
+            file_op_request::Op::Grep(op) => {
+                let (matches, total, truncated) =
+                    grep::grep(workspace, &op.pattern, &op.path, &op.glob, op.max_results)?;
+                file_op_response::Result::Grep(crate::pb::execution::GrepResult {
+                    matches,
+                    total,
+                    truncated,
+                })
+            }
+            file_op_request::Op::ReadText(op) => file_op_response::Result::ReadText(
+                file::read_text(workspace, &op.path, op.offset, op.limit, op.max_bytes)?,
+            ),
+        };
     Ok(FileOpResponse {
         result: Some(result),
     })
