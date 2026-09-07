@@ -1,14 +1,17 @@
 //! Outbound persistent RunnerConnection client and reconnect lifecycle.
 
 use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
+use hyper_util::client::legacy::connect::HttpConnector;
 use tokio::sync::{mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Request;
 use tonic::metadata::MetadataValue;
-use tonic::transport::Endpoint;
+use tonic::transport::{Channel, Endpoint};
+use tower::{Service, service_fn};
 
 use crate::config::Config;
 use crate::execution::Executor;
@@ -139,19 +142,51 @@ fn next_reconnect_delay(current: Duration) -> Duration {
         .min(MAX_RECONNECT_DELAY)
 }
 
+async fn connect_channel(server: &str, connect_ip: Option<IpAddr>) -> anyhow::Result<Channel> {
+    let endpoint = Endpoint::from_shared(server.to_owned())?
+        .connect_timeout(CONNECT_TIMEOUT)
+        .tcp_keepalive(Some(KEEP_ALIVE_INTERVAL))
+        .http2_keep_alive_interval(KEEP_ALIVE_INTERVAL)
+        .keep_alive_timeout(KEEP_ALIVE_TIMEOUT)
+        .keep_alive_while_idle(true);
+    let Some(ip) = connect_ip else {
+        return Ok(endpoint.connect().await?);
+    };
+
+    let mut http = HttpConnector::new();
+    http.enforce_http(false);
+    http.set_nodelay(true);
+    http.set_keepalive(Some(KEEP_ALIVE_INTERVAL));
+    http.set_connect_timeout(Some(CONNECT_TIMEOUT));
+    // Rewrite only the TCP connector URI. Tonic keeps the original URI for
+    // HTTP/2 authority and TLS hostname verification.
+    let connector = service_fn(move |uri: tonic::codegen::http::Uri| {
+        let mut http = http.clone();
+        async move {
+            let port = uri
+                .port_u16()
+                .unwrap_or(if uri.scheme_str() == Some("https") {
+                    443
+                } else {
+                    80
+                });
+            let mut parts = uri.into_parts();
+            parts.authority = Some(SocketAddr::new(ip, port).to_string().parse()?);
+            let target = tonic::codegen::http::Uri::from_parts(parts)?;
+            http.call(target)
+                .await
+                .map_err(Into::<Box<dyn std::error::Error + Send + Sync>>::into)
+        }
+    });
+    Ok(endpoint.connect_with_connector(connector).await?)
+}
+
 async fn connect_once(
     config: Arc<Config>,
     workspace: Arc<Workspace>,
     executor: Arc<Executor>,
 ) -> anyhow::Result<SessionEnd> {
-    let channel = Endpoint::from_shared(config.server.clone())?
-        .connect_timeout(CONNECT_TIMEOUT)
-        .tcp_keepalive(Some(KEEP_ALIVE_INTERVAL))
-        .http2_keep_alive_interval(KEEP_ALIVE_INTERVAL)
-        .keep_alive_timeout(KEEP_ALIVE_TIMEOUT)
-        .keep_alive_while_idle(true)
-        .connect()
-        .await?;
+    let channel = connect_channel(&config.server, config.connect_ip).await?;
     let mut client = RunnerConnectionClient::new(channel);
     let (outbound, receiver) = mpsc::channel(ENVELOPE_BUFFER);
     outbound
@@ -244,6 +279,65 @@ async fn send_heartbeats(
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn connection_preserves_authority_with_and_without_ip_override() {
+        use hyper_util::rt::{TokioExecutor, TokioIo};
+        use tokio::net::TcpListener;
+        use tonic::codegen::http::{Response, uri::PathAndQuery};
+
+        for (host, ip) in [
+            ("unresolvable.invalid", Some("127.0.0.1".parse().unwrap())),
+            ("127.0.0.1", None),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let authority = format!("{host}:{}", listener.local_addr().unwrap().port());
+            let expected = authority.clone();
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let server = tokio::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                let tx = std::sync::Mutex::new(Some(tx));
+                let service = hyper::service::service_fn(
+                    move |request: hyper::Request<hyper::body::Incoming>| {
+                        assert_eq!(request.uri().authority().unwrap().as_str(), expected);
+                        assert_eq!(request.uri().path(), "/test.Service/Call");
+                        tx.lock().unwrap().take().unwrap().send(()).unwrap();
+                        async {
+                            Ok::<_, std::convert::Infallible>(
+                                Response::builder()
+                                    .header("content-type", "application/grpc")
+                                    .header("grpc-status", "12")
+                                    .body(tonic::body::empty_body())
+                                    .unwrap(),
+                            )
+                        }
+                    },
+                );
+                let _ = hyper::server::conn::http2::Builder::new(TokioExecutor::new())
+                    .serve_connection(TokioIo::new(stream), service)
+                    .await;
+            });
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                let channel = super::connect_channel(&format!("http://{authority}"), ip)
+                    .await
+                    .unwrap();
+                let mut grpc = tonic::client::Grpc::new(channel);
+                grpc.ready().await.unwrap();
+                let result: Result<tonic::Response<crate::pb::runner::Heartbeat>, _> = grpc
+                    .unary(
+                        tonic::Request::new(crate::pb::runner::Heartbeat::default()),
+                        PathAndQuery::from_static("/test.Service/Call"),
+                        tonic::codec::ProstCodec::default(),
+                    )
+                    .await;
+                assert_eq!(result.unwrap_err().code(), tonic::Code::Unimplemented);
+                rx.await.unwrap();
+            })
+            .await
+            .unwrap();
+            server.abort();
+        }
+    }
+
     use super::{
         INITIAL_RECONNECT_DELAY, MAX_RECONNECT_DELAY, classify_connection_error,
         next_reconnect_delay,

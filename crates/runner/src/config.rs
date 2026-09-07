@@ -1,5 +1,6 @@
 //! CLI/config surface. See docs/runner.md §8 (workspace) and §9 (command).
 
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
@@ -15,6 +16,10 @@ pub struct Args {
     /// Server URL to open the outbound gRPC connection to, e.g. http://127.0.0.1:54321.
     #[arg(long)]
     pub server: Option<String>,
+
+    /// Connect directly to this IP, preserving the server hostname and port.
+    #[arg(long)]
+    pub connect_ip: Option<IpAddr>,
 
     /// Runner connection token; sent as `authorization: Bearer <token>` metadata.
     #[arg(long)]
@@ -43,6 +48,7 @@ pub struct Args {
 
 pub struct Config {
     pub server: String,
+    pub connect_ip: Option<IpAddr>,
     pub token: String,
     pub runner_id: String,
     pub workspace: PathBuf,
@@ -122,6 +128,7 @@ impl Config {
 
         Ok(Config {
             server,
+            connect_ip: args.connect_ip.or(file.connect_ip),
             token,
             runner_id,
             workspace,
@@ -136,6 +143,7 @@ impl Config {
 #[serde(deny_unknown_fields)]
 struct FileConfig {
     server: Option<String>,
+    connect_ip: Option<IpAddr>,
     token: Option<String>,
     runner_id: Option<String>,
     workspace: Option<PathBuf>,
@@ -195,12 +203,14 @@ fn default_runner_id(workspace: &std::path::Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{Args, Config, ConfigError};
+    use clap::Parser;
     use std::fs;
 
     fn args(config: std::path::PathBuf) -> Args {
         Args {
             config: Some(config),
             server: None,
+            connect_ip: None,
             token: None,
             runner_id: None,
             workspace: None,
@@ -220,6 +230,7 @@ mod tests {
             &path,
             r#"
 server = "https://runner.example.com"
+connect_ip = "223.109.200.118"
 token = "runner-secret"
 workspace = "workspace"
 runner_id = "desktop"
@@ -233,6 +244,7 @@ default_timeout_ms = 4567
         let config = Config::from_args(args(path)).unwrap();
 
         assert_eq!(config.server, "https://runner.example.com");
+        assert_eq!(config.connect_ip, Some("223.109.200.118".parse().unwrap()));
         assert_eq!(config.token, "runner-secret");
         assert_eq!(config.workspace, workspace);
         assert_eq!(config.runner_id, "desktop");
@@ -250,19 +262,21 @@ default_timeout_ms = 4567
         fs::write(
             &path,
             format!(
-                "server = \"https://old.example.com\"\ntoken = \"old\"\nworkspace = {:?}\nmax_concurrency = 2\n",
+                "server = \"https://old.example.com\"\nconnect_ip = \"127.0.0.1\"\ntoken = \"old\"\nworkspace = {:?}\nmax_concurrency = 2\n",
                 workspace.to_string_lossy()
             ),
         )
         .unwrap();
         let mut input = args(path);
         input.server = Some("https://new.example.com".into());
+        input.connect_ip = Some("::1".parse().unwrap());
         input.token = Some("new".into());
         input.max_concurrency = Some(5);
 
         let config = Config::from_args(input).unwrap();
 
         assert_eq!(config.server, "https://new.example.com");
+        assert_eq!(config.connect_ip, Some("::1".parse().unwrap()));
         assert_eq!(config.token, "new");
         assert_eq!(config.max_concurrency, 5);
     }
@@ -283,5 +297,25 @@ default_timeout_ms = 4567
         };
 
         assert!(matches!(error, ConfigError::ConfigParse { .. }));
+    }
+
+    #[test]
+    fn connect_ip_accepts_only_ip_literals() {
+        for ip in ["127.0.0.1", "::1"] {
+            let args = Args::try_parse_from(["nova-runner", "--connect-ip", ip]).unwrap();
+            assert_eq!(args.connect_ip, Some(ip.parse().unwrap()));
+        }
+        for invalid in ["example.com", "127.0.0.1:80", "", "999.1.1.1"] {
+            assert!(Args::try_parse_from(["nova-runner", "--connect-ip", invalid]).is_err());
+            assert!(
+                toml::from_str::<super::FileConfig>(&format!("connect_ip = {invalid:?}")).is_err()
+            );
+        }
+        assert!(
+            Args::try_parse_from(["nova-runner"])
+                .unwrap()
+                .connect_ip
+                .is_none()
+        );
     }
 }

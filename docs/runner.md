@@ -237,6 +237,13 @@ default_timeout_ms = 120000
 
 ### 9.1 用户安装形态
 
+连接可选项 `--connect-ip <IP>`（TOML 字段 `connect_ip`）覆盖 TCP 连接目标，
+仅接受 IPv4/IPv6 地址，不接受域名或端口。端口仍取自 `--server`（默认 HTTP 80、HTTPS 443），
+原 URL 的域名、路径、HTTP/2 authority 和 TLS 验证名称保持不变，不查询目标域名 DNS。
+CLI 优先于 TOML；省略时维持系统 DNS 解析。指定 IP 失败时不回退 DNS，继续按原重连策略重试。
+例如 `--server http://nova-grpc.8and1.cn --connect-ip 223.109.200.118`。
+IP 变化需更新配置；此选项不需要修改容器 DNS 或 hosts。
+
 - Windows Release 提供 `nova-runner-setup.exe`。安装器收集 server、token 和 workspace，
   写入当前用户可读的配置，注册用户登录计划任务并立即启动。
 - Linux Release 提供 `nova-runner-linux-x64.tar.gz`、`SHA256SUMS` 和

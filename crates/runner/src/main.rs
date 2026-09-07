@@ -41,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         runner_id = %config.runner_id,
         server = %config.server,
+        connect_ip = ?config.connect_ip,
         workspace = %workspace.root().display(),
         max_concurrency = config.max_concurrency,
         queue_size = config.queue_size,

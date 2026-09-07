@@ -1,5 +1,17 @@
 # @nnova/runner
 
+如容器 DNS 异常，可指定连接 IP，保留域名路由：
+
+```bash
+npx --yes --package @nnova/runner nova-runner \
+  --server "http://nova-grpc.8and1.cn" \
+  --connect-ip "223.109.200.118" \
+  --token "<runner-token>"
+```
+
+也可在 TOML 配置中设置 `connect_ip = "223.109.200.118"`。IP 支持 IPv4/IPv6，
+端口取自 server；HTTPS 仍验证 server 域名。省略时使用系统 DNS，IP 变化需更新配置。
+
 跨平台发布的 `nova-runner` Rust 可执行文件。该包只负责选择并启动当前平台的
 二进制，Runner 的 gRPC、执行、取消和 workspace 行为仍全部实现于
 `crates/runner`。
