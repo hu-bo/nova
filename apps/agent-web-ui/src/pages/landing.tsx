@@ -10,6 +10,7 @@ import {
   Github,
   LayoutDashboard,
   Laptop,
+  Maximize2,
   MonitorCog,
   MessageCircle,
   Pause,
@@ -261,6 +262,68 @@ export function LandingRoute() {
           </div>
 
           <TerminalDemo />
+        </section>
+
+        <section className="relative border-t border-white/10 bg-slate-950 px-5 py-24 sm:px-8 lg:py-28">
+          <div
+            className="absolute left-1/2 top-0 h-64 w-[80%] -translate-x-1/2 bg-indigo-500/10 blur-3xl"
+            aria-hidden="true"
+          />
+          <div className="relative mx-auto max-w-7xl">
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="text-sm font-semibold text-indigo-300">真实工作现场</p>
+              <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                从执行过程到变更授权，全程清晰可控
+              </h2>
+              <p className="mt-4 text-base leading-7 text-slate-400">
+                在真实 workspace 中查看工具调用、代码变更和任务计划；涉及写入时，由你决定允许、拒绝或终止流程。
+              </p>
+            </div>
+
+            <a
+              href="/images/nova-real-workspace.png"
+              target="_blank"
+              rel="noreferrer"
+              className="group mt-12 block overflow-hidden rounded-2xl bg-[#0a0f1d] ring-1 ring-white/15 shadow-2xl shadow-indigo-950/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              aria-label="在新窗口查看 Nova 真实工作界面原图"
+            >
+              <div className="flex h-11 items-center border-b border-white/10 px-4">
+                <div className="flex gap-1.5" aria-hidden="true">
+                  <span className="size-2.5 rounded-full bg-rose-400" />
+                  <span className="size-2.5 rounded-full bg-amber-300" />
+                  <span className="size-2.5 rounded-full bg-emerald-400" />
+                </div>
+                <span className="mx-auto text-[11px] text-slate-500">Nova · 真实 coding 会话</span>
+                <span className="flex items-center gap-1.5 text-[10px] font-medium text-slate-500 transition group-hover:text-indigo-300">
+                  <Maximize2 className="size-3.5" aria-hidden="true" />
+                  查看原图
+                </span>
+              </div>
+              <div className="overflow-hidden bg-white">
+                <img
+                  src="/images/nova-real-workspace.png"
+                  alt="Nova 真实工作界面，展示代码读取、写入授权以及右侧实时任务计划"
+                  width="1457"
+                  height="944"
+                  loading="lazy"
+                  decoding="async"
+                  className="block h-auto w-full transition duration-500 group-hover:scale-[1.005] motion-reduce:transition-none"
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-white/10 px-4 py-3 text-[11px] font-medium text-slate-400 sm:justify-start sm:px-5">
+                <span className="flex items-center gap-1.5">
+                  <Check className="size-3.5 text-emerald-400" aria-hidden="true" /> 操作前授权
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Check className="size-3.5 text-emerald-400" aria-hidden="true" /> 工具过程可见
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Check className="size-3.5 text-emerald-400" aria-hidden="true" /> 实时任务计划
+                </span>
+              </div>
+            </a>
+            <p className="mt-3 text-center text-xs text-slate-600 sm:hidden">点击截图可查看完整尺寸</p>
+          </div>
         </section>
 
         <section id="workflow" className="bg-slate-50 py-24 text-slate-900">
