@@ -64,7 +64,7 @@ begin
   ConnectionPage.Add('Server URL：', False);
   ConnectionPage.Add('Runner Token：', True);
   ConnectionPage.Add('Workspace 根目录：', False);
-  ConnectionPage.Values[2] := ExpandConstant('{userprofile}');
+  ConnectionPage.Values[2] := GetEnv('USERPROFILE');
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;

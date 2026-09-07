@@ -242,6 +242,10 @@ default_timeout_ms = 120000
 - Linux Release 提供 `nova-runner-linux-x64.tar.gz`、`SHA256SUMS` 和
   `install-runner.sh`。安装脚本按需通过 sudo 写入 binary、配置和 systemd system unit，
   但 unit 必须使用发起安装的普通用户运行 Runner，不得以 root 执行 workspace 操作。
+  Linux x64 产物以 glibc 2.34 为最低运行时构建；不发布静态 musl 产物，避免其
+  `getaddrinfo(AF_UNSPEC)` 在部分本地 DNS 的 A / AAAA 异常响应下丢弃有效 A 记录。
+  GitHub Release 与 npm 包复用同一个 `x86_64-unknown-linux-gnu` 产物；发布前在
+  Rocky Linux 9 中检查动态 libc 依赖并运行 `--help`，确保产物可在最低运行时启动。
 - OS 托管负责开机/登录启动和进程异常拉起；Runner 自身仍是网络重连的唯一 owner。
 
 ---

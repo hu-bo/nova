@@ -19,9 +19,15 @@ curl -fsSL https://github.com/hu-bo/nova/releases/latest/download/install-runner
   --workspace "$HOME"
 ```
 
-脚本验证 GitHub Release 中的 SHA-256，通过 sudo 安装静态 musl x64 binary 和
+脚本验证 GitHub Release 中的 SHA-256，通过 sudo 安装 glibc 2.34+ x64 binary 和
 `nova-runner.service`。sudo 只用于安装和管理 systemd；unit 始终以发起安装的
-普通用户运行 Runner，并在开机时自动启动。
+普通用户运行 Runner，并在开机时自动启动。Linux 产物不用静态 musl 构建，避免部分
+本地 DNS 对 A / AAAA 的异常响应导致有效 IPv4 地址被判为临时解析失败。
+
+npm 包与 GitHub Release 使用同一个 `x86_64-unknown-linux-gnu` 产物。发布流程在
+Rocky Linux 9 中验证动态 libc 依赖并执行 `--help`。已有容器无需修改 DNS 配置，
+但需要安装包含新产物的 npm 版本；可用 `getconf GNU_LIBC_VERSION` 检查 glibc 版本。
+这项兼容性调整不修复上游 DNS 的 AAAA 错误，连接结果仍需在目标环境验证。
 
 Web UI 默认使用 `https://github.com/hu-bo/nova/releases/latest/download`。部署时可通过
 `VITE_RUNNER_RELEASE_URL` 替换 Windows 安装包和 Release 资产的基础地址，通过

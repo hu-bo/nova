@@ -7,21 +7,36 @@ on:
 
 jobs:
   build-linux:
-    name: Build linux-x64 (musl)
+    name: Build linux-x64 (glibc 2.34)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-linux-musl
-      - name: Install musl toolchain
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - name: Build static Linux binary
-        run: cargo build -p nova-runner --release --target x86_64-unknown-linux-musl
+      - name: Build on Rocky Linux 9
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            rockylinux:9 \
+            bash -lc '
+              set -euo pipefail
+              dnf install -y gcc gcc-c++ make perl pkg-config openssl-devel
+              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+              source "$HOME/.cargo/env"
+              cargo build -p nova-runner --release --target x86_64-unknown-linux-gnu
+              binary=target/x86_64-unknown-linux-gnu/release/nova-runner
+              ldd "$binary" | tee /tmp/nova-runner-ldd.txt
+              grep -q "libc.so.6 =>" /tmp/nova-runner-ldd.txt
+              if grep -q "not found" /tmp/nova-runner-ldd.txt; then
+                exit 1
+              fi
+              "$binary" --help
+            '
       - uses: actions/upload-artifact@v6
         with:
           name: nova-runner-linux-x64
-          path: target/x86_64-unknown-linux-musl/release/nova-runner
+          path: target/x86_64-unknown-linux-gnu/release/nova-runner
           if-no-files-found: error
 
   build-native:

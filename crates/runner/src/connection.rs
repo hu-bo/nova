@@ -118,7 +118,12 @@ fn error_chain(error: &anyhow::Error) -> String {
 
 fn classify_connection_error(error: &anyhow::Error) -> &'static str {
     let text = error_chain(error).to_ascii_lowercase();
-    if text.contains("h2") || text.contains("http/2") || text.contains("transport") {
+    if text.contains("dns error")
+        || text.contains("failed to lookup address information")
+        || text.contains("name or service not known")
+    {
+        "dns_resolution_error"
+    } else if text.contains("h2") || text.contains("http/2") || text.contains("transport") {
         "transport_h2_error"
     } else if text.contains("connection closed") || text.contains("senderror") {
         "stream_send_error"
@@ -239,7 +244,10 @@ async fn send_heartbeats(
 
 #[cfg(test)]
 mod tests {
-    use super::{INITIAL_RECONNECT_DELAY, MAX_RECONNECT_DELAY, next_reconnect_delay};
+    use super::{
+        INITIAL_RECONNECT_DELAY, MAX_RECONNECT_DELAY, classify_connection_error,
+        next_reconnect_delay,
+    };
     use std::time::Duration;
 
     #[test]
@@ -259,5 +267,23 @@ mod tests {
         assert_eq!(delays[3], Duration::from_secs(8));
         assert_eq!(delays[4], Duration::from_secs(10 * 60));
         assert_eq!(delays[5], MAX_RECONNECT_DELAY);
+    }
+
+    #[test]
+    fn classifies_dns_failure_before_the_outer_transport_error() {
+        let error = anyhow::anyhow!("failed to lookup address information: Try again")
+            .context("dns error")
+            .context("transport error");
+
+        assert_eq!(classify_connection_error(&error), "dns_resolution_error");
+    }
+
+    #[test]
+    fn keeps_http2_failures_in_the_transport_category() {
+        let error = anyhow::anyhow!("connection error detected: frame with invalid size")
+            .context("http2 error")
+            .context("transport error");
+
+        assert_eq!(classify_connection_error(&error), "transport_h2_error");
     }
 }

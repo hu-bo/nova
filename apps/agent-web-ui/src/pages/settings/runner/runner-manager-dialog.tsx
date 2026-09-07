@@ -12,7 +12,7 @@ import { Card } from "../../../components/ui/card.js";
 import { Dialog } from "../../../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../../../components/ui/feedback.js";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table.js";
-import { linuxRunnerCommand, windowsRunnerInstallerUrl } from "./commands.js";
+import { npxRunnerCommand, windowsRunnerInstallerUrl } from "./commands.js";
 import { useRunnerCatalog, useRunnerConnection, useRunnerTokens } from "./use-runners.js";
 
 interface RunnerManagerDialogProps {
@@ -82,7 +82,7 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
             <div>
               <p className="text-sm font-semibold text-slate-900">安装 Runner</p>
               <p className="mt-1 text-sm text-slate-500">
-                Windows 下载并运行安装器；Linux 复制下方命令，一次完成安装和后台启动。
+                Windows 下载并运行安装器；其他平台复制下方 npx 命令快速启动。
               </p>
             </div>
             <a
@@ -155,8 +155,8 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
                     <CopyButton value={endpoint ?? null} label="复制 Server" compact />
                     <CopyButton value={token.token} label="复制 Token" compact />
                     <CopyButton
-                      value={endpoint ? linuxRunnerCommand(endpoint, token.token) : null}
-                      label="复制 Linux 安装命令"
+                      value={endpoint ? npxRunnerCommand(endpoint, token.token) : null}
+                      label="复制 npx 启动命令"
                       compact
                     />
                     <Button
@@ -230,8 +230,8 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
                         <TableCell>
                           {token ? (
                             <CopyButton
-                              value={endpoint ? linuxRunnerCommand(endpoint, token.token, runner.id) : null}
-                              label="复制 Linux 安装命令"
+                              value={endpoint ? npxRunnerCommand(endpoint, token.token, runner.id) : null}
+                              label="复制 npx 启动命令"
                               compact
                             />
                           ) : (
