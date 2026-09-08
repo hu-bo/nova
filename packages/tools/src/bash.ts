@@ -1,9 +1,22 @@
 import { context, errorResult, text, type Tool, z } from "./shared.js";
 const schema = z.object({
-  command: z.string().min(1),
-  args: z.array(z.string()).optional(),
-  cwd: z.string().optional(),
-  timeoutMs: z.number().optional(),
+  command: z
+    .string()
+    .min(1)
+    .describe(
+      "A single executable name or path, such as `pnpm`, `git`, `sh`, or `powershell.exe`. Do not put arguments or a complete shell command here.",
+    ),
+  args: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Arguments passed directly to the executable, one array item per argument. For shell syntax, use command `sh` with args [`-lc`, `<script>`], or `powershell.exe` with args [`-NoProfile`, `-Command`, `<script>`].",
+    ),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Working directory for the process. Prefer this over putting `cd` in a shell script."),
+  timeoutMs: z.number().optional().describe("Maximum execution time in milliseconds."),
 });
 
 const READ_ONLY_COMMANDS = new Set([
@@ -73,7 +86,7 @@ export function bashRisk(value: unknown): "read" | "exec" {
 export const bash: Tool<z.output<typeof schema>> = {
   name: "bash",
   description:
-    "Run an executable in the workspace. Pass its arguments separately in args; command is not shell-parsed.",
+    "Run one executable directly in the workspace; despite the tool name, no shell is started automatically. `command` must be only the executable name or path, with normal arguments in `args` and the working directory in `cwd`. Example: {command: `pnpm`, args: [`tsc`, `--noEmit`], cwd: `/workspace/app`}. If the operation needs shell syntax such as `cd`, `&&`, `|`, `>`, variables, or quoting, explicitly run a shell: {command: `sh`, args: [`-lc`, `cd /workspace/app && pnpm tsc --noEmit 2>&1 | head -50`]}. On Windows use `powershell.exe` with `-NoProfile`, `-Command`, and the script as separate args. Never put a complete command line directly in `command`.",
   schema,
   risk: bashRisk,
   async execute(input, ctx) {

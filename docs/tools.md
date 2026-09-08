@@ -130,6 +130,11 @@ risk:    常见只读查询命令为 "read"，其他命令为 "exec"
 `{ command: "ls", args: ["/workspace/synes/"] }`。把整段 `ls /workspace/synes/` 放进
 `command` 会被当作一个可执行文件名，并以 `SPAWN_FAILED` 结束。
 
+需要 `cd`、`&&`、管道或重定向等 shell 语法时，必须显式执行 shell，例如
+`{ command: "sh", args: ["-lc", "cd /workspace/app && pnpm tsc --noEmit 2>&1 | head -50"] }`；
+Windows 对应使用 `powershell.exe`，并把 `-NoProfile`、`-Command` 和脚本分别放入 `args`。
+不需要 shell 语法时优先通过 `cwd` 设置工作目录，直接执行目标程序。
+
 直接执行的常见只读查询命令默认放行，包括 `ls`、`find`、`which`、`pwd`、`whoami`、
 `id`、`uname`、`hostname`、`stat`、`file`、`du`、`df`、`realpath`、`readlink`、
 `cat`、`head`、`tail`、`wc`、`grep`、`rg`、`tree`，以及 Git 的 `status`、`diff`、

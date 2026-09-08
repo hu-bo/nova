@@ -8,6 +8,19 @@ import { readDocument } from "./read-document.js";
 import { readFile } from "./read-file.js";
 import { readUrl } from "./read-url.js";
 import * as XLSX from "xlsx";
+import { z } from "./shared.js";
+
+it("describes the direct-executable and explicit-shell bash calling conventions to the model", () => {
+  const parameters = z.toJSONSchema(bash.schema) as {
+    properties?: Record<string, { description?: string }>;
+  };
+
+  expect(bash.description).toContain("{command: `pnpm`, args:");
+  expect(bash.description).toContain("{command: `sh`, args: [`-lc`");
+  expect(parameters.properties?.command?.description).toContain("single executable");
+  expect(parameters.properties?.args?.description).toContain("one array item per argument");
+  expect(parameters.properties?.cwd?.description).toContain("Prefer this over putting `cd`");
+});
 
 it("maps Runner failures and non-zero command exits to error", async () => {
   const runnerFailure = await bash.execute(
