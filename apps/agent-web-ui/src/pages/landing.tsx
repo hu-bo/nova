@@ -165,9 +165,6 @@ export function LandingRoute() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-white">原生二进制</span>
-                      <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-400/20">
-                        推荐
-                      </span>
                     </div>
                     <p className="mt-1 text-xs leading-5 text-slate-400">
                       后台常驻、开机自启，运行时无需 Node.js / npm。
@@ -184,11 +181,11 @@ export function LandingRoute() {
                 <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                   Linux 一行安装
                 </p>
-                <div className="mt-2 flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
+                <div className="mt-2 flex items-start gap-3 rounded-xl bg-slate-900 px-4 py-3">
                   <span className="select-none text-indigo-400">$</span>
-                  <div className="min-w-0 flex-1 text-sm text-slate-200">
+                  <div className="min-w-0 flex-1 text-sm leading-6 text-slate-200">
                     <code
-                      className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap text-slate-400"
+                      className="block min-w-0 select-all whitespace-pre-wrap break-all text-slate-400"
                       title={linuxInstallCommand}
                     >
                       {linuxInstallCommand}
@@ -224,15 +221,18 @@ export function LandingRoute() {
               <div className="border-t border-white/10 p-4 sm:p-5">
                 <div>
                   <span className="text-sm font-semibold text-white">npx 快速运行</span>
+                  <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-400/20">
+                    推荐
+                  </span>
                   <p className="mt-1 text-xs leading-5 text-slate-400">
                     适合临时体验和开发调试，需要本机已安装 Node.js。
                   </p>
                 </div>
-                <div className="mt-3 flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3">
+                <div className="mt-3 flex items-start gap-3 rounded-xl bg-slate-900 px-4 py-3">
                   <span className="select-none text-indigo-400">$</span>
-                  <div className="min-w-0 flex-1 text-sm text-slate-200">
+                  <div className="min-w-0 flex-1 text-sm leading-6 text-slate-200">
                     <code
-                      className="block min-w-0 truncate select-all text-ellipsis whitespace-nowrap text-slate-400"
+                      className="block min-w-0 select-all whitespace-pre-wrap break-all text-slate-400"
                       title={npxCommand}
                     >
                       {npxCommand}
