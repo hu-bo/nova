@@ -77,7 +77,7 @@ function scripted(turns: ModelEvent[][]): { stream: StreamFn; requests: ModelReq
 
 interface LocalToolOpts {
   status?: "ok" | "error";
-  risk?: Risk;
+  risk?: Risk | ((args: unknown) => Risk);
   requiresContext?: boolean;
   executionMode?: "parallel" | "sequential";
   durationMs?: number;
@@ -1284,6 +1284,29 @@ describe("decision", () => {
 // —— Hooks（§4.3）——
 
 describe("hooks", () => {
+  it("uses argument-derived risk for the default approval policy", async () => {
+    let decideCount = 0;
+    const { stream } = scripted([toolEvents([{ name: "query", args: { readOnly: true } }]), textEvents("ok")]);
+    const { agent } = setup(stream, {
+      tools: [
+        localTestTool("query", {
+          risk: (args) =>
+            typeof args === "object" && args !== null && (args as { readOnly?: unknown }).readOnly === true
+              ? "read"
+              : "exec",
+        }),
+      ],
+      decide: async () => {
+        decideCount += 1;
+        return { kind: "approval", decision: "allow" };
+      },
+    });
+
+    await agent.prompt("go");
+
+    expect(decideCount).toBe(0);
+  });
+
   it("beforeToolCall allow 不能放宽基础 ask", async () => {
     let decideCount = 0;
     let executed = false;

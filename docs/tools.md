@@ -123,12 +123,19 @@ risk:    "write"   executionMode: "sequential"
 args:    { command: string; args?: string[]; cwd?: string; timeoutMs?: number }
 content: stdout + stderr（合并，由 agent-core 截断）
 details: { exitCode, stdout, stderr, durationMs, truncated }
-risk:    "exec"
+risk:    常见只读查询命令为 "read"，其他命令为 "exec"
 ```
 
 `command` 是可执行文件名或路径，**不会按 shell 命令行解析**；参数必须放在 `args`，例如
 `{ command: "ls", args: ["/workspace/synes/"] }`。把整段 `ls /workspace/synes/` 放进
 `command` 会被当作一个可执行文件名，并以 `SPAWN_FAILED` 结束。
+
+直接执行的常见只读查询命令默认放行，包括 `ls`、`find`、`which`、`pwd`、`whoami`、
+`id`、`uname`、`hostname`、`stat`、`file`、`du`、`df`、`realpath`、`readlink`、
+`cat`、`head`、`tail`、`wc`、`grep`、`rg`、`tree`，以及 Git 的 `status`、`diff`、
+`log`、`show`、`rev-parse`、`ls-files`、`ls-tree` 子命令。通过 `sh -c`、`powershell`、
+`cmd` 等 shell 间接执行的内容仍为 `exec`；`find -delete/-exec` 等带副作用的形式和未识别命令
+也仍需审批。
 
 **非零退出码不是 tool 错误**，照常返回 `status: "ok"`，让模型自己读 exit code 判断。
 只有 spawn 失败 / 超时 / Runner 不可用才是 error。

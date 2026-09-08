@@ -54,7 +54,7 @@ export interface AgentTool<A = unknown, D = unknown> {
   description: string;
   schema: ZodType<A>;
   executionMode?: "parallel" | "sequential";
-  risk?: Risk;
+  risk?: Risk | ((args: unknown) => Risk);
   requiresContext?: boolean;
   execute(args: A, ctx?: ToolContext, signal?: AbortSignal): Promise<AgentToolResult<D>>;
 }

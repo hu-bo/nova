@@ -531,7 +531,9 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   // §1.1 唯一的构造期校验：Chat 模式（ctx 缺省）不得装配需要执行环境的工具。
   // 默认沿用风险级别判断；自带执行环境的只读工具可显式声明不需要 ToolContext。
   if (!config.ctx) {
-    const unsafe = [...tools.values()].find((tool) => tool.requiresContext ?? (tool.risk ?? "exec") !== "none");
+    const unsafe = [...tools.values()].find(
+      (tool) => tool.requiresContext ?? (typeof tool.risk === "function" || (tool.risk ?? "exec") !== "none"),
+    );
     if (unsafe) throw new Error(`Chat 模式（未注入 ctx）不能装配 risk !== "none" 的工具：${unsafe.name}`);
   }
 

@@ -50,7 +50,7 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
 
     let risk: Risk = "exec";
     if (tool) {
-      risk = tool.risk ?? "exec";
+      risk = resolveRisk(tool, call.args);
       if (tool.executionMode === "sequential") {
         // sequential tool 独占：等前面所有 task，后面的 task 也都等它
         taskDeps.push(...seen);
@@ -99,6 +99,17 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
         executed: false,
       },
   );
+}
+
+function resolveRisk(tool: AgentTool, args: unknown): Risk {
+  if (typeof tool.risk !== "function") return tool.risk ?? "exec";
+  const parsed = tool.schema.safeParse(args);
+  if (!parsed.success) return "exec";
+  try {
+    return tool.risk(parsed.data);
+  } catch {
+    return "exec";
+  }
 }
 
 async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, deps: BatchDeps): Promise<ToolOutcome> {

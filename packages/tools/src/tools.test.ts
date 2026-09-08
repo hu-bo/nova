@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { ToolContext } from "@nova/agent-core";
-import { bash } from "./bash.js";
+import { bash, bashRisk } from "./bash.js";
 import { editFile } from "./edit-file.js";
 import { grep } from "./grep.js";
 import { listDir } from "./list-dir.js";
@@ -23,6 +23,20 @@ it("maps Runner failures and non-zero command exits to error", async () => {
   );
   expect(nonZero.status).toBe("error");
   expect(nonZero.details).toMatchObject({ exitCode: 2 });
+});
+
+it("classifies direct read-only bash queries without relaxing shell or mutating commands", () => {
+  for (const command of ["ls", "/usr/bin/find", "WHICH.EXE", "pwd", "rg", "tree"]) {
+    expect(bashRisk({ command })).toBe("read");
+  }
+  expect(bashRisk({ command: "git", args: ["status", "--short"] })).toBe("read");
+  expect(bashRisk({ command: "git", args: ["commit", "-m", "change"] })).toBe("exec");
+  expect(bashRisk({ command: "find", args: [".", "-delete"] })).toBe("exec");
+  expect(bashRisk({ command: "tree", args: ["-o", "tree.txt"] })).toBe("exec");
+  expect(bashRisk({ command: "rg", args: ["--pre", "generator"] })).toBe("exec");
+  expect(bashRisk({ command: "git", args: ["diff", "--output=changes.patch"] })).toBe("exec");
+  expect(bashRisk({ command: "sh", args: ["-c", "ls"] })).toBe("exec");
+  expect(bashRisk({ command: "powershell.exe", args: ["Get-ChildItem"] })).toBe("exec");
 });
 
 it("reports edit semantic failures explicitly", async () => {

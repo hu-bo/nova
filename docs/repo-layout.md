@@ -290,7 +290,8 @@ type Decide = (req: DecisionRequest, signal: AbortSignal) => Promise<DecisionRes
 **审批策略（保持简单）**
 
 - 三档：`auto` / `ask` / `deny`，按 tool name 配置 + 一个默认档
-- 默认：只读工具（`read_file` `grep` `list_dir`）→ `auto`；写工具与 `bash` → `ask`
+- 默认：只读工具（`read_file` `grep` `list_dir`）及 `bash` 的已知只读查询命令 → `auto`；写工具与其他命令 → `ask`
+- Tool 可按调用参数解析实际风险，审批策略只消费解析结果，不重复理解 Tool 参数
 - `allow_always` 写入 **session 级** allowlist，第一版不跨 session 持久化
 
 **超时与取消**

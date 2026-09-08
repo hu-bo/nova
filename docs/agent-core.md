@@ -211,7 +211,7 @@ interface AgentToolResult<D> {
 
 | 用途 | 读法 |
 |---|---|
-| 审批策略（§6） | `read` 放行 / `write` `exec` 需确认 |
+| 审批策略（§6） | `read` 放行 / `write` `exec` 需确认；工具可按已校验的调用参数解析实际风险 |
 | 模式筛选（§1.1） | `none` = 不碰 workspace，Chat 模式可用；其余需要 `ctx` |
 
 缺省 `exec` 是 fail-safe：忘了声明的工具按最危险处理。
@@ -527,6 +527,10 @@ type Decide = (req: DecisionRequest, signal: AbortSignal) => Promise<DecisionRes
 ```ts
 type ApprovalPolicy = { default: "auto" | "ask" | "deny"; byRisk?: Partial<Record<Risk, Mode>>; byTool?: Record<string, Mode> }
 ```
+
+`AgentTool.risk` 可以是固定风险，也可以是根据调用参数返回风险的函数。动态风险由 Tool 拥有，
+用于同一工具内语义明确的分级（例如 `bash` 的只读查询命令是 `read`，其他命令仍是 `exec`）；
+审批策略只消费解析后的风险，不重复理解 Tool 参数。
 
 缺省：`read → auto`，`write / exec → ask`。
 `allow_always` 写入 **session 级** allowlist，第一版不跨 session 持久化。
