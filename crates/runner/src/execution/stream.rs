@@ -23,8 +23,8 @@ pub struct OutputChunk {
 }
 
 /// Spawns one reader task per stream; both feed the same channel. The channel closes once
-/// both readers hit EOF (or error), which happens only once the process has exited or been
-/// killed — callers use that to know output draining is done.
+/// both readers hit EOF (or error). This only signals that output draining is done:
+/// a process can close its pipes before exiting, or leave inherited pipes open in a child.
 pub fn spawn_readers(stdout: ChildStdout, stderr: ChildStderr) -> mpsc::Receiver<OutputChunk> {
     let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
     tokio::spawn(read_and_chunk(stdout, Stream::Stdout, tx.clone()));

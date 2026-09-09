@@ -268,8 +268,6 @@ impl Executor {
             let stderr = process.take_stderr().expect("stderr was piped at spawn");
             let mut output_rx = stream::spawn_readers(stdout, stderr);
 
-            let wait_task = tokio::spawn(async move { process.wait().await });
-
             let started_at = Instant::now();
             let sleep = tokio::time::sleep(Duration::from_millis(timeout_ms as u64));
             tokio::pin!(sleep);
@@ -277,10 +275,38 @@ impl Executor {
             let mut kill_reason: Option<KillReason> = None;
             let mut bytes_forwarded: u64 = 0;
             let mut truncated = false;
+            let mut output_done = false;
+            let mut process_done = false;
+            let mut exit_status = None;
 
-            loop {
+            while !process_done || !output_done {
                 tokio::select! {
-                    maybe_chunk = output_rx.recv() => {
+                    result = process.wait(), if !process_done => {
+                        process_done = true;
+                        exit_status = match result {
+                            Ok(status) => Some(status),
+                            Err(error) => {
+                                tracing::warn!(
+                                    %execution_id,
+                                    category = "process_error",
+                                    error = %error,
+                                    "failed to wait for the child process"
+                                );
+                                None
+                            }
+                        };
+                        tracing::debug!(
+                            %execution_id,
+                            pid,
+                            exit_code = exit_status.and_then(|status| status.code()),
+                            duration_ms = started_at.elapsed().as_millis() as u64,
+                            "execution process exited; cleaning up descendants and draining output"
+                        );
+                        // Shell descendants can retain stdout/stderr after the shell exits.
+                        // This execution owns their process group; finish it before draining EOF.
+                        killer.kill();
+                    }
+                    maybe_chunk = output_rx.recv(), if !output_done => {
                         match maybe_chunk {
                             Some(chunk) => {
                                 if truncated {
@@ -299,7 +325,7 @@ impl Executor {
                                     event: Some(execution_event::Event::Output(Output { stream: chunk.stream as i32, data: chunk.data })),
                                 };
                             }
-                            None => break, // both readers hit EOF — the process is gone (exited or killed)
+                            None => output_done = true,
                         }
                     }
                     _ = &mut sleep, if kill_reason.is_none() => {
@@ -308,6 +334,8 @@ impl Executor {
                             %execution_id,
                             category = "execution_timeout",
                             timeout_ms,
+                            process_done,
+                            output_done,
                             "execution timed out; killing process"
                         );
                         killer.kill();
@@ -324,27 +352,6 @@ impl Executor {
                 }
             }
 
-            let exit_status = match wait_task.await {
-                Ok(Ok(status)) => Some(status),
-                Ok(Err(error)) => {
-                    tracing::warn!(
-                        %execution_id,
-                        category = "process_error",
-                        error = %error,
-                        "failed to wait for the child process"
-                    );
-                    None
-                }
-                Err(error) => {
-                    tracing::error!(
-                        %execution_id,
-                        category = if error.is_panic() { "panic" } else { "task_join_error" },
-                        error = ?error,
-                        "child-process wait task failed"
-                    );
-                    None
-                }
-            };
             let duration_ms = started_at.elapsed().as_millis() as u64;
             executor.registry.finish(&execution_id);
 
@@ -556,6 +563,97 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         panic!("process {pid} is still alive 5s after being cancelled");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shell_exit_cleans_inherited_pipes_and_preserves_output() {
+        let executor = Executor::new(1, 0, 5_000);
+        for (id, script, expected) in [
+            (
+                "inherited-pipes",
+                "sleep 2 & printf parent-done",
+                "parent-done".to_string(),
+            ),
+            (
+                "buffered-output",
+                "i=0; while [ $i -lt 20000 ]; do printf x; i=$((i + 1)); done",
+                "x".repeat(20_000),
+            ),
+            (
+                "next-command",
+                "printf next-tool-ok",
+                "next-tool-ok".to_string(),
+            ),
+        ] {
+            let mut params = sleep_params(id, 0, 1_000);
+            params.command = "sh".to_string();
+            params.args = vec!["-c".to_string(), script.to_string()];
+            let events: Vec<_> = tokio::time::timeout(
+                Duration::from_secs(3),
+                executor.execute(params).unwrap().collect(),
+            )
+            .await
+            .expect("execution must finish without waiting on inherited pipes");
+            let output: Vec<u8> = events
+                .iter()
+                .filter_map(|event| match &event.event {
+                    Some(execution_event::Event::Output(output)) => Some(output.data.as_slice()),
+                    _ => None,
+                })
+                .flatten()
+                .copied()
+                .collect();
+            assert_eq!(output, expected.as_bytes());
+            let Some(execution_event::Event::Finished(finished)) =
+                events.last().and_then(|event| event.event.as_ref())
+            else {
+                panic!("last event must be Finished");
+            };
+            assert_eq!(finished.status, ExecutionStatus::Completed as i32, "{id}");
+            assert_eq!(finished.exit_code, 0);
+            assert_eq!(executor.running_count(), 0);
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn closing_output_does_not_disable_timeout_or_cancellation() {
+        let executor = Executor::new(1, 0, 5_000);
+        for (id, cancel) in [("closed-timeout", false), ("closed-cancel", true)] {
+            let mut params = sleep_params(id, 0, if cancel { 5_000 } else { 200 });
+            params.command = "sh".to_string();
+            params.args = vec!["-c".to_string(), "exec 1>&- 2>&-; sleep 2".to_string()];
+            let stream = executor.execute(params).unwrap();
+            tokio::pin!(stream);
+            assert!(matches!(
+                stream.next().await.unwrap().event,
+                Some(execution_event::Event::Started(_))
+            ));
+            let cancel_execution = async {
+                if cancel {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    assert!(executor.cancel(id));
+                }
+            };
+            let collect = tokio::time::timeout(Duration::from_secs(1), stream.collect::<Vec<_>>());
+            let (events, ()) = tokio::join!(collect, cancel_execution);
+            let events = events.expect("closed output must not bypass execution limits");
+            let Some(execution_event::Event::Finished(finished)) =
+                events.last().and_then(|event| event.event.as_ref())
+            else {
+                panic!("last event must be Finished");
+            };
+            assert_eq!(
+                finished.status,
+                if cancel {
+                    ExecutionStatus::Cancelled
+                } else {
+                    ExecutionStatus::TimedOut
+                } as i32
+            );
+            assert_eq!(executor.running_count(), 0);
+        }
     }
 
     #[tokio::test]
