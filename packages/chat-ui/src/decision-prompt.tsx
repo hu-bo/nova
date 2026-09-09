@@ -1,79 +1,10 @@
-import {
-  Check,
-  CheckCircle2,
-  Circle,
-  CircleStop,
-  FileCode,
-  HelpCircle,
-  LoaderCircle,
-  ShieldCheck,
-  X,
-  Zap,
-} from "lucide-react";
+import { Check, CheckCircle2, Circle, CircleStop, HelpCircle, LoaderCircle, ShieldCheck, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { diffLines, type Change } from "diff";
-import type { CodeChange, DecisionRequest, DecisionResponse } from "@nova/protocol";
-import { Badge } from "./components/ui/badge.js";
+import type { DecisionRequest, DecisionResponse } from "@nova/protocol";
 import { Button } from "./components/ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./components/ui/card.js";
 import { Checkbox } from "./components/ui/checkbox.js";
-
-function CodeDiffView({ codeChanges }: { codeChanges: CodeChange[] }) {
-  return (
-    <div className="flex flex-col divide-y divide-slate-700/50">
-      {codeChanges.map((change, index) => (
-        <DiffFile key={index} change={change} />
-      ))}
-    </div>
-  );
-}
-
-function DiffFile({ change }: { change: CodeChange }) {
-  const diff = useMemo(() => diffLines(change.oldText, change.newText), [change.oldText, change.newText]);
-
-  const addedCount = diff.filter((d) => d.added).reduce((sum, d) => sum + (d.count ?? 0), 0);
-  const removedCount = diff.filter((d) => d.removed).reduce((sum, d) => sum + (d.count ?? 0), 0);
-
-  return (
-    <div className="py-2">
-      <div className="mb-1.5 flex items-center gap-2 px-1">
-        <FileCode className="size-3.5 text-slate-400" aria-hidden="true" />
-        <span className="min-w-0 break-all text-xs font-medium text-slate-300">{change.path}</span>
-        {addedCount > 0 && (
-          <Badge variant="success" className="bg-emerald-500/20 text-emerald-400">
-            +{addedCount}
-          </Badge>
-        )}
-        {removedCount > 0 && (
-          <Badge variant="danger" className="bg-red-500/20 text-red-400">
-            -{removedCount}
-          </Badge>
-        )}
-      </div>
-      <pre className="nova-scrollbar m-0 max-w-full overflow-x-hidden overflow-y-auto rounded-md bg-slate-950 px-2 py-1.5 font-mono text-xs leading-4 whitespace-pre-wrap break-words text-slate-200">
-        {diff.map((part, i) => (
-          <DiffLine key={i} part={part} />
-        ))}
-      </pre>
-    </div>
-  );
-}
-
-function DiffLine({ part }: { part: Change }) {
-  const prefix = part.added ? "+ " : part.removed ? "- " : "  ";
-  const className = part.added
-    ? "text-emerald-400 bg-emerald-500/10"
-    : part.removed
-      ? "text-red-400 bg-red-500/10"
-      : "text-slate-500";
-
-  return (
-    <div className={className}>
-      <span className="select-none text-slate-600">{prefix}</span>
-      {part.value}
-    </div>
-  );
-}
+import { DiffBlock, unifiedPatchOf } from "./blocks/diff.js";
 
 export interface DecisionPromptProps {
   request: DecisionRequest;
@@ -101,6 +32,11 @@ export function DecisionPrompt({
 }: DecisionPromptProps) {
   const [submitted, setSubmitted] = useState(false);
   const [answers, setAnswers] = useState<string[]>([]);
+  const codeChanges = request.kind === "approval" ? request.codeChanges : undefined;
+  const patches = useMemo(
+    () => codeChanges?.map((change) => ({ path: change.path, ...unifiedPatchOf(change) })) ?? [],
+    [codeChanges],
+  );
 
   useEffect(() => {
     setSubmitted(false);
@@ -160,9 +96,17 @@ export function DecisionPrompt({
             </p>
           </div>
         </CardHeader>
-        {request.codeChanges && request.codeChanges.length > 0 ? (
-          <div className="nova-scrollbar mx-3 max-h-80 overflow-auto rounded-md bg-slate-950 px-2.5 py-2">
-            <CodeDiffView codeChanges={request.codeChanges} />
+        {patches.length ? (
+          <div className="mx-3 flex flex-col gap-2">
+            {patches.map((patch, index) => (
+              <DiffBlock
+                key={`${patch.path}-${index}`}
+                path={patch.path}
+                diff={patch.diff}
+                added={patch.added}
+                removed={patch.removed}
+              />
+            ))}
           </div>
         ) : (
           <pre className="nova-scrollbar mx-3 my-0 max-h-56 max-w-[calc(100%-1.5rem)] overflow-x-hidden overflow-y-auto break-words whitespace-pre-wrap rounded-md bg-slate-950 px-2.5 py-2 font-mono text-xs leading-5 text-slate-200">

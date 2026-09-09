@@ -54,6 +54,8 @@ export interface AgentTool<A = unknown, D = unknown> {
   description: string;
   schema: ZodType<A>;
   executionMode?: "parallel" | "sequential";
+  /** Total call budget required by validated arguments; can extend the configured default. */
+  timeoutMs?: (args: unknown) => number | undefined;
   risk?: Risk | ((args: unknown) => Risk);
   requiresContext?: boolean;
   execute(args: A, ctx?: ToolContext, signal?: AbortSignal): Promise<AgentToolResult<D>>;

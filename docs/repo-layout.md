@@ -174,6 +174,10 @@ packages/agent-core/
 - Sub-agent 派生及其并发与 token 预算
 - 注册 AgentTool（`spawn_agent` / `delegate_task` / `ask_user`）
 
+工具可以通过 `AgentTool.timeoutMs(args)` 声明需要的调用总时限；Agent Core 在参数校验后将其与
+默认调用时限取较大值，仍由 TaskFlow 唯一持有调用计时器。工具负责解释自身参数，Core 不识别
+`bash` 名称或 Shell 参数；Runner 继续负责进程执行超时与终止。
+
 **不负责**
 
 - 进程管理、资源限制、Shell 生命周期

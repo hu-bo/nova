@@ -1,4 +1,8 @@
 import { context, errorResult, text, type Tool, z } from "./shared.js";
+
+const DEFAULT_TIMEOUT_MS = 10_000;
+const EXECUTION_OVERHEAD_MS = 5_000;
+
 const schema = z.object({
   command: z
     .string()
@@ -16,7 +20,15 @@ const schema = z.object({
     .string()
     .optional()
     .describe("Working directory for the process. Prefer this over putting `cd` in a shell script."),
-  timeoutMs: z.number().optional().describe("Maximum execution time in milliseconds."),
+  timeoutMs: z
+    .number()
+    .int()
+    .positive()
+    .max(2_147_483_647 - EXECUTION_OVERHEAD_MS)
+    .optional()
+    .describe(
+      "Maximum execution time in milliseconds; defaults to 10000 (10 seconds) when omitted. For known long-running tasks such as builds, full test suites, or dependency installation, explicitly set a suitable longer timeout, e.g. 300000 (5 minutes).",
+    ),
 });
 
 const READ_ONLY_COMMANDS = new Set([
@@ -89,11 +101,15 @@ export const bash: Tool<z.output<typeof schema>> = {
     "Run one executable directly in the workspace; despite the tool name, no shell is started automatically. `command` must be only the executable name or path, with normal arguments in `args` and the working directory in `cwd`. Example: {command: `pnpm`, args: [`tsc`, `--noEmit`], cwd: `/workspace/app`}. If the operation needs shell syntax such as `cd`, `&&`, `|`, `>`, variables, or quoting, explicitly run a shell: {command: `sh`, args: [`-lc`, `cd /workspace/app && pnpm tsc --noEmit 2>&1 | head -50`]}. On Windows use `powershell.exe` with `-NoProfile`, `-Command`, and the script as separate args. Never put a complete command line directly in `command`.",
   schema,
   risk: bashRisk,
+  timeoutMs(value) {
+    const parsed = schema.safeParse(value);
+    return parsed.success ? (parsed.data.timeoutMs ?? DEFAULT_TIMEOUT_MS) + EXECUTION_OVERHEAD_MS : undefined;
+  },
   async execute(input, ctx) {
     const result = await context(ctx).exec(input.command, {
       args: input.args,
       cwd: input.cwd,
-      timeoutMs: input.timeoutMs,
+      timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     });
     if (!result.ok) return errorResult(result.error, `${result.error.code}: ${result.error.message}`);
     const { value } = result;

@@ -20,6 +20,33 @@ it("describes the direct-executable and explicit-shell bash calling conventions 
   expect(parameters.properties?.command?.description).toContain("single executable");
   expect(parameters.properties?.args?.description).toContain("one array item per argument");
   expect(parameters.properties?.cwd?.description).toContain("Prefer this over putting `cd`");
+  expect(parameters.properties?.timeoutMs?.description).toContain("10000 (10 seconds)");
+  expect(parameters.properties?.timeoutMs?.description).toContain("explicitly set");
+});
+
+it.each([undefined, 300_000])("uses the default or explicit bash execution timeout (%s)", async (timeoutMs) => {
+  const output = {
+    ok: true as const,
+    value: { exitCode: 0, stdout: "done", stderr: "", truncated: false, durationMs: 1 },
+  };
+  const runtime = ctx(output);
+  const input = bash.schema.parse({ command: "pnpm", args: ["test"], cwd: "/workspace/app", timeoutMs });
+  let called = false;
+  runtime.exec = async (command, options) => {
+    called = true;
+    expect(command).toBe("pnpm");
+    expect(options).toEqual({ args: ["test"], cwd: "/workspace/app", timeoutMs: timeoutMs ?? 10_000 });
+    return output;
+  };
+  expect((await bash.execute(input, runtime)).status).toBe("ok");
+  expect(called).toBe(true);
+  expect(bash.timeoutMs?.(input)).toBe((timeoutMs ?? 10_000) + 5_000);
+});
+
+it("rejects timeout values that disable the execution limit or overflow the call timer", () => {
+  for (const timeoutMs of [0, -1, 1.5, Infinity, 2_147_478_648]) {
+    expect(bash.schema.safeParse({ command: "pnpm", timeoutMs }).success).toBe(false);
+  }
 });
 
 it("maps Runner failures and non-zero command exits to error", async () => {

@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { Composer } from "./composer.js";
 import type { ComposerProps, ComposerSubmission } from "./composer-types.js";
 import { DecisionPrompt } from "./decision-prompt.js";
-import { MessageList } from "./message-list.js";
+import { MessageList, type MessageListProps } from "./message-list.js";
 import { RemoteExplorer, type RemoteExplorerProps } from "./remote-explorer.js";
 import { TodoPanel } from "./todo-panel.js";
 
@@ -40,6 +40,7 @@ export type ChatComposerConfig<TMetadata = unknown> = Omit<
 >;
 
 export interface ChatActions<TMetadata = unknown> {
+  onScrollStateChange?: MessageListProps["onScrollStateChange"];
   onSubmit: (submission: ComposerSubmission<TMetadata>) => void | boolean | Promise<void | boolean>;
   onAbort?: (() => void | Promise<void>) | undefined;
   onRetryMessage?: ((messageId: string) => void) | undefined;
@@ -50,6 +51,7 @@ export interface ChatActions<TMetadata = unknown> {
 }
 
 export interface ChatProps<TMetadata = unknown> {
+  initialScrollState?: MessageListProps["initialScrollState"];
   state: ChatState;
   composer: ChatComposerConfig<TMetadata>;
   actions: ChatActions<TMetadata>;
@@ -63,7 +65,14 @@ const feedbackClasses: Record<ChatFeedback["tone"], string> = {
   info: "bg-indigo-50 text-indigo-800 ring-indigo-200",
 };
 
-export function Chat<TMetadata = unknown>({ state, composer, actions, emptyState, explorer }: ChatProps<TMetadata>) {
+export function Chat<TMetadata = unknown>({
+  state,
+  composer,
+  actions,
+  emptyState,
+  explorer,
+  initialScrollState,
+}: ChatProps<TMetadata>) {
   const incompleteTodos = state.todos.filter((todo) => todo.status !== "completed").length;
   const connectionMessage =
     state.connection === "connecting"
@@ -102,6 +111,8 @@ export function Chat<TMetadata = unknown>({ state, composer, actions, emptyState
           {state.messages.length ? (
             <MessageList
               messages={state.messages}
+              initialScrollState={initialScrollState}
+              onScrollStateChange={actions.onScrollStateChange}
               {...(actions.onRetryMessage ? { onRetry: actions.onRetryMessage } : {})}
             />
           ) : (

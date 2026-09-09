@@ -67,16 +67,20 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
       }
     }
     seen.push(taskId);
+    const timeoutMs = callTimeoutMs(tool, call.args, deps.timeoutMs);
 
     flow.addTask({
       id: taskId,
       deps: taskDeps,
-      timeoutMs: deps.timeoutMs,
+      timeoutMs,
       run: async (task) => {
         // TaskFlow owns the per-tool timeout. Its task signal must reach the ToolContext,
         // otherwise a timeout only changes scheduler state and leaves the remote process running.
         const signal = AbortSignal.any([deps.signal, task.signal]);
-        outcomes.set(call.callId, await runOne(call, tool, risk, { ...deps, signal, runSignal: deps.signal }));
+        outcomes.set(
+          call.callId,
+          await runOne(call, tool, risk, { ...deps, timeoutMs, signal, runSignal: deps.signal }),
+        );
       },
     });
   }
@@ -99,6 +103,20 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
         executed: false,
       },
   );
+}
+
+function callTimeoutMs(tool: AgentTool | undefined, args: unknown, fallback: number): number {
+  if (!tool?.timeoutMs) return fallback;
+  const parsed = tool.schema.safeParse(args);
+  if (!parsed.success) return fallback;
+  try {
+    const requested = tool.timeoutMs(parsed.data);
+    return requested !== undefined && Number.isSafeInteger(requested) && requested > 0 && requested <= 2_147_483_647
+      ? Math.max(fallback, requested)
+      : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function resolveRisk(tool: AgentTool, args: unknown): Risk {

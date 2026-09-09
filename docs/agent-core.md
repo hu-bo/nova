@@ -191,6 +191,7 @@ interface AgentTool<A = unknown, D = unknown> {
   description: string
   parameters: JSONSchema
   executionMode?: "parallel" | "sequential"        // 缺省 parallel
+  timeoutMs?: (args: unknown) => number | undefined // 已校验参数所需的调用总时限，只延长默认值
   risk?: "none" | "read" | "write" | "exec"        // 缺省 exec
   execute(args: A, ctx?: ToolContext, signal?: AbortSignal): Promise<AgentToolResult<D>>
 }
@@ -297,7 +298,11 @@ type ExecError = { code: ExecErrorCode; message: string; exitCode?: number }
 读取 Runner root 内其他位置；最终越界判断只由 Runner root 拥有。`read()` 的行窗口在 Runner 内
 完成，并有独立字节上限；这里的有界是资源约束，不是读取权限限制。
 
-Agent 每个 tool call 也有总时限：`AgentConfig.toolTimeoutMs`，缺省 120 秒。该时限由 TaskFlow
+Agent 每个 tool call 也有总时限：`AgentConfig.toolTimeoutMs`，缺省 120 秒。工具可通过
+`AgentTool.timeoutMs(args)` 根据已校验参数声明更长的时限；实际总时限取两者较大值。
+例如 bash 的进程默认执行 10 秒，显式长任务的调用预算包含额外 5 秒用于调度与结果回传，避免
+被外层固定 120 秒提前中止。该声明必须为正整数毫秒，且不能超过 JavaScript 定时器上限。
+该时限由 TaskFlow
 持有，并会把同一个 call-level `AbortSignal` 作为 `execute` 第三个参数传给所有工具；存在 Workspace
 时也会放进 `ToolContext.signal`，Runner 执行因此会收到取消请求。没有 Workspace 的 RemoteTool 仍能
 通过第三个参数响应取消。工具未能自行响应 abort 时，Agent 仍会将该调用收敛为 timeout 结果，不会让

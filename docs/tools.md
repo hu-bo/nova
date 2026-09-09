@@ -126,6 +126,12 @@ details: { exitCode, stdout, stderr, durationMs, truncated }
 risk:    常见只读查询命令为 "read"，其他命令为 "exec"
 ```
 
+`timeoutMs` 缺省为 **10,000 ms（10 秒）**，由 bash 显式传给 Runner，不依赖 Runner 的设备级默认值。
+模型预计构建、完整测试、安装依赖等任务需要更久时，必须自行填写合适的 `timeoutMs`，例如
+`{ command: "pnpm", args: ["test"], timeoutMs: 300000 }`。不按命令名称自动猜测长任务。
+只接受正整数，最大 2,147,478,647 ms，给 Agent 调用定时器预留 5 秒回传余量；0 不表示无限等待。
+显式长任务同时通过 `AgentTool.timeoutMs` 延长外层调用预算，用户取消仍立即生效。
+
 `command` 是可执行文件名或路径，**不会按 shell 命令行解析**；参数必须放在 `args`，例如
 `{ command: "ls", args: ["/workspace/synes/"] }`。把整段 `ls /workspace/synes/` 放进
 `command` 会被当作一个可执行文件名，并以 `SPAWN_FAILED` 结束。

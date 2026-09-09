@@ -2,16 +2,17 @@ import { Chat, type ComposerAttachment, type ComposerSubmission, type ChatFeedba
 import type { UiEvent } from "@nova/protocol";
 import { AlertTriangle, ArrowLeft, FolderKanban, MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { errorMessage } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Dialog } from "../components/ui/dialog.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { useConversationMutations, type RunnerAttachmentMetadata } from "../conversation/mutations.js";
-import { useConversationSession, useConversationStore } from "../conversation/store.js";
+import { conversationStore, useConversationSession, useConversationStore } from "../conversation/store.js";
 import { LocalStore } from "../lib/storage.js";
 import { displayWorkspacePath } from "../lib/workspace-path.js";
 import { useModelSettings } from "./settings/model/provider.js";
+import { draftConversationStateId } from "./project/new-conversation.js";
 import { useConversations, useProject } from "./project/use-projects.js";
 import { RunnerBadge } from "./home.js";
 import { useRunnerDirectoryLoader } from "./settings/runner/use-runners.js";
@@ -21,6 +22,7 @@ const SELECTED_REASONING_STORE = new LocalStore("nova_selected_reasoning_effort"
 
 export function ConversationRoute() {
   const { projectId, conversationId } = useParams();
+  const location = useLocation();
   const conversations = useConversations(projectId, conversationId !== "new");
   const projectQuery = useProject(projectId);
   const isDraft = conversationId === "new";
@@ -50,7 +52,7 @@ export function ConversationRoute() {
       </div>
     );
   if (isDraft) {
-    const draftId = `draft:${projectId ?? "chat"}`;
+    const draftId = draftConversationStateId(projectId, location.key);
     return (
       <ConversationView
         key={draftId}
@@ -165,6 +167,10 @@ function ConversationView({
     [attachments, runnerId],
   );
   useEffect(() => setAttachmentOpen(false), [runnerId]);
+  useEffect(() => {
+    if (!conversation.isDraft) return;
+    return () => conversationStore.discard(conversation.id);
+  }, [conversation.id, conversation.isDraft]);
   const contextUsage =
     store.state.contextUsage ??
     (selectedProfile

@@ -768,6 +768,34 @@ describe("tool batch", () => {
     const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
     expect(textOf(results[0]!.content)).toContain("timed out after 25ms");
   });
+
+  it("按已校验参数延长长任务时限，其他工具仍使用默认时限", async () => {
+    const long = localTestTool("long", { risk: "read", durationMs: 60 });
+    long.schema = z.object({ budget: z.number().int().positive() });
+    long.timeoutMs = (args) => (args as { budget: number }).budget;
+    const slow = localTestTool("slow", { risk: "read", untilAborted: true });
+    const { stream } = scripted([
+      toolEvents([{ name: "long", args: { budget: 500 } }, { name: "slow" }]),
+      textEvents("recovered"),
+    ]);
+    const { agent, storage } = setup(stream, { tools: [long, slow], toolTimeoutMs: 25 });
+
+    expect((await agent.prompt("go")).stopReason).toBe("done");
+    const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
+    expect(results[0]!.status).toBe("ok");
+    expect(textOf(results[1]!.content)).toContain("timed out after 25ms");
+  });
+
+  it.each([1, undefined, Infinity, 2_147_483_648])("无效或更短的工具预算不覆盖默认时限 (%s)", async (budget) => {
+    const slow = localTestTool("slow", { risk: "read", untilAborted: true });
+    slow.timeoutMs = () => budget;
+    const { stream } = scripted([toolEvents([{ name: "slow" }]), textEvents("recovered")]);
+    const { agent, storage } = setup(stream, { tools: [slow], toolTimeoutMs: 25 });
+
+    expect((await agent.prompt("go")).stopReason).toBe("done");
+    const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
+    expect(textOf(results[0]!.content)).toContain("timed out after 25ms");
+  });
 });
 
 // —— 队列（§7）——

@@ -152,6 +152,11 @@ ExecuteRequest
 - `exit_code != 0` 仍是 `completed`，由 Agent / TaskFlow 解释。
 - Runner 不对失败、超时或断连执行业务重试。
 
+进程退出与 stdout / stderr 的 EOF 是两个独立事件：管道关闭不代表进程退出，Shell 退出也不代表
+继承管道的子进程已经结束。Execution 必须同时监听退出、输出、超时和取消；不能因 EOF 提前
+退出超时监听。直接子进程退出后清理本次执行的残留进程组，再排空输出并发送 `Finished`，
+避免已完成的前台命令因后台子进程持有管道而被误报超时。
+
 ---
 
 ## 7. 输出与取消

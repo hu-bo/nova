@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@nova/protocol";
+import type { MessageListScrollState } from "@nova/chat-ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 import { create } from "zustand";
@@ -13,16 +14,32 @@ import {
 import { useConversationStream } from "./use-conversation-stream.js";
 interface ConversationStoreState {
   conversations: Record<string, ConversationState | undefined>;
+  scrollStates: Record<string, MessageListScrollState | undefined>;
+  setScrollState(conversationId: string, state: MessageListScrollState): void;
   dispatch(conversationId: string, action: ConversationAction): void;
+  discard(conversationId: string): void;
 }
 
 const useConversationStateStore = create<ConversationStoreState>((set) => ({
   conversations: {},
+  scrollStates: {},
+  setScrollState: (conversationId, state) =>
+    set((store) => ({ scrollStates: { ...store.scrollStates, [conversationId]: state } })),
   dispatch: (conversationId, action) =>
     set((store) => {
       const state = store.conversations[conversationId] ?? initialConversationState;
       const next = conversationReducer(state, action);
       return next === state ? store : { conversations: { ...store.conversations, [conversationId]: next } };
+    }),
+  discard: (conversationId) =>
+    set((store) => {
+      if (!Object.hasOwn(store.conversations, conversationId) && !Object.hasOwn(store.scrollStates, conversationId))
+        return store;
+      const conversations = { ...store.conversations };
+      const scrollStates = { ...store.scrollStates };
+      delete conversations[conversationId];
+      delete scrollStates[conversationId];
+      return { conversations, scrollStates };
     }),
 }));
 
@@ -37,11 +54,20 @@ export function useConversationStore(conversationId: string) {
 }
 
 export const conversationStore = {
+  scrollState(conversationId: string): MessageListScrollState | undefined {
+    return useConversationStateStore.getState().scrollStates[conversationId];
+  },
+  setScrollState(conversationId: string, state: MessageListScrollState) {
+    useConversationStateStore.getState().setScrollState(conversationId, state);
+  },
   dispatch(conversationId: string, action: ConversationAction) {
     useConversationStateStore.getState().dispatch(conversationId, action);
   },
   state(conversationId: string): ConversationState {
     return useConversationStateStore.getState().conversations[conversationId] ?? initialConversationState;
+  },
+  discard(conversationId: string) {
+    useConversationStateStore.getState().discard(conversationId);
   },
 };
 

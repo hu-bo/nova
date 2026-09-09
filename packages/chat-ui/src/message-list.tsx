@@ -1,5 +1,5 @@
 import { Bot, CircleAlert, LoaderCircle, RotateCcw, UserRound } from "lucide-react";
-import { memo, useEffect, useRef, type ReactNode, type UIEvent } from "react";
+import { memo, useLayoutEffect, useRef, type ReactNode, type UIEvent } from "react";
 import type { Block, ChatMessage } from "@nova/protocol";
 import { BlockView } from "./block-view.js";
 import { ToolBlock } from "./blocks/tool.js";
@@ -7,11 +7,18 @@ import type { BlockRenderers, ExtractBlock } from "./types.js";
 import { Button } from "./components/ui/button.js";
 import { CopyButton } from "./components/copy-button.js";
 
+export interface MessageListScrollState {
+  scrollTop: number;
+  followsBottom: boolean;
+}
+
 export interface MessageListProps {
   messages: ChatMessage[];
   renderers?: BlockRenderers | undefined;
   onRetry?: ((messageId: string) => void) | undefined;
   onOpenPath?: ((path: string, line?: number) => void) | undefined;
+  initialScrollState?: MessageListScrollState | undefined;
+  onScrollStateChange?: ((state: MessageListScrollState) => void) | undefined;
 }
 
 function renderBlocks(
@@ -120,19 +127,55 @@ const MessageRow = memo(function MessageRow({
   );
 });
 
-export function MessageList({ messages, renderers, onRetry, onOpenPath }: MessageListProps) {
+export function MessageList({
+  messages,
+  renderers,
+  onRetry,
+  onOpenPath,
+  initialScrollState,
+  onScrollStateChange,
+}: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const followsBottom = useRef(true);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const scrollState = useRef(initialScrollState ?? { scrollTop: 0, followsBottom: true });
+  const onScrollStateChangeRef = useRef(onScrollStateChange);
+
+  useLayoutEffect(() => {
+    onScrollStateChangeRef.current = onScrollStateChange;
+  }, [onScrollStateChange]);
 
   function trackScroll(event: UIEvent<HTMLDivElement>) {
     const element = event.currentTarget;
-    followsBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+    scrollState.current = {
+      scrollTop: element.scrollTop,
+      followsBottom: element.scrollHeight - element.scrollTop - element.clientHeight < 48,
+    };
+    onScrollStateChangeRef.current?.(scrollState.current);
   }
 
-  useEffect(() => {
-    if (followsBottom.current)
-      containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  useLayoutEffect(() => {
+    const container = containerRef.current!;
+    const content = contentRef.current!;
+    // Restore before paint; route remounts must not animate through the history.
+    container.scrollTop = scrollState.current.followsBottom ? container.scrollHeight : scrollState.current.scrollTop;
+
+    const saveScrollState = () => {
+      scrollState.current = { ...scrollState.current, scrollTop: container.scrollTop };
+      onScrollStateChangeRef.current?.(scrollState.current);
+    };
+    saveScrollState();
+
+    const observer = new ResizeObserver(() => {
+      if (scrollState.current.followsBottom) container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(container);
+    observer.observe(content);
+
+    return () => {
+      observer.disconnect();
+      saveScrollState();
+    };
+  }, []);
 
   return (
     <div
@@ -141,7 +184,7 @@ export function MessageList({ messages, renderers, onRetry, onOpenPath }: Messag
       className="nova-message-list nova-scrollbar flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden overscroll-contain px-1 pb-2 [scrollbar-gutter:stable]"
       aria-live="polite"
     >
-      <div className="nova-chat-content space-y-3">
+      <div ref={contentRef} className="nova-chat-content space-y-3">
         {messages.map((message) => (
           <MessageRow
             message={message}

@@ -165,6 +165,11 @@ TODO、反馈和 Composer 的 DOM 组合及响应式布局由高层 `<Chat>` 统
 **技术选型**：Zustand 维护按 conversation id 隔离的会话状态。路由只选择当前会话，
 不拥有流状态；切换路由时，运行中的会话 SSE 必须继续接收事件。不上 Redux / RTK / Saga。
 
+会话 store 另按 conversation id 保存消息列表的 `scrollTop` 和 `followsBottom`，与 SSE 投影分开。
+路由重新挂载 Chat 时传入上次位置，并接收滚动状态回调；返回正在阅读历史的位置时不被新消息拉到底部，
+离开前处于底部则恢复跟随最新消息。这些记录只保留在当前页面生命周期的内存中，刷新后重新定位到底部；
+discard 会话时一并清除。
+
 临时对话使用按 Project 隔离的本地 state id，仅承载发送期间的 UI 状态，不能被当成服务端 id 发往 API。
 首次发送创建成功后，真实 conversation id 成为 Query、reducer 与 SSE 的唯一 key；发送失败则保留输入和已创建的
 id 供重试，避免一次用户消息产生多个空会话。
@@ -175,7 +180,12 @@ id 供重试，避免一次用户消息产生多个空会话。
 
 Runner 选择发生在 Project 的 workspace 绑定或首次发送创建 Conversation 时，不属于
 `packages/chat-ui`。新建普通 Chat 或 Project 会话直接进入会话页面，不为 Runner 弹窗。
-独立 Chat 不需要 Runner；Project 尚未绑定 Runner/workspace 时，用户首次发送才提示完成绑定。
+独立 Chat 不需要 Runner；Project 尚未绑定 Runner/workspace 或 Runner 离线时，用户发送消息会在
+消息流末尾看到一条前端虚拟提醒，输入与附件保持不变，不创建 Conversation 或发送消息。
+提醒引导用户在工作目录执行带 Runner token 的 npx 安装启动命令；复用已有 token，无 token 时
+按需创建，离线重连必须使用原 Runner 对应的 token 和 Runner ID。命令加载失败时允许再次发送重试。
+虚拟提醒只由页面内存持有，渲染时合并到消息列表，不进入会话 store、历史、SSE 或模型上下文；
+重复发送更新同一条提醒。绑定完成且 Runner 恢复在线后隐藏提醒，用户手动重新发送。
 已有 Conversation 不展示 Runner 切换控件，也没有对应的 server mutation，确保其执行环境不变。
 
 ```text

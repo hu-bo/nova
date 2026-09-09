@@ -62,6 +62,8 @@
   renderers?={BlockRenderers}
   onRetry?={(messageId: string) => void}
   onOpenPath?={(path: string, line?: number) => void}
+  initialScrollState?={{ scrollTop: number, followsBottom: boolean }}
+  onScrollStateChange?={(state: MessageListScrollState) => void}
 />
 
 <BlockView block={Block} renderers?={BlockRenderers} onOpenPath?={callback} />
@@ -177,6 +179,11 @@ SSE ──► agent-web-ui 的 reducer ──► ChatMessage[] ──► <Messag
 | 长列表 | 消息级 `memo`，key 用 `message.id`；超过一定条数再上虚拟滚动，**不预先上** |
 | 流式块 | 只有 `status === "streaming"` 的最后一条消息重渲染 |
 | 自动滚动 | 用户手动上滚后停止跟随，回到底部恢复。这个交互不做会很难用 |
+
+`MessageList` 在首次布局时恢复 `initialScrollState`；没有记录时直接定位到底部，不播放从顶部到底部的滚动动画。
+`followsBottom` 为 true 时随消息内容和视口尺寸变化保持贴底，否则保留阅读位置。
+滚动与卸载时通过 `onScrollStateChange` 回传位置及跟随状态。`Chat` 对应接收 `initialScrollState` 和
+`actions.onScrollStateChange`；按会话缓存这些记录由宿主负责，组件不维护全局缓存。
 
 ---
 
