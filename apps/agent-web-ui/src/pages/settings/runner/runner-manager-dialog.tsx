@@ -18,6 +18,7 @@ import { useRunnerCatalog, useRunnerConnection, useRunnerTokens } from "./use-ru
 interface RunnerManagerDialogProps {
   open: boolean;
   onClose: () => void;
+  title?: string;
   selectedRunnerId?: string | undefined;
   onSelect?: (runnerId: string) => unknown | Promise<unknown>;
 }
@@ -355,9 +356,15 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
   );
 }
 
-export function RunnerManagerDialog({ open, onClose, selectedRunnerId, onSelect }: RunnerManagerDialogProps) {
+export function RunnerManagerDialog({
+  open,
+  onClose,
+  title = "Runner 与连接令牌",
+  selectedRunnerId,
+  onSelect,
+}: RunnerManagerDialogProps) {
   return (
-    <Dialog open={open} onClose={onClose} size="xl" title="Runner 与连接令牌">
+    <Dialog open={open} onClose={onClose} size="xl" title={title}>
       <RunnerManager onClose={onClose} selectedRunnerId={selectedRunnerId} onSelect={onSelect} />
     </Dialog>
   );

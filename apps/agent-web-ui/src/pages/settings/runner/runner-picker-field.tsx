@@ -7,15 +7,9 @@ import { runnerStateLabel, useRunnerCatalog } from "./use-runners.js";
 
 /**
  * Runner 选择入口：摘要按钮负责回显，选择本身复用设置页的 Runner 与连接令牌弹窗，
- * 那里同时提供刷新、断开以及 Windows / macOS / Linux 的启动命令。
+ * 那里同时提供 Runner、Token 管理与安装启动命令。
  */
-export function RunnerPickerField({
-  value,
-  onSelect,
-}: {
-  value: string;
-  onSelect: (runnerId: string) => void;
-}) {
+export function RunnerPickerField({ value, onSelect }: { value: string; onSelect: (runnerId: string) => void }) {
   const [open, setOpen] = useState(false);
   const catalog = useRunnerCatalog();
   const selected = catalog.runners.find((runner) => runner.id === value);

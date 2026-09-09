@@ -5,6 +5,13 @@ import { useCallback } from "react";
 import { queryKeys } from "../../../api/query-keys.js";
 import { useAuth } from "../../../auth/provider.js";
 
+export function runnerStateLabel(state: Runner["state"]) {
+  if (state === "ready") return "在线";
+  if (state === "busy") return "忙碌";
+  if (state === "draining") return "排空中";
+  return "离线";
+}
+
 export function useRunnerCatalog(enabled = true) {
   const { api } = useAuth();
   const query = useInfiniteQuery({
