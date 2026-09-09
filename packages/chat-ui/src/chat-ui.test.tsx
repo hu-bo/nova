@@ -125,6 +125,70 @@ describe("chat-ui", () => {
     expect(html).toContain('data-component="git-diff-view"');
     expect(html).toContain("+2");
     expect(html).toContain("-1");
+    const text = html.replace(/<[^>]*>/g, "");
+    expect(text).toContain("const oldValue = true");
+    expect(text).toContain("const newValue = true");
+    expect(text).toContain("return newValue");
+    expect(html).toContain('data-line-new-num="19"');
+  });
+
+  it.each([
+    { oldText: "", newText: "first\nsecond\nthird\nfourth\n", added: 4, removed: 0 },
+    { oldText: "first\nsecond\n", newText: "", added: 0, removed: 2 },
+    { oldText: "before", newText: "after", added: 1, removed: 1 },
+  ])("renders approval code lines for +$added/-$removed", ({ oldText, newText, added, removed }) => {
+    const html = renderToStaticMarkup(
+      <DecisionPrompt
+        request={{
+          kind: "approval",
+          decisionId: "edit-approval",
+          toolName: "edit_file",
+          risk: "write",
+          args: { path: "src/repository.ts", oldText, newText },
+          codeChanges: [{ path: "src/repository.ts", oldText, newText }],
+        }}
+        onResolve={() => undefined}
+      />,
+    );
+    const text = html.replace(/<[^>]*>/g, "");
+    for (const line of `${oldText}\n${newText}`.split("\n").filter(Boolean)) {
+      expect(text).toContain(line);
+    }
+    expect(html).toContain(`+${added}`);
+    expect(html).toContain(`-${removed}`);
+    expect(text).toContain("允许执行");
+  });
+
+  it("renders complete patches with separate hunks and original line numbers", () => {
+    const html = renderToStaticMarkup(
+      <BlockView
+        block={{
+          type: "diff",
+          path: "src/a.ts",
+          added: 2,
+          removed: 2,
+          diff: [
+            "diff --git a/src/a.ts b/src/a.ts",
+            "--- a/src/a.ts",
+            "+++ b/src/a.ts",
+            "@@ -2,2 +2,2 @@",
+            " context",
+            "-beforeFirst",
+            "+afterFirst",
+            "@@ -20,1 +20,1 @@",
+            "-beforeLast",
+            "+afterLast",
+            "",
+          ].join("\n"),
+        }}
+      />,
+    );
+    const text = html.replace(/<[^>]*>/g, "");
+    for (const line of ["context", "beforeFirst", "afterFirst", "beforeLast", "afterLast"]) {
+      expect(text).toContain(line);
+    }
+    expect(html).toContain('data-line-new-num="20"');
+    expect(html).not.toContain('data-line-new-num="10"');
   });
 
   it("pairs tool calls and results while hiding todo_write", () => {

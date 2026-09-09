@@ -39,9 +39,9 @@ const initialMessages: ChatMessage[] = [
       {
         type: "diff",
         path: "src/auth/provider.tsx",
-        added: 3,
+        added: 4,
         removed: 1,
-        diff: "@@ -18,1 +18,3 @@\n-const api = createClient(token)\n+const api = useMemo(\n+  () => token ? createClient(token) : null,\n+  [token],\n+)",
+        diff: "@@ -18,1 +18,4 @@\n-const api = createClient(token)\n+const api = useMemo(\n+  () => token ? createClient(token) : null,\n+  [token],\n+)",
       },
       { type: "text", text: "已把客户端生命周期绑定到 token，下一步需要验证登出后的缓存清理。" },
     ],
@@ -143,9 +143,16 @@ function Demo() {
               request={{
                 kind: "approval",
                 decisionId: "demo-approval",
-                toolName: "exec",
-                args: { command: "pnpm typecheck" },
-                risk: "exec",
+                toolName: "edit_file",
+                args: { path: "src/auth/provider.tsx" },
+                risk: "write",
+                codeChanges: [
+                  {
+                    path: "src/auth/provider.tsx",
+                    oldText: "",
+                    newText: "const api = useMemo(\n  () => token ? createClient(token) : null,\n  [token],\n);\n",
+                  },
+                ],
               }}
               resolved={resolved}
               onResolve={(response) => setResolved(response)}

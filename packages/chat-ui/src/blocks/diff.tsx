@@ -1,4 +1,4 @@
-import { DiffModeEnum, DiffView } from "@git-diff-view/react";
+import { DiffFile, DiffModeEnum, DiffView } from "@git-diff-view/react";
 import { FileDiff } from "lucide-react";
 import { useMemo } from "react";
 import { structuredPatch } from "diff";
@@ -24,51 +24,11 @@ export function unifiedPatchOf(change: CodeChange): { diff: string; added: numbe
     }
   }
   const diff = hunks
-    .map((hunk) => [`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`, ...hunk.lines].join("\n"))
+    .map((hunk) =>
+      [`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`, ...hunk.lines].join("\n"),
+    )
     .join("\n");
   return { diff, added, removed };
-}
-
-function patchContents(diff: string): { oldContent: string; newContent: string } {
-  const oldLines: string[] = [];
-  const newLines: string[] = [];
-  let oldLine = 0;
-  let newLine = 0;
-
-  const padTo = (lines: string[], line: number) => {
-    while (lines.length < line - 1) lines.push("");
-  };
-
-  for (const line of diff.split("\n")) {
-    const header = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-    if (header) {
-      oldLine = Number(header[1]);
-      newLine = Number(header[3]);
-      padTo(oldLines, oldLine);
-      padTo(newLines, newLine);
-      continue;
-    }
-    if (line.startsWith("\\")) continue;
-    if (line.startsWith("-")) {
-      padTo(oldLines, oldLine);
-      oldLines[oldLine - 1] = line.slice(1);
-      oldLine += 1;
-    } else if (line.startsWith("+")) {
-      padTo(newLines, newLine);
-      newLines[newLine - 1] = line.slice(1);
-      newLine += 1;
-    } else if (line.startsWith(" ")) {
-      const content = line.slice(1);
-      padTo(oldLines, oldLine);
-      padTo(newLines, newLine);
-      oldLines[oldLine - 1] = content;
-      newLines[newLine - 1] = content;
-      oldLine += 1;
-      newLine += 1;
-    }
-  }
-
-  return { oldContent: oldLines.join("\n"), newContent: newLines.join("\n") };
 }
 
 export function DiffBlock({
@@ -84,7 +44,14 @@ export function DiffBlock({
   removed: number;
   onOpenPath?: ((path: string) => void) | undefined;
 }) {
-  const { oldContent, newContent } = useMemo(() => patchContents(diff), [diff]);
+  const diffFile = useMemo(() => {
+    // The viewer requires file headers even when the protocol supplies only hunks.
+    const patch = diff.startsWith("@@") ? `--- ${path}\n+++ ${path}\n${diff}` : diff;
+    const file = new DiffFile(path, "", path, "", [patch]);
+    file.initRaw();
+    file.buildUnifiedDiffLines();
+    return file;
+  }, [path, diff]);
 
   return (
     <section className="nova-diff-block min-w-0 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-950 dark:ring-slate-800">
@@ -105,11 +72,7 @@ export function DiffBlock({
         </span>
       </header>
       <DiffView
-        data={{
-          oldFile: { fileName: path, content: oldContent },
-          newFile: { fileName: path, content: newContent },
-          hunks: [diff],
-        }}
+        diffFile={diffFile}
         diffViewMode={DiffModeEnum.Unified}
         diffViewHighlight={false}
         diffViewWrap={false}

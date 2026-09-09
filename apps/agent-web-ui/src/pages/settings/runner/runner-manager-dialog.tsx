@@ -199,7 +199,7 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
             />
           ) : (
             <Card className="overflow-hidden">
-              <Table>
+              <Table className="min-w-[640px] [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Runner</TableHead>
@@ -215,36 +215,44 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
                     return (
                       <TableRow key={runner.id}>
                         <TableCell>
-                          <strong className="block text-slate-900">{runner.id}</strong>
-                          <span className="text-xs">
+                          <strong className="block max-w-40 truncate text-slate-900" title={runner.id}>
+                            {runner.id}
+                          </strong>
+                          <span
+                            className="block max-w-40 truncate text-xs"
+                            title={`${runner.platform} · v${runner.version}`}
+                          >
                             {runner.platform} · v{runner.version}
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="w-px whitespace-nowrap">
                           <RunnerStateBadge state={runner.state} running={runner.running} />
                         </TableCell>
                         <TableCell>
-                          <span className="block max-w-64 truncate" title={displayWorkspacePath(runner.rootWorkspace)}>
+                          <span
+                            className="block max-w-48 truncate text-xs"
+                            title={displayWorkspacePath(runner.rootWorkspace)}
+                          >
                             {displayWorkspacePath(runner.rootWorkspace)}
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="w-px whitespace-nowrap">
                           {token ? (
                             <CopyButton
                               value={endpoint ? npxRunnerCommand(endpoint, token.token, runner.id) : null}
-                              label="复制 npx 启动命令"
+                              label="复制命令"
                               compact
                             />
                           ) : (
                             <span className="text-xs text-rose-600">Token 已不可用</span>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-2">
+                        <TableCell className="w-px whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
                             {onSelect &&
                               (selectedRunnerId === runner.id ? (
-                                <Badge variant="primary">
-                                  <Check />
+                                <Badge variant="primary" className="shrink-0 gap-1 whitespace-nowrap px-2 py-0.5">
+                                  <Check className="size-3 shrink-0" />
                                   当前
                                 </Badge>
                               ) : (
@@ -375,8 +383,8 @@ function RunnerStateBadge({ state, running }: { state: Runner["state"]; running:
   const label =
     state === "ready" ? "在线" : state === "busy" ? `忙碌 · ${running}` : state === "draining" ? "排空中" : "离线";
   return (
-    <Badge variant={variant}>
-      <span className="size-1.5 rounded-full bg-current" />
+    <Badge variant={variant} className="shrink-0 gap-1 whitespace-nowrap px-2 py-0.5">
+      <span className="size-1.5 shrink-0 rounded-full bg-current" />
       {label}
     </Badge>
   );
