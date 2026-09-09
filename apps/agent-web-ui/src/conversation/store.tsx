@@ -91,7 +91,7 @@ export function useConversationSession(conversationId: string, enabled = true) {
   });
 
   useEffect(() => {
-    if (history.data) dispatch({ type: "hydrate", messages: history.data.items });
+    if (history.data) dispatch({ type: "hydrate", messages: history.data.items, preserveLiveState: true });
   }, [dispatch, history.data]);
   useEffect(() => {
     if (context.data) dispatch({ type: "context.set", usage: context.data });

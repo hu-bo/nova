@@ -145,6 +145,7 @@ interface ChatMessage {
 
 interface SendMessage {
   text: string;
+  images?: { key: string; name: string }[]; // 最多 4 张；允许 text 为空但必须有图片
   queue?: "steering" | "followUp" | "nextRun"; // 缺省：无运行时新开 run，运行中入 steering
 }
 
@@ -304,6 +305,15 @@ packages/protocol/src/
 ---
 
 ## 7. 版本演进
+
+### 图片附件
+
+上传票据与 UploadedFile 增加 `key`（服务端生成的对象标识）。图片通过 `SendMessage.images` 发送，普通附件继续使用文本链接。新服务端兼容原有纯文本消息。
+
+UI Block 增加 `{ type: "image"; key: string; name: string; mimeType: string; url?: string }`。
+存储不保存图片签名 URL；读取消息时在所有权校验后重新签发 `url`，存储不可用时仍返回图片名称。
+仅接收当前用户上传的 PNG/JPEG/GIF/WebP，单张最多 5 MiB、每条最多 4 张。服务端按字节识别格式，读取失败或模型不支持图片时拒绝发送，不静默降级成链接。
+原有 Markdown 附件不会自动升级；要让模型看见旧附件需重新上传发送。
 
 Phase 2 内不做版本协商。前后端同仓库同步发布。
 

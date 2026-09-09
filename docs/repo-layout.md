@@ -135,6 +135,8 @@ apps/model-gateway-client ──HTTP──► apps/model-gateway   (future manag
 
 ## 4. 模块职责
 
+图片附件由 agent-server 校验上传对象归属、读取字节并转为模型内容；protocol 只传对象标识与展示信息，chat-ui 只渲染图片。agent-core 的 prompt 与三条队列保留多模态内容，不认识对象存储或下载 URL。
+
 每个模块给出：**负责 / 不负责 / 对外 API 面 / 依赖**。
 "对外 API 面"是硬约束，超出的不许 export。
 

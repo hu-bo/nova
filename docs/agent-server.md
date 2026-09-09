@@ -7,6 +7,8 @@
 
 ## 1. 定位
 
+图片消息由 Messages 服务协调：先验证模型能力与上传对象归属，再通过 UploadStorage 有界读取图片，转换为 agent-core 的图片 ContentPart。UI 消息只存对象 key、名称与 MIME，模型会话 Entry 保存图片字节快照。历史查询重新签发预览 URL，URL 不进入模型上下文。MinIO endpoint、port 与 useSSL 必须配置成浏览器可访问的地址；HTTPS 页面应使用 HTTPS 存储端点。
+
 **负责**
 
 - HTTP API + SSE 端点（契约见 `protocol.md`）

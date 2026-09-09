@@ -12,7 +12,10 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-async function buildUploadApp(storage: UploadStorage, runners: RunnerRegistry = createRunnerRegistry()) {
+async function buildUploadApp(
+  storage: Omit<UploadStorage, "readImage" | "imageUrl">,
+  runners: RunnerRegistry = createRunnerRegistry(),
+) {
   const app = Fastify({ logger: false });
   apps.push(app);
   app.setValidatorCompiler(validatorCompiler);
@@ -22,16 +25,29 @@ async function buildUploadApp(storage: UploadStorage, runners: RunnerRegistry = 
   app.addHook("onRequest", async (request) => {
     request.userId = "alice";
   });
-  await uploadRoutes(app, storage, runners);
+  await uploadRoutes(
+    app,
+    {
+      ...storage,
+      readImage: async () => {
+        throw new Error("unused");
+      },
+      imageUrl: async () => {
+        throw new Error("unused");
+      },
+    },
+    runners,
+  );
   await app.ready();
   return app;
 }
 
-const unusedPutFile: UploadStorage["putFile"] = async () => ({ download: "" });
+const unusedPutFile: UploadStorage["putFile"] = async () => ({ key: "uploads/alice/test", download: "" });
 
 describe("upload route", () => {
   it("returns a direct-upload ticket without receiving file bytes", async () => {
     const createUpload = vi.fn(async () => ({
+      key: "uploads/alice/test",
       upload: "http://storage.example.com/file.txt?upload=1",
       download: "http://storage.example.com/file.txt?download=1",
     }));
@@ -46,6 +62,7 @@ describe("upload route", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
+      key: "uploads/alice/test",
       upload: "https://storage.example.com/file.txt?upload=1",
       download: "https://storage.example.com/file.txt?download=1",
     });
@@ -82,11 +99,14 @@ describe("upload route", () => {
   it("reads an owned runner file and stores it without sending bytes through the browser", async () => {
     const data = new TextEncoder().encode("hello");
     const readFile = vi.fn(async () => ({ name: "note.txt", size: data.byteLength, data }));
-    const putFile = vi.fn(async () => ({ download: "http://storage.example.com/note.txt?download=1" }));
+    const putFile = vi.fn(async () => ({
+      key: "uploads/alice/test",
+      download: "http://storage.example.com/note.txt?download=1",
+    }));
     const app = await buildUploadApp(
       {
         ensureBucket: async () => undefined,
-        createUpload: async () => ({ upload: "", download: "" }),
+        createUpload: async () => ({ key: "uploads/alice/test", upload: "", download: "" }),
         putFile,
       },
       { readFile } as unknown as RunnerRegistry,
@@ -101,6 +121,7 @@ describe("upload route", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
+      key: "uploads/alice/test",
       url: "https://storage.example.com/note.txt?download=1",
       name: "note.txt",
       size: 5,
@@ -119,7 +140,7 @@ describe("upload route", () => {
     const app = await buildUploadApp(
       {
         ensureBucket: async () => undefined,
-        createUpload: async () => ({ upload: "", download: "" }),
+        createUpload: async () => ({ key: "uploads/alice/test", upload: "", download: "" }),
         putFile: async () => {
           throw new Error("secret storage failure");
         },

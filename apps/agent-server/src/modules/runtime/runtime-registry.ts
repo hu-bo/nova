@@ -4,11 +4,17 @@ import type { ThinkingLevel } from "@nova/model-adapters";
 import { createLogger } from "@nova/logger";
 import type { EntryRoute } from "../../store.js";
 import { conflict } from "../../errors.js";
+import type { ContentPart } from "@nova/agent-core";
 
 const logger = createLogger("agent-server").child("runtime-registry");
 
 export interface ConversationRuntimes {
-  send(route: EntryRoute, text: string, queue?: QueueName, thinkingLevel?: ThinkingLevel): Promise<void>;
+  send(
+    route: EntryRoute,
+    text: string | ContentPart[],
+    queue?: QueueName,
+    thinkingLevel?: ThinkingLevel,
+  ): Promise<void>;
   abort(conversationId: string): Promise<void>;
   context(route: EntryRoute): Promise<ContextUsage>;
   estimatePrompt(route: EntryRoute, text: string): Promise<TokenEstimate & { model: string }>;

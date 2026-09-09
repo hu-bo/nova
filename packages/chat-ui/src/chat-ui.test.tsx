@@ -16,6 +16,16 @@ import {
 } from "./index.js";
 
 describe("chat-ui", () => {
+  it("renders image attachments with an accessible preview and an unavailable fallback", () => {
+    const block = { type: "image" as const, key: "upload", name: "截图.png", mimeType: "image/png" };
+    const html = renderToStaticMarkup(<BlockView block={{ ...block, url: "https://storage.example/image.png" }} />);
+    expect(html).toContain('alt="截图.png"');
+    expect(html).toContain('src="https://storage.example/image.png"');
+    expect(renderToStaticMarkup(<BlockView block={block} />)).toContain("图片暂不可用");
+    expect(renderToStaticMarkup(<BlockView block={{ ...block, url: "javascript:alert(1)" }} />)).not.toContain(
+      "javascript:",
+    );
+  });
   it("composes the controlled chat surface on one shared content rail", () => {
     const html = renderToStaticMarkup(
       <Chat

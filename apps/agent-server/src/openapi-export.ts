@@ -59,12 +59,22 @@ const app = await buildApp(
       async ensureBucket() {},
       async createUpload() {
         return {
+          key: "uploads/openapi/example.txt",
           upload: "https://storage.example.com/uploads/openapi/example.txt?upload=1",
           download: "https://storage.example.com/uploads/openapi/example.txt?download=1",
         };
       },
       async putFile() {
-        return { download: "https://storage.example.com/uploads/openapi/example.txt?download=1" };
+        return {
+          key: "uploads/openapi/example.txt",
+          download: "https://storage.example.com/uploads/openapi/example.txt?download=1",
+        };
+      },
+      async readImage() {
+        throw new Error("OpenAPI export does not read images");
+      },
+      async imageUrl() {
+        throw new Error("OpenAPI export does not sign images");
       },
     },
   },

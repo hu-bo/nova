@@ -801,6 +801,66 @@ describe("tool batch", () => {
 // —— 队列（§7）——
 
 describe("队列", () => {
+  it("refuses a text-only model when restored context contains an image", async () => {
+    const { stream, requests } = scripted([textEvents("seen")]);
+    const { agent, storage } = setup(stream);
+    await agent.prompt([{ type: "image", mimeType: "image/png", data: "aW1hZ2U=" }]);
+    const restored = createAgent({
+      model: { provider: "gateway", model: "test-model", inputModalities: ["text"] },
+      stream,
+      storage,
+      sessionId: agent.sessionId,
+      tools: [],
+      decide: autoDecide,
+    });
+    const events = recordEvents(restored);
+    const result = await restored.prompt("continue");
+    expect(result.stopReason).toBe("error");
+    expect(result.errorMessage).toContain("上下文包含图片");
+    expect(requests).toHaveLength(1);
+    expect(events).toContainEqual({ type: "error", code: "unsupported_input", message: result.errorMessage });
+    expect(events.at(-1)).toMatchObject({ type: "run.end", stopReason: "error" });
+  });
+  it.each(["steer", "followUp", "nextRun"] as const)(
+    "%s preserves mixed image input through the next request and session reload",
+    async (queue) => {
+      const { stream, requests } = scripted([toolEvents([{ name: "slow" }]), textEvents("ok"), textEvents("next")]);
+      const { agent, storage } = setup(stream, { tools: [localTestTool("slow", { risk: "read" })] });
+      const parts: ContentPart[] = [
+        { type: "text", text: "看这张图" },
+        { type: "image", mimeType: "image/png", data: "aW1hZ2U=" },
+      ];
+      const run = agent.prompt("go");
+      agent[queue](parts);
+      parts[0] = { type: "text", text: "mutated draft" };
+      await run;
+      await waitFor(
+        () =>
+          requests.some((request) =>
+            request.messages.some((message) => message.blocks.some((block) => block.type === "image")),
+          ) && !agent.state.isStreaming,
+      );
+      const withImage = requests.find((request) =>
+        request.messages.some((message) => message.blocks.some((block) => block.type === "image")),
+      )!;
+      expect(
+        withImage.messages.find((message) => message.blocks.some((block) => block.type === "image"))!.blocks,
+      ).toEqual([
+        { type: "text", text: "看这张图" },
+        { type: "image", mimeType: "image/png", data: "aW1hZ2U=" },
+      ]);
+      const restored = setup(stream, { storage, sessionId: agent.sessionId });
+      await restored.agent.prompt("继续");
+      expect(
+        requests
+          .at(-1)!
+          .messages.some((message) =>
+            message.blocks.some((block) => block.type === "image" && block.data === "aW1hZ2U="),
+          ),
+      ).toBe(true);
+      expect(JSON.stringify(await storage.loadRecords(agent.sessionId))).not.toContain("aW1hZ2U=");
+    },
+  );
   it("steering 在 tool batch 完成后（排空点 A）注入当前 run", async () => {
     const { stream, requests } = scripted([toolEvents([{ name: "slow" }]), textEvents("after steer")]);
     const { agent, storage } = setup(stream, { tools: [localTestTool("slow", { risk: "read", durationMs: 40 })] });

@@ -2,6 +2,62 @@ import { describe, expect, it } from "vitest";
 import { conversationReducer, initialConversationState } from "./reducer.js";
 
 describe("conversationReducer", () => {
+  it("merges late history without clearing a live approval, todo plan or completed run", () => {
+    const live = {
+      ...initialConversationState,
+      connection: "open" as const,
+      isRunning: true,
+      todos: [{ id: "todo-1", text: "写入文件", status: "in_progress" as const }],
+      pendingDecision: {
+        kind: "approval" as const,
+        decisionId: "approval-1",
+        toolName: "write_file",
+        risk: "write" as const,
+        args: { path: "large.ts" },
+      },
+      messages: [
+        {
+          id: "live-1",
+          conversationId: "c1",
+          role: "assistant" as const,
+          status: "streaming" as const,
+          blocks: [{ type: "text" as const, text: "等待授权" }],
+          createdAt: 2,
+        },
+      ],
+    };
+    const loaded = conversationReducer(live, { type: "hydrate", messages: [], preserveLiveState: true });
+    expect(loaded).toEqual(live);
+    const ended = { ...live, isRunning: false, pendingDecision: null, queueReady: true };
+    expect(conversationReducer(ended, { type: "hydrate", messages: live.messages, preserveLiveState: true })).toEqual(
+      ended,
+    );
+    // 显式重同步仍按快照重建临时状态。
+    expect(conversationReducer(live, { type: "hydrate", messages: [] }).pendingDecision).toBeNull();
+  });
+
+  it("restores history on first open even when the stream connects before history arrives", () => {
+    const loaded = conversationReducer(
+      { ...initialConversationState, connection: "open" },
+      {
+        type: "hydrate",
+        preserveLiveState: true,
+        messages: [
+          {
+            id: "old-1",
+            conversationId: "c1",
+            role: "assistant",
+            status: "streaming",
+            blocks: [{ type: "todo", items: [{ id: "todo-1", text: "继续任务", status: "in_progress" }] }],
+            createdAt: 1,
+          },
+        ],
+      },
+    );
+    expect(loaded.isRunning).toBe(true);
+    expect(loaded.todos).toEqual([{ id: "todo-1", text: "继续任务", status: "in_progress" }]);
+  });
+
   it("overwrites completed blocks and replaces the current todo plan", () => {
     const started = conversationReducer(initialConversationState, {
       type: "event",

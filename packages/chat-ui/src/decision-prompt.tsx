@@ -78,11 +78,11 @@ export function DecisionPrompt({
     return (
       <Card
         data-kind="approval"
-        className="nova-decision-prompt nova-chat-content nova-approval-prompt min-w-0 overflow-hidden bg-indigo-50/80 text-indigo-950 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-50 dark:ring-indigo-800"
+        className="nova-decision-prompt nova-chat-content nova-approval-prompt max-h-[min(32rem,50dvh)] min-w-0 overflow-hidden bg-indigo-50/80 text-indigo-950 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-50 dark:ring-indigo-800"
         role="region"
         aria-labelledby={`${request.decisionId}-title`}
       >
-        <CardHeader className="flex flex-row items-start gap-3 px-3 py-3">
+        <CardHeader className="flex shrink-0 flex-row items-start gap-3 px-3 py-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/60 dark:text-indigo-300">
             <Zap className="size-5" strokeWidth={2.5} aria-hidden="true" />
           </span>
@@ -96,24 +96,31 @@ export function DecisionPrompt({
             </p>
           </div>
         </CardHeader>
-        {patches.length ? (
-          <div className="mx-3 flex flex-col gap-2">
-            {patches.map((patch, index) => (
-              <DiffBlock
-                key={`${patch.path}-${index}`}
-                path={patch.path}
-                diff={patch.diff}
-                added={patch.added}
-                removed={patch.removed}
-              />
-            ))}
-          </div>
-        ) : (
-          <pre className="nova-scrollbar mx-3 my-0 max-h-56 max-w-[calc(100%-1.5rem)] overflow-x-hidden overflow-y-auto break-words whitespace-pre-wrap rounded-md bg-slate-950 px-2.5 py-2 font-mono text-xs leading-5 text-slate-200">
-            {approvalDetails(request)}
-          </pre>
-        )}
-        <CardFooter className="flex-wrap gap-2 px-3 pb-3 pt-2.5">
+        <div
+          className="nova-approval-details nova-scrollbar mx-3 min-h-0 overflow-auto overscroll-contain"
+          tabIndex={0}
+          role="region"
+          aria-label="操作详情"
+        >
+          {patches.length ? (
+            <div className="flex flex-col gap-2 p-px">
+              {patches.map((patch, index) => (
+                <DiffBlock
+                  key={`${patch.path}-${index}`}
+                  path={patch.path}
+                  diff={patch.diff}
+                  added={patch.added}
+                  removed={patch.removed}
+                />
+              ))}
+            </div>
+          ) : (
+            <pre className="my-0 break-words whitespace-pre-wrap rounded-md bg-slate-950 px-2.5 py-2 font-mono text-xs leading-5 text-slate-200">
+              {approvalDetails(request)}
+            </pre>
+          )}
+        </div>
+        <CardFooter className="shrink-0 flex-wrap gap-2 px-3 pb-3 pt-2.5">
           <Button
             type="button"
             variant="primary"

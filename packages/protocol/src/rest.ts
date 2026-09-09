@@ -205,13 +205,20 @@ export type MessageQuery = z.infer<typeof MessageQuerySchema>;
 
 export const SendMessageSchema = z
   .object({
-    text: z.string().trim().min(1),
+    text: z.string().trim(),
+    images: z
+      .array(z.object({ key: z.string().min(1).max(1024), name: z.string().trim().min(1).max(255) }).strict())
+      .max(4)
+      .optional(),
     queue: z.enum(["steering", "followUp", "nextRun"]).optional(),
     reasoningEffort: z.enum(["off", "low", "medium", "high", "max"]).optional(),
     modelConfig: ModelConfigSchema.optional(),
     modelId: z.uuid().optional(),
   })
   .strict()
+  .refine((value) => value.text.length > 0 || Boolean(value.images?.length), {
+    message: "消息必须包含文字或图片",
+  })
   .refine((value) => !(value.modelConfig && value.modelId), {
     message: "modelConfig and modelId cannot be used together",
   });
@@ -265,6 +272,7 @@ export const CreateUploadSchema = z
 export type CreateUpload = z.infer<typeof CreateUploadSchema>;
 
 export const UploadTicketSchema = z.object({
+  key: z.string().min(1),
   upload: z.url(),
   download: z.url(),
 });
@@ -279,6 +287,7 @@ export const UploadRunnerFileSchema = z
 export type UploadRunnerFile = z.infer<typeof UploadRunnerFileSchema>;
 
 export const UploadedFileSchema = z.object({
+  key: z.string().min(1),
   url: z.url(),
   name: z.string().min(1),
   size: z.number().int().nonnegative(),

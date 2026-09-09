@@ -7,6 +7,8 @@
 
 ## 1. 定位
 
+`image` Block 使用宿主提供的 HTTP(S) URL 渲染缩略图与文件名，点击可打开原图；没有 URL 时显示名称和不可用提示。组件不读取文件、不签名，也不接触模型图片 base64。
+
 **负责**
 
 - Block 渲染器：`text` / `thinking` / `code` / `diff` / `file` / `tool_call` / `tool_result` / `error`
@@ -241,6 +243,9 @@ SSE ──► agent-web-ui 的 reducer ──► ChatMessage[] ──► <Messag
 | 已解决的 Decision 传入 `resolved` 后显示最终选择 | 回看时要知道当时批了什么 |
 | 提交后立即禁用，等待 `onResolve` 返回 | 防重复提交；宿主返回 Promise 即可覆盖 REST 请求全过程，失败后重新启用 |
 | 组件不做超时 | 超时是 agent-core 的策略（`agent-core.md` §6），UI 只反映状态 |
+
+审批卡片按视口限制总高度，标题和操作区不收缩，完整代码差异或参数在中间区域滚动。
+多文件写入共用一个预览滚动区；窄屏、低高度窗口中仍可访问允许、拒绝和取消操作。
 
 ---
 

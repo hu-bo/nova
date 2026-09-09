@@ -21,12 +21,12 @@ export function useProject(projectId: string | undefined) {
   };
 }
 
-export function useConversations(projectId?: string, enabled = true) {
+export function useConversations(projectId?: string) {
   const { api } = useAuth();
   return useQuery({
     queryKey: queryKeys.conversations(projectId),
     queryFn: () => api!.listConversations(projectId),
-    enabled: Boolean(api) && enabled,
+    enabled: Boolean(api),
     staleTime: 5_000,
   });
 }

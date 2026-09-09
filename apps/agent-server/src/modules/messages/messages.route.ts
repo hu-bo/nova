@@ -19,6 +19,7 @@ import type { ConversationRuntimes } from "../runtime/runtime-registry.js";
 import { createMessagesService } from "./messages.service.js";
 import type { ModelConfigStore } from "../model-config/model-config.store.js";
 import type { CredentialCipher } from "../model-config/credential.js";
+import type { UploadStorage } from "../uploads/upload-storage.js";
 
 const IdParams = z.object({ id: z.uuid() });
 const EventHeaders = z.object({ "last-event-id": z.string().optional() });
@@ -30,9 +31,10 @@ export function messageRoutes(
   runtimes: ConversationRuntimes,
   models: ModelConfigStore,
   cipher: CredentialCipher,
+  uploads?: UploadStorage,
 ): void {
   const server = app.withTypeProvider<ZodTypeProvider>();
-  const messages = createMessagesService(store, runtimes, models, cipher);
+  const messages = createMessagesService(store, runtimes, models, cipher, uploads);
 
   server.get(
     "/conversations/:id/messages",

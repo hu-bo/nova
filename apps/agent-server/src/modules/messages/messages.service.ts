@@ -5,12 +5,16 @@ import type { ConversationRuntimes } from "../runtime/runtime-registry.js";
 import type { ModelConfigStore } from "../model-config/model-config.store.js";
 import { resolveCatalogModel } from "../model-config/model-config.store.js";
 import type { CredentialCipher } from "../model-config/credential.js";
+import type { ContentPart } from "@nova/agent-core";
+import type { UploadStorage } from "../uploads/upload-storage.js";
+import { invalidInput, uploadUnavailable } from "../../errors.js";
 
 export function createMessagesService(
   store: AgentStore,
   runtimes: ConversationRuntimes,
   models: ModelConfigStore,
   cipher: CredentialCipher,
+  uploads?: UploadStorage,
 ) {
   const view = (message: MessageRow): ChatMessage => ({
     id: message.id,
@@ -24,12 +28,44 @@ export function createMessagesService(
   return {
     async list(userId: string, conversationId: string, query: { before?: string; limit: number }) {
       const result = await store.listMessages({ userId, conversationId, ...query });
-      return { items: result.items.map(view), nextCursor: result.nextCursor };
+      const items: ChatMessage[] = [];
+      for (const row of result.items) {
+        const message = view(row);
+        message.blocks = await Promise.all(
+          message.blocks.map(async (block) => {
+            if (block.type !== "image") return block;
+            const { url: _url, ...image } = block;
+            try {
+              return { ...image, url: await uploads?.imageUrl(userId, image.key) };
+            } catch {
+              return image;
+            }
+          }),
+        );
+        items.push(message);
+      }
+      return { items, nextCursor: result.nextCursor };
     },
     async send(userId: string, conversationId: string, input: SendMessage) {
       let route = await store.routeConversation(userId, conversationId);
+      const modelConfig =
+        input.modelConfig ??
+        (input.modelId
+          ? await resolveCatalogModel(models, cipher, userId, input.modelId)
+          : route.conversation.modelConfig);
+      const blocks: ChatMessage["blocks"] = input.text ? [{ type: "text", text: input.text }] : [];
+      const content: ContentPart[] = input.text ? [{ type: "text", text: input.text }] : [];
+      if (input.images?.length) {
+        if (!modelConfig.inputModalities.includes("image"))
+          throw invalidInput("当前模型不支持图片，请选择支持图片的模型");
+        if (!uploads) throw uploadUnavailable();
+        for (const image of input.images) {
+          const resolved = await uploads.readImage(userId, image.key);
+          content.push({ type: "image", ...resolved });
+          blocks.push({ type: "image", key: image.key, name: image.name, mimeType: resolved.mimeType });
+        }
+      }
       if (input.modelConfig || input.modelId) {
-        const modelConfig = input.modelConfig ?? (await resolveCatalogModel(models, cipher, userId, input.modelId!));
         await store.updateConversationModel({ userId, id: conversationId, modelConfig });
         runtimes.invalidate(conversationId);
         route = await store.routeConversation(userId, conversationId);
@@ -38,14 +74,18 @@ export function createMessagesService(
         id: randomUUID(),
         conversationId,
         role: "user",
-        blocks: [{ type: "text", text: input.text }],
+        blocks,
         status: "done",
         createdAt: new Date(),
       });
       if (route.conversation.title === "New conversation") {
-        await store.setConversationTitleIfUntitled({ userId, id: conversationId, title: titleFromMessage(input.text) });
+        await store.setConversationTitleIfUntitled({
+          userId,
+          id: conversationId,
+          title: titleFromMessage(input.text || input.images?.[0]?.name || ""),
+        });
       }
-      await runtimes.send(route, input.text, input.queue, input.reasoningEffort);
+      await runtimes.send(route, input.images?.length ? content : input.text, input.queue, input.reasoningEffort);
     },
     async abort(userId: string, conversationId: string) {
       await store.routeConversation(userId, conversationId);

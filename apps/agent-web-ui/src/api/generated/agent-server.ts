@@ -28,6 +28,15 @@ export type BlockInput = {
   type: 'text';
   text: string;
 } | {
+  type: 'image';
+  /** @minLength 1 */
+  key: string;
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  mimeType: string;
+  url?: string;
+} | {
   type: 'thinking';
   text: string;
 } | {
@@ -95,6 +104,15 @@ export type BlockInput = {
 export type Block = {
   type: 'text';
   text: string;
+} | {
+  type: 'image';
+  /** @minLength 1 */
+  key: string;
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  mimeType: string;
+  url?: string;
 } | {
   type: 'thinking';
   text: string;
@@ -2052,6 +2070,19 @@ export type ListMessages404 = {
   requestId?: string;
 };
 
+export type SendMessageBodyImagesItem = {
+  /**
+     * @minLength 1
+     * @maxLength 1024
+     */
+  key: string;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+};
+
 export type SendMessageBodyQueue = typeof SendMessageBodyQueue[keyof typeof SendMessageBodyQueue];
 
 
@@ -2135,8 +2166,9 @@ export type SendMessageBodyModelConfig = {
 };
 
 export type SendMessageBody = {
-  /** @minLength 1 */
   text: string;
+  /** @maxItems 4 */
+  images?: SendMessageBodyImagesItem[];
   queue?: SendMessageBodyQueue;
   reasoningEffort?: SendMessageBodyReasoningEffort;
   modelConfig?: SendMessageBodyModelConfig;
@@ -2429,6 +2461,8 @@ export type CreateUploadBody = {
 };
 
 export type CreateUpload200 = {
+  /** @minLength 1 */
+  key: string;
   upload: string;
   download: string;
 };
@@ -2465,6 +2499,8 @@ export type UploadRunnerFileBody = {
 };
 
 export type UploadRunnerFile200 = {
+  /** @minLength 1 */
+  key: string;
   url: string;
   /** @minLength 1 */
   name: string;

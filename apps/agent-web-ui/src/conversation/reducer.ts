@@ -19,7 +19,7 @@ export interface ConversationState {
 }
 
 export type ConversationAction =
-  | { type: "hydrate"; messages: ChatMessage[] }
+  | { type: "hydrate"; messages: ChatMessage[]; preserveLiveState?: boolean }
   | { type: "connection"; connection: ConversationState["connection"] }
   | { type: "context.set"; usage: ContextUsage }
   | { type: "event"; event: UiEvent; conversationId: string }
@@ -49,6 +49,8 @@ export function conversationReducer(state: ConversationState, action: Conversati
   switch (action.type) {
     case "hydrate": {
       const messages = mergeHydratedMessages(action.messages, state.messages);
+      if (action.preserveLiveState && state.connection !== "closed" && state.messages.length > 0)
+        return { ...state, messages };
       return {
         ...state,
         messages,

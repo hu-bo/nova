@@ -7,6 +7,14 @@ afterEach(() => {
 });
 
 describe("attachment upload client", () => {
+  it("sends image object references through the generated message client", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response("null", { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("localStorage", { getItem: vi.fn(() => "nova-token") });
+    const body = { text: "", images: [{ key: "uploads/alice/image.png", name: "截图.png" }] };
+    await createApiClient({ accessToken: "nova-token" }).sendMessage("conversation", body);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body))).toEqual(body);
+  });
   it("keeps the selected-workspace error visible to the user", () => {
     expect(
       errorMessage(new ApiClientError(409, "RUNNER_UNAVAILABLE", "Runner cannot access the selected workspace")),
@@ -19,6 +27,7 @@ describe("attachment upload client", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
+            key: "uploads/alice/file.txt",
             upload: "https://storage.example.com/file.txt?upload=1",
             download: "https://storage.example.com/file.txt?download=1",
           }),
@@ -35,6 +44,7 @@ describe("attachment upload client", () => {
     const uploaded = await createApiClient({ accessToken: "nova-token" }).uploadFile(file);
 
     expect(uploaded).toEqual({
+      key: "uploads/alice/file.txt",
       url: "https://storage.example.com/file.txt?download=1",
       name: "file.txt",
       size: 5,
@@ -59,6 +69,7 @@ describe("attachment upload client", () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
       new Response(
         JSON.stringify({
+          key: "uploads/alice/source.ts",
           url: "https://storage.example.com/source.ts?download=1",
           name: "source.ts",
           size: 42,
@@ -76,6 +87,7 @@ describe("attachment upload client", () => {
     });
 
     expect(uploaded).toEqual({
+      key: "uploads/alice/source.ts",
       url: "https://storage.example.com/source.ts?download=1",
       name: "source.ts",
       size: 42,

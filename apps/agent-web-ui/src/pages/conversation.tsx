@@ -23,7 +23,7 @@ const SELECTED_REASONING_STORE = new LocalStore("nova_selected_reasoning_effort"
 export function ConversationRoute() {
   const { projectId, conversationId } = useParams();
   const location = useLocation();
-  const conversations = useConversations(projectId, conversationId !== "new");
+  const conversations = useConversations(projectId);
   const projectQuery = useProject(projectId);
   const isDraft = conversationId === "new";
 
@@ -67,7 +67,12 @@ export function ConversationRoute() {
       />
     );
   }
-  if (conversations.isLoading)
+  const conversation = conversations.data?.items.find((item) => item.id === conversationId);
+  if (conversation)
+    return <ConversationView key={conversationId} conversation={conversation} project={projectQuery.project} />;
+
+  // 列表只是分页视图：“还没取到”不等于“会话不存在”，要等这一次取数落定再判定。
+  if (conversations.isPending || conversations.isFetching)
     return (
       <div className="p-6 lg:p-8">
         <LoadingState label="正在打开会话" />
@@ -79,15 +84,11 @@ export function ConversationRoute() {
         <ErrorState message={errorMessage(conversations.error)} onRetry={() => void conversations.refetch()} />
       </div>
     );
-  const conversation = conversations.data?.items.find((item) => item.id === conversationId);
-  if (!conversation)
-    return (
-      <div className="p-6 lg:p-8">
-        <ErrorState title="会话不存在" message="它可能已被删除、超出当前列表范围，或你没有访问权限。" />
-      </div>
-    );
-
-  return <ConversationView key={conversationId} conversation={conversation} project={projectQuery.project} />;
+  return (
+    <div className="p-6 lg:p-8">
+      <ErrorState title="会话不存在" message="它可能已被删除、超出当前列表范围，或你没有访问权限。" />
+    </div>
+  );
 }
 
 function ConversationView({
@@ -222,13 +223,13 @@ function ConversationView({
     [models.profiles],
   );
 
-  if (session.isLoading)
+  if (session.isLoading && store.state.messages.length === 0)
     return (
       <div className="p-6">
         <LoadingState label="正在同步历史消息" />
       </div>
     );
-  if (session.historyError)
+  if (session.historyError && store.state.messages.length === 0)
     return (
       <div className="p-6">
         <ErrorState message={errorMessage(session.historyError)} onRetry={session.retryHistory} />
@@ -244,6 +245,12 @@ function ConversationView({
   }
 
   const feedback: ChatFeedback[] = [];
+  if (session.historyError)
+    feedback.push({
+      id: "history",
+      message: `历史消息同步失败：${errorMessage(session.historyError)}`,
+      tone: "warning",
+    });
   if (store.state.error)
     feedback.push({ id: "conversation", message: store.state.error, tone: "error", dismissible: true });
   if (mutations.sendMutation.error)
@@ -325,7 +332,11 @@ function ConversationView({
             todos: store.state.todos,
             queuedMessages: store.state.queuedMessages.map(({ message }) => ({
               id: message.id,
-              text: message.blocks.find((block) => block.type === "text")?.text ?? "待处理消息",
+              text:
+                message.blocks
+                  .map((block) => (block.type === "text" ? block.text : block.type === "image" ? block.name : ""))
+                  .filter(Boolean)
+                  .join("\n") || "待处理消息",
               isSteering:
                 mutations.steerMutation.isPending && mutations.steerMutation.variables?.message.id === message.id,
             })),

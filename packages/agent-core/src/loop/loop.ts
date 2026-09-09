@@ -19,7 +19,7 @@ import type {
 import type { Entry, EntryParts } from "../session/entry.js";
 import type { RecordParts } from "../session/record.js";
 import type { SessionStorage } from "../session/storage.js";
-import { toContextMessages } from "../session/tree.js";
+import { toContextMessages, toMessages } from "../session/tree.js";
 import type { Queues } from "../queue/queues.js";
 import { renderTodoInjection } from "../context/todo.js";
 import { compactionTarget, maxInputTokens, shouldCompact } from "../context/budget.js";
@@ -97,6 +97,23 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
     // turn 边界：此刻历史是完整的（最后一条是 user message），abort 可以安全退出
     if (host.signal().aborted) return finish(host, "aborted", lastAssistant);
 
+    const modalities = host.modelRef().inputModalities;
+    if (
+      modalities &&
+      !modalities.includes("image") &&
+      toMessages(host.view()).some((message) =>
+        message.blocks.some(
+          (block) =>
+            block.type === "image" ||
+            (block.type === "tool_result" && block.content.some((part) => part.type === "image")),
+        ),
+      )
+    ) {
+      const message = "当前上下文包含图片，请选择支持图片的模型或清空上下文";
+      host.streaming({ errorMessage: message });
+      host.emit({ type: "error", code: "unsupported_input", message });
+      return finish(host, "error", lastAssistant, message);
+    }
     await compactToBudget(host, host.signal());
 
     const model = host.modelRef().model;
@@ -143,7 +160,7 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
         // §7 排空点 B：阻止 run 结束，续跑
         await host.append({
           kind: "message",
-          message: newMessage("user", [{ type: "text", text: host.queues.drain("followUp").join("\n\n") }]),
+          message: newMessage("user", host.queues.drain("followUp")),
         });
         continue;
       }
@@ -201,7 +218,7 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
       // §7 排空点 A：tool batch 完成后注入当前 run
       await host.append({
         kind: "message",
-        message: newMessage("user", [{ type: "text", text: host.queues.drain("steering").join("\n\n") }]),
+        message: newMessage("user", host.queues.drain("steering")),
       });
     }
 

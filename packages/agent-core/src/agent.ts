@@ -309,7 +309,13 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
       runController = new AbortController();
       runUsage = { input: 0, output: 0 };
       state.errorMessage = null;
-      await rec({ kind: "run-started", input: typeof input === "string" ? input : "[multimodal input]" });
+      await rec({
+        kind: "run-started",
+        input:
+          typeof input === "string"
+            ? input
+            : input.map((part) => (part.type === "text" ? part.text : "[image]")).join(""),
+      });
       const run = runTurnLoop(host, input).finally(() => {
         busy = false;
         activeRun = null;
@@ -339,7 +345,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
       // §7 nextRun：当前 run 结束后触发一个新的独立 run
       const queued = queues.drain("nextRun");
       if (queued.length > 0) {
-        void prompt(queued.join("\n\n")).catch((error) => {
+        void prompt(queued).catch((error) => {
           emit({ type: "error", code: "run_failed", message: error instanceof Error ? error.message : String(error) });
         });
       }

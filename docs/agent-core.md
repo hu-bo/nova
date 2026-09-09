@@ -1,5 +1,7 @@
 # agent-core
 
+图片输入：`prompt`、`steer`、`followUp`、`nextRun` 均接受 `string | ContentPart[]`。队列合并保持文本与图片顺序；消息 Entry 保存图片 base64，使后续轮次和会话恢复不依赖外部 URL。queue-enqueued Record 仅记录文本摘要，不重复保存图片字节。
+
 > `packages/agent-core` — 决策层。
 > 结构契约见 `repo-layout.md` §4.1，本文档定义 **API 面与字段**。
 
@@ -63,9 +65,9 @@ createAgent(config: AgentConfig): Agent
 interface Agent {
   prompt(input: string | ContentPart[]): Promise<RunResult>
 
-  steer(msg: string): void        // 运行中插话，当前 tool batch 跑完后注入
-  followUp(msg: string): void     // agent 准备停下时注入，让它继续
-  nextRun(msg: string): void      // 排到下一个独立 run
+  steer(msg: string | ContentPart[]): void        // 运行中插话，当前 tool batch 跑完后注入
+  followUp(msg: string | ContentPart[]): void     // agent 准备停下时注入，让它继续
+  nextRun(msg: string | ContentPart[]): void      // 排到下一个独立 run
 
   abort(): Promise<void>
   compact(opts?: { instruction?: string }): Promise<CompactionResult>
@@ -558,7 +560,7 @@ type ApprovalPolicy = { default: "auto" | "ask" | "deny"; byRisk?: Partial<Recor
 
 ## 7. 三条队列
 
-**这是消息缓冲，不是调度器。** 元素是用户输入的 `string`，出队条件只看 turn 边界，
+**这是消息缓冲，不是调度器。** 元素是用户输入的文本或 `ContentPart[]`，出队条件只看 turn 边界，
 没有并发、没有依赖、没有重试。
 
 > 与 `taskflow` 的 ready queue **无依赖、无冲突，只是同名**：那边元素是 `Task`，

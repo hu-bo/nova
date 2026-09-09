@@ -18,13 +18,13 @@ export function createUploadService(storage: UploadStorage, runners: RunnerRegis
       const file = await runners.readFile(userId, runnerId, path, MAX_RUNNER_UPLOAD_SIZE);
       const mimeType = mimeTypeFor(file.name);
       try {
-        const { download } = await storage.putFile({
+        const { key, download } = await storage.putFile({
           userId,
           filename: file.name,
           data: file.data,
           mimeType,
         });
-        return { url: download, name: file.name, size: file.size, mimeType };
+        return { key, url: download, name: file.name, size: file.size, mimeType };
       } catch {
         throw uploadUnavailable();
       }

@@ -11,6 +11,7 @@ export interface Todo {
 
 export type Block =
   | { type: "text"; text: string }
+  | { type: "image"; key: string; name: string; mimeType: string; url?: string | undefined }
   | { type: "thinking"; text: string }
   | { type: "code"; language: string; code: string; path?: string | undefined; startLine?: number | undefined }
   | { type: "diff"; path: string; diff: string; added: number; removed: number }
@@ -32,6 +33,13 @@ export const TodoSchema: z.ZodType<Todo> = z.object({
 export const BlockSchema: z.ZodType<Block> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z.object({ type: z.literal("text"), text: z.string() }),
+    z.object({
+      type: z.literal("image"),
+      key: z.string().min(1),
+      name: z.string().min(1),
+      mimeType: z.string().min(1),
+      url: z.url().optional(),
+    }),
     z.object({ type: z.literal("thinking"), text: z.string() }),
     z.object({
       type: z.literal("code"),
@@ -57,7 +65,7 @@ export const BlockSchema: z.ZodType<Block> = z.lazy(() =>
       type: z.literal("tool_call"),
       callId: z.string().min(1),
       name: z.string().min(1),
-      args: z.unknown().refine(value => value !== undefined, "args is required"),
+      args: z.unknown().refine((value) => value !== undefined, "args is required"),
       status: ToolStatusSchema,
     }),
     z.object({

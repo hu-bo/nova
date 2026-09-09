@@ -2,13 +2,14 @@ import type { ComposerSubmission } from "@nova/chat-ui";
 import type { ChatMessage, DecisionResponse } from "@nova/protocol";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
-import { ApiClientError, errorMessage } from "../api/client.js";
+import { ApiClientError, errorMessage, type ApiClient } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAuth } from "../auth/provider.js";
 import { useModelSettings } from "../pages/settings/model/provider.js";
 import { createUuid } from "../lib/uuid.js";
 import { useConversationStore } from "./store.js";
 import type { QueuedMessage } from "./reducer.js";
+import { messageContent, validateImageAttachments } from "./message-content.js";
 
 export interface RunnerAttachmentMetadata {
   runnerId: string;
@@ -38,7 +39,9 @@ export function useConversationMutations(options: ConversationMutationOptions) {
   const queryClient = useQueryClient();
   const { state, dispatch } = useConversationStore(stateId);
   const activeConversationId = useRef(conversationId);
-  const pendingCreatedConversation = useRef<{ id: string; projectId: string | null } | undefined>(undefined);
+  const pendingCreatedConversation = useRef<Awaited<ReturnType<ApiClient["createConversation"]>> | undefined>(
+    undefined,
+  );
 
   const refreshLists = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists, refetchType: "none" });
@@ -48,20 +51,24 @@ export function useConversationMutations(options: ConversationMutationOptions) {
     mutationFn: async ({
       submission,
       retryId,
+      existingImages = [],
     }: {
       submission: ComposerSubmission<RunnerAttachmentMetadata>;
       retryId?: string;
+      existingImages?: Extract<ChatMessage["blocks"][number], { type: "image" }>[];
     }) => {
       const model = models.modelSelection(modelProfileId);
       if (!model) throw new Error("当前模型不可用，请选择其他模型或补充 API Key");
+      const supportsImages = models.profiles.find((profile) => profile.id === modelProfileId)?.supportsImages ?? false;
+      validateImageAttachments(
+        submission.files.map((file) => ({ name: file.name, mimeType: file.type, size: file.size })),
+        supportsImages,
+      );
       const uploads = await Promise.all([
         ...submission.files.map((file) => api!.uploadFile(file)),
         ...submission.attachments.map((attachment) => api!.uploadRunnerFile(attachment.metadata)),
       ]);
-      const attachmentText = uploads
-        .map((file) => `[附件：${file.name.replaceAll("[", "\\[").replaceAll("]", "\\]")}](${file.url})`)
-        .join("\n");
-      const text = [submission.text, attachmentText].filter(Boolean).join("\n\n");
+      const { blocks, ...content } = messageContent(submission.text, [...uploads, ...existingImages], supportsImages);
       let targetConversationId = activeConversationId.current;
       let createdConversation = pendingCreatedConversation.current;
       if (!targetConversationId) {
@@ -74,15 +81,11 @@ export function useConversationMutations(options: ConversationMutationOptions) {
         targetConversationId = createdConversation.id;
         activeConversationId.current = targetConversationId;
         pendingCreatedConversation.current = createdConversation;
-        void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists });
       }
       const wasRunning = state.isRunning;
       const messageId = retryId ?? createUuid();
-      // reasoningEffort is a UI-only selection for now. The message API does
-      // not accept a per-request reasoningEffort field; sending it makes the
-      // strict server schema reject an otherwise valid message.
       const request = {
-        text,
+        ...content,
         ...model,
         ...(isReasoningEffort(reasoningEffort) ? { reasoningEffort } : {}),
       };
@@ -93,7 +96,7 @@ export function useConversationMutations(options: ConversationMutationOptions) {
           id: messageId,
           conversationId: targetConversationId,
           role: "user",
-          blocks: [{ type: "text", text }],
+          blocks,
           status: "done",
           createdAt: Date.now(),
         };
@@ -116,7 +119,20 @@ export function useConversationMutations(options: ConversationMutationOptions) {
     onSuccess: async (result) => {
       const createdConversation = result?.createdConversation;
       if (createdConversation) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists });
+        // 先终止旧列表请求，避免它在导航前后覆盖刚创建的会话。
+        await queryClient.cancelQueries({ queryKey: queryKeys.conversationLists });
+        const listKeys = [queryKeys.conversations()];
+        if (createdConversation.projectId) listKeys.push(queryKeys.conversations(createdConversation.projectId));
+        for (const queryKey of listKeys) {
+          queryClient.setQueryData<Awaited<ReturnType<ApiClient["listConversations"]>>>(queryKey, (current) => ({
+            items: [
+              createdConversation,
+              ...(current?.items.filter((item) => item.id !== createdConversation.id) ?? []),
+            ],
+            nextCursor: current?.nextCursor ?? null,
+          }));
+        }
+        refreshLists();
         pendingCreatedConversation.current = undefined;
         draft?.onCreated(createdConversation);
         return;
@@ -216,10 +232,16 @@ export function useConversationMutations(options: ConversationMutationOptions) {
               .slice(0, index)
               .reverse()
               .find((item) => item.role === "user");
-      const text = source?.blocks.find((block) => block.type === "text")?.text;
-      if (!text) return Promise.reject(new Error("找不到可重试的消息内容"));
+      const text =
+        source?.blocks
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("\n\n") ?? "";
+      const existingImages = source?.blocks.filter((block) => block.type === "image") ?? [];
+      if (!text && !existingImages.length) return Promise.reject(new Error("找不到可重试的消息内容"));
       return sendMutation.mutateAsync({
         submission: { text, files: [], attachments: [] },
+        existingImages,
         ...(source?.id === messageId ? { retryId: messageId } : {}),
       });
     },

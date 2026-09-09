@@ -127,6 +127,7 @@ export async function registerApp(app: FastifyInstance, dependencies: AppDepende
         dependencies.runtimes,
         dependencies.modelConfigStore,
         dependencies.credentialCipher,
+        dependencies.uploadStorage,
       );
       decisionRoutes(api, dependencies.decisions);
       if (dependencies.uploadStorage) await uploadRoutes(api, dependencies.uploadStorage, dependencies.runners);

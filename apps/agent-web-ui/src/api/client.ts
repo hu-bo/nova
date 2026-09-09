@@ -63,7 +63,7 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
     listAvailableModels,
     uploadFile: async (file: File) => {
       const mimeType = file.type || "application/octet-stream";
-      const { upload, download } = await createUpload({ name: file.name });
+      const { key, upload, download } = await createUpload({ name: file.name });
       let response: Response;
       try {
         response = await fetch(upload, { method: "PUT", headers: { "Content-Type": mimeType }, body: file });
@@ -77,7 +77,7 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
           response.status === 403 ? "上传凭证已失效，请重试" : `附件上传失败（${response.status}）`,
         );
       }
-      return { url: download, name: file.name, size: file.size, mimeType };
+      return { key, url: download, name: file.name, size: file.size, mimeType };
     },
     uploadRunnerFile,
     deleteRunner,
@@ -94,9 +94,10 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
     },
     listMessages: (conversationId: string) => listMessages(conversationId, { limit: 100 }),
     sendMessage: (conversationId: string, input: SendMessage) => {
-      const { queue, reasoningEffort, modelConfig, modelId, ...required } = input;
+      const { queue, reasoningEffort, modelConfig, modelId, images, ...required } = input;
       return sendMessage(conversationId, {
         ...required,
+        ...(images === undefined ? {} : { images }),
         ...(queue === undefined ? {} : { queue }),
         ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
         ...(modelConfig === undefined ? {} : { modelConfig: modelConfigBody(modelConfig) }),
