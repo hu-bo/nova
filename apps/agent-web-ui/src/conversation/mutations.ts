@@ -7,7 +7,7 @@ import { queryKeys } from "../api/query-keys.js";
 import { useAuth } from "../auth/provider.js";
 import { useModelSettings } from "../pages/settings/model/provider.js";
 import { createUuid } from "../lib/uuid.js";
-import { useConversationStore } from "./store.js";
+import { conversationStore, useConversationStore } from "./store.js";
 import type { QueuedMessage } from "./reducer.js";
 import { messageContent, validateImageAttachments } from "./message-content.js";
 
@@ -27,6 +27,7 @@ interface ConversationMutationOptions {
   draft?: {
     projectId?: string;
     runnerId?: string;
+    onPersisted: (conversationId: string) => void;
     onCreated: (conversation: { id: string; projectId: string | null }) => void;
   };
 }
@@ -89,8 +90,9 @@ export function useConversationMutations(options: ConversationMutationOptions) {
         ...model,
         ...(isReasoningEffort(reasoningEffort) ? { reasoningEffort } : {}),
       };
+      // 创建后只用正式 id 写入消息，与 SSE 共用同一份状态。
       if (retryId) {
-        dispatch({ type: "optimistic.retry", messageId });
+        conversationStore.dispatch(targetConversationId, { type: "optimistic.retry", messageId });
       } else {
         const message: ChatMessage = {
           id: messageId,
@@ -101,18 +103,24 @@ export function useConversationMutations(options: ConversationMutationOptions) {
           createdAt: Date.now(),
         };
         if (wasRunning) {
-          dispatch({ type: "optimistic.queue", queued: { message, request } });
+          conversationStore.dispatch(targetConversationId, { type: "optimistic.queue", queued: { message, request } });
           return;
         }
-        dispatch({ type: "optimistic.add", message });
+        conversationStore.dispatch(targetConversationId, { type: "optimistic.add", message });
       }
+      if (createdConversation) draft?.onPersisted(targetConversationId);
       try {
         await ensureStreamConnected(targetConversationId);
         await api!.sendMessage(targetConversationId, request);
         return { createdConversation };
       } catch (error) {
+        conversationStore.dispatch(targetConversationId, {
+          type: "optimistic.fail",
+          messageId,
+          keepRunning: wasRunning,
+          message: errorMessage(error),
+        });
         if (!conversationId) releaseStream(targetConversationId);
-        dispatch({ type: "optimistic.fail", messageId, keepRunning: wasRunning, message: errorMessage(error) });
         throw error;
       }
     },

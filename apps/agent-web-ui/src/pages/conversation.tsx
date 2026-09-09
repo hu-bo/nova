@@ -69,7 +69,13 @@ export function ConversationRoute() {
   }
   const conversation = conversations.data?.items.find((item) => item.id === conversationId);
   if (conversation)
-    return <ConversationView key={conversationId} conversation={conversation} project={projectQuery.project} />;
+    return (
+      <ConversationView
+        key={location.state?.conversationViewKey ?? conversationId}
+        conversation={conversation}
+        project={projectQuery.project}
+      />
+    );
 
   // 列表只是分页视图：“还没取到”不等于“会话不存在”，要等这一次取数落定再判定。
   if (conversations.isPending || conversations.isFetching)
@@ -107,6 +113,10 @@ function ConversationView({
 }) {
   const models = useModelSettings();
   const navigate = useNavigate();
+  const [persistedId, setPersistedId] = useState<string | undefined>(
+    conversation.isDraft ? undefined : conversation.id,
+  );
+  const stateId = persistedId ?? conversation.id;
   const [storedProfileId, setStoredProfileId] = useState(() => SELECTED_MODEL_STORE.get());
   const [storedReasoning, setStoredReasoning] = useState(() => SELECTED_REASONING_STORE.get());
   // 存储的模型可能已被删除或不在当前用户的服务端目录里，此时回落到默认值
@@ -118,8 +128,8 @@ function ConversationView({
   const [compactNotice, setCompactNotice] = useState<string | null>(null);
   const [clearNotice, setClearNotice] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<ComposerAttachment<RunnerAttachmentMetadata>[]>([]);
-  const session = useConversationSession(conversation.id, !conversation.isDraft);
-  const store = useConversationStore(conversation.id);
+  const session = useConversationSession(stateId, Boolean(persistedId));
+  const store = useConversationStore(stateId);
   const runnerId = conversation.runnerId ?? project?.runnerId ?? "";
   const selectedProfile = models.profiles.find((profile) => profile.id === modelProfileId);
   const reasoningEfforts = useMemo<{ value: string; label: string }[]>(
@@ -136,7 +146,7 @@ function ConversationView({
     : (reasoningEfforts[0]?.value ?? "");
   const mutations = useConversationMutations({
     ...(conversation.isDraft ? {} : { conversationId: conversation.id }),
-    stateId: conversation.id,
+    stateId,
     modelProfileId,
     ensureStreamConnected: session.ensureStreamConnected,
     releaseStream: session.releaseStream,
@@ -146,9 +156,11 @@ function ConversationView({
           draft: {
             ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
             ...(runnerId ? { runnerId } : {}),
+            onPersisted: setPersistedId,
             onCreated: (created: { id: string; projectId: string | null }) =>
               navigate(created.projectId ? `/p/${created.projectId}/c/${created.id}` : `/c/${created.id}`, {
                 replace: true,
+                state: { conversationViewKey: conversation.id },
               }),
           },
         }

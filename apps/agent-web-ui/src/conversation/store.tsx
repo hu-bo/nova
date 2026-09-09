@@ -75,10 +75,15 @@ export function useConversationSession(conversationId: string, enabled = true) {
   const { api } = useAuth();
   const queryClient = useQueryClient();
   const { dispatch } = useConversationStore(conversationId);
+  // 本页发起的会话已经拥有完整的本地消息；导航不需要再用历史快照重建它。
+  const needsHistory = useMemo(
+    () => enabled && conversationStore.state(conversationId).messages.length === 0,
+    [conversationId, enabled],
+  );
   const history = useQuery({
     queryKey: queryKeys.messages(conversationId),
     queryFn: () => api!.listMessages(conversationId),
-    enabled: Boolean(api) && enabled,
+    enabled: Boolean(api) && needsHistory,
     refetchOnWindowFocus: false,
     retry: 1,
   });
