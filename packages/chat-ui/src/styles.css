@@ -134,6 +134,16 @@
   transform: translateY(-1px) translateZ(0);
 }
 
+/* Growing the draft must stay inside the layout engine. Measuring it from JavaScript on every
+   keystroke dirties style and then reads `scrollHeight`, which forces a synchronous reflow whose
+   cost scales with the draft length. Once capped, the box scrolls instead of growing. */
+@supports (field-sizing: content) {
+  .nova-chat .nova-composer-textarea {
+    field-sizing: content;
+    overflow-y: auto;
+  }
+}
+
 .nova-chat .nova-composer-input-row {
   position: relative;
   border-color: transparent;

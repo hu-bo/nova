@@ -137,6 +137,12 @@ type BlockRenderers = Record<string, BlockRenderer>
 模型与推理强度是受控选择：选项和当前值由宿主传入，变更通过回调上抛；没有选项时
 不渲染对应控件。这样模型能力、默认值和持久化仍只有宿主一个 owner。
 
+输入框高度自适应优先交给 CSS `field-sizing: content`（`.nova-composer-textarea`），由布局引擎在
+排版阶段完成，按键不产生 JS 测量。不支持该属性的浏览器在 `useLayoutEffect` 中测量：已进入滚动
+状态且内容仍超过高度上限时，保持现有高度，不写样式；其他情况先恢复自动高度再测量，使删除、
+替换文本和提交清空后都能正常收缩。固定高度下的 `scrollHeight` 包含当前可视高度，不能用它与
+上次高度相等来判断内容高度未变。
+
 Skill 候选同样由宿主提供，`chat-ui` 不读取 Skill 注册表，也不执行 Skill。Composer 只在
 草稿以 `/` 开头时按 command / label 过滤并展示候选；正文中途出现 `/` 不触发。选择候选后
 清空该命令草稿并调用 `onSkillInvoke`，网络请求、运行中禁用规则和错误反馈仍由宿主负责。

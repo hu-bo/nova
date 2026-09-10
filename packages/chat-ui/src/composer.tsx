@@ -9,6 +9,16 @@ import type { ComposerProps, ComposerSkill, ComposerSubmission } from "./compose
 import { Textarea } from "./components/ui/textarea.js";
 import { UploadCover } from "./upload-cover.js";
 
+/**
+ * `field-sizing: content` grows the textarea in the layout engine, so the composer needs no
+ * JavaScript measurement. Only engines without it pay for the resize effect below, which has to
+ * read `scrollHeight` and therefore forces a synchronous layout.
+ */
+const autoGrowIsNative =
+  typeof window !== "undefined" &&
+  typeof window.CSS?.supports === "function" &&
+  window.CSS.supports("field-sizing", "content");
+
 export function Composer<TMetadata = unknown>({
   disabled = false,
   isRunning = false,
@@ -38,6 +48,7 @@ export function Composer<TMetadata = unknown>({
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
   const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const maxHeightRef = useRef<number | null>(null);
   const skillListId = useId();
   const locked = disabled || submitting || invokingSkill;
   const matchingSkills = skillMenuDismissed ? [] : matchComposerSkills(text, skills);
@@ -45,14 +56,26 @@ export function Composer<TMetadata = unknown>({
   const hasDraft = Boolean(text.trim() || files.length || attachments.length);
   const canSubmit = !locked && hasDraft;
 
+  // Fallback for engines without `field-sizing: content`.
   useLayoutEffect(() => {
+    if (autoGrowIsNative) return;
     const textarea = textareaRef.current;
     if (!textarea) return;
 
+    if (maxHeightRef.current === null) {
+      maxHeightRef.current = Number.parseFloat(getComputedStyle(textarea).maxHeight) || Number.POSITIVE_INFINITY;
+    }
+    const maxHeight = maxHeightRef.current;
+
+    // While capped and still overflowing, keep the box and scroll position without style writes.
+    if (textarea.style.overflowY === "auto" && textarea.scrollHeight > maxHeight) return;
+
+    // A fixed box floors scrollHeight at clientHeight, so reset before measuring shrinkage.
+    textarea.style.overflowY = "hidden";
     textarea.style.height = "auto";
-    const maxHeight = Number.parseFloat(getComputedStyle(textarea).maxHeight);
-    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    const contentHeight = textarea.scrollHeight;
+    textarea.style.height = `${Math.min(contentHeight, maxHeight)}px`;
+    textarea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
   }, [text]);
 
   function clearDraft() {
@@ -163,7 +186,7 @@ export function Composer<TMetadata = unknown>({
                 onPaste={allowFiles ? onPaste : undefined}
                 rows={2}
                 placeholder={placeholder}
-                className="min-h-16 max-h-[204px] resize-none overflow-y-hidden border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
+                className="nova-composer-textarea nova-scrollbar min-h-16 max-h-[204px] resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
                 aria-expanded={matchingSkills.length > 0}
                 aria-controls={matchingSkills.length > 0 ? skillListId : undefined}
                 aria-activedescendant={selectedSkill ? `${skillListId}-${selectedSkill.id}` : undefined}
