@@ -24,7 +24,7 @@ services:
     command:
       - /bin/sh
       - -c
-      - npm run db:migrate && node dist/server.js
+      - node dist/server.js
     init: true
     restart: unless-stopped
 networks:
