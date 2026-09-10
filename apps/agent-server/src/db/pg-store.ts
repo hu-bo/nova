@@ -21,7 +21,7 @@ export interface PgStore {
   store: AgentStore;
   db: ReturnType<typeof drizzle>;
   client: ReturnType<typeof postgres>;
-  checkConnection(): Promise<void>;
+  checkReady(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -409,8 +409,19 @@ export function createPgStore(databaseUrl: string): PgStore {
     store,
     db,
     client,
-    async checkConnection() {
+    async checkReady() {
       await client`SELECT 1`;
+      // Validate required columns as well as table visibility before recovery starts.
+      try {
+        await db.select().from(runs).limit(0);
+      } catch (error) {
+        throw new Error(
+          "Run storage is not ready. Apply database migrations (db:migrate) before starting agent-server.",
+          {
+            cause: error,
+          },
+        );
+      }
     },
     close: () => client.end(),
   };

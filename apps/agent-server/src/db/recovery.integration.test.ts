@@ -71,6 +71,23 @@ describe.skipIf(!url)("PostgreSQL durable runs", () => {
     };
   }
 
+  it("rejects missing or incomplete run storage before recovery can start", async () => {
+    const schema = `startup_test_${randomUUID().replaceAll("-", "")}`;
+    await database.client.unsafe(`CREATE SCHEMA ${schema}`);
+    const isolatedUrl = new URL(url!);
+    isolatedUrl.searchParams.set("options", `-c search_path=${schema}`);
+    const isolated = createPgStore(isolatedUrl.toString());
+    try {
+      await expect(isolated.checkReady()).rejects.toThrow("Apply database migrations");
+      await database.client.unsafe(`CREATE TABLE ${schema}.runs (conversation_id uuid)`);
+      await expect(isolated.checkReady()).rejects.toThrow("Apply database migrations");
+      await database.checkReady();
+    } finally {
+      await isolated.close();
+      await database.client.unsafe(`DROP SCHEMA ${schema} CASCADE`);
+    }
+  });
+
   it("commits drafts and rejects stale writes atomically", async () => {
     const { id, storage } = await setup();
     const checkpoint = cp();

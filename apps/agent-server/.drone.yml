@@ -48,6 +48,7 @@ steps:
       - pnpm -w install --no-frozen-lockfile --filter "$APP_NAME..."
       - pnpm --filter "$APP_NAME" run typecheck
       - pnpm --filter "$APP_NAME" run build
+      - test -f drizzle/meta/_journal.json
       - pnpm deploy --filter "$APP_NAME" --node-linker=hoisted "$APP_DEPLOY_DIR" --prod=false
       - cp -R dist "$APP_DEPLOY_DIR/dist"
       - cp -R drizzle "$APP_DEPLOY_DIR/drizzle"
@@ -112,6 +113,7 @@ steps:
       port: 22
       command_timeout: 2m
       script:
+        - set -eu
         - APP_NAME=agent-server
         - APP_DIR=/data/app/$APP_NAME
         - PID_FILE=$APP_DIR/app.pid
@@ -122,6 +124,8 @@ steps:
         - tar xzf /temp/app/$APP_NAME.tar.gz -C $APP_DIR
         - rm -f /temp/app/$APP_NAME.tar.gz
         - cd $APP_DIR
+        # 使用服务相同的 .env 和网络；迁移失败禁止启动新版本。
+        - docker compose run --rm --no-deps agent-server node node_modules/drizzle-kit/bin.cjs migrate --config=drizzle.config.ts
         - docker compose up -d --force-recreate
         - docker compose ps
         - sleep 2

@@ -34,11 +34,11 @@ const uploadStorage = createMinioUploadStorage({
   bucket: config.MINIO_BUCKET,
 });
 try {
-  await database.checkConnection();
+  await database.checkReady();
 } catch (error) {
   await database.close();
-  logger.fatal({ err: error, component: "server" }, "database connection failed during startup");
-  throw new Error(`Unable to connect to PostgreSQL. Check DATABASE_URL and ensure PostgreSQL is running.`, {
+  logger.fatal({ err: error, component: "server" }, "database startup checks failed");
+  throw new Error(`PostgreSQL is not ready. Check DATABASE_URL and apply database migrations before startup.`, {
     cause: error,
   });
 }

@@ -39,6 +39,13 @@ pnpm proto:generate
 checkpoint，历史 Entry / Record 保留。SQL 和 Drizzle 生成的 meta 一同进入版本控制，
 使新检出的工作区能执行相同迁移；meta 只通过生成器更新，不手工编辑。
 
+Drone 部署在启动服务前，通过同一个 Compose 服务配置运行
+`docker compose run --rm --no-deps agent-server node node_modules/drizzle-kit/bin.cjs migrate --config=drizzle.config.ts`。
+迁移与服务使用相同的 `.env` 和网络；迁移失败立即终止部署。服务启动先验证连接与
+`runs` 表结构，再启动 Runner 监听和恢复扫描，避免缺表时持续刷错误日志。
+已有部署遇到 `relation "runs" does not exist` 时，在 `/data/app/agent-server` 执行上述
+迁移命令，成功后执行 `docker compose up -d --force-recreate agent-server`。
+
 数据库恢复测试使用单独的 `NOVA_TEST_DATABASE_URL`，必须指向已迁移的临时数据库，
 不会回退读取应用 DATABASE_URL 或 .env。运行：
 `pnpm --filter @nova/agent-server exec vitest run src/db/recovery.integration.test.ts`。

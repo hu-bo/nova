@@ -9,7 +9,6 @@ output/
 !.env.example
 
 apps/agent-server/logs/
-apps/agent-server/drizzle/meta/
 target/
 
 *.log
