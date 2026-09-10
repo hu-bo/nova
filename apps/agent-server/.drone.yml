@@ -118,7 +118,7 @@ steps:
             set -eu
             mkdir -p logs
             status=0
-            node node_modules/drizzle-kit/bin.cjs push --config=drizzle.config.ts --strict=false > logs/schema-sync.log 2>&1 || status=$?
+            node node_modules/drizzle-kit/bin.cjs push --config=drizzle.config.ts > logs/schema-sync.log 2>&1 || status=$?
             cat logs/schema-sync.log
             if [ "$status" -ne 0 ]; then exit "$status"; fi
             # Drizzle Kit 0.31 may return zero after an error or an aborted prompt.

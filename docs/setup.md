@@ -53,13 +53,15 @@ Drone 构建从配置中心拉取 `.env`，显式复制到部署包根目录；�
 Drone 在启动服务前通过同一个 Compose 服务配置执行：
 
 ```sh
-docker compose run --rm --no-deps -T agent-server node node_modules/drizzle-kit/bin.cjs push --config=drizzle.config.ts --strict=false
+docker compose run --rm --no-deps -T agent-server node node_modules/drizzle-kit/bin.cjs push --config=drizzle.config.ts
 ```
 
 输出保存在宿主机 `/data/app/agent-server/logs/schema-sync.log` 并回显到 Drone。
 当前 Drizzle Kit 某些失败路径返回零退出码，因此流水线同时要求日志明确报告
 `Changes applied` 或 `No changes detected`，否则禁止启动新版本。
 同步成功后执行 `docker compose up -d --force-recreate agent-server`。
+如果在 CI 遇到每次确认导致的 TTY 错误，检查部署目录中的 `drizzle.config.ts` 是否
+仍为 `strict: true`，应更新为 `false`；当前版本的 CLI `--strict=false` 无法覆盖文件中的 `true`。
 服务启动仍校验数据库连接及 `runs` 表结构，失败时不启动恢复扫描或监听端口。
 
 历史 SQL、meta 和 `db:migrate` 命令保留供明确采用迁移历史的环境使用；当前部署
