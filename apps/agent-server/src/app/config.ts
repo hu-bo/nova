@@ -1,6 +1,5 @@
 import fastifyEnv from "@fastify/env";
 import type { FastifyInstance } from "fastify";
-import { fileURLToPath } from "node:url";
 
 const configSchema = {
   type: "object",
@@ -50,7 +49,7 @@ export async function loadConfig(app: FastifyInstance, data: NodeJS.ProcessEnv =
   await app.register(fastifyEnv, {
     schema: configSchema,
     data,
-    dotenv: data === process.env ? { path: fileURLToPath(new URL("../../.env", import.meta.url)) } : false,
+    dotenv: data === process.env,
   });
   const config = app.getEnvs<EnvironmentConfig>();
   const advertisedHost =

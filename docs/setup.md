@@ -39,6 +39,13 @@ pnpm proto:generate
 checkpoint，历史 Entry / Record 保留。SQL 和 Drizzle 生成的 meta 一同进入版本控制，
 使新检出的工作区能执行相同迁移；meta 只通过生成器更新，不手工编辑。
 
+Drone 构建从配置中心拉取 `.env`，显式复制到部署包根目录；打包前和服务器解包后
+都检查文件非空。宿主机部署目录 `/data/app/agent-server` 整体挂载到容器的
+`/app/agent-server`，其中包含 `.env`，无需单独挂载；Compose 同时通过 `env_file`
+注入环境变量。服务从当前工作目录
+加载 `.env`，本地通过应用的 pnpm 脚本启动，容器通过 `working_dir` 保持相同约定，
+避免打包改变源码相对路径后找不到配置文件。
+
 Drone 部署在启动服务前，通过同一个 Compose 服务配置运行
 `docker compose run --rm --no-deps agent-server node node_modules/drizzle-kit/bin.cjs migrate --config=drizzle.config.ts`。
 迁移与服务使用相同的 `.env` 和网络；迁移失败立即终止部署。服务启动先验证连接与

@@ -55,6 +55,7 @@ steps:
       - cp drizzle.config.ts "$APP_DEPLOY_DIR/drizzle.config.ts"
       - cp docker-compose.yml "$APP_DEPLOY_DIR/docker-compose.yml"
       - cp .env "$APP_DEPLOY_DIR/.env"
+      - test -s "$APP_DEPLOY_DIR/.env"
       - tar -czf /drone/src/$APP_NAME.tar.gz -C $APP_DEPLOY_DIR .
 
   - name: rebuild-pnpm-cache
@@ -110,8 +111,9 @@ steps:
         - tar xzf /temp/app/$APP_NAME.tar.gz -C $APP_DIR
         - rm -f /temp/app/$APP_NAME.tar.gz
         - cd $APP_DIR
+        - test -s .env
         # 使用服务相同的 .env 和网络；迁移失败禁止启动新版本。
-        - docker compose run --rm --no-deps agent-server
+        - docker compose run --rm --no-deps agent-server node node_modules/drizzle-kit/bin.cjs migrate --config=drizzle.config.ts
         - docker compose up -d --force-recreate
         - docker compose ps
         - sleep 2
