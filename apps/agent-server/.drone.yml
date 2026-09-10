@@ -113,7 +113,15 @@ steps:
         - cd $APP_DIR
         - test -s .env
         # 使用服务相同的 .env 和网络；迁移失败禁止启动新版本。
-        - docker compose run --rm --no-deps agent-server node node_modules/drizzle-kit/bin.cjs migrate --config=drizzle.config.ts
+        - |
+          docker compose run --rm --no-deps -T agent-server /bin/sh -c '
+            set -eu
+            mkdir -p logs
+            status=0
+            node dist/migrate.js > logs/migrate.log 2>&1 || status=$?
+            cat logs/migrate.log
+            exit "$status"
+          '
         - docker compose up -d --force-recreate
         - docker compose ps
         - sleep 2

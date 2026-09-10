@@ -549,6 +549,10 @@ Runner Module 依赖 Runner SDK，反向依赖禁止。它不拥有第二套传�
 
 ### 4.9 `apps/agent-server`
 
+数据库迁移入口为 `src/db/migrate.ts`，独立于服务启动运行，复用 Drizzle ORM
+的迁移执行器及现有 SQL / journal。该入口负责连接生命周期、迁移错误输出与
+退出码，不自行维护迁移记录或重写迁移算法。
+
 Control Plane / Host / **Composition Root**。
 
 **负责**

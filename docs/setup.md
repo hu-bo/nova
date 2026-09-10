@@ -47,9 +47,17 @@ Drone 构建从配置中心拉取 `.env`，显式复制到部署包根目录；�
 避免打包改变源码相对路径后找不到配置文件。
 
 Drone 部署在启动服务前，通过同一个 Compose 服务配置运行
-`docker compose run --rm --no-deps agent-server node node_modules/drizzle-kit/bin.cjs migrate --config=drizzle.config.ts`。
+`docker compose run --rm --no-deps -T agent-server node dist/migrate.js`。
+本地 `db:migrate` 与部署使用同一个 `src/db/migrate.ts` 入口，读取环境变量
+`DATABASE_URL`，直接调用 Drizzle ORM migrator，沿用 `drizzle/` 下的 SQL、journal
+及数据库中的 `drizzle.__drizzle_migrations`。当前 Drizzle Kit 进度条在迁移失败时
+直接退出而不打印异常，因此迁移入口自行打印错误及其 cause（含 PostgreSQL 错误码），
+关闭连接后以非零状态退出。不要删除迁移记录来消除 already exists 的 NOTICE。
 迁移与服务使用相同的 `.env` 和网络；迁移失败立即终止部署。服务启动先验证连接与
 `runs` 表结构，再启动 Runner 监听和恢复扫描，避免缺表时持续刷错误日志。
+流水线迁移关闭 TTY，将标准输出和错误先写入容器 `logs/migrate.log`，再回显到 Drone，
+并保留迁移退出码。失败后可在宿主机 `/data/app/agent-server/logs/migrate.log`
+查看本次完整日志；后续重新部署会替换部署目录，排查时应先保留该日志。
 已有部署遇到 `relation "runs" does not exist` 时，在 `/data/app/agent-server` 执行上述
 迁移命令，成功后执行 `docker compose up -d --force-recreate agent-server`。
 
