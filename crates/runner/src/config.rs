@@ -124,7 +124,7 @@ impl Config {
         let default_timeout_ms = args
             .default_timeout_ms
             .or(file.default_timeout_ms)
-            .unwrap_or(120_000);
+            .unwrap_or(12_000);
 
         Ok(Config {
             server,
