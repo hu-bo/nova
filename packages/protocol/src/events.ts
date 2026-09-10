@@ -1,9 +1,11 @@
+import { RunStateSchema } from "./rest.js";
 import { z } from "zod";
 import { BlockSchema, TodoSchema, type Block, type Todo } from "./block.js";
 import { DecisionRequestSchema, type DecisionRequest } from "./decision.js";
 import { MessageStatusSchema, type ChatMessage } from "./rest.js";
 
 export type UiEvent =
+  | { type: "run.state"; state: import("./rest.js").RunState }
   | { type: "message.start"; messageId: string; role: "assistant" }
   | { type: "block.start"; messageId: string; index: number; block: Block }
   | { type: "block.delta"; messageId: string; index: number; delta: string }
@@ -19,6 +21,7 @@ export type UiEvent =
   | { type: "error"; code: string; message: string };
 
 export const UiEventSchema: z.ZodType<UiEvent> = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("run.state"), state: RunStateSchema }),
   z.object({ type: z.literal("message.start"), messageId: z.string(), role: z.literal("assistant") }),
   z.object({
     type: z.literal("block.start"),

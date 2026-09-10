@@ -1,15 +1,28 @@
 // §5.1 Record —— 运行事实流：不进模型上下文，供 resume / 排障 / 计费 / 审计。
-import type { DecisionRequest, DecisionResponse, QueueName, StopReason, Todo, Usage } from "../types.js";
+import type { DecisionRequest, DecisionResponse, QueueName, StopReason, Todo, Usage, ContentPart } from "../types.js";
 import type { CompactionTrigger } from "../context/compaction.js";
 
 export type Record = { id: string; runId: string; ts: number } & (
-  | { kind: "run-started"; input: string }
+  | { kind: "run-started"; input: string; requestId?: string }
   | { kind: "turn-started"; turn: number; model: string }
   | { kind: "tool-started"; callId: string; name: string; args: unknown }
-  | { kind: "tool-finished"; callId: string; status: "ok" | "error"; durationMs: number }
+  | {
+      kind: "tool-finished";
+      callId: string;
+      status: "ok" | "error";
+      durationMs: number;
+      content?: ContentPart[];
+      details?: unknown;
+      outcomeKnown?: boolean;
+      executed?: boolean;
+      terminate?: boolean;
+      usage?: Usage;
+    }
+  | { kind: "run-resumed"; attempt: number }
+  | { kind: "run-paused"; reason: string }
   | { kind: "decision-requested"; decisionId: string; request: DecisionRequest }
   | { kind: "decision-resolved"; decisionId: string; response: DecisionResponse | "timeout" }
-  | { kind: "queue-enqueued"; queue: QueueName; message: string }
+  | { kind: "queue-enqueued"; queue: QueueName; message: string; requestId?: string }
   | { kind: "todo-updated"; items: Todo[] }
   | { kind: "usage"; model: string; usage: Usage; estimatedInput?: number }
   | { kind: "context-compacted"; trigger: CompactionTrigger; summarized: boolean }

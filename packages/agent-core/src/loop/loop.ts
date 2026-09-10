@@ -34,7 +34,14 @@ import type { AgentHooks } from "./hooks.js";
 import type { ApprovalOutcome } from "../decision/decision.js";
 import { toolParameters } from "../tool-schema.js";
 
+import type { RunCheckpoint } from "../session/checkpoint.js";
+
 export interface LoopHost {
+  checkpoint(): RunCheckpoint | null;
+  saveCheckpoint(patch: Partial<RunCheckpoint>): Promise<void>;
+  pauseReason(): string | null;
+  pauseRun(reason: string): void;
+  modelTimeoutMs: number;
   // —— 只读配置 ——
   storage: SessionStorage;
   sessionId: string;
@@ -52,7 +59,7 @@ export interface LoopHost {
   runId(): string;
   signal(): AbortSignal;
   view(): Entry[];
-  append(parts: EntryParts): Promise<Entry>;
+  append(parts: EntryParts, patch?: Partial<RunCheckpoint>): Promise<Entry>;
   applyCompaction(plan: CompactionPlan): Promise<void>;
   modelRef(): ModelRef;
   contextWindow(): number;
@@ -86,14 +93,31 @@ export function newMessage(role: "user" | "assistant", blocks: Block[]): Message
   return { id: newMessageId(), role, blocks, createdAt: Date.now() };
 }
 
-export async function runTurnLoop(host: LoopHost, input: string | ContentPart[]): Promise<RunResult> {
-  await host.append({
-    kind: "message",
-    message: newMessage("user", typeof input === "string" ? [{ type: "text", text: input }] : input),
-  });
+export async function runTurnLoop(host: LoopHost, input?: string | ContentPart[], resume = false): Promise<RunResult> {
+  if (input !== undefined)
+    await host.append({
+      kind: "message",
+      message: newMessage("user", typeof input === "string" ? [{ type: "text", text: input }] : input),
+    });
 
   let lastAssistant: Message | null = null;
-  for (let turn = 0; turn < host.maxTurns; turn += 1) {
+  const resumedMessage = resume
+    ? [...host.view()].reverse().find((e) => e.kind === "message" && e.message.role === "assistant")
+    : undefined;
+  let pending =
+    host.checkpoint()?.phase === "tools" && resumedMessage?.kind === "message" ? resumedMessage.message : null;
+  if (resume && host.checkpoint()?.phase === "finish") {
+    if (host.queues.nonEmpty("followUp")) {
+      await host.append({ kind: "message", message: newMessage("user", host.queues.drain("followUp")) });
+    } else {
+      return finish(
+        host,
+        host.checkpoint()?.completion ?? "done",
+        resumedMessage?.kind === "message" ? resumedMessage.message : null,
+      );
+    }
+  }
+  for (let turn = Math.max(0, (host.checkpoint()?.turns ?? 0) - (pending ? 1 : 0)); turn < host.maxTurns; turn += 1) {
     // turn 边界：此刻历史是完整的（最后一条是 user message），abort 可以安全退出
     if (host.signal().aborted) return finish(host, "aborted", lastAssistant);
 
@@ -116,25 +140,35 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
     }
     await compactToBudget(host, host.signal());
 
-    const model = host.modelRef().model;
-    await host.rec({ kind: "turn-started", turn, model });
+    let streamed: StreamedTurn;
+    if (pending) {
+      streamed = { message: pending, usage: null, finish: "tool_use" };
+      pending = null;
+    } else {
+      const model = host.modelRef().model;
+      await host.rec({ kind: "turn-started", turn, model });
 
-    const request = assembleRequest(host);
-    const estimatedInput = host.tokenEstimator.estimateRequest(request).tokens;
-    const streamed = await streamTurn(host, request);
-    if (streamed.usage) {
-      host.addUsage(streamed.usage);
-      host.setLastUsage(streamed.usage, estimatedInput);
-      await host.rec({ kind: "usage", model, usage: streamed.usage, estimatedInput });
+      const request = assembleRequest(host);
+      const estimatedInput = host.tokenEstimator.estimateRequest(request).tokens;
+      streamed = await streamTurn(host, request);
+      if (streamed.usage) {
+        host.addUsage(streamed.usage);
+        host.setLastUsage(streamed.usage, estimatedInput);
+        await host.rec({ kind: "usage", model, usage: streamed.usage, estimatedInput });
+      }
+
+      if (streamed.finish === "error" && streamed.errorCode === "context_overflow") {
+        const compacted = await compactNow(host, "overflow", host.signal());
+        if (compacted.replacedFrom !== null) continue;
+      }
+
+      if (host.pauseReason()) return finish(host, "paused", streamed.message);
+      await host.append(
+        { kind: "message", message: streamed.message },
+        { completion: streamed.finish === "stop" || streamed.finish === "tool_use" ? "done" : streamed.finish },
+      );
     }
-
-    if (streamed.finish === "error" && streamed.errorCode === "context_overflow") {
-      const compacted = await compactNow(host, "overflow", host.signal());
-      if (compacted.replacedFrom !== null) continue;
-    }
-
     lastAssistant = streamed.message;
-    await host.append({ kind: "message", message: streamed.message });
 
     if (streamed.finish === "error") {
       const message = streamed.errorMessage ?? "model stream failed";
@@ -169,34 +203,20 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
 
     // 即使已 abort 也要走 batch：收敛出 error 结果，保证每个 tool_call 都有对应 tool_result
     const outcomes = await runBatch(host, toolCalls);
-    await host.append({
-      kind: "message",
-      message: newMessage(
-        "user",
-        outcomes.map((outcome): Block => ({
-          type: "tool_result",
-          callId: outcome.callId,
-          status: outcome.status,
-          content: outcome.content,
-        })),
-      ),
-    });
-    host.streaming({ pendingToolCalls: [] });
-
-    // tool 结果携带的 usage（如 sub-agent，§10 token 预算记父账）计入本 run
-    for (const outcome of outcomes) if (outcome.usage) host.addUsage(outcome.usage);
-
-    // A disconnected Runner invalidates the session captured by this Agent.
-    // Do not feed the same failed tool call back to the model: it would keep
-    // issuing work against the dead session until maxTurns, and replaying a
-    // write/exec operation could duplicate side effects. The next user retry
-    // creates a runtime with the newly connected Runner session.
     const runnerUnavailable = outcomes.some(isRunnerUnavailableOutcome);
-    if (runnerUnavailable) {
-      const message = "Runner connection lost; the tool call was not completed. Retry after the Runner reconnects.";
-      host.streaming({ errorMessage: message });
-      host.emit({ type: "error", code: "RUNNER_UNAVAILABLE", message });
-      return finish(host, "error", lastAssistant, message);
+    if (runnerUnavailable) host.pauseRun("outcome_unknown");
+    if (host.pauseReason()) {
+      const message =
+        host.pauseReason() === "outcome_unknown"
+          ? runnerUnavailable
+            ? "Runner connection lost; the tool result is unknown. Verify the actual state before repeating the operation."
+            : "Tool execution result is unknown. Verify the actual state before repeating the operation."
+          : undefined;
+      if (message) {
+        host.streaming({ errorMessage: message });
+        host.emit({ type: "error", code: runnerUnavailable ? "RUNNER_UNAVAILABLE" : "outcome_unknown", message });
+      }
+      return finish(host, "paused", lastAssistant, message);
     }
 
     // §9.4 todo_write 是 TodoState 唯一写入点
@@ -205,25 +225,44 @@ export async function runTurnLoop(host: LoopHost, input: string | ContentPart[])
       .find((outcome) => outcome.name === "todo_write" && outcome.status === "ok");
     const todoItems = todoOutcome ? parseTodos(todoOutcome.details) : null;
     if (todoItems) await host.updateTodos(todoItems);
-
-    if (host.signal().aborted || streamed.finish === "aborted") return finish(host, "aborted", lastAssistant);
-
     const submitted = [...outcomes]
       .reverse()
       .find((outcome) => outcome.name === "submit_result" && outcome.status === "ok");
     const output = submitted ? parseSubmittedResult(submitted.details) : null;
+    const terminate = !!output || outcomes.every((outcome) => outcome.terminate);
+    await host.append(
+      {
+        kind: "message",
+        message: newMessage(
+          "user",
+          outcomes.map((outcome): Block => ({
+            type: "tool_result",
+            callId: outcome.callId,
+            status: outcome.status,
+            content: outcome.content,
+          })),
+        ),
+      },
+      terminate ? { phase: "finish", completion: "terminate" } : {},
+    );
+    host.streaming({ pendingToolCalls: [] });
+
+    if (host.signal().aborted || streamed.finish === "aborted") return finish(host, "aborted", lastAssistant);
     if (output) return finish(host, "terminate", lastAssistant, undefined, output);
 
     if (host.queues.nonEmpty("steering")) {
       // §7 排空点 A：tool batch 完成后注入当前 run
-      await host.append({
-        kind: "message",
-        message: newMessage("user", host.queues.drain("steering")),
-      });
+      await host.append(
+        {
+          kind: "message",
+          message: newMessage("user", host.queues.drain("steering")),
+        },
+        terminate ? { phase: "finish", completion: "terminate" } : {},
+      );
     }
 
     // §4.2：只有 batch 内每个结果都置 terminate 才提前结束
-    if (outcomes.every((outcome) => outcome.terminate)) return finish(host, "terminate", lastAssistant);
+    if (terminate) return finish(host, "terminate", lastAssistant);
     if (host.hooks?.shouldStopAfterTurn?.()) return finish(host, "done", lastAssistant);
 
     const change = host.hooks?.prepareNextTurn?.();
@@ -240,6 +279,7 @@ async function finish(
   errorMessage?: string,
   output?: AgentTaskResult,
 ): Promise<RunResult> {
+  if (host.pauseReason()) stopReason = host.pauseReason() === "deadline_exceeded" ? "error" : "paused";
   await host.rec({ kind: "run-finished", stopReason });
   host.streaming({ isStreaming: false, streamingMessage: null, pendingToolCalls: [] });
   const usage = host.runUsage();
@@ -307,24 +347,58 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
 
   const blocks: Block[] = [];
   const openText = new Map<number, string>();
+  const openTypes = new Map<number, "text" | "thinking">();
   const repetitionCheckpoints = new Map<number, number>();
   let usage: Usage | null = null;
   let finishReason: StreamedTurn["finish"] = "stop";
+  let sawFinish = false;
   let errorMessage: string | undefined;
   let errorCode: "context_overflow" | undefined;
 
+  const controller = new AbortController();
+  const signal = AbortSignal.any([host.signal(), controller.signal]);
+  const timeout = setTimeout(() => controller.abort(new Error("Model request deadline exceeded")), host.modelTimeoutMs);
+  const iterator = host.stream(request, signal)[Symbol.asyncIterator]();
+  let lastSaved = Date.now();
+  let dirtyBytes = 0;
+  const snapshot = () => {
+    const draft = [...blocks];
+    for (const [index, text] of openText) draft[index] = { type: openTypes.get(index) ?? "text", text };
+    return { ...message, blocks: draft.filter(Boolean) };
+  };
   try {
-    for await (const event of host.stream(request, host.signal())) {
+    let next = iterator.next();
+    for (;;) {
+      const item = await nextOrTick(next, signal);
+      if (dirtyBytes && (Date.now() - lastSaved >= 1000 || dirtyBytes >= 4096)) {
+        await host.saveCheckpoint({ draft: snapshot() });
+        lastSaved = Date.now();
+        dirtyBytes = 0;
+      }
+      if (!item) continue;
+      if (item.done) {
+        if (!sawFinish) {
+          finishReason = "error";
+          errorMessage = "Model stream ended without a finish event";
+        }
+        break;
+      }
+      const event = item.value;
+      next = iterator.next();
       if (event.type === "block.start") {
-        if (event.blockType === "text") openText.set(event.index, "");
+        if (event.blockType === "text" || event.blockType === "thinking") {
+          openText.set(event.index, "");
+          openTypes.set(event.index, event.blockType);
+        }
         host.emit({ type: "block.start", messageId, index: event.index, blockType: event.blockType });
       } else if (event.type === "block.delta") {
+        dirtyBytes += event.delta.length;
         const text = openText.get(event.index);
         if (text !== undefined) {
           const next = text + event.delta;
           openText.set(event.index, next);
           const checkpoint = repetitionCheckpoints.get(event.index) ?? 0;
-          if (next.length - checkpoint >= 128 && hasRepeatedTail(next)) {
+          if (openTypes.get(event.index) === "text" && next.length - checkpoint >= 128 && hasRepeatedTail(next)) {
             const block: Block = { type: "text", text: next };
             blocks[event.index] = block;
             host.emit({ type: "block.delta", messageId, index: event.index, delta: event.delta });
@@ -342,18 +416,25 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
         host.emit({ type: "block.end", messageId, index: event.index, block: event.block });
       } else if (event.type === "usage") usage = event.usage;
       else {
+        sawFinish = true;
         finishReason = event.stopReason;
         errorMessage = event.errorMessage;
         errorCode = event.errorCode;
       }
     }
   } catch (error) {
+    if (host.signal().aborted) finishReason = "aborted";
+    else finishReason = "error";
     // §3.3 契约是 StreamFn 不得 throw；实现违约时防御性兜底，不炸掉事件序列
-    finishReason = "error";
     errorMessage = error instanceof Error ? error.message : String(error);
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
+    void iterator.return?.().catch(() => undefined);
   }
 
-  message.blocks = blocks.filter(Boolean);
+  message.blocks = snapshot().blocks;
+  await host.saveCheckpoint({ draft: message });
   host.emit({
     type: "message.end",
     messageId,
@@ -368,7 +449,7 @@ async function streamTurn(host: LoopHost, request: ModelRequest): Promise<Stream
               ? "repetition_detected"
               : "done",
   });
-  host.streaming({ isStreaming: false, streamingMessage: null });
+  host.streaming({ streamingMessage: null });
   return {
     message,
     usage,
@@ -390,9 +471,38 @@ function hasRepeatedTail(text: string): boolean {
 
 async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutcome[]> {
   const signal = host.signal();
+  const facts = await host.storage.loadRecords(host.sessionId, { runId: host.runId() });
+  const completed = new Map(
+    facts
+      .filter((r) => r.kind === "tool-finished" && r.content !== undefined && r.outcomeKnown !== false)
+      .map((r) => [r.kind === "tool-finished" ? r.callId : "", r]),
+  );
+  const started = new Set(
+    facts.filter((r) => r.kind === "tool-started").map((r) => (r.kind === "tool-started" ? r.callId : "")),
+  );
+  if (toolCalls.some((c) => started.has(c.callId) && !completed.has(c.callId))) {
+    host.pauseRun("outcome_unknown");
+    return [];
+  }
+  const remaining = toolCalls.filter((c) => !completed.has(c.callId));
+  for (const call of remaining) {
+    const matching = facts.filter(
+      (r) => r.kind === "tool-started" && r.name === call.name && stableJson(r.args) === stableJson(call.args),
+    );
+    if (matching.length >= 3) {
+      const results = matching.map((r) => (r.kind === "tool-started" ? completed.get(r.callId) : undefined));
+      if (
+        results.every((r) => r?.kind === "tool-finished") &&
+        new Set(results.map((r) => (r?.kind === "tool-finished" ? stableJson([r.status, r.content]) : ""))).size === 1
+      ) {
+        host.pauseRun("no_progress");
+        return [];
+      }
+    }
+  }
   const startedAt = new Map<string, number>();
   host.streaming({ pendingToolCalls: toolCalls });
-  return runToolBatch(toolCalls, {
+  const outcomes = await runToolBatch(remaining, {
     tools: host.tools,
     ctx: host.toolCtx,
     concurrency: host.toolConcurrency,
@@ -405,15 +515,26 @@ async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutc
       host.emit({ type: "tool.start", callId: call.callId, name: call.name, args: call.args });
     },
     async onToolEnd(call, outcome) {
+      if (!outcome.executed && signal.aborted) return;
       const started = startedAt.get(call.callId);
-      if (started !== undefined)
-        await host.rec({
-          kind: "tool-finished",
-          callId: call.callId,
-          status: outcome.status,
-          durationMs: Date.now() - started,
-        });
+      const outcomeKnown =
+        outcome.outcomeKnown !== false &&
+        !(outcome.executed && outcome.status === "error" && (signal.aborted || isRunnerUnavailableOutcome(outcome)));
+      if (outcome.usage) host.addUsage(outcome.usage);
+      await host.rec({
+        kind: "tool-finished",
+        callId: call.callId,
+        status: outcome.status,
+        durationMs: started === undefined ? 0 : Date.now() - started,
+        content: outcome.content,
+        details: outcome.details,
+        executed: outcome.executed,
+        outcomeKnown,
+        terminate: outcome.terminate,
+        ...(outcome.usage ? { usage: outcome.usage } : {}),
+      });
       host.emit({ type: "tool.end", callId: call.callId, status: outcome.status, details: outcome.details });
+      if (!outcomeKnown && !signal.aborted) host.pauseRun("outcome_unknown");
       if (outcome.executed)
         await host.hooks?.afterToolCall?.(call, {
           status: outcome.status,
@@ -423,6 +544,58 @@ async function runBatch(host: LoopHost, toolCalls: ToolCall[]): Promise<ToolOutc
           ...(outcome.usage ? { usage: outcome.usage } : {}),
         });
     },
+  });
+  return toolCalls.map((call) => {
+    const saved = completed.get(call.callId);
+    if (saved?.kind === "tool-finished")
+      return {
+        callId: call.callId,
+        name: call.name,
+        status: saved.status,
+        content: saved.content!,
+        details: saved.details,
+        executed: saved.executed ?? true,
+        terminate: saved.terminate ?? false,
+        ...(saved.usage ? { usage: saved.usage } : {}),
+      };
+    return outcomes.find((o) => o.callId === call.callId)!;
+  });
+}
+
+function stableJson(value: unknown): string | undefined {
+  return JSON.stringify(value, (_key, item: unknown) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : item,
+  );
+}
+
+function nextOrTick<T>(next: Promise<IteratorResult<T>>, signal: AbortSignal): Promise<IteratorResult<T> | null> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+    };
+    const abort = () => {
+      cleanup();
+      reject(signal.reason ?? new Error("Interrupted"));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, 1000);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    next.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
   });
 }
 

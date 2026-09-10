@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BlockSchema } from "./block.js";
-import { DecisionResponseSchema } from "./decision.js";
+import { DecisionResponseSchema, DecisionRequestSchema } from "./decision.js";
 
 export const RunnerStateSchema = z.enum(["ready", "busy", "draining", "disconnected"]);
 
@@ -205,6 +205,7 @@ export type MessageQuery = z.infer<typeof MessageQuerySchema>;
 
 export const SendMessageSchema = z
   .object({
+    requestId: z.uuid().optional(),
     text: z.string().trim(),
     images: z
       .array(z.object({ key: z.string().min(1).max(1024), name: z.string().trim().min(1).max(255) }).strict())
@@ -308,3 +309,13 @@ export interface Page<T> {
 
 export const ApiErrorSchema = z.object({ code: z.string(), message: z.string(), requestId: z.string().optional() });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
+
+export const RunStateSchema = z.object({
+  runId: z.string(),
+  version: z.number().int().nonnegative(),
+  status: z.enum(["running", "paused", "completed", "failed", "cancelled"]),
+  phase: z.enum(["model", "tools", "finish"]),
+  reason: z.string().nullable(),
+  pendingDecision: DecisionRequestSchema.nullable().optional(),
+});
+export type RunState = z.infer<typeof RunStateSchema>;

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { ToolContext } from "@nova/agent-core";
+import { createAgent, memoryStorage, type ToolContext } from "@nova/agent-core";
 import { bash, bashRisk } from "./bash.js";
 import { editFile } from "./edit-file.js";
 import { grep } from "./grep.js";
@@ -77,6 +77,85 @@ it("classifies direct read-only bash queries without relaxing shell or mutating 
   expect(bashRisk({ command: "git", args: ["diff", "--output=changes.patch"] })).toBe("exec");
   expect(bashRisk({ command: "sh", args: ["-c", "ls"] })).toBe("exec");
   expect(bashRisk({ command: "powershell.exe", args: ["Get-ChildItem"] })).toBe("exec");
+});
+
+it("classifies a standalone sh cd as read-only, including literal quoted paths", () => {
+  for (const script of [
+    "cd /xxx",
+    "cd ../app",
+    "cd /项目",
+    "cd",
+    "cd ~",
+    "cd -- /xxx",
+    " cd\t/xxx ",
+    "cd '/my project'",
+    'cd "/my project"',
+  ]) {
+    for (const flag of ["-c", "-lc"]) {
+      expect(bashRisk({ command: "/bin/sh", args: [flag, script] }), script).toBe("read");
+    }
+  }
+});
+
+it("keeps compound cd scripts, expansions and extra shell arguments subject to approval", () => {
+  for (const script of [
+    "cd /xxx && touch file",
+    "cd /xxx; touch file",
+    "cd /xxx\ntouch file",
+    "cd /xxx | tee file",
+    "cd /xxx > file",
+    "cd /xxx &",
+    "cd $(touch file)",
+    'cd "$(touch file)"',
+    "cd `touch file`",
+    'cd "$HOME"',
+    "cd /xxx\\\n; touch file",
+    "cd /xxx /yyy",
+    "CD /xxx",
+    "cd '/xxx",
+    'cd "/xxx',
+  ]) {
+    expect(bashRisk({ command: "sh", args: ["-lc", script] }), script).toBe("exec");
+  }
+  expect(bashRisk({ command: "sh", args: ["-lc", "cd /xxx", "extra"] })).toBe("exec");
+  expect(bashRisk({ command: "sh", args: ["-lC", "cd /xxx"] })).toBe("exec");
+});
+
+it("executes sh -lc cd under the default policy without requesting user approval", async () => {
+  const input = { command: "sh", args: ["-lc", "cd /xxx"] };
+  const output = { ok: true as const, value: { exitCode: 0, stdout: "", stderr: "", truncated: false, durationMs: 1 } };
+  const runtime = ctx(output);
+  let executions = 0;
+  let approvals = 0;
+  runtime.exec = async (command, options) => {
+    executions++;
+    expect(command).toBe(input.command);
+    expect(options?.args).toEqual(input.args);
+    return output;
+  };
+  let turns = 0;
+  const agent = createAgent({
+    model: { provider: "gateway", model: "test-model" },
+    storage: memoryStorage(),
+    ctx: runtime,
+    tools: [bash],
+    decide: async () => {
+      approvals++;
+      return { kind: "approval", decision: "deny" };
+    },
+    stream: async function* () {
+      if (turns++ === 0) {
+        yield { type: "block.start", index: 0, blockType: "tool_call" };
+        yield { type: "block.end", index: 0, block: { type: "tool_call", callId: "cd", name: "bash", args: input } };
+        yield { type: "finish", stopReason: "tool_use" };
+      } else {
+        yield { type: "finish", stopReason: "stop" };
+      }
+    },
+  });
+  expect((await agent.prompt("change directory")).stopReason).toBe("done");
+  expect(executions).toBe(1);
+  expect(approvals).toBe(0);
 });
 
 it("reports edit semantic failures explicitly", async () => {

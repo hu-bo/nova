@@ -33,12 +33,11 @@ import {
   approvalMode,
   askQuestion,
   requestApproval,
-  requestDecision,
   type ApprovalOutcome,
   type DecisionDeps,
 } from "./decision/decision.js";
 
-type RecordOf<K extends Record["kind"]> = Extract<Record, { kind: K }>;
+import { CheckpointConflict, type RunCheckpoint } from "./session/checkpoint.js";
 
 // 内部装配参数：fork / 子 agent 复用同一 createAgent，不新增公开构造面
 interface AgentInit {
@@ -95,9 +94,16 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   let runController = new AbortController();
   let busy = false;
   let activeRun: Promise<RunResult> | null = null;
+  let checkpoint: RunCheckpoint | null = null;
+  let pauseReason: string | null = null;
+  let writes = Promise.resolve();
   const allowlist = new Set<string>(); // §6 allow_always：session 级，第一版不跨 session 持久化
   const listeners = new Set<(event: AgentEvent) => void>();
-  const queues = createQueues(sessionId, config.storage, () => runId);
+  const queues = createQueues(
+    sessionId,
+    { ...config.storage, appendRecord: async (_id, fact) => save({}, undefined, fact) },
+    () => runId,
+  );
 
   function emit(event: AgentEvent): void {
     if (event.type === "decision.requested") state.pendingDecision = event.request;
@@ -111,13 +117,73 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     }
   }
 
-  async function rec(parts: RecordParts): Promise<void> {
-    await config.storage.appendRecord(sessionId, record(runId, parts));
+  async function save(patch: Partial<RunCheckpoint> = {}, value?: Entry, fact?: Record): Promise<void> {
+    const queuedSnapshot = queues.snapshot();
+    const task = writes.then(async () => {
+      if (!checkpoint) {
+        if (value) await config.storage.appendEntry(sessionId, value);
+        if (fact) await config.storage.appendRecord(sessionId, fact);
+        return;
+      }
+      if (fact?.kind === "decision-requested") patch.pendingDecision = fact.request;
+      if (fact?.kind === "decision-resolved") patch.pendingDecision = null;
+      if (patch.status && patch.status !== "running") patch.pendingDecision = null;
+      const next = {
+        ...checkpoint,
+        ...patch,
+        version: checkpoint.version + 1,
+        usage: { ...runUsage },
+        queues: queuedSnapshot,
+      };
+      await config.storage.commit(sessionId, {
+        expectedVersion: checkpoint.version === 0 ? null : checkpoint.version,
+        checkpoint: next,
+        ...(value ? { entry: value } : {}),
+        ...(fact ? { record: fact } : {}),
+      });
+      checkpoint = next;
+      emit({ type: "run.state", state: runState(next) });
+    });
+    writes = task.catch(() => {
+      runController.abort();
+    });
+    await task;
   }
 
-  async function append(parts: EntryParts): Promise<Entry> {
+  async function rec(parts: RecordParts): Promise<void> {
+    const patch: Partial<RunCheckpoint> = {};
+    if (parts.kind === "turn-started") {
+      patch.turns = parts.turn + 1;
+      patch.phase = "model";
+    }
+    if (parts.kind === "run-finished") {
+      patch.status =
+        parts.stopReason === "paused"
+          ? "paused"
+          : parts.stopReason === "aborted"
+            ? "cancelled"
+            : ["error", "max_turns", "repetition_detected", "max_tokens"].includes(parts.stopReason)
+              ? "failed"
+              : "completed";
+      patch.reason = pauseReason ?? (patch.status === "failed" ? parts.stopReason : null);
+      if (patch.status !== "paused") patch.phase = "finish";
+    }
+    await save(patch, undefined, record(runId, parts));
+  }
+
+  async function append(parts: EntryParts, extra: Partial<RunCheckpoint> = {}): Promise<Entry> {
     const next = entry({ ...parts, parentId: leaf });
-    await config.storage.appendEntry(sessionId, next);
+    const patch: Partial<RunCheckpoint> = {};
+    if (parts.kind === "message" && parts.message.role === "assistant") {
+      patch.draft = null;
+      patch.phase = parts.message.blocks.some((b) => b.type === "tool_call") ? "tools" : "finish";
+      patch.recoveries = 0;
+    }
+    if (parts.kind === "message" && parts.message.role === "user") {
+      patch.phase = "model";
+      patch.recoveries = 0;
+    }
+    await save({ ...patch, ...extra }, next);
     view.push(next);
     leaf = next.id;
     if (loaded) publishContext();
@@ -132,7 +198,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
       replacedTo: plan.replacedTo,
       parentId: leaf,
     });
-    await config.storage.appendEntry(sessionId, marker);
+    await save({}, marker);
     const preservedConfig = view
       .slice(plan.startIndex, plan.endIndex)
       .filter((item) => item.kind === "model" || item.kind === "thinking-level" || item.kind === "active-tools");
@@ -144,7 +210,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   const decisionDeps: DecisionDeps = {
     decide: config.decide,
     sessionId,
-    storage: config.storage,
+    storage: { ...config.storage, appendRecord: async (_session, fact) => save({}, undefined, fact) },
     runId: () => runId,
     emit,
     fs: config.ctx?.fs,
@@ -229,6 +295,14 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     tools,
     hooks: config.hooks,
     maxTurns: config.maxTurns ?? 100,
+    modelTimeoutMs: config.modelTimeoutMs ?? 20 * 60_000,
+    checkpoint: () => checkpoint,
+    saveCheckpoint: save,
+    pauseReason: () => pauseReason,
+    pauseRun: (reason) => {
+      pauseReason = reason;
+      runController.abort();
+    },
     toolConcurrency: config.toolConcurrency ?? 8,
     toolTimeoutMs: config.toolTimeoutMs ?? 120_000,
     systemPrompt,
@@ -267,7 +341,6 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   // 加载已有分支（fork / resume / 重建场景）；新 session 加载结果为空，无副作用
   async function ensureLoaded(): Promise<void> {
     if (loaded) return;
-    loaded = true;
     const branch = await config.storage.loadEntries(sessionId, leaf ?? undefined);
     view = branchView(branch);
     leaf = branch.length > 0 ? branch[branch.length - 1]!.id : leaf;
@@ -294,76 +367,133 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
       } else if (item.kind === "thinking-level") state.thinkingLevel = item.level;
       else if (item.kind === "active-tools") state.activeTools = item.tools.filter((name) => tools.has(name));
     }
+    loaded = true;
+  }
+
+  async function execute(input?: string | ContentPart[], resume = false): Promise<RunResult> {
+    state.isStreaming = true;
+    const timer = setTimeout(
+      () => {
+        pauseReason = "deadline_exceeded";
+        runController.abort();
+      },
+      Math.max(1, (checkpoint?.deadline ?? Date.now()) - Date.now()),
+    );
+    const task = (async () => {
+      try {
+        return await runTurnLoop(host, input, resume);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        state.errorMessage = message;
+        if (!(error instanceof CheckpointConflict)) {
+          try {
+            await rec({ kind: "run-finished", stopReason: "error" });
+          } catch {
+            /* storage failure remains visible */
+          }
+        }
+        emit({ type: "error", code: "run_failed", message });
+        emit({ type: "run.end", runId, stopReason: "error", usage: runUsage });
+        return { runId, stopReason: "error" as const, message: null, usage: runUsage, errorMessage: message };
+      } finally {
+        clearTimeout(timer);
+        state.isStreaming = false;
+        state.streamingMessage = null;
+        state.pendingToolCalls = [];
+        state.pendingDecision = null;
+        busy = false;
+        activeRun = null;
+      }
+    })();
+    activeRun = task;
+    const result = await task;
+    if (!["error", "aborted", "paused", "max_turns", "repetition_detected", "max_tokens"].includes(result.stopReason)) {
+      const queued = queues.drain("nextRun");
+      if (queued.length > 0) await prompt(queued);
+    }
+    return result;
   }
 
   async function prompt(
     input: string | ContentPart[],
-    options?: { thinkingLevel?: ThinkingLevel },
+    options?: { thinkingLevel?: ThinkingLevel; requestId?: string },
   ): Promise<RunResult> {
     if (busy) throw new Error("agent is running");
     busy = true;
+    runController = new AbortController();
+    pauseReason = null;
+    state.isStreaming = true;
     try {
       await ensureLoaded();
+      const previous = await config.storage.loadCheckpoint(sessionId);
+      if (previous && ["running", "paused"].includes(previous.status))
+        throw new Error("Resume or cancel the unfinished run first");
+      checkpoint = null;
       if (options?.thinkingLevel !== undefined) await applyTurnConfig({ thinkingLevel: options.thinkingLevel });
       runId = newRunId();
-      runController = new AbortController();
       runUsage = { input: 0, output: 0 };
       state.errorMessage = null;
-      await rec({
-        kind: "run-started",
-        input:
-          typeof input === "string"
-            ? input
-            : input.map((part) => (part.type === "text" ? part.text : "[image]")).join(""),
+      checkpoint = {
+        runId,
+        version: previous?.version ?? 0,
+        status: "running",
+        phase: "model",
+        reason: null,
+        turns: 0,
+        recoveries: 0,
+        startedAt: Date.now(),
+        deadline: Date.now() + (config.runTimeoutMs ?? 60 * 60_000),
+        usage: runUsage,
+        draft: null,
+      };
+      const user = entry({
+        kind: "message",
+        parentId: leaf,
+        message: newMessage("user", typeof input === "string" ? [{ type: "text", text: input }] : input),
       });
-      const run = runTurnLoop(host, input).finally(() => {
-        busy = false;
-        activeRun = null;
-      });
-      activeRun = run;
-      let result: RunResult;
-      try {
-        result = await run;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        // A failure outside the loop's normal error boundaries must still close the run
-        // for storage and UI consumers. Otherwise the conversation can remain "thinking"
-        // forever after a transport/tool or persistence failure.
-        state.errorMessage = message;
-        state.isStreaming = false;
-        state.streamingMessage = null;
-        state.pendingToolCalls = [];
-        try {
-          await rec({ kind: "run-finished", stopReason: "error" });
-        } catch {
-          // Preserve the terminal UI event even if persistence is the original failure.
-        }
-        emit({ type: "error", code: "run_failed", message });
-        emit({ type: "run.end", runId, stopReason: "error", usage: runUsage });
-        result = { runId, stopReason: "error", message: null, usage: runUsage, errorMessage: message };
-      }
-      // §7 nextRun：当前 run 结束后触发一个新的独立 run
-      const queued = queues.drain("nextRun");
-      if (queued.length > 0) {
-        void prompt(queued).catch((error) => {
-          emit({ type: "error", code: "run_failed", message: error instanceof Error ? error.message : String(error) });
-        });
-      }
-      return result;
+      await save(
+        {},
+        user,
+        record(runId, {
+          kind: "run-started",
+          ...(options?.requestId ? { requestId: options.requestId } : {}),
+          input:
+            typeof input === "string" ? input : input.map((p) => (p.type === "text" ? p.text : "[image]")).join(""),
+        }),
+      );
+      view.push(user);
+      leaf = user.id;
+      return await execute();
     } catch (error) {
       busy = false;
-      activeRun = null;
+      state.isStreaming = false;
       throw error;
     }
   }
 
-  async function abort(): Promise<void> {
-    const run = activeRun;
-    if (!run) return;
-    await rec({ kind: "abort-requested" });
+  async function pause(reason: string): Promise<void> {
+    pauseReason = reason;
     runController.abort();
-    // run 收敛到 stopReason "aborted"；真正抛出的异常由 prompt 的调用方看到
-    await run.catch(() => undefined);
+    if (activeRun) await activeRun;
+  }
+
+  async function abort(): Promise<void> {
+    pauseReason = null;
+    runController.abort();
+    if (activeRun) {
+      await rec({ kind: "abort-requested" });
+      await activeRun;
+      return;
+    }
+    if (busy) return;
+    checkpoint = await config.storage.loadCheckpoint(sessionId);
+    if (checkpoint && ["paused", "running"].includes(checkpoint.status)) {
+      runId = checkpoint.runId;
+      runUsage = checkpoint.usage;
+      await rec({ kind: "abort-requested" });
+      await rec({ kind: "run-finished", stopReason: "aborted" });
+      emit({ type: "run.end", runId, stopReason: "aborted", usage: runUsage });
+    }
   }
 
   async function compact(opts?: { instruction?: string }): Promise<CompactionResult> {
@@ -413,75 +543,79 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     return createAgent(config, { sessionId, leafId: entryId, depth, gate });
   }
 
-  // §5.2：读 Record 找中断的 run → 恢复 TodoState → 未完成 tool / decision 收敛 → 续跑
   async function resume(): Promise<void> {
     if (busy) throw new Error("agent is running");
-    await ensureLoaded();
-    const records = await config.storage.loadRecords(sessionId);
-    const finishedRuns = new Set(records.filter((item) => item.kind === "run-finished").map((item) => item.runId));
-    let interruptedRun: string | null = null;
-    for (let i = records.length - 1; i >= 0; i -= 1) {
-      const item = records[i]!;
-      if (item.kind === "run-started" && !finishedRuns.has(item.runId)) {
-        interruptedRun = item.runId;
-        break;
+    busy = true;
+    runController = new AbortController();
+    pauseReason = null;
+    state.isStreaming = true;
+    try {
+      await ensureLoaded();
+      checkpoint = await config.storage.loadCheckpoint(sessionId);
+      if (!checkpoint) {
+        const facts = await config.storage.loadRecords(sessionId);
+        const finished = new Set(facts.filter((f) => f.kind === "run-finished").map((f) => f.runId));
+        const prior = [...facts].reverse().find((f) => f.kind === "run-started" && !finished.has(f.runId));
+        if (prior) {
+          const tail = [...view].reverse().find((e) => e.kind === "message");
+          checkpoint = {
+            runId: prior.runId,
+            version: 0,
+            status: "paused",
+            phase:
+              tail?.kind === "message" &&
+              tail.message.role === "assistant" &&
+              tail.message.blocks.some((b) => b.type === "tool_call")
+                ? "tools"
+                : "model",
+            reason: "server_restart",
+            turns: facts.filter((f) => f.runId === prior.runId && f.kind === "turn-started").length,
+            recoveries: 0,
+            startedAt: prior.ts,
+            deadline: prior.ts + (config.runTimeoutMs ?? 60 * 60_000),
+            usage: { input: 0, output: 0 },
+            draft: null,
+          };
+        }
       }
-    }
-    if (interruptedRun === null) return;
-
-    // 未完成的 tool-started → 结果不可知，作为 error 结果喂回模型
-    const finishedCalls = new Set(
-      records
-        .filter(
-          (item): item is RecordOf<"tool-finished"> => item.kind === "tool-finished" && item.runId === interruptedRun,
-        )
-        .map((item) => item.callId),
-    );
-    const pendingCalls = records.filter(
-      (item): item is RecordOf<"tool-started"> =>
-        item.kind === "tool-started" && item.runId === interruptedRun && !finishedCalls.has(item.callId),
-    );
-    if (pendingCalls.length > 0) {
-      const pendingIds = new Set(pendingCalls.map((item) => item.callId));
-      const lastMessageEntry = [...view].reverse().find((item) => item.kind === "message");
-      if (lastMessageEntry && lastMessageEntry.kind === "message" && lastMessageEntry.message.role === "assistant") {
-        const results: Block[] = lastMessageEntry.message.blocks
-          .filter(
-            (block): block is Extract<Block, { type: "tool_call" }> =>
-              block.type === "tool_call" && pendingIds.has(block.callId),
-          )
-          .map((block) => ({
-            type: "tool_result",
-            callId: block.callId,
-            status: "error",
-            content: [
-              { type: "text", text: "上次运行在此中断，该工具调用的结果未知。请先核实实际状态，再决定是否重新执行。" },
-            ],
-          }));
-        if (results.length > 0) await append({ kind: "message", message: newMessage("user", results) });
+      if (checkpoint?.status === "completed" && checkpoint.queues?.nextRun.length) {
+        queues.restore(checkpoint.queues);
+        const next = queues.drain("nextRun");
+        busy = false;
+        await prompt(next);
+        return;
       }
+      if (!checkpoint || !["paused", "running"].includes(checkpoint.status)) return;
+      if (
+        checkpoint.reason &&
+        !["runner_disconnected", "server_restart", "server_shutdown"].includes(checkpoint.reason)
+      )
+        return;
+      runId = checkpoint.runId;
+      if (checkpoint.queues) queues.restore(checkpoint.queues);
+      runUsage = { ...checkpoint.usage };
+      if (
+        checkpoint.phase !== "finish" &&
+        (checkpoint.deadline <= Date.now() || checkpoint.turns >= (config.maxTurns ?? 100))
+      ) {
+        pauseReason = "deadline_exceeded";
+        await rec({ kind: "run-finished", stopReason: "error" });
+        return;
+      }
+      if (checkpoint.recoveries >= 3) {
+        await save({ status: "paused", reason: "recovery_limit" });
+        return;
+      }
+      await save(
+        { status: "running", reason: null, draft: null, recoveries: checkpoint.recoveries + 1 },
+        undefined,
+        record(runId, { kind: "run-resumed", attempt: checkpoint.recoveries + 1 }),
+      );
+      await execute(undefined, true);
+    } finally {
+      busy = false;
+      state.isStreaming = false;
     }
-
-    // 未 resolved 的 decision → 重新发出请求，等人类
-    const resumeDeps: DecisionDeps = { ...decisionDeps, runId: () => interruptedRun as string };
-    const resolvedDecisions = new Set(
-      records
-        .filter(
-          (item): item is RecordOf<"decision-resolved"> =>
-            item.kind === "decision-resolved" && item.runId === interruptedRun,
-        )
-        .map((item) => item.decisionId),
-    );
-    const pendingDecisions = records.filter(
-      (item): item is RecordOf<"decision-requested"> =>
-        item.kind === "decision-requested" && item.runId === interruptedRun && !resolvedDecisions.has(item.decisionId),
-    );
-    if (pendingDecisions.length > 0) {
-      const signal = new AbortController().signal;
-      for (const item of pendingDecisions) await requestDecision(item.request, resumeDeps, signal);
-    }
-
-    await prompt("继续执行之前被中断的任务。请根据当前 TODO 与上下文判断接下来要做什么。");
   }
 
   // §10 子 agent：独立 session（共享 storage），工具集来自父的 config.tools；
@@ -546,16 +680,11 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
   return {
     sessionId,
     prompt,
-    steer: (msg) => {
-      void queues.enqueue("steering", msg);
-    },
-    followUp: (msg) => {
-      void queues.enqueue("followUp", msg);
-    },
-    nextRun: (msg) => {
-      void queues.enqueue("nextRun", msg);
-    },
+    steer: (msg, requestId) => queues.enqueue("steering", msg, requestId),
+    followUp: (msg, requestId) => queues.enqueue("followUp", msg, requestId),
+    nextRun: (msg, requestId) => queues.enqueue("nextRun", msg, requestId),
     abort,
+    pause,
     compact,
     contextUsage,
     estimatePrompt,
@@ -571,4 +700,9 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
       };
     },
   };
+}
+
+function runState(value: RunCheckpoint) {
+  const { runId, version, status, phase, reason, pendingDecision } = value;
+  return { runId, version, status, phase, reason, pendingDecision: pendingDecision ?? null };
 }

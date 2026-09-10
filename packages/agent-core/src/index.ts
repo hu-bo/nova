@@ -7,6 +7,8 @@ export { memoryStorage } from "./session/storage.js";
 export type { SessionStorage, RecordFilter } from "./session/storage.js";
 export type { Entry, EntryId } from "./session/entry.js";
 export type { Record } from "./session/record.js";
+export type { RunCheckpoint, SessionCommit } from "./session/checkpoint.js";
+export { CheckpointConflict } from "./session/checkpoint.js";
 export type { AgentHooks } from "./loop/hooks.js";
 export type { CompactionResult, CompactionTrigger } from "./context/compaction.js";
 export { z } from "./tool-schema.js";

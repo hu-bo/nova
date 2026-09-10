@@ -66,6 +66,9 @@ const MUTATING_FIND_ARGUMENTS = new Set([
   "-ok",
   "-okdir",
 ]);
+// 仅识别单条 cd 和字面量路径；不解析或放行组合命令、重定向与 shell 展开。
+const SIMPLE_CD_SCRIPT =
+  /^[ \t]*cd(?:[ \t]+(?:--[ \t]+)?(?:[\p{L}\p{N}_./~:@%+=,-]+|'[^'\r\n]*'|"[^"$`\\\r\n]*"))?[ \t]*$/u;
 
 function commandName(command: string): string {
   return command
@@ -81,6 +84,13 @@ export function bashRisk(value: unknown): "read" | "exec" {
   if (!parsed.success) return "exec";
   const input = parsed.data;
   const command = commandName(input.command);
+  if (
+    command === "sh" &&
+    input.args?.length === 2 &&
+    (input.args[0] === "-c" || input.args[0] === "-lc") &&
+    SIMPLE_CD_SCRIPT.test(input.args[1]!)
+  )
+    return "read";
   const args = input.args?.map((arg) => arg.toLowerCase()) ?? [];
   if (command === "find" && input.args?.some((arg) => MUTATING_FIND_ARGUMENTS.has(arg.toLowerCase()))) return "exec";
   if (command === "tree" && args.includes("-o")) return "exec";

@@ -13,6 +13,7 @@ export interface ToolOutcome {
   details: unknown;
   terminate: boolean;
   executed: boolean; // false = 未真正执行（未知工具 / 被拒 / 中断），结果是合成的 error
+  outcomeKnown?: boolean; // false = execution was interrupted without a confirmed result
   usage?: Usage;
 }
 
@@ -22,7 +23,7 @@ export interface BatchDeps {
   concurrency: number;
   timeoutMs: number;
   signal: AbortSignal;
-  /** 原始 run signal。task timeout 使用组合后的 signal，仍需保留它来区分 timeout 与用户 abort。 */
+  /** 原始 run signal，用于区分工具执行 timeout 与用户 abort。 */
   runSignal?: AbortSignal;
   approve(call: ToolCall & { risk: Risk }): Promise<ApprovalOutcome | "aborted">;
   onToolStart(call: ToolCall): Promise<void>;
@@ -43,6 +44,7 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
   const lastWriteByPath = new Map<string, string>();
   const seen: string[] = [];
 
+  let fatalFailure: unknown;
   for (const call of calls) {
     const tool = deps.tools.get(call.name);
     const taskId = `call-${call.callId}`;
@@ -72,15 +74,19 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
     flow.addTask({
       id: taskId,
       deps: taskDeps,
-      timeoutMs,
       run: async (task) => {
-        // TaskFlow owns the per-tool timeout. Its task signal must reach the ToolContext,
-        // otherwise a timeout only changes scheduler state and leaves the remote process running.
+        // TaskFlow owns scheduling and cancellation; execution timing starts after approval.
         const signal = AbortSignal.any([deps.signal, task.signal]);
-        outcomes.set(
-          call.callId,
-          await runOne(call, tool, risk, { ...deps, timeoutMs, signal, runSignal: deps.signal }),
-        );
+        try {
+          outcomes.set(
+            call.callId,
+            await runOne(call, tool, risk, { ...deps, timeoutMs, signal, runSignal: deps.signal }),
+          );
+        } catch (error) {
+          fatalFailure = error;
+          flow.cancel();
+          throw error;
+        }
       },
     });
   }
@@ -89,6 +95,7 @@ export async function runToolBatch(calls: ToolCall[], deps: BatchDeps): Promise<
     /* tool.start/tool.end 已在回调里外发，这里只驱动调度 */
   }
   deps.signal.removeEventListener("abort", onAbort);
+  if (fatalFailure) throw fatalFailure;
 
   // 每个 tool_call 都必须有对应 tool_result（provider 契约）：被取消/未启动的补 error 结果
   return calls.map(
@@ -160,11 +167,16 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
   }
 
   await deps.onToolStart(call);
+  if (deps.signal.aborted) return end(fail(interruptedText(deps, false)));
 
+  let outcome: ToolOutcome;
+  const controller = new AbortController();
+  const executionSignal = AbortSignal.any([deps.signal, controller.signal]);
+  const timer = setTimeout(() => controller.abort(), deps.timeoutMs);
   try {
-    const toolCtx = deps.ctx ? withSignal(deps.ctx, deps.signal) : undefined;
-    const result = await awaitTool(tool.execute(parsed.data, toolCtx, deps.signal), deps.signal);
-    return await end({
+    const toolCtx = deps.ctx ? withSignal(deps.ctx, executionSignal) : undefined;
+    const result = await awaitTool(tool.execute(parsed.data, toolCtx, executionSignal), executionSignal);
+    outcome = {
       callId: call.callId,
       name: call.name,
       status: result.status,
@@ -173,19 +185,21 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
       terminate: result.terminate ?? false,
       executed: true,
       ...(result.usage ? { usage: result.usage } : {}),
-    });
+    };
   } catch (error) {
-    if (error instanceof ToolInterrupted) {
-      const text = interruptedText(deps, true);
-      const outcome = fail(text);
-      outcome.executed = true;
-      return await end(outcome);
-    }
-    // §3.3：AgentTool.execute 可以 throw —— 转成 error tool_result 喂回模型自行纠错
-    const outcome = fail(error instanceof Error ? error.message : String(error));
+    outcome = fail(
+      error instanceof ToolInterrupted
+        ? interruptedText(deps, true)
+        : error instanceof Error
+          ? error.message
+          : String(error),
+    );
     outcome.executed = true;
-    return await end(outcome);
+    if (error instanceof ToolInterrupted) outcome.outcomeKnown = false;
+  } finally {
+    clearTimeout(timer);
   }
+  return end(outcome);
 
   async function end(outcome: ToolOutcome): Promise<ToolOutcome> {
     await deps.onToolEnd(call, outcome);

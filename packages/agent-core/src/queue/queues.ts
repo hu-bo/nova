@@ -5,7 +5,9 @@ import { record } from "../session/record.js";
 import type { SessionStorage } from "../session/storage.js";
 
 export interface Queues {
-  enqueue(queue: QueueName, message: string | ContentPart[]): Promise<void>;
+  snapshot(): { [K in QueueName]: ContentPart[][] };
+  restore(value: { [K in QueueName]: ContentPart[][] }): void;
+  enqueue(queue: QueueName, message: string | ContentPart[], requestId?: string): Promise<void>;
   drain(queue: QueueName): ContentPart[];
   nonEmpty(queue: QueueName): boolean;
 }
@@ -13,15 +15,24 @@ export interface Queues {
 export function createQueues(sessionId: string, storage: SessionStorage, currentRunId: () => string): Queues {
   const queues: { [K in QueueName]: ContentPart[][] } = { steering: [], followUp: [], nextRun: [] };
   return {
+    snapshot: () => structuredClone(queues),
+    restore(value) {
+      for (const name of ["steering", "followUp", "nextRun"] as const) queues[name] = structuredClone(value[name]);
+    },
     // 入队必须落 queue-enqueued Record：用户插了话但 agent 没反应时，这是唯一排查依据
-    async enqueue(queue, message) {
+    async enqueue(queue, message, requestId) {
       const parts: ContentPart[] =
         typeof message === "string" ? [{ type: "text", text: message }] : structuredClone(message);
       queues[queue].push(parts);
       const summary = parts.map((part) => (part.type === "text" ? part.text : "[image]")).join("\n");
       await storage.appendRecord(
         sessionId,
-        record(currentRunId(), { kind: "queue-enqueued", queue, message: summary }),
+        record(currentRunId(), {
+          kind: "queue-enqueued",
+          queue,
+          message: summary,
+          ...(requestId ? { requestId } : {}),
+        }),
       );
     },
     drain(queue) {

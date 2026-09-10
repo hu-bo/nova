@@ -1,12 +1,12 @@
 // testing.md §2：agent-core 行为测试。
 // 纯编排行为使用本地测试工具；OS / FS / process 行为在 coding-agent integration 中经真实 Runner 验证。
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ModelEvent, ModelRequest, StreamFn, Usage } from "@nova/model-adapters";
 import { createAgent } from "./agent.js";
 import { memoryStorage, type SessionStorage } from "./session/storage.js";
 import { entry } from "./session/entry.js";
 import { record, type Record as SessionRecord } from "./session/record.js";
-import { requestDecision } from "./decision/decision.js";
+import { DECISION_TIMEOUT_MS, requestApproval, requestDecision } from "./decision/decision.js";
 import { createSubAgentGate } from "./sub-agent/spawn-agent.js";
 import { z } from "./tool-schema.js";
 import type { AgentHooks } from "./loop/hooks.js";
@@ -373,9 +373,9 @@ describe("主流程", () => {
     const base = memoryStorage();
     const storage: SessionStorage = {
       ...base,
-      async appendRecord(sessionId, value) {
-        if (value.kind === "turn-started") throw new Error("recording failed");
-        await base.appendRecord(sessionId, value);
+      async commit(sessionId, change) {
+        if (change.record?.kind === "turn-started") throw new Error("recording failed");
+        await base.commit(sessionId, change);
       },
     };
     const { agent } = setup(stream, { storage });
@@ -446,7 +446,7 @@ describe("主流程", () => {
 
     const result = await agent.prompt("run command");
 
-    expect(result.stopReason).toBe("error");
+    expect(result.stopReason).toBe("paused");
     expect(result.errorMessage).toContain("Runner connection lost");
     expect(requests).toHaveLength(1);
     expect(agent.state.isStreaming).toBe(false);
@@ -748,7 +748,7 @@ describe("tool batch", () => {
     expect(events.some((event) => event.type === "run.end" && event.stopReason === "aborted")).toBe(true);
   });
 
-  it("tool 超时会 abort ToolContext，并将调用收敛为 error 结果", async () => {
+  it("tool 超时会 abort ToolContext，保存未知结果并暂停运行", async () => {
     let observedAbort = false;
     const slow = localTestTool("slow", {
       risk: "read",
@@ -763,10 +763,11 @@ describe("tool batch", () => {
 
     const result = await agent.prompt("go");
 
-    expect(result.stopReason).toBe("done");
+    expect(result.stopReason).toBe("paused");
     expect(observedAbort).toBe(true);
-    const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
-    expect(textOf(results[0]!.content)).toContain("timed out after 25ms");
+    const results = (await storage.loadRecords(agent.sessionId)).filter((r) => r.kind === "tool-finished");
+    expect(textOf(results[0]!.content!)).toContain("timed out after 25ms");
+    expect(results[0]!.outcomeKnown).toBe(false);
   });
 
   it("按已校验参数延长长任务时限，其他工具仍使用默认时限", async () => {
@@ -778,12 +779,12 @@ describe("tool batch", () => {
       toolEvents([{ name: "long", args: { budget: 500 } }, { name: "slow" }]),
       textEvents("recovered"),
     ]);
-    const { agent, storage } = setup(stream, { tools: [long, slow], toolTimeoutMs: 25 });
+    const { agent, storage } = setup(stream, { tools: [long, slow], toolTimeoutMs: 25, toolConcurrency: 1 });
 
-    expect((await agent.prompt("go")).stopReason).toBe("done");
-    const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
+    expect((await agent.prompt("go")).stopReason).toBe("paused");
+    const results = (await storage.loadRecords(agent.sessionId)).filter((r) => r.kind === "tool-finished");
     expect(results[0]!.status).toBe("ok");
-    expect(textOf(results[1]!.content)).toContain("timed out after 25ms");
+    expect(textOf(results[1]!.content!)).toContain("timed out after 25ms");
   });
 
   it.each([1, undefined, Infinity, 2_147_483_648])("无效或更短的工具预算不覆盖默认时限 (%s)", async (budget) => {
@@ -792,9 +793,9 @@ describe("tool batch", () => {
     const { stream } = scripted([toolEvents([{ name: "slow" }]), textEvents("recovered")]);
     const { agent, storage } = setup(stream, { tools: [slow], toolTimeoutMs: 25 });
 
-    expect((await agent.prompt("go")).stopReason).toBe("done");
-    const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
-    expect(textOf(results[0]!.content)).toContain("timed out after 25ms");
+    expect((await agent.prompt("go")).stopReason).toBe("paused");
+    const results = (await storage.loadRecords(agent.sessionId)).filter((r) => r.kind === "tool-finished");
+    expect(textOf(results[0]!.content!)).toContain("timed out after 25ms");
   });
 });
 
@@ -1143,6 +1144,77 @@ describe("上下文预算与压缩", () => {
 // —— Decision（§6）——
 
 describe("decision", () => {
+  it.each([
+    ["edit_file", true],
+    ["write_file", false],
+    ["bash", false],
+  ])("%s approval timeout allows only edit_file, once per request", async (name, allowed) => {
+    vi.useFakeTimers();
+    try {
+      let executions = 0;
+      const signals: AbortSignal[] = [];
+      const { stream } = scripted([
+        toolEvents([{ name, callId: "first" }]),
+        toolEvents([{ name, callId: "second" }]),
+        textEvents("done"),
+      ]);
+      const { agent, storage } = setup(stream, {
+        tools: [localTestTool(name, { risk: "write", onExecute: () => executions++ })],
+        decide: (_request, signal) => {
+          signals.push(signal);
+          return new Promise<DecisionResponse>(() => {});
+        },
+      });
+      const running = agent.prompt("go");
+      await vi.advanceTimersByTimeAsync(DECISION_TIMEOUT_MS - 1);
+      expect(executions).toBe(0);
+      expect(signals).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(DECISION_TIMEOUT_MS + 1);
+      expect((await running).stopReason).toBe("done");
+      expect(executions).toBe(allowed ? 2 : 0);
+      expect(signals).toHaveLength(2);
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+      expect(agent.state.pendingDecision).toBeNull();
+      const resolved = await storage.loadRecords(agent.sessionId, { kind: "decision-resolved" });
+      expect(resolved).toHaveLength(2);
+      for (const item of resolved) {
+        expect(item).toMatchObject({
+          response: allowed
+            ? { kind: "approval", decision: "allow", reason: expect.stringContaining("timed out") }
+            : "timeout",
+        });
+      }
+      expect(toolResultBlocks(await storage.loadEntries(agent.sessionId)).map((result) => result.status)).toEqual(
+        allowed ? ["ok", "ok"] : ["error", "error"],
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each<[string, Decide]>([
+    ["explicit denial", async () => ({ kind: "approval", decision: "deny" })],
+    ["invalid response kind", async () => ({ kind: "question", answers: [] })],
+    ["rejected callback", () => Promise.reject(new Error("unavailable"))],
+    [
+      "throwing callback",
+      () => {
+        throw new Error("unavailable");
+      },
+    ],
+  ])("edit_file does not auto-allow %s", async (_name, decide) => {
+    const allowlist = new Set<string>();
+    const result = await requestApproval(
+      "ask",
+      { callId: "edit", name: "edit_file", args: {}, risk: "write" },
+      { decide, sessionId: "s", storage: memoryStorage(), runId: () => "r", emit: () => {}, timeoutMs: 10 },
+      allowlist,
+      new AbortController().signal,
+    );
+    expect(result).toEqual({ allowed: false, alwaysAllowed: false });
+    expect(allowlist.size).toBe(0);
+  });
+
   it("risk write 缺省 ask：decide 收到 approval 请求，allow 后执行", async () => {
     const seen: DecisionResponse[] = [];
     const decide: Decide = async (request) => {
@@ -1251,9 +1323,9 @@ describe("decision", () => {
   });
 
   it("abort 打断等待中的 decision → run aborted，decision 收敛", async () => {
-    const { stream } = scripted([toolEvents([{ name: "risky" }]), textEvents("never")]);
+    const { stream } = scripted([toolEvents([{ name: "edit_file" }]), textEvents("never")]);
     const { agent, storage } = setup(stream, {
-      tools: [localTestTool("risky", { risk: "write" })],
+      tools: [localTestTool("edit_file", { risk: "write" })],
       decide: () =>
         new Promise<DecisionResponse>(() => {
           /* 永不回答 */
@@ -1663,10 +1735,23 @@ describe("fork 与 resume", () => {
     await storage.appendEntry(sessionId, user);
     await storage.appendEntry(sessionId, assistant);
     await storage.appendRecord(sessionId, record("run-1", { kind: "run-started", input: "fix the bug" }));
-    await storage.appendRecord(
-      sessionId,
-      record("run-1", { kind: "tool-started", callId: "c1", name: "ping", args: {} }),
-    );
+    if (!opts.decision)
+      await storage.appendRecord(
+        sessionId,
+        record("run-1", { kind: "tool-started", callId: "c1", name: "ping", args: {} }),
+      );
+    if (opts.todos)
+      await storage.appendRecord(
+        sessionId,
+        record("run-1", {
+          kind: "tool-finished",
+          callId: "c1",
+          status: "ok",
+          durationMs: 1,
+          content: [{ type: "text", text: "ping done" }],
+          details: null,
+        }),
+      );
     if (opts.decision) {
       await storage.appendRecord(
         sessionId,
@@ -1685,7 +1770,7 @@ describe("fork 与 resume", () => {
     }
   }
 
-  it("resume：中断的 tool 调用合成 error 结果喂回，然后续跑", async () => {
+  it("resume：中断的 tool 调用结果未知时暂停，不交给模型自动重放", async () => {
     const storage = memoryStorage();
     await interruptedFixture(storage, "s-resume");
     const { stream, requests } = scripted([textEvents("recovered")]);
@@ -1695,14 +1780,13 @@ describe("fork 与 resume", () => {
 
     const entries = await storage.loadEntries("s-resume");
     const synthetic = toolResultBlocks(entries);
-    expect(synthetic).toHaveLength(1);
-    expect(synthetic[0]!.status).toBe("error");
-    expect(textOf(synthetic[0]!.content)).toContain("上次运行在此中断");
-
-    const records = await storage.loadRecords("s-resume");
-    expect(records.filter((item) => item.kind === "run-started")).toHaveLength(2);
-    expect(records.filter((item) => item.kind === "run-finished")).toHaveLength(1);
-    expect(requests).toHaveLength(1);
+    expect(synthetic).toHaveLength(0);
+    expect(await storage.loadCheckpoint("s-resume")).toMatchObject({
+      runId: "run-1",
+      status: "paused",
+      reason: "outcome_unknown",
+    });
+    expect(requests).toHaveLength(0);
   });
 
   it("resume：未决 decision 重新发给人类", async () => {
@@ -1713,6 +1797,7 @@ describe("fork 与 resume", () => {
     const { agent } = setup(stream, {
       storage,
       sessionId: "s-resume-d",
+      tools: [localTestTool("ping", { risk: "write" })],
       decide: async (request) => {
         seen.push(request.decisionId);
         return request.kind === "approval"
@@ -1723,13 +1808,14 @@ describe("fork 与 resume", () => {
 
     await agent.resume();
 
-    expect(seen).toEqual(["d1"]);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toBe("d1");
     const records = await storage.loadRecords("s-resume-d");
     const resolved = records.filter(
       (item): item is Extract<SessionRecord, { kind: "decision-resolved" }> => item.kind === "decision-resolved",
     );
     expect(resolved).toHaveLength(1);
-    expect(resolved[0]!.decisionId).toBe("d1");
+    expect(resolved[0]!.decisionId).toBe(seen[0]);
     expect(resolved[0]!.runId).toBe("run-1");
   });
 

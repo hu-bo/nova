@@ -48,7 +48,7 @@ function newDecisionId(): string {
   return `decision-${Date.now().toString(36)}-${decisionCounter.toString(36)}`;
 }
 
-// timeout → fail-closed；abort → 返回 null，调用方负责干净退出
+// edit_file 审批超时仅放行本次；其他 timeout → fail-closed；abort → null
 export async function requestDecision(
   request: DecisionRequest,
   deps: DecisionDeps,
@@ -61,12 +61,24 @@ export async function requestDecision(
   deps.emit({ type: "decision.requested", request });
 
   const timeoutMs = deps.timeoutMs ?? DECISION_TIMEOUT_MS;
+  const controller = new AbortController();
+  const decisionSignal = AbortSignal.any([signal, controller.signal]);
   let outcome: DecisionResponse | "timeout" | null;
   try {
-    outcome = await raceHuman(deps.decide(request, signal), timeoutMs, signal);
+    outcome = signal.aborted ? null : await raceHuman(deps.decide(request, decisionSignal), timeoutMs, signal);
+    if (outcome === "timeout" && request.kind === "approval" && request.toolName === "edit_file") {
+      outcome = {
+        kind: "approval",
+        decision: "allow",
+        reason: "edit_file approval timed out; allowed once by default",
+      };
+    }
   } catch {
-    // decide 自身抛错按超时处理（fail-closed），abort 由下面的 signal 检查兜底
+    // 回调异常仍 fail-closed，不能触发超时自动放行。
     outcome = "timeout";
+  } finally {
+    // 结束外部等待并释放 pending 请求；不取消运行或后续工具执行。
+    controller.abort();
   }
   if (signal.aborted) outcome = null;
 
@@ -87,7 +99,7 @@ function raceHuman(
   timeoutMs: number,
   signal: AbortSignal,
 ): Promise<DecisionResponse | "timeout" | null> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (value: DecisionResponse | "timeout" | null) => {
       if (settled) return;
@@ -101,8 +113,15 @@ function raceHuman(
     signal.addEventListener("abort", onAbort, { once: true });
     pending.then(
       (response) => finish(response),
-      () => finish("timeout"),
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
     );
+    if (signal.aborted) onAbort();
   });
 }
 

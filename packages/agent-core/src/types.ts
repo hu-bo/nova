@@ -230,10 +230,17 @@ export type AgentEvent =
   | { type: "context.updated"; usage: ContextUsage }
   | { type: "context.compacted"; trigger: CompactionTrigger; summarized: boolean }
   | { type: "run.end"; runId: string; stopReason: StopReason; usage: Usage }
+  | {
+      type: "run.state";
+      state: Pick<
+        import("./session/checkpoint.js").RunCheckpoint,
+        "runId" | "version" | "status" | "phase" | "reason" | "pendingDecision"
+      >;
+    }
   | { type: "error"; code: string; message: string };
 
 export type StopReason =
-  "done" | "max_tokens" | "repetition_detected" | "terminate" | "max_turns" | "aborted" | "error";
+  "done" | "max_tokens" | "repetition_detected" | "terminate" | "max_turns" | "aborted" | "error" | "paused";
 
 // §2 对外 API 面
 export interface PromptAsset {
@@ -256,8 +263,10 @@ export interface AgentConfig {
   userId?: string; // 缺省 "local"
   systemPrompt?: PromptAsset[];
   maxTurns?: number; // 缺省 100
+  runTimeoutMs?: number; // 总期限，跨恢复累计；缺省一小时
+  modelTimeoutMs?: number; // 单次模型请求上限，缺省二十分钟
   toolConcurrency?: number; // 缺省 8（§4.2）
-  toolTimeoutMs?: number; // 每个 tool call 的总时限，缺省 120_000；超时会 abort ToolContext
+  toolTimeoutMs?: number; // 审批通过后的执行时限，缺省 120_000；超时会 abort ToolContext
   subAgent?: { maxConcurrent?: number; maxDepth?: number }; // 缺省 4 / 1（§10）
 }
 
@@ -283,11 +292,15 @@ export interface RunResult {
 
 export interface Agent {
   readonly sessionId: string;
-  prompt(input: string | ContentPart[], options?: { thinkingLevel?: ThinkingLevel }): Promise<RunResult>;
-  steer(msg: string | ContentPart[]): void; // 运行中插话，当前 tool batch 跑完后注入
-  followUp(msg: string | ContentPart[]): void; // agent 准备停下时注入，让它继续
-  nextRun(msg: string | ContentPart[]): void; // 排到下一个独立 run
+  prompt(
+    input: string | ContentPart[],
+    options?: { thinkingLevel?: ThinkingLevel; requestId?: string },
+  ): Promise<RunResult>;
+  steer(msg: string | ContentPart[], requestId?: string): Promise<void>; // 运行中插话，当前 tool batch 跑完后注入
+  followUp(msg: string | ContentPart[], requestId?: string): Promise<void>; // agent 准备停下时注入，让它继续
+  nextRun(msg: string | ContentPart[], requestId?: string): Promise<void>; // 排到下一个独立 run
   abort(): Promise<void>;
+  pause(reason: string): Promise<void>;
   compact(opts?: { instruction?: string }): Promise<CompactionResult>;
   contextUsage(): Promise<ContextUsage>;
   estimatePrompt(text: string): TokenEstimate & { model: string };
