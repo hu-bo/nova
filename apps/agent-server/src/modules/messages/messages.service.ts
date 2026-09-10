@@ -7,7 +7,7 @@ import { resolveCatalogModel } from "../model-config/model-config.store.js";
 import type { CredentialCipher } from "../model-config/credential.js";
 import type { ContentPart } from "@nova/agent-core";
 import type { UploadStorage } from "../uploads/upload-storage.js";
-import { invalidInput, uploadUnavailable } from "../../errors.js";
+import { conflict, invalidInput, uploadUnavailable } from "../../errors.js";
 
 export function createMessagesService(
   store: AgentStore,
@@ -26,6 +26,15 @@ export function createMessagesService(
   });
 
   return {
+    async run(userId: string, id: string) {
+      await store.routeConversation(userId, id);
+      return runtimes.status ? runtimes.status(id) : null;
+    },
+    async resume(userId: string, id: string) {
+      const route = await store.routeConversation(userId, id);
+      if (!runtimes.resume) throw conflict("Run recovery is unavailable");
+      await runtimes.resume(route);
+    },
     async list(userId: string, conversationId: string, query: { before?: string; limit: number }) {
       const result = await store.listMessages({ userId, conversationId, ...query });
       const items: ChatMessage[] = [];
@@ -48,6 +57,8 @@ export function createMessagesService(
     },
     async send(userId: string, conversationId: string, input: SendMessage) {
       let route = await store.routeConversation(userId, conversationId);
+      const currentRun = await runtimes.status?.(conversationId);
+      if (currentRun?.status === "paused") throw conflict("任务已暂停，请先继续或停止当前任务");
       const modelConfig =
         input.modelConfig ??
         (input.modelId
@@ -71,7 +82,7 @@ export function createMessagesService(
         route = await store.routeConversation(userId, conversationId);
       }
       await store.appendMessage({
-        id: randomUUID(),
+        id: input.requestId ?? randomUUID(),
         conversationId,
         role: "user",
         blocks,
@@ -85,7 +96,13 @@ export function createMessagesService(
           title: titleFromMessage(input.text || input.images?.[0]?.name || ""),
         });
       }
-      await runtimes.send(route, input.images?.length ? content : input.text, input.queue, input.reasoningEffort);
+      await runtimes.send(
+        route,
+        input.images?.length ? content : input.text,
+        input.queue,
+        input.reasoningEffort,
+        input.requestId,
+      );
     },
     async abort(userId: string, conversationId: string) {
       await store.routeConversation(userId, conversationId);

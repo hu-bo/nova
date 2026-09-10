@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import {
   ApiErrorSchema,
+  RunStateSchema,
   ChatMessageSchema,
   ClearConversationContextResultSchema,
   CompactConversationResultSchema,
@@ -35,6 +36,36 @@ export function messageRoutes(
 ): void {
   const server = app.withTypeProvider<ZodTypeProvider>();
   const messages = createMessagesService(store, runtimes, models, cipher, uploads);
+
+  server.get(
+    "/conversations/:id/run",
+    {
+      schema: {
+        operationId: "getConversationRun",
+        tags: ["messages"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: { 200: RunStateSchema.nullable(), 401: ApiErrorSchema, 404: ApiErrorSchema },
+      },
+    },
+    (request) => messages.run(request.userId, request.params.id),
+  );
+  server.post(
+    "/conversations/:id/resume",
+    {
+      schema: {
+        operationId: "resumeConversation",
+        tags: ["messages"],
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: { 202: z.null(), 401: ApiErrorSchema, 404: ApiErrorSchema, 409: ApiErrorSchema, 503: ApiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      await messages.resume(request.userId, request.params.id);
+      return reply.code(202).send(null);
+    },
+  );
 
   server.get(
     "/conversations/:id/messages",

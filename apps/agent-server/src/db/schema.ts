@@ -1,3 +1,4 @@
+import type { RunCheckpoint } from "@nova/agent-core";
 import {
   bigint,
   boolean,
@@ -242,7 +243,7 @@ export const messages = pgTable(
     seq: bigint("seq", { mode: "number" }).generatedAlwaysAsIdentity(),
     role: text("role").$type<"user" | "assistant">().notNull(),
     blocks: jsonb("blocks").$type<Block[]>().notNull(),
-    status: text("status").$type<"done" | "error" | "aborted">().notNull(),
+    status: text("status").$type<"done" | "error" | "aborted" | "streaming">().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => [
@@ -275,4 +276,20 @@ export const runners = pgTable(
     foreignKey({ columns: [table.tokenId], foreignColumns: [runnerTokens.id], name: "runners_token_fk" }),
     index("runners_owner_seen_idx").on(table.ownerId, table.lastSeenAt, table.id),
   ],
+);
+
+export const runs = pgTable(
+  "runs",
+  {
+    conversationId: uuid("conversation_id")
+      .primaryKey()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    runId: text("run_id").notNull(),
+    version: integer("version").notNull(),
+    status: text("status").$type<RunCheckpoint["status"]>().notNull(),
+    reason: text("reason"),
+    payload: jsonb("payload").$type<RunCheckpoint>().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("runs_status_updated_idx").on(table.status, table.updatedAt)],
 );

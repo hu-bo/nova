@@ -2001,6 +2001,107 @@ export type DeleteConversation404 = {
   requestId?: string;
 };
 
+export type GetConversationRun200Status = typeof GetConversationRun200Status[keyof typeof GetConversationRun200Status];
+
+
+export const GetConversationRun200Status = {
+  running: 'running',
+  paused: 'paused',
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
+export type GetConversationRun200Phase = typeof GetConversationRun200Phase[keyof typeof GetConversationRun200Phase];
+
+
+export const GetConversationRun200Phase = {
+  model: 'model',
+  tools: 'tools',
+  finish: 'finish',
+} as const;
+
+export type GetConversationRun200PendingDecision = {
+  kind: 'approval';
+  /** @minLength 1 */
+  decisionId: string;
+  /** @minLength 1 */
+  toolName: string;
+  args: unknown;
+  risk: 'read' | 'write' | 'exec';
+  codeChanges?: {
+  /** @minLength 1 */
+  path: string;
+  oldText: string;
+  newText: string;
+}[];
+} | {
+  kind: 'question';
+  /** @minLength 1 */
+  decisionId: string;
+  /** @minLength 1 */
+  question: string;
+  /**
+     * @minItems 1
+     * @items.minLength 1
+     */
+  options: string[];
+  multiSelect: boolean;
+} | null;
+
+/**
+ * @nullable
+ */
+export type GetConversationRun200 = {
+  runId: string;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  version: number;
+  status: GetConversationRun200Status;
+  phase: GetConversationRun200Phase;
+  /** @nullable */
+  reason: string | null;
+  pendingDecision?: GetConversationRun200PendingDecision;
+} | null;
+
+export type GetConversationRun401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type GetConversationRun404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type ResumeConversation401 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type ResumeConversation404 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type ResumeConversation409 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+export type ResumeConversation503 = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
 export type ListMessagesParams = {
 /**
  * @minLength 1
@@ -2166,6 +2267,8 @@ export type SendMessageBodyModelConfig = {
 };
 
 export type SendMessageBody = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  requestId?: string;
   text: string;
   /** @maxItems 4 */
   images?: SendMessageBodyImagesItem[];
@@ -5104,6 +5207,166 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteConversationMutationOptions(options), queryClient);
+    }
+
+export const getGetConversationRunUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/run`
+}
+
+export const getConversationRun = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<GetConversationRun200> => {
+
+  return apiMutator<GetConversationRun200>(getGetConversationRunUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetConversationRunQueryKey = (id: string,) => {
+    return [
+    `/api/conversations/${id}/run`
+    ] as const;
+    }
+
+
+export const getGetConversationRunQueryOptions = <TData = Awaited<ReturnType<typeof getConversationRun>>, TError = ErrorType<GetConversationRun401 | GetConversationRun404>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationRun>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetConversationRunQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getConversationRun>>> = ({ signal }) => getConversationRun(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getConversationRun>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetConversationRunQueryResult = NonNullable<Awaited<ReturnType<typeof getConversationRun>>>
+export type GetConversationRunQueryError = ErrorType<GetConversationRun401 | GetConversationRun404>
+
+
+export function useGetConversationRun<TData = Awaited<ReturnType<typeof getConversationRun>>, TError = ErrorType<GetConversationRun401 | GetConversationRun404>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationRun>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getConversationRun>>,
+          TError,
+          Awaited<ReturnType<typeof getConversationRun>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetConversationRun<TData = Awaited<ReturnType<typeof getConversationRun>>, TError = ErrorType<GetConversationRun401 | GetConversationRun404>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationRun>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getConversationRun>>,
+          TError,
+          Awaited<ReturnType<typeof getConversationRun>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetConversationRun<TData = Awaited<ReturnType<typeof getConversationRun>>, TError = ErrorType<GetConversationRun401 | GetConversationRun404>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationRun>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetConversationRun<TData = Awaited<ReturnType<typeof getConversationRun>>, TError = ErrorType<GetConversationRun401 | GetConversationRun404>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationRun>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetConversationRunQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getResumeConversationUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/resume`
+}
+
+export const resumeConversation = async (id: string, options?: Parameters<typeof apiMutator>[1]): Promise<void> => {
+
+  return apiMutator<void>(getResumeConversationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResumeConversationMutationOptions = <TError = ErrorType<ResumeConversation401 | ResumeConversation404 | ResumeConversation409 | ResumeConversation503>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeConversation>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiMutator>}
+): UseMutationOptions<Awaited<ReturnType<typeof resumeConversation>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['resumeConversation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resumeConversation>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resumeConversation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResumeConversationMutationResult = NonNullable<Awaited<ReturnType<typeof resumeConversation>>>
+
+    export type ResumeConversationMutationError = ErrorType<ResumeConversation401 | ResumeConversation404 | ResumeConversation409 | ResumeConversation503>
+
+    export const useResumeConversation = <TError = ErrorType<ResumeConversation401 | ResumeConversation404 | ResumeConversation409 | ResumeConversation503>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeConversation>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof resumeConversation>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getResumeConversationMutationOptions(options), queryClient);
     }
 
 export const getListMessagesUrl = (id: string,

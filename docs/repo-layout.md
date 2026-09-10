@@ -177,7 +177,8 @@ packages/agent-core/
 - 注册 AgentTool（`spawn_agent` / `delegate_task` / `ask_user`）
 
 工具可以通过 `AgentTool.timeoutMs(args)` 声明需要的调用总时限；Agent Core 在参数校验后将其与
-默认调用时限取较大值，仍由 TaskFlow 唯一持有调用计时器。工具负责解释自身参数，Core 不识别
+默认调用时限取较大值，由 Agent Core 的 tool batch 在审批通过后持有执行计时器；TaskFlow 负责调度与取消。
+审批等待由 Decision 单独计时，不消耗工具执行预算。工具负责解释自身参数，Core 不识别
 `bash` 名称或 Shell 参数；Runner 继续负责进程执行超时与终止。
 
 **不负责**
@@ -302,7 +303,7 @@ type Decide = (req: DecisionRequest, signal: AbortSignal) => Promise<DecisionRes
 
 **超时与取消**
 
-- 等待人类输入必须有 timeout，超时默认动作 **fail-closed（deny）**
+- 等待人类输入必须有 timeout；`edit_file` 审批超时默认仅放行本次，其他审批超时默认 deny，反问超时无答案
 - 等待期间收到 abort，要能干净退出并落 record
 
 **落 Entry 还是 Record**
@@ -1011,3 +1012,9 @@ Agent → TaskFlow → Execution → Runner
 - `proto` 是跨进程契约
 
 **Use better boundaries, state models, and data flow to reduce complexity — never use more code to hide complexity.**
+
+## 持久化运行与恢复边界
+
+Agent Core 是逻辑 run、执行阶段、恢复预算和工具结果的唯一 owner。SessionStorage
+原子提交 Entry / Record / checkpoint；agent-server 持有数据库执行权、恢复调度和 UI
+投影。TaskFlow 只管理当前尝试，Runner 只执行并报告事实。页面读取持久化运行状态。

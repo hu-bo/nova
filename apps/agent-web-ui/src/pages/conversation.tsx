@@ -338,6 +338,34 @@ function ConversationView({
           </div>
         )}
 
+        {store.state.run?.status === "paused" && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            <p className="min-w-0 flex-1">{pauseMessage(store.state.run.reason)}</p>
+            {[null, "runner_disconnected", "server_restart", "server_shutdown"].includes(store.state.run.reason) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void session.resume().catch((error) =>
+                    store.dispatch({
+                      type: "event",
+                      conversationId: conversation.id,
+                      event: { type: "error", code: "RESUME_FAILED", message: errorMessage(error) },
+                    }),
+                  );
+                }}
+              >
+                继续
+              </Button>
+            )}
+            <Button variant="outline" size="sm" disabled={mutations.abortMutation.isPending} onClick={mutations.abort}>
+              停止任务
+            </Button>
+          </div>
+        )}
         <Chat
           state={{
             messages: store.state.messages,
@@ -362,6 +390,7 @@ function ConversationView({
           }}
           composer={{
             disabled:
+              store.state.run?.status === "paused" ||
               mutations.sendMutation.isPending ||
               mutations.compactMutation.isPending ||
               mutations.clearMutation.isPending,
@@ -481,4 +510,21 @@ function contextCompactionMessage(event: Extract<UiEvent, { type: "context.compa
     return "上下文达到自动压缩阈值，已压缩较早内容以继续对话；页面中的历史消息仍然保留。";
   if (event.trigger === "overflow") return "模型报告上下文超限，已自动压缩较早内容并重试；页面中的历史消息仍然保留。";
   return "上下文已压缩；页面中的历史消息仍然保留。";
+}
+
+function pauseMessage(reason: string | null): string {
+  switch (reason) {
+    case "outcome_unknown":
+      return "任务已暂停：部分操作可能已经执行，请先核实文件或命令结果。为避免重复修改，不会自动重试；可停止本次任务后继续核实。";
+    case "recovery_limit":
+      return "任务已暂停：同一步骤恢复多次仍未推进，已停止自动重试。";
+    case "no_progress":
+      return "任务已暂停：重复操作没有带来新进展，已停止循环。";
+    case "runtime_failed":
+      return "任务已暂停：运行环境创建失败。请检查配置，停止本次任务后重试。";
+    case "ownership_lost":
+      return "任务已暂停：执行连接已失效，请检查服务状态。";
+    default:
+      return "任务已暂停，已提交的进度保留。等待 Runner 就绪后自动继续。";
+  }
 }

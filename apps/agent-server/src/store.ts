@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Block, ModelConfig, Page, ProjectInstructions } from "@nova/protocol";
 import { conflict, notFound } from "./errors.js";
@@ -69,7 +70,7 @@ export interface MessageRow {
   conversationId: string;
   role: "user" | "assistant";
   blocks: Block[];
-  status: "done" | "error" | "aborted";
+  status: "done" | "error" | "aborted" | "streaming";
   createdAt: Date;
   seq: number;
 }
@@ -383,6 +384,12 @@ export function createMemoryStore(): AgentStore {
       return updated;
     },
     async appendMessage(input) {
+      const existing = state.messages.find((m) => m.conversationId === input.conversationId && m.id === input.id);
+      if (existing) {
+        if (existing.role !== input.role || !isDeepStrictEqual(existing.blocks, input.blocks))
+          throw conflict("Message request ID was reused with different content");
+        return existing;
+      }
       const message = { ...input, seq: state.nextMessageSeq++ };
       state.messages.push(message);
       const conversation = state.conversations.get(input.conversationId);

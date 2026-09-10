@@ -300,12 +300,12 @@ type ExecError = { code: ExecErrorCode; message: string; exitCode?: number }
 读取 Runner root 内其他位置；最终越界判断只由 Runner root 拥有。`read()` 的行窗口在 Runner 内
 完成，并有独立字节上限；这里的有界是资源约束，不是读取权限限制。
 
-Agent 每个 tool call 也有总时限：`AgentConfig.toolTimeoutMs`，缺省 120 秒。工具可通过
+Agent 每个 tool call 的执行也有时限：`AgentConfig.toolTimeoutMs`，缺省 120 秒，不包含审批等待。工具可通过
 `AgentTool.timeoutMs(args)` 根据已校验参数声明更长的时限；实际总时限取两者较大值。
 例如 bash 的进程默认执行 10 秒，显式长任务的调用预算包含额外 5 秒用于调度与结果回传，避免
 被外层固定 120 秒提前中止。该声明必须为正整数毫秒，且不能超过 JavaScript 定时器上限。
-该时限由 TaskFlow
-持有，并会把同一个 call-level `AbortSignal` 作为 `execute` 第三个参数传给所有工具；存在 Workspace
+该时限由 Agent Core 的 tool batch 在审批通过后开始计时，TaskFlow 负责调度与取消。
+同一个 call-level `AbortSignal` 作为 `execute` 第三个参数传给所有工具；存在 Workspace
 时也会放进 `ToolContext.signal`，Runner 执行因此会收到取消请求。没有 Workspace 的 RemoteTool 仍能
 通过第三个参数响应取消。工具未能自行响应 abort 时，Agent 仍会将该调用收敛为 timeout 结果，不会让
 整个 run 永久停在 loading。
@@ -453,17 +453,15 @@ interface Usage { input: number; output: number; cacheRead?: number; cacheWrite?
 
 ### 5.2 Resume
 
-崩溃或重启后：
+恢复优先读取持久化 checkpoint，保留原 runId、turn 计数、usage 与 deadline。
 
-```text
-读 Record → 找最后一条 run-started 且无匹配 run-finished 的 runId
-  ├── 恢复 TodoState：取最后一条 todo-updated（跨 run，见 §9）
-  ├── 有未完成的 tool-started        → 该 tool 结果不可知，作为 error 结果喂回模型，续跑
-  ├── 有未 resolved 的 decision      → 重新发出 DecisionRequest，等人类
-  └── 都没有                         → 从最后一条 Entry 之后重新进 turn 循环
-```
+- `model`：已提交草稿用于展示，从最后完整 Entry 重新请求模型。
+- `tools`：按 callId 复用完整 tool-finished 结果，只执行尚未派发的调用；已派发而没有完整回执的调用暂停为 outcome_unknown。
+- `finish`：提交已经决定的终态，不重新请求模型；已入队 followUp / nextRun 继续按队列语义处理。
+- 未执行工具的审批重新根据当前环境生成，避免复用过期的文件修改预览。
+- 三次恢复没有进入新的已提交阶段时暂停；用户取消不自动恢复。
 
-**挂起状态必须落 Record**，否则断线后无法恢复。这是 Record 存在的首要理由。
+兼容读取旧 Record 的恢复入口只能保守恢复已保存内容；结果未知不会再作为普通错误交回模型自动重试。
 
 ### 5.3 存储接口
 
@@ -471,6 +469,8 @@ interface Usage { input: number; output: number; cacheRead?: number; cacheWrite?
 
 ```ts
 interface SessionStorage {
+  loadCheckpoint(sessionId: string): Promise<RunCheckpoint | null>
+  commit(sessionId: string, change: SessionCommit): Promise<void>
   appendEntry(sessionId: string, entry: Entry): Promise<void>
   appendRecord(sessionId: string, record: Record): Promise<void>
   loadEntries(sessionId: string, leafId?: EntryId): Promise<Entry[]>   // 返回该分支，已按序
@@ -485,7 +485,7 @@ interface RecordFilter { runId?: string; kind?: Record["kind"]; limit?: number; 
 | 集成测试 / CLI | 内存 或 JSONL |
 | agent-server | PostgreSQL + Drizzle（见 `agent-server.md` §6） |
 
-四个方法，没有 `update` / `delete`。**两条流都是 append-only**，改历史一律靠新增 Entry。
+Entry / Record 仍为 append-only。运行中的变更通过 commit 原子追加内容/事实并以 expectedVersion 更新 checkpoint；只有数据库提交成功才继续派发工具。
 
 `RecordFilter` 的存在只为一件事：恢复 TodoState 时取最后一条 `todo-updated`
 （`loadRecords(id, { kind: "todo-updated", limit: 1, desc: true })`），
@@ -544,7 +544,9 @@ type ApprovalPolicy = { default: "auto" | "ask" | "deny"; byRisk?: Partial<Recor
 
 **超时与取消**
 
-- 等待人类必须有 timeout，缺省 5 分钟，**超时 fail-closed（deny）**
+- 等待人类必须有 timeout，缺省 5 分钟；`edit_file` 审批超时默认 `allow`，仅放行本次，不写入 session allowlist；Record 保存 `allow` 及超时自动放行原因
+- 其他审批超时仍 deny，反问超时无答案；显式拒绝、审批回调异常和运行取消都不会触发超时放行
+- Decision 结束时取消传给 `Decide` 的局部 signal，释放待处理请求并关闭 UI 卡片，不取消运行
 - 等待期间收到 abort：干净退出、落 `decision-resolved: "timeout"` 之外的 `abort-requested`
 
 **落 Entry 还是 Record**
@@ -843,3 +845,14 @@ packages/agent-core/
 | `allow_always` 跨 session 持久化 | Phase 2 | 要先有 server 的用户态 |
 | 跨 run 的 Entry 树 UI 导航 | Phase 2 | 前端未就绪，接口已留 |
 | `delegate_task`（异步派生） | 按需 | 见 §9 |
+
+## 持久化运行恢复契约（2026-09）
+
+同一逻辑任务恢复时保留 runId，累计 turn、尝试数与 deadline 不重置。checkpoint
+保存阶段、草稿和恢复次数；完整 assistant 与工具结果分别在执行边界提交。每个工具
+完成立即保存完整 content/details，不等待整个 batch。模型草稿按时间/字节合并保存，
+不完整工具参数不执行，草稿不作为完整模型上下文。工具已派发但没有完整回执时暂停
+为 outcome_unknown，禁止自动重放有副作用的调用。暂停保留上下文，取消为不可恢复终态。
+同一进度最多自动恢复 3 次，累计执行期限与 maxTurns 跨重启有效。
+工具超时且未确认执行结果时同样暂停，保留错误回执，不交回模型重复执行。
+终止型工具的结果与完成阶段一起提交；重复调用判定忽略 JSON 对象键顺序。

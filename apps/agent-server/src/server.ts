@@ -1,3 +1,4 @@
+import { pgRunControl } from "./db/pg-run-control.js";
 import { createApp, registerApp } from "./app/app.js";
 import { createAuthServiceClient } from "./app/auth-service.js";
 import { loadConfig } from "./app/config.js";
@@ -88,7 +89,7 @@ const createAgentRuntime = createAgentRuntimeFactory({
 });
 const runtimes = createRuntimeRegistry(
   createAgentRuntime,
-  (conversationId, agent) => agent.subscribe(projectAgentEvents(conversationId, events, database.store)),
+  (conversationId, agent) => agent.subscribe(projectAgentEvents(conversationId, events)),
   (failure) => {
     logger.error(
       {
@@ -104,6 +105,11 @@ const runtimes = createRuntimeRegistry(
       "conversation run failed",
     );
   },
+  undefined,
+  pgRunControl(database.db, database.client, database.store, (route) => {
+    const id = route.conversation.runnerId ?? route.project?.runnerId;
+    return id ? runners.generation(route.userId, id) : null;
+  }),
 );
 await registerApp(app, {
   store: database.store,
@@ -119,10 +125,22 @@ await registerApp(app, {
   uploadStorage,
 });
 
+let closing = false;
 const close = async () => {
-  await app.close();
-  await runnerSdk.close();
-  await database.close();
+  if (closing) return;
+  closing = true;
+  const deadline = setTimeout(() => process.exit(1), 15_000);
+  deadline.unref();
+  try {
+    await runtimes.close?.();
+    await app.close();
+    await runnerSdk.close();
+    await database.close();
+    clearTimeout(deadline);
+  } catch (error) {
+    logger.error({ err: error }, "graceful shutdown failed");
+    process.exitCode = 1;
+  }
 };
 process.once("SIGINT", () => void close());
 process.once("SIGTERM", () => void close());

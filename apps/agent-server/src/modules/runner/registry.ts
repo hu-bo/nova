@@ -10,6 +10,7 @@ const logger = createLogger("agent-server").child("runner-registry");
 export type RunnerState = Project["runnerState"];
 
 export interface RunnerRegistry {
+  generation(userId: string, runnerId: string): string | null;
   register(ownerId: string, tokenId: string, session: RunnerSession): Promise<void>;
   markDisconnected(ownerId: string, runnerId: string): void;
   state(userId: string, runnerId: string | null, workspace: string | null): RunnerState;
@@ -110,6 +111,11 @@ export function createRunnerRegistry(store?: AgentStore, heartbeatIntervalMs = 1
   };
 
   return {
+    generation(userId, runnerId) {
+      return status(userId, runnerId) === "disconnected"
+        ? null
+        : (current(userId, runnerId)?.session.generation ?? null);
+    },
     async register(ownerId, tokenId, session) {
       const runnerId = session.identity.runnerId;
       const sessionKey = key(ownerId, runnerId);

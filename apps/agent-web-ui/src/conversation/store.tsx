@@ -87,6 +87,32 @@ export function useConversationSession(conversationId: string, enabled = true) {
     refetchOnWindowFocus: false,
     retry: 1,
   });
+  const run = useQuery({
+    queryKey: ["conversation-run", conversationId],
+    queryFn: () => api!.getConversationRun(conversationId),
+    enabled: Boolean(api) && enabled,
+    refetchInterval: 3000,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  });
+  useEffect(() => {
+    const snapshot = run.data;
+    if (!snapshot) return;
+    dispatch({ type: "event", event: { type: "run.state", state: snapshot }, conversationId });
+    if (snapshot.status !== "running") {
+      let disposed = false;
+      void api!
+        .listMessages(conversationId)
+        .then((page) => {
+          if (!disposed) dispatch({ type: "hydrate", messages: page.items, runVersion: snapshot.version });
+        })
+        .catch(() => undefined);
+      return () => {
+        disposed = true;
+      };
+    }
+  }, [run.data, api, conversationId, dispatch]);
+
   const context = useQuery({
     queryKey: queryKeys.context(conversationId),
     queryFn: () => api!.getConversationContext(conversationId),
@@ -96,8 +122,9 @@ export function useConversationSession(conversationId: string, enabled = true) {
   });
 
   useEffect(() => {
-    if (history.data) dispatch({ type: "hydrate", messages: history.data.items, preserveLiveState: true });
-  }, [dispatch, history.data]);
+    if (needsHistory && history.data)
+      dispatch({ type: "hydrate", messages: history.data.items, preserveLiveState: true });
+  }, [dispatch, history.data, needsHistory]);
   useEffect(() => {
     if (context.data) dispatch({ type: "context.set", usage: context.data });
   }, [context.data, dispatch]);
@@ -121,8 +148,19 @@ export function useConversationSession(conversationId: string, enabled = true) {
   return {
     isLoading: enabled && history.isLoading,
     historyError: history.error,
-    retryHistory: () => void history.refetch(),
+    retryHistory: async () => {
+      const result = await history.refetch();
+      if (result.data && !result.error)
+        dispatch({ type: "hydrate", messages: result.data.items, preserveLiveState: true });
+    },
     ensureStreamConnected: stream.ensureConnected,
     releaseStream: stream.release,
+    resume: async () => {
+      await api!.resumeConversation(conversationId);
+      await run.refetch();
+    },
+    refreshRun: () => {
+      void run.refetch();
+    },
   };
 }

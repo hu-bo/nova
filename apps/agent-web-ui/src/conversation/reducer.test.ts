@@ -1,7 +1,59 @@
 import { describe, expect, it } from "vitest";
+import type { ChatMessage } from "@nova/protocol";
 import { conversationReducer, initialConversationState } from "./reducer.js";
 
 describe("conversationReducer", () => {
+  it("keeps the first question before its reply when a partial history arrives after switching chats", () => {
+    const question: ChatMessage = {
+      id: "user-1",
+      conversationId: "c1",
+      role: "user",
+      status: "done",
+      blocks: [{ type: "text", text: "first question" }],
+      // 浏览器时钟领先服务端时，也必须保持提问在回复之前。
+      createdAt: 100,
+    };
+    const reply: ChatMessage = {
+      ...question,
+      id: "assistant-1",
+      role: "assistant",
+      status: "streaming",
+      blocks: [{ type: "text", text: "live answer" }],
+      createdAt: 101,
+    };
+    const nextQuestion: ChatMessage = { ...question, id: "user-2", createdAt: 102 };
+    const state = {
+      ...initialConversationState,
+      connection: "open" as const,
+      isRunning: true,
+      messages: [question, reply, nextQuestion],
+    };
+    const action = {
+      type: "hydrate" as const,
+      preserveLiveState: true,
+      messages: [{ ...reply, createdAt: 1, blocks: [] }],
+    };
+    const hydrated = conversationReducer(state, action);
+    expect(hydrated.messages).toEqual([question, reply, nextQuestion]);
+    expect(conversationReducer(hydrated, action)).toEqual(hydrated);
+  });
+
+  it("places disjoint older local messages before history while retaining newer local messages", () => {
+    const message = (id: string, createdAt: number): ChatMessage => ({
+      id,
+      createdAt,
+      conversationId: "c1",
+      role: "user",
+      blocks: [{ type: "text", text: id }],
+      status: "done",
+    });
+    const hydrated = conversationReducer(
+      { ...initialConversationState, messages: [message("first", 1), message("latest", 3)] },
+      { type: "hydrate", preserveLiveState: true, messages: [message("history", 2)] },
+    );
+    expect(hydrated.messages.map((item) => item.id)).toEqual(["first", "history", "latest"]);
+  });
+
   it("merges late history without clearing a live approval, todo plan or completed run", () => {
     const live = {
       ...initialConversationState,
@@ -192,6 +244,7 @@ describe("conversationReducer", () => {
     });
     const hydrated = conversationReducer(withDelta, {
       type: "hydrate",
+      preserveLiveState: true,
       messages: [
         {
           id: "user-1",
@@ -208,4 +261,42 @@ describe("conversationReducer", () => {
     expect(hydrated.messages[1]?.status).toBe("streaming");
     expect(hydrated.messages[1]?.blocks).toEqual([{ type: "text", text: "仍在生成" }]);
   });
+});
+
+it("authoritative paused state settles stale loading and ignores older snapshots", () => {
+  const live = conversationReducer(initialConversationState, {
+    type: "event",
+    conversationId: "c",
+    event: { type: "message.start", messageId: "m", role: "assistant" },
+  });
+  const run = {
+    runId: "r",
+    version: 10,
+    status: "paused" as const,
+    phase: "tools" as const,
+    reason: "outcome_unknown",
+  };
+  const paused = conversationReducer(live, {
+    type: "event",
+    conversationId: "c",
+    event: { type: "run.state", state: run },
+  });
+  expect(paused.isRunning).toBe(false);
+  expect(paused.messages[0]?.status).toBe("aborted");
+  expect(paused.queueReady).toBe(false);
+  expect(
+    conversationReducer(paused, {
+      type: "event",
+      conversationId: "c",
+      event: { type: "run.state", state: { ...run, version: 9, status: "running" } },
+    }),
+  ).toEqual(paused);
+  expect(conversationReducer(paused, { type: "hydrate", messages: [], runVersion: 9 })).toEqual(paused);
+  expect(
+    conversationReducer(paused, {
+      type: "event",
+      conversationId: "c",
+      event: { type: "run.end", runId: "previous-run", stopReason: "done" },
+    }),
+  ).toEqual(paused);
 });

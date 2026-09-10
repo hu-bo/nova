@@ -580,7 +580,7 @@ flush headers 后必须立即写入 SSE 注释帧 `:connected\n\n`。不能等�
 
 | 关注点   | 做法                                                                                                                                            |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 事件 id  | 进程内每 conversation 一个单调递增计数器，写进 SSE `id:` 字段                                                                                   |
+| 事件 id  | 进程 epoch + 每 conversation 单调递增计数器，写进 SSE `id:` 字段                                                                                   |
 | 重连     | 原生 `EventSource` 自动带 `Last-Event-ID` header；新建连接可传 `after` query，server 从环形缓冲（每 conversation 最近 500 条）重放，header 优先 |
 | 缓冲区外 | 返回一次 `error{code:"RESYNC"}`，客户端重新拉 `GET /messages` 全量对齐                                                                          |
 | 建连帧   | headers 后立即发送 `:connected` 注释，强制代理转发并完成 `EventSource.open`                                                                     |
@@ -632,7 +632,8 @@ Decision Record 的唯一 writer 是 agent-core。`sseDecide` 不碰 `records` �
 **`decisionId` 不存在时返回 404**（重启后 pending map 已空）。
 客户端据此提示"该请求已失效"，而不是静默丢弃。
 
-超时由 agent-core 管（`agent-core.md` §6），server 不重复实现。
+超时由 agent-core 管（`agent-core.md` §6），server 不重复实现。`edit_file` 审批超时仅放行本次；
+core 结束等待时取消 `Decide` 的局部 signal，server 据此清理 pending map 并发布 `decision.resolved`。
 
 ---
 
@@ -863,3 +864,24 @@ Agent。
 | Event Store / Replay        | 见 §6                             |
 | 角色 / 团队 / ACL           | 见 §5                             |
 | Task / Execution 的运维视图 | 没有消费者                        |
+
+## 持久化运行恢复（2026-09）
+
+runs 保存每个 conversation 的当前逻辑运行 checkpoint，历史保留在 records。
+SessionStorage.commit 在事务内提交 checkpoint、Entry / Record 与可重建的消息投影；
+观察订阅不承担可靠写入。运行取得数据库排他执行权后才能恢复；进程失效释放执行权，
+新运行者重新加载 checkpoint。服务启动周期性扫描可恢复运行，并等待指定 Runner
+就绪；不切换到其他设备。重连必须使用新 Runner generation 创建 runtime。
+
+Runner 断连主动暂停关联运行，服务关闭先暂停运行再关闭 Runner 与数据库。
+未知工具结果、恢复额度耗尽与过期任务停止自动调度。状态读取和手动恢复/取消均校验
+conversation 所有权。恢复扫描有并发边界，不用无限 prompt(继续) 循环。
+
+恢复调度每秒检查连接与候选任务，最多同时持有 4 个运行。
+候选任务按会话游标轮转分页，离线任务不会长期占满候选窗口、阻塞后续任务。
+数据库 advisory lock 覆盖运行生命周期，checkpoint version 拒绝旧实例写入。
+连接失效后旧执行停止。工具超时且缺少确认结果时，暂停并要求核实，不自动重放。
+已提交的最终模型结果可由 Host 在同一存储事务中完成收尾，不要求 Runner 在线。
+`GET /api/conversations/:id/run` 返回脱敏运行状态与当前审批，`POST .../resume` 请求安全续跑。
+结果未知、无进展和恢复额度耗尽的任务须停止并核实后发起新任务；尚未实现 Runner
+持久化执行回执查询，不能承诺任意 Shell 操作自动恢复或 exactly-once。

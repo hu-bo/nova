@@ -29,7 +29,7 @@
 | `agent-core/loop` | tool batch 的并发/串行分组、**并发上限生效（20 个 call 时在途不超过 8）**、结果顺序回填、terminate 规则、max_turns |
 | `agent-core/context` | cut point 合法性（**不得切开 tool_call 与 tool_result**）、压缩失败降级、截断保头尾 |
 | `agent-core/session` | 树的 fork / 回溯、resume 的三种分支（未完成 tool / 未 resolve decision / 都没有） |
-| `agent-core/decision` | 超时 fail-closed、abort 期间的清理、拒绝要落 Entry |
+| `agent-core/decision` | `edit_file` 审批超时仅放行本次、其他审批超时拒绝、异常不放行、abort 期间的清理、拒绝要落 Entry |
 | `agent-core/queue` | 三个排空点的时机、**不在 tool 执行中途注入** |
 | `agent-core/context/todo` | 阈值以下不注入、阈值以上必注入、压缩后 TodoState 不变、注入位置在最后一条 user message 之前 |
 | `agent-core` 装配 | Chat 模式（无 `ctx`）+ 含 `risk !== "none"` 的工具 → 构造期抛错 |
@@ -208,3 +208,11 @@ nightly:
 | 快照测试 UI | Block 渲染改动频繁，快照会变成"每次都更新"的仪式 |
 | mock `crates/runner` | Integration 的价值就在于用真 Runner。要 mock 就退回 Unit 层 |
 | 性能基准 | 还没有性能目标。有了再加 |
+
+## 运行恢复故障验证
+
+`packages/agent-core/src/recovery.test.ts` 覆盖流式草稿、中途失去执行权、部分工具已提交、
+最终答案收尾、预算及取消。`apps/agent-server/src/db/recovery.integration.test.ts` 使用
+显式临时 PG 数据库验证原子提交、消息投影、排他执行权与 Runner 换连接恢复。
+页面 reducer 验证暂停终态覆盖 streaming、旧版本不能恢复 loading；SSE epoch 测试
+验证服务重启后不会把同一个数字游标误认为新进程事件。

@@ -1,4 +1,4 @@
-import type { Block, ChatMessage, ContextUsage, SendMessage, Todo, UiEvent } from "@nova/protocol";
+import type { Block, ChatMessage, ContextUsage, SendMessage, Todo, UiEvent, RunState } from "@nova/protocol";
 
 export interface QueuedMessage {
   message: ChatMessage;
@@ -6,6 +6,7 @@ export interface QueuedMessage {
 }
 
 export interface ConversationState {
+  run: RunState | null;
   messages: ChatMessage[];
   queuedMessages: QueuedMessage[];
   todos: Todo[];
@@ -19,7 +20,7 @@ export interface ConversationState {
 }
 
 export type ConversationAction =
-  | { type: "hydrate"; messages: ChatMessage[]; preserveLiveState?: boolean }
+  | { type: "hydrate"; messages: ChatMessage[]; preserveLiveState?: boolean; runVersion?: number }
   | { type: "connection"; connection: ConversationState["connection"] }
   | { type: "context.set"; usage: ContextUsage }
   | { type: "event"; event: UiEvent; conversationId: string }
@@ -33,6 +34,7 @@ export type ConversationAction =
   | { type: "clear-context-compaction" };
 
 export const initialConversationState: ConversationState = {
+  run: null,
   messages: [],
   queuedMessages: [],
   todos: [],
@@ -48,7 +50,10 @@ export const initialConversationState: ConversationState = {
 export function conversationReducer(state: ConversationState, action: ConversationAction): ConversationState {
   switch (action.type) {
     case "hydrate": {
-      const messages = mergeHydratedMessages(action.messages, state.messages);
+      if (action.runVersion !== undefined && action.runVersion !== state.run?.version) return state;
+      const messages = action.preserveLiveState
+        ? mergeHydratedMessages(action.messages, state.messages)
+        : action.messages;
       if (action.preserveLiveState && state.connection !== "closed" && state.messages.length > 0)
         return { ...state, messages };
       return {
@@ -56,7 +61,9 @@ export function conversationReducer(state: ConversationState, action: Conversati
         messages,
         todos: latestTodos(messages),
         pendingDecision: null,
-        isRunning: messages.some((message) => message.status === "streaming"),
+        isRunning: state.run
+          ? state.run.status === "running"
+          : messages.some((message) => message.status === "streaming"),
         queueReady: false,
         error: null,
       };
@@ -123,25 +130,59 @@ function mergeHydratedMessages(snapshot: ChatMessage[], current: ChatMessage[]):
     return existing?.status === "streaming" ? existing : message;
   });
   const hydratedIds = new Set(snapshot.map((message) => message.id));
-  return [...hydrated, ...current.filter((message) => !hydratedIds.has(message.id))];
+  if (!current.some((message) => hydratedIds.has(message.id)))
+    return [...hydrated, ...current].sort((a, b) => a.createdAt - b.createdAt);
+
+  // 共有消息提供位置锚点，不依赖浏览器与服务端时钟一致。
+  // 从后往前插入，让快照缺少的首问仍位于它的回复之前。
+  let nextIndex = hydrated.length;
+  for (let index = current.length - 1; index >= 0; index -= 1) {
+    const message = current[index]!;
+    if (hydratedIds.has(message.id)) {
+      nextIndex = hydrated.findIndex((item) => item.id === message.id);
+    } else {
+      hydrated.splice(nextIndex, 0, message);
+    }
+  }
+  return hydrated;
 }
 
 function reduceEvent(state: ConversationState, event: UiEvent, conversationId: string): ConversationState {
   switch (event.type) {
-    case "message.start": {
-      if (state.messages.some((message) => message.id === event.messageId)) {
-        return { ...state, isRunning: true, queueReady: false, error: null };
-      }
-      const message: ChatMessage = {
-        id: event.messageId,
-        conversationId,
-        role: event.role,
-        blocks: [],
-        status: "streaming",
-        createdAt: Date.now(),
+    case "run.state": {
+      if (state.run && event.state.version < state.run.version) return state;
+      const running = event.state.status === "running";
+      return {
+        ...state,
+        run: event.state,
+        isRunning: running,
+        queueReady: event.state.status === "completed",
+        pendingDecision: running
+          ? event.state.pendingDecision === undefined
+            ? state.pendingDecision
+            : event.state.pendingDecision
+          : null,
+        messages: running
+          ? state.messages
+          : settleMessages(state.messages, event.state.status === "failed" ? "error" : "aborted"),
       };
-      return { ...state, messages: [...state.messages, message], isRunning: true, queueReady: false, error: null };
     }
+    case "message.start":
+      if (state.run && state.run.status !== "running") return state;
+      {
+        if (state.messages.some((message) => message.id === event.messageId)) {
+          return { ...state, isRunning: true, queueReady: false, error: null };
+        }
+        const message: ChatMessage = {
+          id: event.messageId,
+          conversationId,
+          role: event.role,
+          blocks: [],
+          status: "streaming",
+          createdAt: Date.now(),
+        };
+        return { ...state, messages: [...state.messages, message], isRunning: true, queueReady: false, error: null };
+      }
     case "block.start":
       return { ...state, messages: setBlock(state.messages, event.messageId, event.index, event.block) };
     case "block.delta":
@@ -175,10 +216,13 @@ function reduceEvent(state: ConversationState, event: UiEvent, conversationId: s
     case "context.compacted":
       return { ...state, contextCompaction: event };
     case "run.end":
+      if (state.run && state.run.runId !== event.runId) return state;
       return {
         ...state,
         isRunning: false,
-        queueReady: event.stopReason !== "aborted" && event.stopReason !== "error",
+        queueReady: ["done", "terminate"].includes(event.stopReason),
+        pendingDecision: null,
+        messages: settleMessages(state.messages, event.stopReason === "error" ? "error" : "aborted"),
       };
     case "error":
       return event.code === "RESYNC" ? state : { ...state, error: event.message };
@@ -262,4 +306,14 @@ function latestTodos(messages: ChatMessage[]): Todo[] {
   };
   for (const message of messages) visit(message.blocks);
   return latest;
+}
+
+function settleMessages(messages: ChatMessage[], status: "error" | "aborted"): ChatMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    status: message.status === "streaming" ? status : message.status,
+    blocks: message.blocks.map((block) =>
+      block.type === "tool_call" && block.status === "running" ? { ...block, status: "cancelled" } : block,
+    ),
+  }));
 }

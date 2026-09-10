@@ -1,11 +1,8 @@
+import { toUiRequest } from "../decision/pending-decisions.js";
 import type { AgentEvent, Block as CoreBlock, StopReason } from "@nova/agent-core";
 import type { Block, UiEvent } from "@nova/protocol";
-import type { AgentStore } from "../../store.js";
 import type { EventHub } from "../runtime/event-hub.js";
-import { createLogger } from "@nova/logger";
 import { projectToolDetails } from "./tool-blocks.js";
-
-const logger = createLogger("agent-server").child("projection");
 
 type ProjectedMessage = {
   id: string;
@@ -14,18 +11,26 @@ type ProjectedMessage = {
   createdAt: Date;
 };
 
-export function projectAgentEvents(conversationId: string, events: EventHub, store: Pick<AgentStore, "appendMessage">) {
+export function projectAgentEvents(conversationId: string, events: EventHub) {
   const messages = new Map<string, ProjectedMessage>();
   const toolNames = new Map<string, string>();
   const toolCodeChanges = new Map<string, Array<{ path: string; oldText: string; newText: string }>>();
   let activeMessageId: string | null = null;
-  let writes = Promise.resolve();
 
   const publish = (event: UiEvent) => events.publish(conversationId, event);
   const current = () => (activeMessageId ? messages.get(activeMessageId) : undefined);
 
   return (event: AgentEvent): void => {
     switch (event.type) {
+      case "run.state":
+        publish({
+          ...event,
+          state: {
+            ...event.state,
+            pendingDecision: event.state.pendingDecision ? toUiRequest(event.state.pendingDecision) : null,
+          },
+        });
+        return;
       case "message.start":
         activeMessageId = event.messageId;
         messages.set(event.messageId, { id: event.messageId, blocks: [], status: "done", createdAt: new Date() });
@@ -70,6 +75,14 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
         const message = current();
         if (!message) return;
         const name = toolNames.get(event.callId) ?? "tool";
+        const callIndex = message.blocks.findIndex(
+          (block) => block.type === "tool_call" && block.callId === event.callId,
+        );
+        const call = message.blocks[callIndex];
+        if (call?.type === "tool_call") {
+          message.blocks[callIndex] = { ...call, status: event.status };
+          publish({ type: "block.end", messageId: message.id, index: callIndex, block: message.blocks[callIndex]! });
+        }
         const index = message.blocks.length;
         const block: Block = {
           type: "tool_result",
@@ -110,10 +123,12 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
         return;
       }
       case "run.end": {
-        if (event.stopReason === "aborted") {
+        if (event.stopReason === "aborted" || event.stopReason === "paused" || event.stopReason === "error") {
           for (const message of messages.values()) {
-            message.status = "aborted";
-            publish({ type: "message.end", messageId: message.id, status: "aborted" });
+            if (message.id === activeMessageId) {
+              message.status = event.stopReason === "error" ? "error" : "aborted";
+              publish({ type: "message.end", messageId: message.id, status: message.status });
+            }
             message.blocks.forEach((block, index) => {
               if (block?.type !== "tool_call" || block.status !== "running") return;
               const cancelled: Block = { ...block, status: "cancelled" };
@@ -123,45 +138,20 @@ export function projectAgentEvents(conversationId: string, events: EventHub, sto
           }
         }
         publish({ type: "run.end", runId: event.runId, stopReason: event.stopReason });
-        const completed = [...messages.values()];
         messages.clear();
         activeMessageId = null;
-        writes = writes
-          .then(async () => {
-            for (const message of completed) {
-              await store.appendMessage({
-                id: message.id,
-                conversationId,
-                role: "assistant",
-                blocks: message.blocks.filter(Boolean),
-                status: message.status,
-                createdAt: message.createdAt,
-              });
-            }
-          })
-          .catch((error) => {
-            logger.error(
-              { err: error, component: "server", conversationId },
-              "failed to persist projected agent messages",
-            );
-            publish({
-              type: "error",
-              code: "PERSISTENCE_FAILED",
-              message: error instanceof Error ? error.message : "Failed to save assistant message",
-            });
-          });
       }
     }
   };
 }
 
 function messageStatus(stopReason: StopReason): ProjectedMessage["status"] {
-  if (stopReason === "aborted") return "aborted";
+  if (stopReason === "aborted" || stopReason === "paused") return "aborted";
   if (stopReason === "error" || stopReason === "repetition_detected") return "error";
   return "done";
 }
 
-function projectBlock(block: CoreBlock): Block | null {
+export function projectBlock(block: CoreBlock): Block | null {
   switch (block.type) {
     case "text":
       return block;

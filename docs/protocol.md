@@ -319,3 +319,10 @@ Phase 2 内不做版本协商。前后端同仓库同步发布。
 
 破坏性变更的规矩：**先加新字段并双写，再切前端，最后删旧字段**，三步分开发布。
 路径里不加 `/v1` —— 加了就要维护，而现在没有外部消费者。
+
+## 运行状态快照（2026-09）
+
+运行状态独立于 message.status 与 SSE connection。run.state 及授权 REST 状态接口
+返回 runId、version、status、phase、reason。paused 停止 loading，明确显示暂停原因；
+浏览器断线显示连接状态，不推断后台失败。重连和周期状态对齐使遗漏终态不造成永久
+loading。SSE 游标包含进程 epoch，重启后旧游标必须 RESYNC。

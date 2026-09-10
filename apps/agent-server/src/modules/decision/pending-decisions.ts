@@ -53,7 +53,7 @@ export function createPendingDecisions(events: EventHub): PendingDecisions {
   };
 }
 
-function toUiRequest(request: CoreDecisionRequest): DecisionRequest {
+export function toUiRequest(request: CoreDecisionRequest): DecisionRequest {
   if (request.kind === "question") return request;
   if (request.risk === "none") throw new Error("risk-free tools must not request approval");
   return {

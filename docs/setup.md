@@ -31,3 +31,16 @@ pnpm proto:generate
 - Phase 1：`agent-core`、`taskflow`、`tools`、`model-adapters`、`runner-sdk`、`proto`、Rust Runner 与集成测试。
 - Phase 2 的 `protocol` 与 `chat-ui` 已实现；`agent-server`、`agent-web-ui`、`model-gateway` 和 `model-gateway-client` 尚未实现。
 - `casdoor/` 和 `pi-main/` 是已有内容；前者作为共享鉴权库工作区成员，后者保留为参考项目，不纳入 Nova 的构建或改动范围。
+
+## 持久化运行升级
+
+上线此版本前，在 agent-server 配置正确的 DATABASE_URL 后执行
+`pnpm --filter @nova/agent-server db:migrate`，再启动新服务。新增 runs 表保存当前
+checkpoint，历史 Entry / Record 保留。SQL 和 Drizzle 生成的 meta 一同进入版本控制，
+使新检出的工作区能执行相同迁移；meta 只通过生成器更新，不手工编辑。
+
+数据库恢复测试使用单独的 `NOVA_TEST_DATABASE_URL`，必须指向已迁移的临时数据库，
+不会回退读取应用 DATABASE_URL 或 .env。运行：
+`pnpm --filter @nova/agent-server exec vitest run src/db/recovery.integration.test.ts`。
+默认模型请求上限 20 分钟，逻辑 run 总期限 1 小时、最多 100 turn，同一步骤最多恢复 3 次。
+这些限制跨重启累计；配置入口为 AgentConfig，不要通过重复新建 prompt 绕过。

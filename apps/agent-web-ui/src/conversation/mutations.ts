@@ -45,7 +45,7 @@ export function useConversationMutations(options: ConversationMutationOptions) {
   );
 
   const refreshLists = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists, refetchType: "none" });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.conversationLists });
   }, [queryClient]);
 
   const sendMutation = useMutation({
@@ -86,6 +86,7 @@ export function useConversationMutations(options: ConversationMutationOptions) {
       const wasRunning = state.isRunning;
       const messageId = retryId ?? createUuid();
       const request = {
+        requestId: messageId,
         ...content,
         ...model,
         ...(isReasoningEffort(reasoningEffort) ? { reasoningEffort } : {}),

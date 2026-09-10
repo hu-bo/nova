@@ -9,6 +9,8 @@ import type {
 } from "@nova/protocol";
 import {
   abortConversation,
+  getConversationRun,
+  resumeConversation,
   bindProjectWorkspace,
   createConversation,
   createProject,
@@ -94,9 +96,10 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
     },
     listMessages: (conversationId: string) => listMessages(conversationId, { limit: 100 }),
     sendMessage: (conversationId: string, input: SendMessage) => {
-      const { queue, reasoningEffort, modelConfig, modelId, images, ...required } = input;
+      const { requestId, queue, reasoningEffort, modelConfig, modelId, images, ...required } = input;
       return sendMessage(conversationId, {
         ...required,
+        ...(requestId === undefined ? {} : { requestId }),
         ...(images === undefined ? {} : { images }),
         ...(queue === undefined ? {} : { queue }),
         ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
@@ -105,6 +108,8 @@ export function createApiClient({ accessToken }: ApiClientOptions) {
       });
     },
     abortConversation,
+    getConversationRun,
+    resumeConversation,
     getConversationContext,
     estimateConversationPromptTokens: (conversationId: string, text: string) =>
       estimateConversationPromptTokens(conversationId, { text }),

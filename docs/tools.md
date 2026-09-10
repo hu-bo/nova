@@ -144,9 +144,13 @@ Windows 对应使用 `powershell.exe`，并把 `-NoProfile`、`-Command` 和脚�
 直接执行的常见只读查询命令默认放行，包括 `ls`、`find`、`which`、`pwd`、`whoami`、
 `id`、`uname`、`hostname`、`stat`、`file`、`du`、`df`、`realpath`、`readlink`、
 `cat`、`head`、`tail`、`wc`、`grep`、`rg`、`tree`，以及 Git 的 `status`、`diff`、
-`log`、`show`、`rev-parse`、`ls-files`、`ls-tree` 子命令。通过 `sh -c`、`powershell`、
-`cmd` 等 shell 间接执行的内容仍为 `exec`；`find -delete/-exec` 等带副作用的形式和未识别命令
-也仍需审批。
+`log`、`show`、`rev-parse`、`ls-files`、`ls-tree` 子命令。
+`sh -c` / `sh -lc` 仅执行一条 `cd` 时也归为 `read`，默认直接放行，例如
+`{ command: "sh", args: ["-lc", "cd /xxx"] }`。支持普通路径、单引号路径、无展开的双引号路径，
+以及省略路径或使用 `--`；脚本不包含额外命令、重定向或命令替换，shell 不接受额外参数。
+`cd` 只影响该 shell 进程的工作目录，后续工具调用仍应通过 `cwd` 指定目录。
+其余 shell 脚本、`powershell` / `cmd`、`find -delete/-exec` 等带副作用的形式和未识别命令
+仍为 `exec`，默认需审批。
 
 **非零退出码不是 tool 错误**，照常返回 `status: "ok"`，让模型自己读 exit code 判断。
 只有 spawn 失败 / 超时 / Runner 不可用才是 error。

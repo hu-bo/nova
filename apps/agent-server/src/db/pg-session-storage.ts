@@ -1,13 +1,185 @@
-import { and, asc, desc, eq } from "drizzle-orm";
-import type { Entry, EntryId, SessionStorage } from "@nova/agent-core";
+import { projectBlock } from "../modules/projection/project-agent-events.js";
+import { projectToolDetails } from "../modules/projection/tool-blocks.js";
+import type { Block } from "@nova/protocol";
+import { and, asc, desc, eq, sql, gte } from "drizzle-orm";
+import { CheckpointConflict, type Entry, type EntryId, type SessionStorage } from "@nova/agent-core";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { entries, records } from "./schema.js";
+import { entries, records, runs, messages } from "./schema.js";
 
 export function pgSessionStorage<TSchema extends Record<string, unknown>>(
   db: PostgresJsDatabase<TSchema>,
   conversationId: string,
 ): SessionStorage {
   return {
+    async loadCheckpoint(sessionId) {
+      assertSession(sessionId, conversationId);
+      const [row] = await db
+        .select({ payload: runs.payload })
+        .from(runs)
+        .where(eq(runs.conversationId, conversationId));
+      return row?.payload ?? null;
+    },
+    async commit(sessionId, change) {
+      assertSession(sessionId, conversationId);
+      await db.transaction(async (tx) => {
+        const cp = change.checkpoint;
+        const values = {
+          conversationId,
+          runId: cp.runId,
+          version: cp.version,
+          status: cp.status,
+          reason: cp.reason,
+          payload: cp,
+          updatedAt: new Date(),
+        };
+        const changed =
+          change.expectedVersion === null
+            ? await tx.insert(runs).values(values).onConflictDoNothing().returning({ version: runs.version })
+            : await tx
+                .update(runs)
+                .set(values)
+                .where(and(eq(runs.conversationId, conversationId), eq(runs.version, change.expectedVersion)))
+                .returning({ version: runs.version });
+        if (!changed.length) throw new CheckpointConflict();
+        const fact = change.record;
+        const value = change.entry;
+        if (value)
+          await tx.insert(entries).values({
+            conversationId,
+            id: value.id,
+            parentId: value.parentId,
+            kind: value.kind,
+            payload: value,
+            createdAt: new Date(value.ts),
+          });
+        if (fact)
+          await tx.insert(records).values({
+            conversationId,
+            id: fact.id,
+            runId: fact.runId,
+            kind: fact.kind,
+            payload: fact,
+            createdAt: new Date(fact.ts),
+          });
+        const message = value?.kind === "message" && value.message.role === "assistant" ? value.message : cp.draft;
+        if (message) {
+          const blocks = message.blocks.flatMap((block) => {
+            const projected = projectBlock(block);
+            return projected ? [projected] : [];
+          });
+          const status = cp.draft
+            ? cp.status === "running"
+              ? ("streaming" as const)
+              : ("aborted" as const)
+            : cp.phase === "finish" && cp.completion === "aborted"
+              ? ("aborted" as const)
+              : cp.phase === "finish" &&
+                  cp.completion &&
+                  ["error", "repetition_detected", "max_tokens", "max_turns"].includes(cp.completion)
+                ? ("error" as const)
+                : ("done" as const);
+          await tx
+            .insert(messages)
+            .values({
+              conversationId,
+              id: message.id,
+              role: "assistant",
+              blocks,
+              status,
+              createdAt: new Date(message.createdAt),
+            })
+            .onConflictDoUpdate({ target: [messages.conversationId, messages.id], set: { blocks, status } });
+        }
+        if (fact?.kind === "tool-finished") {
+          const [row] = await tx
+            .select()
+            .from(messages)
+            .where(
+              and(
+                eq(messages.conversationId, conversationId),
+                eq(messages.role, "assistant"),
+                sql`${messages.blocks} @> ${JSON.stringify([{ type: "tool_call", callId: fact.callId }])}::jsonb`,
+              ),
+            )
+            .orderBy(desc(messages.seq))
+            .limit(1);
+          if (row?.role === "assistant") {
+            const call = row.blocks.find((b) => b.type === "tool_call" && b.callId === fact.callId);
+            const blocks: Block[] = row.blocks
+              .filter((b) => !(b.type === "tool_result" && b.callId === fact.callId))
+              .map((b) =>
+                b.type === "tool_call" && b.callId === fact.callId
+                  ? { ...b, status: fact.status === "ok" ? "ok" : "error" }
+                  : b,
+              );
+            const approvals = await tx
+              .select({ payload: records.payload })
+              .from(records)
+              .where(
+                and(
+                  eq(records.conversationId, conversationId),
+                  eq(records.runId, cp.runId),
+                  eq(records.kind, "decision-requested"),
+                ),
+              )
+              .orderBy(desc(records.seq));
+            const approval = approvals
+              .map((r) => r.payload)
+              .find(
+                (r) =>
+                  r.kind === "decision-requested" && r.request.kind === "approval" && r.request.callId === fact.callId,
+              );
+            const changes =
+              approval?.kind === "decision-requested" && approval.request.kind === "approval"
+                ? approval.request.codeChanges
+                : undefined;
+            blocks.push({
+              type: "tool_result",
+              callId: fact.callId,
+              status: fact.status,
+              blocks:
+                fact.details !== undefined
+                  ? projectToolDetails(call?.type === "tool_call" ? call.name : "tool", fact.details, changes)
+                  : (fact.content ?? []).flatMap((p) =>
+                      p.type === "text" ? [{ type: "text" as const, text: p.text }] : [],
+                    ),
+            });
+            await tx
+              .update(messages)
+              .set({ blocks })
+              .where(and(eq(messages.conversationId, conversationId), eq(messages.id, row.id)));
+          }
+        }
+        if (cp.status !== "running") {
+          const unfinished = await tx
+            .select()
+            .from(messages)
+            .where(
+              and(
+                eq(messages.conversationId, conversationId),
+                eq(messages.role, "assistant"),
+                gte(messages.createdAt, new Date(cp.startedAt)),
+              ),
+            );
+          for (const row of unfinished) {
+            if (!row.blocks.some((b) => b.type === "tool_call" && b.status === "running")) continue;
+            const blocks: Block[] = row.blocks.map((b) =>
+              b.type === "tool_call" && b.status === "running" ? { ...b, status: "cancelled" } : b,
+            );
+            await tx
+              .update(messages)
+              .set({ blocks })
+              .where(and(eq(messages.conversationId, conversationId), eq(messages.id, row.id)));
+          }
+        }
+        if (cp.status !== "running" || fact?.kind === "run-resumed") {
+          await tx
+            .update(messages)
+            .set({ status: cp.status === "failed" ? "error" : cp.status === "completed" ? "done" : "aborted" })
+            .where(and(eq(messages.conversationId, conversationId), eq(messages.status, "streaming")));
+        }
+      });
+    },
     async appendEntry(sessionId, entry) {
       assertSession(sessionId, conversationId);
       await db.insert(entries).values({

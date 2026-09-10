@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -10,6 +11,7 @@ import {
   messages,
   projects,
   records,
+  runs,
   runners as runnerRecords,
   runnerTokens,
   users,
@@ -18,6 +20,7 @@ import {
 export interface PgStore {
   store: AgentStore;
   db: ReturnType<typeof drizzle>;
+  client: ReturnType<typeof postgres>;
   checkConnection(): Promise<void>;
   close(): Promise<void>;
 }
@@ -311,6 +314,7 @@ export function createPgStore(databaseUrl: string): PgStore {
           .limit(1);
         if (!conversation) throw notFound("Conversation");
         await tx.delete(records).where(eq(records.conversationId, input.id));
+        await tx.delete(runs).where(eq(runs.conversationId, input.id));
         await tx.delete(entries).where(eq(entries.conversationId, input.id));
       });
     },
@@ -353,7 +357,17 @@ export function createPgStore(databaseUrl: string): PgStore {
     },
     async appendMessage(input) {
       return db.transaction(async (tx) => {
-        const [message] = await tx.insert(messages).values(input).returning();
+        const [inserted] = await tx.insert(messages).values(input).onConflictDoNothing().returning();
+        const message =
+          inserted ??
+          (
+            await tx
+              .select()
+              .from(messages)
+              .where(and(eq(messages.conversationId, input.conversationId), eq(messages.id, input.id)))
+          )[0];
+        if (!message || message.role !== input.role || !isDeepStrictEqual(message.blocks, input.blocks))
+          throw conflict("Message request ID was reused with different content");
         await tx
           .update(conversations)
           .set({ updatedAt: input.createdAt })
@@ -394,6 +408,7 @@ export function createPgStore(databaseUrl: string): PgStore {
   return {
     store,
     db,
+    client,
     async checkConnection() {
       await client`SELECT 1`;
     },
