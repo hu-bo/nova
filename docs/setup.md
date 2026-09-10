@@ -32,34 +32,38 @@ pnpm proto:generate
 - Phase 2 的 `protocol` 与 `chat-ui` 已实现；`agent-server`、`agent-web-ui`、`model-gateway` 和 `model-gateway-client` 尚未实现。
 - `casdoor/` 和 `pi-main/` 是已有内容；前者作为共享鉴权库工作区成员，后者保留为参考项目，不纳入 Nova 的构建或改动范围。
 
-## 持久化运行升级
+## 数据库结构同步与部署
 
-上线此版本前，在 agent-server 配置正确的 DATABASE_URL 后执行
-`pnpm --filter @nova/agent-server db:migrate`，再启动新服务。新增 runs 表保存当前
-checkpoint，历史 Entry / Record 保留。SQL 和 Drizzle 生成的 meta 一同进入版本控制，
-使新检出的工作区能执行相同迁移；meta 只通过生成器更新，不手工编辑。
+`src/db/schema.ts` 是数据库结构的来源。配置 `DATABASE_URL` 后运行
+`pnpm --filter @nova/agent-server db:push`，Drizzle Kit 会读取实际数据库结构并
+执行差异 SQL：已有且一致的表保留，缺少的表或字段新增。此流程不依赖
+`drizzle.__drizzle_migrations`，旧库无需补记迁移历史即可创建缺失的 `runs` 表。
+
+`push` 是结构差异同步，不是仅追加模式，也可能生成修改或删除操作。配置关闭
+每次必问的 `strict`，部署不使用 `--force`；Drizzle 检测到需要数据丢失确认的操作时，
+非交互部署会停止，交由人工检查。同步范围限定在 `public`。结构同步不会执行
+历史 SQL 中的数据清理或回填；需要的数据变更单独处理。
 
 Drone 构建从配置中心拉取 `.env`，显式复制到部署包根目录；打包前和服务器解包后
 都检查文件非空。宿主机部署目录 `/data/app/agent-server` 整体挂载到容器的
-`/app/agent-server`，其中包含 `.env`，无需单独挂载；Compose 同时通过 `env_file`
-注入环境变量。服务从当前工作目录
-加载 `.env`，本地通过应用的 pnpm 脚本启动，容器通过 `working_dir` 保持相同约定，
-避免打包改变源码相对路径后找不到配置文件。
+`/app/agent-server`，其中包含 `.env`；Compose 同时通过 `env_file` 注入环境变量。
+服务从当前工作目录加载 `.env`。部署包显式包含 `src/db/schema.ts` 和
+`drizzle.config.ts`，供容器内的 Drizzle Kit 使用。
 
-Drone 部署在启动服务前，通过同一个 Compose 服务配置运行
-`docker compose run --rm --no-deps -T agent-server node dist/migrate.js`。
-本地 `db:migrate` 与部署使用同一个 `src/db/migrate.ts` 入口，读取环境变量
-`DATABASE_URL`，直接调用 Drizzle ORM migrator，沿用 `drizzle/` 下的 SQL、journal
-及数据库中的 `drizzle.__drizzle_migrations`。当前 Drizzle Kit 进度条在迁移失败时
-直接退出而不打印异常，因此迁移入口自行打印错误及其 cause（含 PostgreSQL 错误码），
-关闭连接后以非零状态退出。不要删除迁移记录来消除 already exists 的 NOTICE。
-迁移与服务使用相同的 `.env` 和网络；迁移失败立即终止部署。服务启动先验证连接与
-`runs` 表结构，再启动 Runner 监听和恢复扫描，避免缺表时持续刷错误日志。
-流水线迁移关闭 TTY，将标准输出和错误先写入容器 `logs/migrate.log`，再回显到 Drone，
-并保留迁移退出码。失败后可在宿主机 `/data/app/agent-server/logs/migrate.log`
-查看本次完整日志；后续重新部署会替换部署目录，排查时应先保留该日志。
-已有部署遇到 `relation "runs" does not exist` 时，在 `/data/app/agent-server` 执行上述
-迁移命令，成功后执行 `docker compose up -d --force-recreate agent-server`。
+Drone 在启动服务前通过同一个 Compose 服务配置执行：
+
+```sh
+docker compose run --rm --no-deps -T agent-server node node_modules/drizzle-kit/bin.cjs push --config=drizzle.config.ts --strict=false
+```
+
+输出保存在宿主机 `/data/app/agent-server/logs/schema-sync.log` 并回显到 Drone。
+当前 Drizzle Kit 某些失败路径返回零退出码，因此流水线同时要求日志明确报告
+`Changes applied` 或 `No changes detected`，否则禁止启动新版本。
+同步成功后执行 `docker compose up -d --force-recreate agent-server`。
+服务启动仍校验数据库连接及 `runs` 表结构，失败时不启动恢复扫描或监听端口。
+
+历史 SQL、meta 和 `db:migrate` 命令保留供明确采用迁移历史的环境使用；当前部署
+统一使用 `db:push`，不混用历史迁移来修复同步过的数据库，不手工修改生成的 meta。
 
 数据库恢复测试使用单独的 `NOVA_TEST_DATABASE_URL`，必须指向已迁移的临时数据库，
 不会回退读取应用 DATABASE_URL 或 .env。运行：

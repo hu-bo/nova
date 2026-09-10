@@ -38,7 +38,7 @@ try {
 } catch (error) {
   await database.close();
   logger.fatal({ err: error, component: "server" }, "database startup checks failed");
-  throw new Error(`PostgreSQL is not ready. Check DATABASE_URL and apply database migrations before startup.`, {
+  throw new Error(`PostgreSQL is not ready. Check DATABASE_URL and run db:push before startup.`, {
     cause: error,
   });
 }

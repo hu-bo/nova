@@ -78,9 +78,9 @@ describe.skipIf(!url)("PostgreSQL durable runs", () => {
     isolatedUrl.searchParams.set("options", `-c search_path=${schema}`);
     const isolated = createPgStore(isolatedUrl.toString());
     try {
-      await expect(isolated.checkReady()).rejects.toThrow("Apply database migrations");
+      await expect(isolated.checkReady()).rejects.toThrow("Sync database schema");
       await database.client.unsafe(`CREATE TABLE ${schema}.runs (conversation_id uuid)`);
-      await expect(isolated.checkReady()).rejects.toThrow("Apply database migrations");
+      await expect(isolated.checkReady()).rejects.toThrow("Sync database schema");
       await database.checkReady();
     } finally {
       await isolated.close();

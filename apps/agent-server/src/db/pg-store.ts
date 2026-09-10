@@ -415,12 +415,9 @@ export function createPgStore(databaseUrl: string): PgStore {
       try {
         await db.select().from(runs).limit(0);
       } catch (error) {
-        throw new Error(
-          "Run storage is not ready. Apply database migrations (db:migrate) before starting agent-server.",
-          {
-            cause: error,
-          },
-        );
+        throw new Error("Run storage is not ready. Sync database schema (db:push) before starting agent-server.", {
+          cause: error,
+        });
       }
     },
     close: () => client.end(),
