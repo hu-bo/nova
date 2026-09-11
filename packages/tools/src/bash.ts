@@ -176,8 +176,6 @@ export const bash: Tool<z.output<typeof schema>> = {
     "  ❌ {command: `pwd && ls -la`}          → split into two calls, or wrap in `sh`.",
     "  ❌ {command: `cd /app && pnpm test`}   → set `cwd` and call once, or wrap in `sh`.",
     "  ❌ {command: `ls -la | grep foo`}      → use the `grep` tool, or wrap in `sh`.",
-    "  ❌ {command: `cat foo.txt`}            → use the `read_file` tool.",
-    "  ❌ {command: `echo $HOME`}             → wrap in `sh` — `args` does not expand variables.",
     "",
     "Compound commands — only when you genuinely need shell syntax. Wrap the script yourself and pass it to `sh` or `powershell.exe`:",
     "  POSIX (macOS / Linux / WSL):",
@@ -189,7 +187,6 @@ export const bash: Tool<z.output<typeof schema>> = {
   ].join("\n"),
   schema,
   risk: bashRisk,
-  approvalScope: bashApprovalScope,
   timeoutMs(value) {
     const parsed = schema.safeParse(value);
     return parsed.success ? (parsed.data.timeoutMs ?? DEFAULT_TIMEOUT_MS) + EXECUTION_OVERHEAD_MS : undefined;
