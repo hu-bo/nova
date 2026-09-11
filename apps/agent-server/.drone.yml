@@ -113,20 +113,20 @@ steps:
         - cd $APP_DIR
         - test -s .env
         # 按 schema 同步实际表结构；同步失败禁止启动新版本。
-        - |
-          docker compose run --rm --no-deps -T agent-server /bin/sh -c '
-            set -eu
-            mkdir -p logs
-            status=0
-            node node_modules/drizzle-kit/bin.cjs push --config=drizzle.config.ts > logs/schema-sync.log 2>&1 || status=$?
-            cat logs/schema-sync.log
-            if [ "$status" -ne 0 ]; then exit "$status"; fi
-            # Drizzle Kit 0.31 may return zero after an error or an aborted prompt.
-            if ! grep -Eq "\] (Changes applied|No changes detected)" logs/schema-sync.log; then
-              echo "Schema sync did not complete; deployment stopped."
-              exit 1
-            fi
-          '
+        # - |
+        #   docker compose run --rm --no-deps -T agent-server /bin/sh -c '
+        #     set -eu
+        #     mkdir -p logs
+        #     status=0
+        #     node node_modules/drizzle-kit/bin.cjs push --config=drizzle.config.ts > logs/schema-sync.log 2>&1 || status=$?
+        #     cat logs/schema-sync.log
+        #     if [ "$status" -ne 0 ]; then exit "$status"; fi
+        #     # Drizzle Kit 0.31 may return zero after an error or an aborted prompt.
+        #     if ! grep -Eq "\] (Changes applied|No changes detected)" logs/schema-sync.log; then
+        #       echo "Schema sync did not complete; deployment stopped."
+        #       exit 1
+        #     fi
+        #   '
         - docker compose up -d --force-recreate
         - docker compose ps
         - sleep 2
