@@ -2,7 +2,8 @@
 import { expect, it } from "vitest";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestRuntime, replay, toolResults } from "./test-runtime.js";
+import { toToolContext } from "@nova/runner-sdk";
+import { createTestRuntime, replay, toolResults, startRunner } from "./test-runtime.js";
 
 it("录制模型完成读代码、失败测试、反问、修复、复测与交付闭环", async () => {
   const harness = await createTestRuntime({
@@ -48,5 +49,29 @@ it("录制模型完成读代码、失败测试、反问、修复、复测与交�
     expect(await readFile(join(harness.workspace!, "sum.js"), "utf8")).toContain("a + b");
   } finally {
     await harness.cleanup();
+  }
+}, 30_000);
+
+it("git config --file .gitmodules --list returns Finished without timing out", async () => {
+  const runner = await startRunner();
+  try {
+    await writeFile(join(runner.workspace, ".gitmodules"), '[submodule "demo"]\n\tpath = packages/demo\n');
+    const context = toToolContext(runner.session, { cwd: runner.workspace });
+    for (let i = 0; i < 20; i += 1) {
+      const result = await context.exec("git", {
+        args: ["config", "--file", ".gitmodules", "--list"],
+        timeoutMs: 10_000,
+      });
+      expect(result).toEqual({
+        ok: true,
+        value: expect.objectContaining({
+          exitCode: 0,
+          stdout: "submodule.demo.path=packages/demo\n",
+        }),
+      });
+    }
+  } finally {
+    runner.process.kill();
+    await runner.sdk.close();
   }
 }, 30_000);

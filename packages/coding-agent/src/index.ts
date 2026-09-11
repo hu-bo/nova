@@ -49,9 +49,7 @@ export function createRunnerEnvironmentPrompt(environment: RunnerEnvironment) {
     name: "runner-environment",
     content: `## Runner execution environment
 - Platform: ${JSON.stringify(environment.platform)}
-- Working directory: ${JSON.stringify(environment.workspace)}
-- 选择与该平台兼容的可执行程序和路径格式。
-- \`bash\` 工具虽然沿用这个名称，但它直接启动 command，不经过 shell 解析；command 只能放可执行程序名，参数必须逐项放入 args。
+- Working directory: ${JSON.stringify(environment.workspace)}。
 ${shellGuidance}`,
   });
 }
