@@ -1,9 +1,14 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
-import { ExecutionStatus, GrepResultSchema, ReadTextResultSchema } from "../src/gen/execution_pb.js";
+import {
+  ExecuteRequestSchema,
+  ExecutionStatus,
+  GrepResultSchema,
+  ReadTextResultSchema,
+} from "../src/gen/execution_pb.js";
 import { RegisterSchema, RunnerState } from "../src/gen/runner_pb.js";
 import type { ExecuteRequest, ExecutionEvent } from "../src/gen/execution_pb.js";
-import type { RunnerSession } from "../src/session.js";
+import { BoundedQueue, RunnerSessionImpl, type RunnerSession, type ServerEnvelopeInit } from "../src/session.js";
 import { toToolContext } from "../src/tool-context.js";
 
 describe("toToolContext", () => {
@@ -68,6 +73,26 @@ describe("toToolContext", () => {
     await context.exec("git", { cwd: "../shared" });
 
     expect(requests.map((request) => request.cwd)).toEqual(["/work/project", "/work/shared"]);
+  });
+
+  it("settles when cancellation receives no Finished event", async () => {
+    const controller = new AbortController();
+    const outbound = new BoundedQueue<ServerEnvelopeInit>(8);
+    const session = new RunnerSessionImpl(
+      create(RegisterSchema, { runnerId: "runner", platform: "linux-x86_64", workspace: "/work" }),
+      "generation",
+      outbound,
+    );
+    const request = create(ExecuteRequestSchema, {
+      executionId: "execution-cancelled",
+      command: "git",
+      args: ["config", "--file", ".gitmodules", "--list"],
+      cwd: "/work",
+    });
+    const next = session.execute(request, controller.signal)[Symbol.asyncIterator]().next();
+    await outbound.shift();
+    controller.abort();
+    await expect(next).rejects.toMatchObject({ code: "CANCELLED", message: "execution cancelled before Finished" });
   });
 });
 

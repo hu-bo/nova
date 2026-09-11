@@ -189,13 +189,24 @@ export class RunnerSessionImpl implements RunnerSession {
       }
       const queue = new BoundedQueue<ExecutionEvent>(EXECUTION_BUFFER);
       session.executions.set(request.executionId, queue);
-      // 取消不是关流（docs/runner-sdk.md §5）：abort 只发 CancelRequest，
-      // 事件继续读到终态或连接失效
+      // 取消不是关 gRPC 流（docs/runner-sdk.md §5）：只影响当前 execution；同时
+      // 本地队列立即可收敛，避免 Runner 不回 Finished 时阻塞整个 tool。
       const onAbort = () => {
+        // Cancellation must wake the consumer even when the Runner failed before sending
+        // Finished. close() preserves already queued events, so a Finished that raced with
+        // cancellation is still delivered; otherwise execute() rejects promptly instead of
+        // leaving bash waiting until an outer timeout.
+        queue.close(new RunnerError("CANCELLED", "execution cancelled before Finished"));
         session.cancel(request.executionId).catch(() => {});
       };
       try {
         signal?.addEventListener("abort", onAbort, { once: true });
+        // Abort can race the initial check above. Re-check after installing the listener so
+        // an already-aborted request cannot enter a queue that has no future producer.
+        if (signal?.aborted) {
+          onAbort();
+          throw new RunnerError("CANCELLED", "aborted before start");
+        }
         await session.send({ requestId: "", payload: { case: "execute", value: request } });
         for (;;) {
           const item = await queue.shift();

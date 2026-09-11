@@ -55,6 +55,14 @@ const READ_ONLY_COMMANDS = new Set([
   "whoami",
 ]);
 const READ_ONLY_GIT_SUBCOMMANDS = new Set(["diff", "log", "ls-files", "ls-tree", "rev-parse", "show", "status"]);
+const MUTATING_GIT_CONFIG_ARGUMENTS = new Set([
+  "--add",
+  "--delete",
+  "--delete-all",
+  "--replace-all",
+  "--unset",
+  "--unset-all",
+]);
 const MUTATING_FIND_ARGUMENTS = new Set([
   "-delete",
   "-exec",
@@ -98,11 +106,24 @@ export function bashRisk(value: unknown): "read" | "exec" {
   if (READ_ONLY_COMMANDS.has(command)) return "read";
   if (
     command === "git" &&
-    READ_ONLY_GIT_SUBCOMMANDS.has(args[0] ?? "") &&
-    !args.some((arg) => arg === "--output" || arg.startsWith("--output="))
+    ((READ_ONLY_GIT_SUBCOMMANDS.has(args[0] ?? "") &&
+      !args.some((arg) => arg === "--output" || arg.startsWith("--output="))) ||
+      isReadOnlyGitConfig(args))
   )
     return "read";
   return "exec";
+}
+
+function isReadOnlyGitConfig(args: string[]): boolean {
+  if (args[0] !== "config" || !args.includes("--list")) return false;
+  return !args.some(
+    (arg) =>
+      MUTATING_GIT_CONFIG_ARGUMENTS.has(arg) ||
+      arg.startsWith("--add=") ||
+      arg.startsWith("--replace-all=") ||
+      arg.startsWith("--unset=") ||
+      arg.startsWith("--unset-all="),
+  );
 }
 
 export const bash: Tool<z.output<typeof schema>> = {

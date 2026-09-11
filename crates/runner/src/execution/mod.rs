@@ -34,6 +34,9 @@ use scheduler::Scheduler;
 /// runaway command (`find /`) can't take the whole link down. The process keeps running to
 /// completion; forwarding just stops.
 const MAX_OUTPUT_BYTES: u64 = 10 * 1024 * 1024;
+// A child can inherit stdout/stderr after the tracked process exits. Drain briefly so buffered
+// output is preserved, then finish even if a descendant ignores termination.
+const OUTPUT_DRAIN_GRACE: Duration = Duration::from_secs(1);
 
 pub struct ExecuteParams {
     pub execution_id: String,
@@ -278,6 +281,7 @@ impl Executor {
             let mut output_done = false;
             let mut process_done = false;
             let mut exit_status = None;
+            let mut drain_sleep = Box::pin(tokio::time::sleep(Duration::from_secs(24 * 60 * 60)));
 
             while !process_done || !output_done {
                 tokio::select! {
@@ -305,6 +309,9 @@ impl Executor {
                         // Shell descendants can retain stdout/stderr after the shell exits.
                         // This execution owns their process group; finish it before draining EOF.
                         killer.kill();
+                        drain_sleep
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + OUTPUT_DRAIN_GRACE);
                     }
                     maybe_chunk = output_rx.recv(), if !output_done => {
                         match maybe_chunk {
@@ -327,6 +334,11 @@ impl Executor {
                             }
                             None => output_done = true,
                         }
+                    }
+                    _ = &mut drain_sleep, if process_done && !output_done => {
+                        // An inherited pipe must not turn a completed command into an unbounded
+                        // tool timeout when process-tree termination is incomplete.
+                        output_done = true;
                     }
                     _ = &mut sleep, if kill_reason.is_none() => {
                         kill_reason = Some(KillReason::TimedOut);

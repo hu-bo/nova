@@ -70,7 +70,12 @@ it("classifies direct read-only bash queries without relaxing shell or mutating 
     expect(bashRisk({ command })).toBe("read");
   }
   expect(bashRisk({ command: "git", args: ["status", "--short"] })).toBe("read");
+  expect(bashRisk({ command: "git", args: ["config", "--file", ".gitmodules", "--list"] })).toBe("read");
+  expect(bashRisk({ command: "git", args: ["config", "--list"] })).toBe("read");
+  expect(bashRisk({ command: "git", args: ["config", "--global", "--list", "--null"] })).toBe("read");
   expect(bashRisk({ command: "git", args: ["commit", "-m", "change"] })).toBe("exec");
+  expect(bashRisk({ command: "git", args: ["config", "--file", ".gitmodules", "--add", "x.y", "z"] })).toBe("exec");
+  expect(bashRisk({ command: "git", args: ["config", "--file", ".gitmodules", "--unset", "x.y"] })).toBe("exec");
   expect(bashRisk({ command: "find", args: [".", "-delete"] })).toBe("exec");
   expect(bashRisk({ command: "tree", args: ["-o", "tree.txt"] })).toBe("exec");
   expect(bashRisk({ command: "rg", args: ["--pre", "generator"] })).toBe("exec");

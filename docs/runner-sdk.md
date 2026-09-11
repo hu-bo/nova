@@ -141,7 +141,7 @@ SDK 不将断线的旧 Session 悄悄替换为新 Session。`generation` 变化�
 | 输出 | Protobuf 传 `bytes`；按 UTF-8 增量解码时保留跨 chunk 的多字节序列 |
 | 复用 | 同一连接上用 `execution_id` / `request_id` 关联消息 |
 | 有界缓冲 | 每个 session 和 execution 都有上限；不得无界聚合 |
-| abort | 发送 `CancelRequest`，继续读取直到终态或连接失效 |
+| abort | 发送 `CancelRequest`；已排队的 `Finished` 先交付，未收到终态时立即结束本地等待 |
 | 输出上限 | 超限后标记 `truncated`，仍消费事件直到 `Finished` |
 
 取消不是关闭 gRPC 流。关闭整个流会同时影响该 Runner 上的其他 execution。
