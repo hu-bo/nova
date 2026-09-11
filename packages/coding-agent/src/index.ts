@@ -13,23 +13,19 @@ import {
 } from "@nova/tools";
 
 const CODING_WORKFLOW_PROMPT = `## Coding workflow
-- 先读取相关文件、调用链和项目指令，确认已有能力与职责边界后再修改；不要凭目录名猜实现。
-- 优先修改现有实现，保持变更局部且与目标一致；不要创建平行 V2、兼容包装层或做无关重构，并保留用户已有改动。
+- 遵守项目指令，围绕当前任务定位已有实现；路径已知就直接读取，否则先在相关模块搜索，未命中再扩大范围。
+- 每次读取只解决影响实现或验证的具体未知，优先读取相关片段；复用仍有效的上下文，不重复读取，不为“可能有用”收集文件。
+- 明确修改位置、相关约束和验证方式后就开始实施；仅遇到具体阻碍或跨边界影响时补查调用方与契约，不以理解整个仓库为前提。
+- 优先修改现有实现，保留用户改动；只做任务所需的重构，不新增平行实现、重复抽象或纯转发包装层。
 - 读取、搜索和编辑优先使用结构化工具；bash 用于构建、测试、Git 查询和项目特定命令，不用 shell 绕过结构化工具或审批。
-- PDF、Office 文档和 CSV 必须使用 read_document；read_file 只用于 UTF-8 文本与源码。
-- 工具失败时依据明确的 status、typed error、exitCode 和实际输出调整方案，不盲目重试，也不把命令启动等同于验证成功。
-- 修改后执行与风险相称的测试、类型检查或构建，检查真实结果；无法验证时说明原因和剩余风险。
-- 完成时确认目标行为已实现，且没有 dead code、重复抽象、pass-through wrapper 或陈旧兼容路径；最终回答先给结果，再说明关键修改和验证。
+- 工具失败时根据状态、错误和实际输出调整方案，不盲目重试。修改后做与风险相称的验证，检查结果，不把命令启动等同于成功。
+- 完成后简述结果、关键修改和验证；无法验证时说明原因和剩余风险。
 
-## General architecture thinking
-- Design from user outcomes, system constraints, key state transitions, and end-to-end data flow—not from languages, frameworks, directory structures, or design patterns. First determine whether the problem belongs to a local implementation, a module boundary, or a system interaction.
-- Assign a single owner to each business decision, state, control flow, concurrency boundary, and lifecycle. Separate decisions from execution and sources of truth from derived views; avoid multiple components writing the same state or maintaining duplicate truths.
-- Draw boundaries around cohesive responsibilities and real directions of change. Keep the stable core dependent on explicit contracts and place volatile transport, persistence, provider, and presentation details at the edges; do not add layers that only forward parameters.
-- Make interfaces explicit about inputs, outputs, invariants, errors, defaults, versions, and ownership. Transform data only at clear boundaries, and keep one canonical source for each protocol, schema, and shared type.
-- Extract abstractions only from repetition or variation that already exists, can be named precisely, and hides details irrelevant to callers. Prefer a direct implementation when an abstraction adds concepts, boolean switches, hidden control flow, or navigation across many directories.
-- Treat failure paths as part of the architecture. Give timeouts, cancellation, retries, idempotency, partial failures, resource cleanup, backpressure, and observability clear owners, and implement only the resilience the system actually needs.
-- Evaluate the real constraints on security, performance, reliability, maintainability, cost, and consistency, and explain tradeoffs with evidence. Do not introduce complexity solely in the name of best practices, technology trends, or hypothetical future needs.
-- Design evolution paths to be compatible, migratable, reversible, and removable. For changes across boundaries, update contracts, consumers, documentation, and verification together; avoid permanent dual writes, dual reads, or long-lived old and new implementations.`;
+## Design principles
+- 仅评估本次变更涉及的设计，不把架构原则当作全仓库检查清单。
+- 从目标行为和真实约束出发；决策与执行分离，状态、控制流、并发和生命周期各有唯一 owner。
+- 保持职责与依赖方向清晰、契约来源唯一；优先组合和显式数据结构，只为已有重复或真实变化提取抽象。
+- 明确相关接口的输入、输出和失败语义，只实现实际需要的容错；跨边界变更同步契约、调用方、文档和验证。`;
 
 export interface RunnerEnvironment {
   platform: string;
@@ -40,10 +36,10 @@ export function createRunnerEnvironmentPrompt(environment: RunnerEnvironment) {
   const platform = environment.platform.toLowerCase();
   const shellGuidance =
     platform.startsWith("windows-") || platform.startsWith("win32-")
-      ? "- 这是 Windows 环境。不要默认使用 ls、cat、grep、rm 等 Unix 命令；需要管道、重定向或 shell 内建命令时，显式执行 `powershell.exe`（若不可用再用 `cmd.exe`），并把参数分别放入 args。"
+      ? "- 这是 Windows 环境。不要默认使用 ls、cat、grep、rm 等 Unix 命令；显式执行 `powershell.exe`（若不可用再用 `cmd.exe`），并把参数分别放入 args。"
       : platform.startsWith("linux-") || platform.startsWith("macos-") || platform.startsWith("darwin-")
-        ? "- 这是 Unix 类环境。需要管道、重定向或其他 shell 语法时，显式执行 `sh`，并通过 args 传入 `-lc` 和脚本。"
-        : "- 不要假定它是 Linux；先用已有结构化工具或轻量命令确认可用能力，再选择平台兼容的可执行程序。";
+        ? "- 这是 Unix 类环境。"
+        : "";
 
   return Object.freeze({
     name: "runner-environment",

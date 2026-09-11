@@ -92,7 +92,7 @@ export function createHarness(config: HarnessConfig): Harness {
       const agent = createAgent({
         ...agentConfig,
         tools: [...resolvedTools],
-        systemPrompt: [...resolvedPrompts, ...instancePrompts],
+        systemPrompt: [...instancePrompts, ...resolvedPrompts],
         ...(hooks ? { hooks } : {}),
       });
 

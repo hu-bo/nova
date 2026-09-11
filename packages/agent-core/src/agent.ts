@@ -286,7 +286,7 @@ export function createAgent(config: AgentConfig, init?: AgentInit): Agent {
     }
     return prompt;
   })();
-
+  console.log(systemPrompt)
   const host: LoopHost = {
     storage: config.storage,
     sessionId,
