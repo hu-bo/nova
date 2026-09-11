@@ -68,12 +68,25 @@ describe("chat-ui", () => {
     expect(html).toContain("nova-chat-view");
     expect(html).toContain("nova-chat-content");
     expect(html).toContain("已完成");
-    expect(html).toContain("需要授权");
     expect(html).toContain("正在调整");
     expect(html).toContain("验证结果");
     expect(html).toContain("实时消息流已断开，正在重连");
     expect(html).toContain("上下文已压缩");
     expect(html).toContain("继续对话");
+
+    // The pending decision floats over the message stream: it must not stack below the TODO panel
+    // or the composer, which on a short screen pushed its action row out of view.
+    const messageList = html.indexOf("nova-message-list");
+    const decisionLayer = html.indexOf("nova-decision-layer");
+    const approvalCard = html.indexOf("需要授权");
+    const mobileTodo = html.indexOf("当前计划");
+    const composer = html.indexOf("nova-composer");
+    expect(messageList).toBeGreaterThanOrEqual(0);
+    expect(decisionLayer).toBeGreaterThan(messageList);
+    expect(html).toContain("pointer-events-none absolute inset-0");
+    expect(approvalCard).toBeGreaterThan(decisionLayer);
+    expect(approvalCard).toBeLessThan(mobileTodo);
+    expect(composer).toBeGreaterThan(approvalCard);
   });
 
   it("renders markdown and structured code", () => {

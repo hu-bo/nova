@@ -181,11 +181,11 @@ export function DecisionPrompt({
   return (
     <Card
       data-kind="question"
-      className="nova-decision-prompt nova-chat-content"
+      className="nova-decision-prompt nova-chat-content max-h-[min(32rem,50dvh)] min-w-0 overflow-hidden"
       role="region"
       aria-labelledby={`${question.decisionId}-title`}
     >
-      <CardHeader className="mb-2 flex flex-row items-start gap-2.5">
+      <CardHeader className="mb-2 flex shrink-0 flex-row items-start gap-2.5">
         <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:ring-indigo-900">
           <HelpCircle className="size-4" aria-hidden="true" />
         </span>
@@ -199,7 +199,10 @@ export function DecisionPrompt({
           </h3>
         </div>
       </CardHeader>
-      <CardContent role={question.multiSelect ? "group" : "radiogroup"} className="grid gap-1.5 pb-2">
+      <CardContent
+        role={question.multiSelect ? "group" : "radiogroup"}
+        className="nova-scrollbar grid min-h-0 gap-1.5 overflow-y-auto overscroll-contain pb-2"
+      >
         {question.options.map((option) => {
           const selected = answers.includes(option);
           return (
@@ -235,7 +238,7 @@ export function DecisionPrompt({
           );
         })}
       </CardContent>
-      <CardFooter className="justify-end">
+      <CardFooter className="shrink-0 justify-end">
         {onAbort && (
           <Button type="button" variant="ghost" size="xs" disabled={locked} onClick={() => void onAbort()}>
             <CircleStop aria-hidden="true" />

@@ -17,7 +17,20 @@ it("describes the direct-executable and explicit-shell bash calling conventions 
 
   expect(bash.description).toContain("{command: `pnpm`, args:");
   expect(bash.description).toContain("{command: `sh`, args: [`-lc`");
+  // Front-loaded warning that the tool name is misleading.
+  expect(bash.description).toMatch(/does NOT start a shell|no shell is started/i);
+  // The three canonical wrong-call examples must be present, with ❌/✅ framing.
+  expect(bash.description).toContain("pwd && ls -la");
+  expect(bash.description).toContain("cd /app && pnpm test");
+  expect(bash.description).toContain("ls -la | grep foo");
+  expect(bash.description).toContain("✅");
+  expect(bash.description).toContain("❌");
+  // Explicit shell metacharacter decision rule.
+  expect(bash.description).toMatch(/&&.*\||Decision rule/);
   expect(parameters.properties?.command?.description).toContain("single executable");
+  // The command field description itself must show what NOT to do.
+  expect(parameters.properties?.command?.description).toContain("INVALID examples");
+  expect(parameters.properties?.command?.description).toContain("pwd && ls -la");
   expect(parameters.properties?.args?.description).toContain("one array item per argument");
   expect(parameters.properties?.cwd?.description).toContain("Prefer this over putting `cd`");
   expect(parameters.properties?.timeoutMs?.description).toContain("10000 (10 seconds)");

@@ -138,10 +138,15 @@ type BlockRenderers = Record<string, BlockRenderer>
 不渲染对应控件。这样模型能力、默认值和持久化仍只有宿主一个 owner。
 
 输入框高度自适应优先交给 CSS `field-sizing: content`（`.nova-composer-textarea`），由布局引擎在
-排版阶段完成，按键不产生 JS 测量。不支持该属性的浏览器在 `useLayoutEffect` 中测量：已进入滚动
-状态且内容仍超过高度上限时，保持现有高度，不写样式；其他情况先恢复自动高度再测量，使删除、
-替换文本和提交清空后都能正常收缩。固定高度下的 `scrollHeight` 包含当前可视高度，不能用它与
-上次高度相等来判断内容高度未变。
+排版阶段完成，按键不产生 JS 测量。可用性由样式表通过 `--nova-composer-field-sizing` 发布，Composer
+读取该信号决定是否启用兜底测量；不用 `CSS.supports`，因为打包器可能在引擎仍报告支持时丢掉该声明。
+兜底测量必须避免逐键"写样式 + 读布局"：固定高度下 `scrollHeight` 不小于可视高度，测之前先恢复自动
+高度；内容达到 `max-height` 后只在框内滚动，继续输入不再改变盒子尺寸，此时跳过测量，否则每次按键都
+强制一次随草稿长度增长的同步重排。
+
+贴底跟随由 `MessageList` 的 `ResizeObserver` 承担，其回调**不得读取布局属性**：Composer 变高会压缩
+消息区并触发该回调，在那里读 `scrollHeight` 会重排全部消息节点（表现为 Performance 面板
+`Recalculate style` 中的 Forced reflow）。回调用一个越界的 `scrollTo` 偏移钉住底部，并按帧合并。
 
 Skill 候选同样由宿主提供，`chat-ui` 不读取 Skill 注册表，也不执行 Skill。Composer 只在
 草稿以 `/` 开头时按 command / label 过滤并展示候选；正文中途出现 `/` 不触发。选择候选后
@@ -152,8 +157,8 @@ Skill 候选同样由宿主提供，`chat-ui` 不读取 Skill 注册表，也不
 **所有交互通过 props 回调上抛，组件自己不发请求。** 这是“纯展示”的可检验定义：
 消息、Decision、Composer 和 RemoteExplorer 都只能调用各自声明的 props 回调，没有隐式对外通路。
 
-高层 `Chat` 是宿主默认使用的组合边界。它拥有聊天区域的布局、响应式 TODO 区域、内容轨道、
-连接状态提示和各子组件间的交互分发；宿主传入 `ChatState`、`ChatComposerConfig` 与语义明确的
+高层 `Chat` 是宿主默认使用的组合边界。它拥有聊天区域的布局、响应式 TODO 区域、Decision 悬浮层、
+内容轨道、连接状态提示和各子组件间的交互分发；宿主传入 `ChatState`、`ChatComposerConfig` 与语义明确的
 `ChatActions`。`Chat` 不接收 query、mutation、store、Runner 或路由对象，也不通过一个宽泛的
 `onChange(nextState)` 反向接管业务状态。低层组件继续导出，用于独立测试和确有差异的组合场景。
 
@@ -252,6 +257,11 @@ SSE ──► agent-web-ui 的 reducer ──► ChatMessage[] ──► <Messag
 
 审批卡片按视口限制总高度，标题和操作区不收缩，完整代码差异或参数在中间区域滚动。
 多文件写入共用一个预览滚动区；窄屏、低高度窗口中仍可访问允许、拒绝和取消操作。
+
+`Chat` 里的待处理 Decision **悬浮在消息区之上**，不与 TODO 面板、反馈和 Composer 竖向堆叠：
+窄屏一旦堆叠就会把操作区推出裁剪视口。悬浮层覆盖消息区，卡片高度以该区域剩余空间为上限
+（不只是视口比例），因此标题和操作行始终可见，中间详情自己滚动。悬浮层只在卡片本身接收指针事件，
+消息流在卡片旁边照常滚动。`DecisionPrompt` 单用时保持文档流内渲染。
 
 ---
 

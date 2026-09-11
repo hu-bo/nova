@@ -38,6 +38,7 @@ nova/
 │
 ├── packages/
 │   ├── agent-core/              # Agent Loop / Context / Session / Decision / Sub-agent
+│   ├── dsh-agent/               # 独立 DSH 业务 Harness：受控 prompt + business tools 的一次性运行基座
 │   ├── harness/                 # 可信 AgentModule 的静态组合与故障隔离
 │   ├── coding-agent/            # Coding Prompt + 默认 Coding Tool 场景模块
 │   ├── taskflow/                # Task 图 + 有界并发 + retry / timeout / cancel
@@ -92,6 +93,9 @@ apps/agent-server / CLI / tests (Composition Root)
   │             └──────────────► proto generated types
   └──► model / storage / decide / ToolContext providers
 
+low-code / form / workflow Worker
+  └──► packages/dsh-agent ──► @deepseek-ai/dsh-*（独立运行时；不依赖任何 @nova/* 包）
+
 packages/agent-core ──► taskflow
                     └─► model-adapters ──HTTP/SSE──► provider-compatible endpoint
 
@@ -114,6 +118,7 @@ apps/model-gateway-client ──HTTP──► apps/model-gateway   (future manag
 | `agent-core` / `harness` / `coding-agent` / `taskflow` / `tools` → `protocol` | UI 契约不得渗入运行时 |
 | `crates/runner` 认识 Conversation / Message / Prompt / Task 语义 | Runner 只认识 Execution |
 | `agent-core` / `model-adapters` → `model-gateway-client` | 管理后台不在推理数据路径上 |
+| `dsh-agent` → 任意 `@nova/*` 包 | DSH 业务基座与 Nova 主 Agent Runtime 独立演进；宿主只在进程组合根同时依赖两者 |
 | `model-gateway` → 任何 nova 内部包 | 它是独立服务，只暴露 provider 兼容接口 |
 | `protocol` 引入运行时依赖 | 必须纯类型，浏览器可直接消费 |
 | `protocol` re-export `proto/` 类型 | 两个契约面独立演进 |

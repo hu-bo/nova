@@ -165,14 +165,24 @@ export function MessageList({
     };
     saveScrollState();
 
+    // The composer changing height resizes this scroller, so the callback must not read layout: a
+    // `scrollHeight` read here reflows every message node on each keystroke. Letting the scroller
+    // resolve an overflowing offset pins it to the bottom without the read, and the frame
+    // coalescing keeps a streaming resize to one scroll per frame.
+    let pendingFrame = 0;
     const observer = new ResizeObserver(() => {
-      if (scrollState.current.followsBottom) container.scrollTop = container.scrollHeight;
+      if (!scrollState.current.followsBottom || pendingFrame) return;
+      pendingFrame = requestAnimationFrame(() => {
+        pendingFrame = 0;
+        container.scrollTo(0, Number.MAX_SAFE_INTEGER);
+      });
     });
     observer.observe(container);
     observer.observe(content);
 
     return () => {
       observer.disconnect();
+      if (pendingFrame) cancelAnimationFrame(pendingFrame);
       saveScrollState();
     };
   }, []);

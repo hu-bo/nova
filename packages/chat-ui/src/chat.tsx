@@ -118,6 +118,18 @@ export function Chat<TMetadata = unknown>({
           ) : (
             <div className="grid h-full place-items-center">{emptyState}</div>
           )}
+
+          {state.pendingDecision && (
+            <div className="nova-decision-layer pointer-events-none absolute inset-0 z-20 flex flex-col justify-end">
+              <DecisionPrompt
+                request={state.pendingDecision}
+                disabled={state.isResolvingDecision}
+                onResolve={actions.onResolveDecision}
+                {...(actions.onAbort ? { onAbort: actions.onAbort } : {})}
+                isAborting={state.isAborting}
+              />
+            </div>
+          )}
         </div>
 
         <div className="min-w-0 shrink-0 overflow-visible border-slate-200 bg-white px-3 pb-0 pt-1 sm:px-4 sm:pb-1.5">
@@ -153,18 +165,6 @@ export function Chat<TMetadata = unknown>({
                 role="status"
               >
                 {connectionMessage}
-              </div>
-            )}
-
-            {state.pendingDecision && (
-              <div className="mb-2">
-                <DecisionPrompt
-                  request={state.pendingDecision}
-                  disabled={state.isResolvingDecision}
-                  onResolve={actions.onResolveDecision}
-                  {...(actions.onAbort ? { onAbort: actions.onAbort } : {})}
-                  isAborting={state.isAborting}
-                />
               </div>
             )}
 

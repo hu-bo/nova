@@ -62,6 +62,7 @@
 |---|---|---|
 | [harness.md](./harness.md) | `packages/harness` | 内部可信 Agent Module 的静态组合与约束校验；不是动态 Plugin Framework |
 | [coding-agent.md](./coding-agent.md) | `packages/coding-agent` | Coding Prompt 与代码工具的场景能力配置；不创建第二套 Agent Runtime |
+| [dsh-agent.md](./dsh-agent.md) | `packages/dsh-agent` | 独立 DSH 业务 Harness：直接组合业务 prompt 与 DSH tools，由外部队列/租约保证单写者 |
 
 这两个包已实现并通过测试。后续变更仍须同步维护 `repo-layout.md` 的依赖图与模块职责。
 

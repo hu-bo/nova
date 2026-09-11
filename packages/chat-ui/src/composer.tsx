@@ -10,14 +10,13 @@ import { Textarea } from "./components/ui/textarea.js";
 import { UploadCover } from "./upload-cover.js";
 
 /**
- * `field-sizing: content` grows the textarea in the layout engine, so the composer needs no
- * JavaScript measurement. Only engines without it pay for the resize effect below, which has to
- * read `scrollHeight` and therefore forces a synchronous layout.
+ * Reads the capability signal published by `styles.css`. Must not be replaced with
+ * `CSS.supports("field-sizing", "content")`: that reports engine support even when a build-time CSS
+ * transform drops the rule, which would leave the field pinned to its fixed row height.
  */
-const autoGrowIsNative =
-  typeof window !== "undefined" &&
-  typeof window.CSS?.supports === "function" &&
-  window.CSS.supports("field-sizing", "content");
+function growsWithNativeLayout(element: HTMLElement): boolean {
+  return getComputedStyle(element).getPropertyValue("--nova-composer-field-sizing").trim() === "content";
+}
 
 export function Composer<TMetadata = unknown>({
   disabled = false,
@@ -49,6 +48,10 @@ export function Composer<TMetadata = unknown>({
   const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const maxHeightRef = useRef<number | null>(null);
+  const growsNativelyRef = useRef<boolean | null>(null);
+  const isCappedRef = useRef(false);
+  const appliedHeightRef = useRef<string | null>(null);
+  const previousLengthRef = useRef(0);
   const skillListId = useId();
   const locked = disabled || submitting || invokingSkill;
   const matchingSkills = skillMenuDismissed ? [] : matchComposerSkills(text, skills);
@@ -56,26 +59,37 @@ export function Composer<TMetadata = unknown>({
   const hasDraft = Boolean(text.trim() || files.length || attachments.length);
   const canSubmit = !locked && hasDraft;
 
-  // Fallback for engines without `field-sizing: content`.
+  // Grow the field in the layout engine wherever the stylesheet managed to apply
+  // `field-sizing: content`; measuring here would dirty style and then read layout on every key.
   useLayoutEffect(() => {
-    if (autoGrowIsNative) return;
     const textarea = textareaRef.current;
     if (!textarea) return;
+
+    if (growsNativelyRef.current === null) growsNativelyRef.current = growsWithNativeLayout(textarea);
+    if (growsNativelyRef.current) return;
 
     if (maxHeightRef.current === null) {
       maxHeightRef.current = Number.parseFloat(getComputedStyle(textarea).maxHeight) || Number.POSITIVE_INFINITY;
     }
     const maxHeight = maxHeightRef.current;
+    const previousLength = previousLengthRef.current;
+    previousLengthRef.current = text.length;
 
-    // While capped and still overflowing, keep the box and scroll position without style writes.
-    if (textarea.style.overflowY === "auto" && textarea.scrollHeight > maxHeight) return;
+    // A capped field scrolls its own overflow, so adding characters cannot change its box size.
+    // Skipping the measurement here is what keeps long drafts from reflowing on every key.
+    if (isCappedRef.current && text.length >= previousLength) return;
 
-    // A fixed box floors scrollHeight at clientHeight, so reset before measuring shrinkage.
-    textarea.style.overflowY = "hidden";
+    // A fixed box floors `scrollHeight` at its own height, so release it before measuring.
     textarea.style.height = "auto";
+    textarea.style.overflowY = "hidden";
     const contentHeight = textarea.scrollHeight;
-    textarea.style.height = `${Math.min(contentHeight, maxHeight)}px`;
-    textarea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
+    const nextHeight = `${Math.min(contentHeight, maxHeight)}px`;
+    isCappedRef.current = contentHeight > maxHeight;
+    if (isCappedRef.current) textarea.style.overflowY = "auto";
+    if (appliedHeightRef.current !== nextHeight) {
+      textarea.style.height = nextHeight;
+      appliedHeightRef.current = nextHeight;
+    }
   }, [text]);
 
   function clearDraft() {
@@ -202,7 +216,6 @@ export function Composer<TMetadata = unknown>({
 
             <div className="nova-composer-input-row flex min-w-0 items-center justify-between gap-2  border-slate-100 pt-1.5 dark:border-slate-800/80">
               <div className="nova-composer-options flex min-w-0 flex-wrap items-center gap-1">
-                {trigger}
                 {models.length > 0 && (
                   <ComposerOptionMenu
                     label="选择模型"
@@ -227,6 +240,7 @@ export function Composer<TMetadata = unknown>({
 
               <div className="flex shrink-0 items-center gap-1.5">
                 {contextUsage && <ComposerContextUsageIndicator usage={contextUsage} />}
+                {trigger}
                 {isRunning && onAbort && !hasDraft && !submitting ? (
                   <Button
                     type="button"

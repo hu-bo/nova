@@ -8,18 +8,20 @@ const schema = z.object({
     .string()
     .min(1)
     .describe(
-      "A single executable name or path, such as `pnpm`, `git`, `sh`, or `powershell.exe`. Do not put arguments or a complete shell command here.",
+      "A single executable name or path — just the program, e.g. `pnpm`, `git`, `ls`, `sh`, `powershell.exe`. Do NOT put arguments, flags, or a complete shell command line here. INVALID examples: `\"pwd && ls -la\"`, `\"cd /app && pnpm test\"`, `\"ls -la | grep foo\"`, `\"cat foo.txt\"`. If you need shell syntax (`&&`, `|`, `>`, `;`, `$()`, variables, or `cd`), set command=`sh` (POSIX) or `powershell.exe` (Windows) and pass the script as the next array element.",
     ),
   args: z
     .array(z.string())
     .optional()
     .describe(
-      "Arguments passed directly to the executable, one array item per argument. For shell syntax, use command `sh` with args [`-lc`, `<script>`], or `powershell.exe` with args [`-NoProfile`, `-Command`, `<script>`].",
+      "Arguments passed directly to the executable, one array item per argument — no shell parsing, no quoting tricks. For compound commands, use command `sh` with args [`-lc`, `<script>`] on POSIX, or `powershell.exe` with args [`-NoProfile`, `-Command`, `<script>`] on Windows.",
     ),
   cwd: z
     .string()
     .optional()
-    .describe("Working directory for the process. Prefer this over putting `cd` in a shell script."),
+    .describe(
+      "Working directory for the process. Prefer this over putting `cd` in a shell script — `cwd` is structured and works on every platform.",
+    ),
   timeoutMs: z
     .number()
     .int()
@@ -126,12 +128,68 @@ function isReadOnlyGitConfig(args: string[]): boolean {
   );
 }
 
+// Shell 解释器与带全局选项的 git：真实执行内容由后续参数决定，不能按名字记住放行。
+const NEVER_REMEMBER_COMMANDS = new Set([
+  "sh",
+  "bash",
+  "zsh",
+  "dash",
+  "ksh",
+  "fish",
+  "powershell",
+  "pwsh",
+  "cmd",
+  "command",
+]);
+
+/**
+ * §6 `allow_always` 作用域：按「可执行程序 + 子命令」记忆，而不是按工具名。
+ * 因此对 `bash` 点一次"总是允许" `git diff` 不会顺带放行 `git reset --hard`；
+ * 解释器包装（`sh -lc "…"`）与 `git -C …` 这类首参是全局选项的调用返回 null，永不记住。
+ */
+export function bashApprovalScope(value: unknown): string | null {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) return null;
+  const command = commandName(parsed.data.command);
+  if (NEVER_REMEMBER_COMMANDS.has(command)) return null;
+  const first = parsed.data.args?.[0]?.toLowerCase();
+  if (first === undefined) return `bash:${command}`;
+  return first.startsWith("-") ? null : `bash:${command}:${first}`;
+}
+
 export const bash: Tool<z.output<typeof schema>> = {
   name: "bash",
-  description:
-    "Run one executable directly in the workspace; despite the tool name, no shell is started automatically. `command` must be only the executable name or path, with normal arguments in `args` and the working directory in `cwd`. Example: {command: `pnpm`, args: [`tsc`, `--noEmit`], cwd: `/workspace/app`}. If the operation needs shell syntax such as `cd`, `&&`, `|`, `>`, variables, or quoting, explicitly run a shell: {command: `sh`, args: [`-lc`, `cd /workspace/app && pnpm tsc --noEmit 2>&1 | head -50`]}. On Windows use `powershell.exe` with `-NoProfile`, `-Command`, and the script as separate args. Never put a complete command line directly in `command`.",
+  description: [
+    "Run ONE program directly. Despite the name `bash`, this tool does NOT start a shell — `command` is the program name only, never a shell command line.",
+    "",
+    "Calling convention:",
+    "  command — a single executable name or path (e.g. `pnpm`, `git`, `ls`, `sh`, `powershell.exe`). Do not put arguments, flags, or a shell script here.",
+    "  args    — one array item per argument; no shell parsing, no quoting tricks.",
+    "  cwd     — working directory; prefer this over `cd` in a script.",
+    "",
+    "Correct:",
+    "  ✅ {command: `pnpm`, args: [`tsc`, `--noEmit`], cwd: `/workspace/app`}",
+    "  ✅ {command: `git`, args: [`diff`, `--stat`]}",
+    "  ✅ {command: `ls`, args: [`-la`, `/workspace/app`]}",
+    "",
+    "Common mistakes (will fail):",
+    "  ❌ {command: `pwd && ls -la`}          → split into two calls, or wrap in `sh`.",
+    "  ❌ {command: `cd /app && pnpm test`}   → set `cwd` and call once, or wrap in `sh`.",
+    "  ❌ {command: `ls -la | grep foo`}      → use the `grep` tool, or wrap in `sh`.",
+    "  ❌ {command: `cat foo.txt`}            → use the `read_file` tool.",
+    "  ❌ {command: `echo $HOME`}             → wrap in `sh` — `args` does not expand variables.",
+    "",
+    "Compound commands — only when you genuinely need shell syntax. Wrap the script yourself and pass it to `sh` or `powershell.exe`:",
+    "  POSIX (macOS / Linux / WSL):",
+    "    ✅ {command: `sh`, args: [`-lc`, `cd /workspace/app && pnpm test 2>&1 | head -50`]}",
+    "  Windows:",
+    "    ✅ {command: `powershell.exe`, args: [`-NoProfile`, `-Command`, `Get-ChildItem | Select-Object -First 5`]}",
+    "",
+    "Decision rule: if your command contains `&&`, `||`, `|`, `>`, `<`, `;`, `$(...)`, `` ` ` ``, variables, or `cd`, use `sh` (POSIX) or `powershell.exe` (Windows). Otherwise pass the program name in `command` and each argument as a separate element of `args`.",
+  ].join("\n"),
   schema,
   risk: bashRisk,
+  approvalScope: bashApprovalScope,
   timeoutMs(value) {
     const parsed = schema.safeParse(value);
     return parsed.success ? (parsed.data.timeoutMs ?? DEFAULT_TIMEOUT_MS) + EXECUTION_OVERHEAD_MS : undefined;
