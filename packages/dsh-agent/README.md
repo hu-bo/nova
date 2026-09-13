@@ -74,6 +74,7 @@ await kernel.dispose(); // 通常放在应用关闭阶段，异常路径也应�
 | `model`           | 供应商模型 ID                                                  |
 | `contextWindow`   | 必填，由部署方确认的上下文容量                                 |
 | `maxOutputTokens` | 默认 `min(4096, floor(contextWindow / 4))`，必须小于上下文容量 |
+| `reasoning`       | 可选推理档位 `off`/`low`/`medium`/`high`，见下                 |
 
 ```ts
 await kernel.updateModel({
@@ -91,6 +92,14 @@ await session.send({ text: "检查流程是否遗漏规则", model: "qianwen-qua
 `updateModel` 新增或整体替换配置。会话创建时可指定默认 `model`；`send.model` 只覆盖本轮，省略时回到会话默认模型。每轮开始固定配置，更新不影响该轮的工具循环、摘要或输出上限。密钥不进入历史、事件、结果或日志。
 
 `maxOutputTokens` 是上限，不保证实际生成长度。当前 pi-ai 还会按自己的输入估算预留 4096 token 安全空间，临近容量时可能进一步降低实际请求的输出上限。上下文容量必须填写真实模型能力，不宜为触发压缩而伪造小容量；测试压缩可降低 `thresholdRatio`。
+
+`reasoning` 决定本模型是否下发 `thinking` 参数：
+
+- 不传：请求里完全没有 `thinking` 字段，由网关自己决定。默认开启思考且不限量的网关会把 `maxOutputTokens` 全部消耗在思考上，一轮结束在 `max_tokens`、正文 0 字符（本包报 `OUTPUT_LIMIT`）。
+- `off`：下发 `thinking: { type: "disabled" }`，适合默认开启思考的模型。
+- `low`/`medium`/`high`：下发 `thinking: { type: "enabled", budget_tokens }`，预算受 `maxOutputTokens` 约束。
+
+不确定网关默认行为时显式传档位，不要用"不传"当默认值。
 
 ## 压缩与生命周期
 

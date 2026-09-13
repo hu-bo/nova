@@ -1,6 +1,5 @@
-import { loadEnvFile } from "node:process";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { config as loadDotenv } from "dotenv";
 import { expect, it } from "vitest";
 import { memoryStorage } from "@nova/agent-core";
 import { createHarness } from "@nova/harness";
@@ -11,7 +10,8 @@ const live = process.env.NOVA_TEST_LIVE === "1";
 it.skipIf(!live)(
   "真实 OpenAI-compatible Provider 完成一次 Agent turn",
   async () => {
-    loadEnvFileOverride(fileURLToPath(new URL("../../../.env", import.meta.url)));
+    // override：.env 优先于同名 shell 变量，保证用例口径唯一。
+    loadDotenv({ path: fileURLToPath(new URL("../../../.env", import.meta.url)), override: true, quiet: true });
     const apiKey = process.env.OPENAI_API_KEY;
     const modelName = process.env.MODEL;
     if (!apiKey || !modelName) throw new Error("OPENAI_API_KEY and MODEL are required in .env");
@@ -43,20 +43,3 @@ it.skipIf(!live)(
   },
   60_000,
 );
-
-function loadEnvFileOverride(path: string): void {
-  loadEnvFile(path);
-  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const separator = trimmed.indexOf("=");
-    if (separator < 0) continue;
-    const key = trimmed.slice(0, separator).trim();
-    if (!key) continue;
-    let value = trimmed.slice(separator + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    process.env[key] = value;
-  }
-}

@@ -16,4 +16,5 @@ target/
 .playwright-cli
 .pnpm-store
 .claude
+.workbuddy-ai
 submodule/

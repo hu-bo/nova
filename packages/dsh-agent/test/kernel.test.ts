@@ -77,6 +77,33 @@ describe("session kernel with real DSH and HTTP adapter", () => {
     expect(server.requests[0]!.headers.authorization).toBe("Bearer test-secret");
   });
 
+  it("only sends a thinking parameter when the model declares a reasoning level", async () => {
+    const { server, kernel } = await harness(() => ({ text: "ok" }));
+    const agent = await kernel.createAgent({ sessionId: "reasoning", systemPrompt: "" });
+    const wire = () => server.requests.at(-1)!.body;
+
+    await agent.send({ text: "no level" });
+    expect(wire().thinking).toBeUndefined();
+
+    await kernel.updateModel({ ...server.model, reasoning: "high", maxOutputTokens: 4096 });
+    await agent.send({ text: "bounded" });
+    expect(wire().thinking).toMatchObject({ type: "enabled" });
+    expect(wire().thinking.budget_tokens).toBeGreaterThan(0);
+
+    // 默认开启思考的网关会把 maxOutputTokens 烧在思考上，所以 off 必须真的下发到线上。
+    await kernel.updateModel({ ...server.model, reasoning: "off" });
+    await agent.send({ text: "off" });
+    expect(wire().thinking).toMatchObject({ type: "disabled" });
+  });
+
+  it("refuses an unknown reasoning level", async () => {
+    const { server, kernel } = await harness(() => ({ text: "ok" }));
+    await expect(
+      // 运行时故意传非法档位，验证配置校验而不是 TypeScript 的联合类型。
+      kernel.updateModel({ ...server.model, reasoning: "max" as unknown as "off" }),
+    ).rejects.toMatchObject({ code: "INVALID_CONFIG" });
+  });
+
   it("checks prompt and tool envelope capacity before network I/O", async () => {
     const { server, kernel } = await harness(() => ({ text: "ok" }));
     await kernel.updateModel({ ...server.model, contextWindow: 1000, maxOutputTokens: 256 });
@@ -109,7 +136,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
         return null;
       },
     });
-    const agent= await kernel.createAgent({ sessionId: "tool-cancel", systemPrompt: "", tools: [tool] });
+    const agent = await kernel.createAgent({ sessionId: "tool-cancel", systemPrompt: "", tools: [tool] });
     const abort = new AbortController();
     const pending = agent.send({ text: "wait", signal: abort.signal });
     await entered.promise;
@@ -124,7 +151,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
         ? "Remember: project code BLUE-57."
         : "Acknowledged",
     }));
-    const agent= await kernel.createAgent({ sessionId: "compact", systemPrompt: "business persona" });
+    const agent = await kernel.createAgent({ sessionId: "compact", systemPrompt: "business persona" });
     await agent.send({ text: "Project code BLUE-57. " + "historical details ".repeat(400) });
     await agent.send({ text: "Keep the code" });
     const events: AgentEvent[] = [];
@@ -141,7 +168,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
     const { server, kernel } = await harness((request) => ({
       text: JSON.stringify(request.body).includes("acting as a compaction engine") ? "Project code BLUE-57." : "ok",
     }));
-    const agent= await kernel.createAgent({
+    const agent = await kernel.createAgent({
       sessionId: "smaller",
       systemPrompt: "Business assistant",
       compression: { thresholdRatio: 0.4 },
@@ -166,7 +193,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
     const { server, kernel } = await harness((request) =>
       JSON.stringify(request.body).includes("acting as a compaction engine") ? { status: 500 } : { text: "ok" },
     );
-    const agent= await kernel.createAgent({
+    const agent = await kernel.createAgent({
       sessionId: "failed-summary",
       systemPrompt: "",
       compression: { enabled: false },
@@ -180,7 +207,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
 
   it("retains turns, streams text and switches model without changing the default", async () => {
     const { server, kernel } = await harness((_request, index) => ({ text: `answer-${index}` }));
-    const agent= await kernel.createAgent({ sessionId: "chat", systemPrompt: "business persona" });
+    const agent = await kernel.createAgent({ sessionId: "chat", systemPrompt: "business persona" });
     const events: AgentEvent[] = [];
     const first = await agent.send({ text: "Remember blue", onEvent: (event) => events.push(event) });
     expect(first).toMatchObject({ status: "succeeded", text: "answer-0", usage: { inputTokens: 10, outputTokens: 5 } });
@@ -198,7 +225,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
     const { server, kernel } = await harness((_request, index) =>
       index === 0 ? { tool: { name: "quote_total", args: { quantity: 3, price: 19 } } } : { text: "57" },
     );
-    const agent= await kernel.createAgent({ sessionId: "tools", systemPrompt: "Use tools", tools: [quote] });
+    const agent = await kernel.createAgent({ sessionId: "tools", systemPrompt: "Use tools", tools: [quote] });
     const events: AgentEvent[] = [];
     const result = await agent.send({
       text: "Quote",
@@ -228,7 +255,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
           ? { tool: { name: "shell", args: {} } }
           : { text: "recovered" },
     );
-    const agent= await kernel.createAgent({
+    const agent = await kernel.createAgent({
       sessionId: "guard",
       systemPrompt: "",
       tools: [
@@ -282,7 +309,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
 
   it("normalizes provider errors and contains event callback failures", async () => {
     const { kernel } = await harness((_request, index) => (index === 0 ? { status: 500 } : { text: "ok" }));
-    const agent= await kernel.createAgent({ sessionId: "failure", systemPrompt: "" });
+    const agent = await kernel.createAgent({ sessionId: "failure", systemPrompt: "" });
     const result = await agent.send({ text: "Fail" });
     expect(result.status).toBe("failed");
     expect(JSON.stringify(result)).not.toContain("private vendor details");
@@ -301,7 +328,7 @@ describe("session kernel with real DSH and HTTP adapter", () => {
     await expect(
       kernel.createAgent({ sessionId: "same", systemPrompt: "", tools: [quote, quote] }),
     ).rejects.toMatchObject({ code: "INVALID_TOOL" });
-    const agent= await kernel.createAgent({ sessionId: "same", systemPrompt: "" });
+    const agent = await kernel.createAgent({ sessionId: "same", systemPrompt: "" });
     expect((await agent.compact()).status).toBe("skipped");
     await expect(agent.send({ text: "x", model: "missing" })).rejects.toMatchObject({ code: "UNKNOWN_MODEL" });
   });

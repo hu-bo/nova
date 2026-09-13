@@ -1,4 +1,5 @@
-import { DshAgentError, type ModelConfig } from "./contracts.js";
+import { DshAgentError, type ModelConfig, type ReasoningEffort } from "./contracts.js";
+const REASONING_EFFORTS: readonly ReasoningEffort[] = ["off", "low", "medium", "high"];
 export const protocol = {
   anthropic: "anthropic-messages",
   "openai-chat": "openai-completions",
@@ -23,6 +24,8 @@ export function modelSnapshot(model: ModelConfig): ModelConfig {
   if (!["https:", "http:"].includes(url.protocol) || url.username || url.password)
     fail("INVALID_CONFIG", "Expected HTTP(S) baseURL without embedded credentials");
   positive(model.contextWindow, "contextWindow");
+  if (model.reasoning !== undefined && !REASONING_EFFORTS.includes(model.reasoning))
+    fail("INVALID_CONFIG", `reasoning must be one of ${REASONING_EFFORTS.join(" | ")}`);
   const maxOutputTokens = model.maxOutputTokens ?? Math.min(4096, Math.floor(model.contextWindow / 4));
   positive(maxOutputTokens, "maxOutputTokens");
   if (maxOutputTokens >= model.contextWindow)

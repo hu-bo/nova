@@ -1,5 +1,5 @@
-import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
+import { config as loadDotenv } from "dotenv";
 import { expect, it } from "vitest";
 import { createDshAgentKernel, defineTool, type AgentEvent } from "../src/index.js";
 
@@ -7,7 +7,7 @@ const enabled = process.env.NOVA_TEST_LIVE === "1";
 it.skipIf(!enabled)(
   "qianwen: real multi-turn tool call, compression and recall",
   async () => {
-    loadEnvFile(fileURLToPath(new URL("../../../.env", import.meta.url)));
+    loadDotenv({ path: fileURLToPath(new URL("../../../.env", import.meta.url)), quiet: true });
     const { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_BASE_URL: baseURL, MODEL: model } = process.env;
     if (!apiKey || !baseURL || !model)
       throw new Error("Live test requires ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL and MODEL");
@@ -36,6 +36,8 @@ it.skipIf(!enabled)(
           model,
           contextWindow: Number(process.env.NOVA_TEST_CONTEXT_WINDOW ?? 32768),
           maxOutputTokens: 2048,
+          // 该网关默认开启思考；不显式声明档位就不会下发 thinking 参数，思考会吃掉全部输出预算。
+          reasoning: "off",
         },
       ],
       defaultModel: "qianwen",

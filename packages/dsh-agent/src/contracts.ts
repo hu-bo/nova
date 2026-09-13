@@ -1,6 +1,12 @@
 export type JsonSchema = boolean | { readonly [keyword: string]: unknown };
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+/**
+ * 推理档位。`off` 会显式下发 `thinking: { type: "disabled" }`。
+ * 不传则完全不下发 thinking 参数，由网关自行决定——默认开启思考的网关会把
+ * maxOutputTokens 全部消耗在思考上，正文一个字都拿不到。
+ */
+export type ReasoningEffort = "off" | "low" | "medium" | "high";
 export interface ModelConfig {
   id: string;
   protocol: "anthropic" | "openai-chat" | "openai-responses";
@@ -9,6 +15,7 @@ export interface ModelConfig {
   model: string;
   contextWindow: number;
   maxOutputTokens?: number;
+  reasoning?: ReasoningEffort;
 }
 export interface ToolContext {
   signal: AbortSignal;

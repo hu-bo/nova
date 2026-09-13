@@ -26,6 +26,11 @@ import type {
 } from "./contracts.js";
 
 import { fail, positive, protocol } from "./validation.js";
+/**
+ * pi-ai 只在模型声明过推理档位时才下发 thinking 参数（否则整块被跳过，网关按自己的
+ * 默认走）。档位名到线上拼写一一对应；`off` 会落成 `thinking: { type: "disabled" }`。
+ */
+const REASONING_WIRE = { off: "off", low: "low", medium: "medium", high: "high" } as const;
 export async function createAgent(
   options: SessionOptions,
   initial: ModelConfig,
@@ -220,7 +225,9 @@ export async function createAgent(
                   id,
                   contextWindow: model.contextWindow,
                   maxTokens: model.maxOutputTokens!,
+                  ...(model.reasoning ? { reasoningEfforts: REASONING_WIRE } : {}),
                 })),
+                ...(model.reasoning ? { reasoning: model.reasoning } : {}),
                 retryPolicy: { mode: "normal", maxRetries: 0 },
               },
             },
