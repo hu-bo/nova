@@ -21,7 +21,7 @@ export type Record = { id: string; runId: string; ts: number } & (
   | { kind: "run-resumed"; attempt: number }
   | { kind: "run-paused"; reason: string }
   | { kind: "decision-requested"; decisionId: string; request: DecisionRequest }
-  | { kind: "decision-resolved"; decisionId: string; response: DecisionResponse | "timeout" }
+  | { kind: "decision-resolved"; decisionId: string; response: DecisionResponse | "timeout" | "error" }
   | { kind: "queue-enqueued"; queue: QueueName; message: string; requestId?: string }
   | { kind: "todo-updated"; items: Todo[] }
   | { kind: "usage"; model: string; usage: Usage; estimatedInput?: number }

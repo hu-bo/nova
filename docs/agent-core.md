@@ -545,7 +545,7 @@ type ApprovalPolicy = { default: "auto" | "ask" | "deny"; byRisk?: Partial<Recor
 **超时与取消**
 
 - 等待人类必须有 timeout，缺省 5 分钟；`edit_file` 审批超时默认 `allow`，仅放行本次，不写入 session allowlist；Record 保存 `allow` 及超时自动放行原因
-- 其他审批超时仍 deny，反问超时无答案；显式拒绝、审批回调异常和运行取消都不会触发超时放行
+- 其他审批超时不执行工具，并向模型返回 `approval timed out` 的 error `tool_result`，不能伪装成显式拒绝；反问超时无答案；显式拒绝、审批回调异常和运行取消都不会触发超时放行
 - Decision 结束时取消传给 `Decide` 的局部 signal，释放待处理请求并关闭 UI 卡片，不取消运行
 - 等待期间收到 abort：干净退出、落 `decision-resolved: "timeout"` 之外的 `abort-requested`
 
@@ -555,7 +555,7 @@ type ApprovalPolicy = { default: "auto" | "ask" | "deny"; byRisk?: Partial<Recor
 |---|---|---|---|
 | 审批请求发出 | ✅ | ❌ | 模型不需要知道 |
 | 审批通过 | ✅ | ❌ | 结果就是 tool 正常执行 |
-| 审批**拒绝** | ✅ | ✅ | 模型必须知道被拒，否则会反复重试同一个操作 |
+| 审批**拒绝或超时** | ✅ | ✅ | 模型必须知道未执行的原因，避免把超时误判为拒绝或反复重试 |
 | 反问的问题与答案 | ✅ | ✅ | 属于对话的一部分 |
 
 ---

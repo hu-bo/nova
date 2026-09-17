@@ -134,17 +134,10 @@
   transform: translateY(-1px) translateZ(0);
 }
 
-/* Growing the draft must stay inside the layout engine: measuring it from JavaScript on every
-   keystroke dirties style and then reads a layout property, which forces a synchronous reflow that
-   scales with draft length. `--nova-composer-field-sizing` publishes the outcome so the Composer
-   can trust the stylesheet instead of `CSS.supports`: a bundler that drops the unsupported
-   `field-sizing` declaration must not leave the field stuck at its fixed row height. */
-@supports (field-sizing: content) {
-  .nova-chat .nova-composer-textarea {
-    --nova-composer-field-sizing: content;
-    overflow-y: auto;
-    field-sizing: content;
-  }
+/* Keep the line width stable when the field starts scrolling. Composer measures the field only
+   until this max-height is reached, then pins the box and lets the textarea scroll internally. */
+.nova-chat .nova-composer-textarea {
+  scrollbar-gutter: stable;
 }
 
 .nova-chat .nova-composer-input-row {

@@ -308,7 +308,7 @@ type Decide = (req: DecisionRequest, signal: AbortSignal) => Promise<DecisionRes
 
 **超时与取消**
 
-- 等待人类输入必须有 timeout；`edit_file` 审批超时默认仅放行本次，其他审批超时默认 deny，反问超时无答案
+- 等待人类输入必须有 timeout；`edit_file` 审批超时默认仅放行本次，其他审批超时不执行工具并向模型返回 timeout（不是 deny），反问超时无答案
 - 等待期间收到 abort，要能干净退出并落 record
 
 **落 Entry 还是 Record**
@@ -317,7 +317,7 @@ type Decide = (req: DecisionRequest, signal: AbortSignal) => Promise<DecisionRes
 |---|---|---|
 | 审批请求发出 | ✅ | ❌ |
 | 审批通过 | ✅ | ❌ 模型不需要知道 |
-| 审批**拒绝** | ✅ | ✅ 模型必须知道被拒，避免重试 |
+| 审批**拒绝或超时** | ✅ | ✅ 模型必须知道未执行原因，避免误判并重试 |
 | 反问的问题与答案 | ✅ | ✅ 属于对话的一部分 |
 
 **挂起状态必须落 record**，否则 server 重启或断线后无法恢复。

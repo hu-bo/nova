@@ -161,7 +161,10 @@ async function runOne(call: ToolCall, tool: AgentTool | undefined, risk: Risk, d
 
   const approval = await deps.approve({ ...call, risk });
   if (approval === "aborted") return end(fail(interruptedText(deps, false)));
-  if (!approval.allowed) {
+  if (approval.status === "timed_out") {
+    return end(fail(`approval timed out: ${call.name}; tool was not executed`));
+  }
+  if (approval.status === "denied") {
     // §6：拒绝必须让模型知道，否则它会反复重试同一个操作
     return end(fail(`denied by user: ${call.name}`));
   }

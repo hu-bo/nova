@@ -1187,6 +1187,13 @@ describe("decision", () => {
       expect(toolResultBlocks(await storage.loadEntries(agent.sessionId)).map((result) => result.status)).toEqual(
         allowed ? ["ok", "ok"] : ["error", "error"],
       );
+      if (!allowed) {
+        const results = toolResultBlocks(await storage.loadEntries(agent.sessionId));
+        for (const result of results) {
+          expect(textOf(result.content)).toContain("approval timed out");
+          expect(textOf(result.content)).not.toContain("denied by user");
+        }
+      }
     } finally {
       vi.useRealTimers();
     }
@@ -1211,7 +1218,7 @@ describe("decision", () => {
       allowlist,
       new AbortController().signal,
     );
-    expect(result).toEqual({ allowed: false, alwaysAllowed: false });
+    expect(result).toEqual({ status: "denied" });
     expect(allowlist.size).toBe(0);
   });
 

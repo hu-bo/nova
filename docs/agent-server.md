@@ -633,6 +633,7 @@ Decision Record 的唯一 writer 是 agent-core。`sseDecide` 不碰 `records` �
 客户端据此提示"该请求已失效"，而不是静默丢弃。
 
 超时由 agent-core 管（`agent-core.md` §6），server 不重复实现。`edit_file` 审批超时仅放行本次；
+其他 tool 的审批超时由 core 生成 `approval timed out` 的 tool result，不当作用户拒绝。
 core 结束等待时取消 `Decide` 的局部 signal，server 据此清理 pending map 并发布 `decision.resolved`。
 
 ---

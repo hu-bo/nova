@@ -48,12 +48,12 @@ function newDecisionId(): string {
   return `decision-${Date.now().toString(36)}-${decisionCounter.toString(36)}`;
 }
 
-// edit_file 审批超时仅放行本次；其他 timeout → fail-closed；abort → null
+// edit_file 审批超时仅放行本次；其他 timeout 不执行并把超时交给调用方；abort → null
 export async function requestDecision(
   request: DecisionRequest,
   deps: DecisionDeps,
   signal: AbortSignal,
-): Promise<DecisionResponse | "timeout" | null> {
+): Promise<DecisionResponse | "timeout" | "error" | null> {
   await deps.storage.appendRecord(
     deps.sessionId,
     record(deps.runId(), { kind: "decision-requested", decisionId: request.decisionId, request }),
@@ -63,7 +63,7 @@ export async function requestDecision(
   const timeoutMs = deps.timeoutMs ?? DECISION_TIMEOUT_MS;
   const controller = new AbortController();
   const decisionSignal = AbortSignal.any([signal, controller.signal]);
-  let outcome: DecisionResponse | "timeout" | null;
+  let outcome: DecisionResponse | "timeout" | "error" | null;
   try {
     outcome = signal.aborted ? null : await raceHuman(deps.decide(request, decisionSignal), timeoutMs, signal);
     if (outcome === "timeout" && request.kind === "approval" && request.toolName === "edit_file") {
@@ -74,8 +74,8 @@ export async function requestDecision(
       };
     }
   } catch {
-    // 回调异常仍 fail-closed，不能触发超时自动放行。
-    outcome = "timeout";
+    // 回调异常仍 fail-closed，不能触发超时自动放行，也不能伪装成用户超时。
+    outcome = "error";
   } finally {
     // 结束外部等待并释放 pending 请求；不取消运行或后续工具执行。
     controller.abort();
@@ -125,10 +125,8 @@ function raceHuman(
   });
 }
 
-export interface ApprovalOutcome {
-  allowed: boolean;
-  alwaysAllowed: boolean;
-}
+export type ApprovalOutcome =
+  { status: "allowed"; alwaysAllowed: boolean } | { status: "denied" } | { status: "timed_out" };
 
 // 审批一个 tool call：mode 由调用方合成（policy + hooks.beforeToolCall，见 §4.3/§6）；
 // allow_always 写入 session 级 allowlist（第一版不跨 session 持久化）
@@ -139,8 +137,8 @@ export async function requestApproval(
   allowlist: Set<string>,
   signal: AbortSignal,
 ): Promise<ApprovalOutcome | "aborted"> {
-  if (mode === "auto") return { allowed: true, alwaysAllowed: false };
-  if (mode === "deny") return { allowed: false, alwaysAllowed: false };
+  if (mode === "auto") return { status: "allowed", alwaysAllowed: false };
+  if (mode === "deny") return { status: "denied" };
 
   const request: DecisionRequest = {
     kind: "approval",
@@ -153,9 +151,14 @@ export async function requestApproval(
   };
   const response = await requestDecision(request, deps, signal);
   if (response === null) return "aborted";
-  if (response === "timeout" || response.kind !== "approval") return { allowed: false, alwaysAllowed: false };
+  if (response === "timeout") {
+    return call.name === "edit_file" ? { status: "allowed", alwaysAllowed: false } : { status: "timed_out" };
+  }
+  if (response === "error" || response.kind !== "approval") return { status: "denied" };
   if (response.decision === "allow_always") allowlist.add(call.name);
-  return { allowed: response.decision !== "deny", alwaysAllowed: response.decision === "allow_always" };
+  return response.decision === "deny"
+    ? { status: "denied" }
+    : { status: "allowed", alwaysAllowed: response.decision === "allow_always" };
 }
 
 async function buildCodeChanges(
@@ -203,6 +206,6 @@ export async function askQuestion(
   };
   const response = await requestDecision(request, deps, signal);
   if (response === null) return "aborted";
-  if (response === "timeout" || response.kind !== "question") return null;
+  if (response === "timeout" || response === "error" || response.kind !== "question") return null;
   return response.answers;
 }

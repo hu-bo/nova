@@ -29,7 +29,7 @@
 | `agent-core/loop` | tool batch 的并发/串行分组、**并发上限生效（20 个 call 时在途不超过 8）**、结果顺序回填、terminate 规则、max_turns |
 | `agent-core/context` | cut point 合法性（**不得切开 tool_call 与 tool_result**）、压缩失败降级、截断保头尾 |
 | `agent-core/session` | 树的 fork / 回溯、resume 的三种分支（未完成 tool / 未 resolve decision / 都没有） |
-| `agent-core/decision` | `edit_file` 审批超时仅放行本次、其他审批超时拒绝、异常不放行、abort 期间的清理、拒绝要落 Entry |
+| `agent-core/decision` | `edit_file` 审批超时仅放行本次、其他审批超时返回 timeout 且不执行、异常不放行、abort 期间的清理、拒绝与超时原因要落 Entry |
 | `agent-core/queue` | 三个排空点的时机、**不在 tool 执行中途注入** |
 | `agent-core/context/todo` | 阈值以下不注入、阈值以上必注入、压缩后 TodoState 不变、注入位置在最后一条 user message 之前 |
 | `agent-core` 装配 | Chat 模式（无 `ctx`）+ 含 `risk !== "none"` 的工具 → 构造期抛错 |

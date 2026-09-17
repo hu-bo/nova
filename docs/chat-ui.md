@@ -137,12 +137,12 @@ type BlockRenderers = Record<string, BlockRenderer>
 模型与推理强度是受控选择：选项和当前值由宿主传入，变更通过回调上抛；没有选项时
 不渲染对应控件。这样模型能力、默认值和持久化仍只有宿主一个 owner。
 
-输入框高度自适应优先交给 CSS `field-sizing: content`（`.nova-composer-textarea`），由布局引擎在
-排版阶段完成，按键不产生 JS 测量。可用性由样式表通过 `--nova-composer-field-sizing` 发布，Composer
-读取该信号决定是否启用兜底测量；不用 `CSS.supports`，因为打包器可能在引擎仍报告支持时丢掉该声明。
-兜底测量必须避免逐键"写样式 + 读布局"：固定高度下 `scrollHeight` 不小于可视高度，测之前先恢复自动
-高度；内容达到 `max-height` 后只在框内滚动，继续输入不再改变盒子尺寸，此时跳过测量，否则每次按键都
-强制一次随草稿长度增长的同步重排。
+输入框高度自适应由 Composer 统一管理：内容未达到 `max-height` 前才测量 `scrollHeight` 并更新高度，
+达到上限后固定盒子、只让 textarea 自己滚动，继续输入不再触发高度测量。textarea 预留稳定的
+`scrollbar-gutter`，避免滚动条出现时改变可用行宽并重新换行。这样不依赖浏览器对
+`field-sizing: content` 的实现质量，也不会在已封顶的长草稿上重复 intrinsic sizing。
+草稿文本本身由 textarea/ref 持有，React 只投影“是否有可发送内容”和 Skill 候选等确实需要更新视图的状态，
+避免普通文本的每个字符重渲染整个 Composer 子树。
 
 贴底跟随由 `MessageList` 的 `ResizeObserver` 承担，其回调**不得读取布局属性**：Composer 变高会压缩
 消息区并触发该回调，在那里读 `scrollHeight` 会重排全部消息节点（表现为 Performance 面板
