@@ -8,13 +8,12 @@ const schema = z.object({
     .string()
     .min(1)
     .describe(
-      "A single executable name or path — just the program, e.g. `pnpm`, `git`, `ls`, `sh`, `powershell.exe`. Do NOT put arguments, flags, or a complete shell command line here. INVALID examples: `\"pwd && ls -la\"`, `\"cd /app && pnpm test\"`, `\"ls -la | grep foo\"`, `\"cat foo.txt\"`. If you need shell syntax (`&&`, `|`, `>`, `;`, `$()`, variables, or `cd`), set command=`sh` (POSIX) or `powershell.exe` (Windows) and pass the script as the next array element.",
+      'A single executable name or path — just the program, e.g. `pnpm`, `git`, `ls`, `sh`, `powershell.exe`. Do NOT put arguments, flags, or a complete shell command line here. INVALID examples: `"pwd && ls -la"`, `"cd /app && pnpm test"`, `"ls -la | grep foo"`, `"cat foo.txt"`. If you need shell syntax (`&&`, `|`, `>`, `;`, `$()`, variables, or `cd`), set command=`sh` (POSIX) or `powershell.exe` (Windows) and pass the script as the next array element.',
     ),
   args: z
     .array(z.string())
-    .optional()
     .describe(
-      "Arguments passed directly to the executable, one array item per argument — no shell parsing, no quoting tricks. For compound commands, use command `sh` with args [`-lc`, `<script>`] on POSIX, or `powershell.exe` with args [`-NoProfile`, `-Command`, `<script>`] on Windows.",
+      "Required array, including [] when the executable needs no arguments. Arguments passed directly to the executable, one array item per argument — no shell parsing, no quoting tricks. Never append arguments to command. For compound commands, use command `sh` with args [`-lc`, `<script>`] on POSIX, or `powershell.exe` with args [`-NoProfile`, `-Command`, `<script>`] on Windows.",
     ),
   cwd: z
     .string()
@@ -96,13 +95,13 @@ export function bashRisk(value: unknown): "read" | "exec" {
   const command = commandName(input.command);
   if (
     command === "sh" &&
-    input.args?.length === 2 &&
+    input.args.length === 2 &&
     (input.args[0] === "-c" || input.args[0] === "-lc") &&
     SIMPLE_CD_SCRIPT.test(input.args[1]!)
   )
     return "read";
-  const args = input.args?.map((arg) => arg.toLowerCase()) ?? [];
-  if (command === "find" && input.args?.some((arg) => MUTATING_FIND_ARGUMENTS.has(arg.toLowerCase()))) return "exec";
+  const args = input.args.map((arg) => arg.toLowerCase());
+  if (command === "find" && input.args.some((arg) => MUTATING_FIND_ARGUMENTS.has(arg.toLowerCase()))) return "exec";
   if (command === "tree" && args.includes("-o")) return "exec";
   if (command === "rg" && args.some((arg) => arg === "--pre" || arg.startsWith("--pre="))) return "exec";
   if (READ_ONLY_COMMANDS.has(command)) return "read";
@@ -152,7 +151,7 @@ export function bashApprovalScope(value: unknown): string | null {
   if (!parsed.success) return null;
   const command = commandName(parsed.data.command);
   if (NEVER_REMEMBER_COMMANDS.has(command)) return null;
-  const first = parsed.data.args?.[0]?.toLowerCase();
+  const first = parsed.data.args[0]?.toLowerCase();
   if (first === undefined) return `bash:${command}`;
   return first.startsWith("-") ? null : `bash:${command}:${first}`;
 }
@@ -164,15 +163,18 @@ export const bash: Tool<z.output<typeof schema>> = {
     "",
     "Calling convention:",
     "  command — a single executable name or path (e.g. `pnpm`, `git`, `ls`, `sh`, `powershell.exe`). Do not put arguments, flags, or a shell script here.",
-    "  args    — one array item per argument; no shell parsing, no quoting tricks.",
+    "  args    — REQUIRED array, one array item per argument; use [] for no arguments. No shell parsing, no quoting tricks.",
     "  cwd     — working directory; prefer this over `cd` in a script.",
     "",
     "Correct:",
     "  ✅ {command: `pnpm`, args: [`tsc`, `--noEmit`], cwd: `/workspace/app`}",
     "  ✅ {command: `git`, args: [`diff`, `--stat`]}",
     "  ✅ {command: `ls`, args: [`-la`, `/workspace/app`]}",
+    "  ✅ {command: `pwd`, args: []}",
+    "  ✅ {command: `grep`, args: [`-rn`, `subcontract_material_issue_item`, `/workspace/hotfix/backend`]}",
     "",
     "Common mistakes (will fail):",
+    "  ❌ {command: `grep subcontract_material_issue_item /workspace/hotfix/backend`} → command must be `grep`; put the pattern and path in args.",
     "  ❌ {command: `pwd && ls -la`}          → split into two calls, or wrap in `sh`.",
     "  ❌ {command: `cd /app && pnpm test`}   → set `cwd` and call once, or wrap in `sh`.",
     "  ❌ {command: `ls -la | grep foo`}      → use the `grep` tool, or wrap in `sh`.",

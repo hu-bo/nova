@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use tokio::sync::Notify;
+use tokio::sync::{Notify, mpsc};
 use tokio_stream::Stream as EventStream;
 
 use crate::error::RunnerError;
@@ -34,9 +34,8 @@ use scheduler::Scheduler;
 /// runaway command (`find /`) can't take the whole link down. The process keeps running to
 /// completion; forwarding just stops.
 const MAX_OUTPUT_BYTES: u64 = 10 * 1024 * 1024;
-// A child can inherit stdout/stderr after the tracked process exits. Drain briefly so buffered
-// output is preserved, then finish even if a descendant ignores termination.
-const OUTPUT_DRAIN_GRACE: Duration = Duration::from_secs(1);
+// Bound both reaping after termination and draining inherited pipes after a normal exit.
+const CLEANUP_GRACE: Duration = Duration::from_secs(1);
 
 pub struct ExecuteParams {
     pub execution_id: String,
@@ -217,8 +216,8 @@ impl Executor {
     }
 
     /// Admits or rejects (`BUSY` / `INVALID`) synchronously. On success, returns a stream that
-    /// always ends with exactly one `Finished` event. The returned stream owns everything it
-    /// needs (cloned `Arc`s, owned params) and doesn't borrow `self` — `use<>` says so
+    /// always ends with exactly one `Finished` event. An independent task owns execution;
+    /// dropping the event receiver cancels it. The stream doesn't borrow `self` — `use<>` says so
     /// explicitly, since edition 2024 would otherwise conservatively tie the opaque type to
     /// `self`'s elided lifetime.
     pub fn execute(
@@ -234,45 +233,86 @@ impl Executor {
             )));
         };
         let executor = self.clone();
-        Ok(async_stream::stream! {
+        let (event_tx, event_rx) = mpsc::channel(2);
+        tokio::spawn(async move {
             let execution_id = params.execution_id.clone();
             let mut sequence: u64 = 0;
 
-            let Some(_running_permit) = admission.wait_for_running_slot(&handle.cancel).await else {
+            let running_permit = tokio::select! {
+                permit = admission.wait_for_running_slot(&handle.cancel) => permit,
+                _ = event_tx.closed() => None,
+            };
+            let Some(running_permit) = running_permit else {
                 executor.registry.finish(&execution_id);
                 sequence += 1;
-                yield finished_event(&execution_id, sequence, ExecutionStatus::Cancelled, -1, Some(wire_error(ErrorCode::Cancelled, "cancelled before it started running")), 0);
+                let _ = event_tx
+                    .send(finished_event(
+                        &execution_id,
+                        sequence,
+                        ExecutionStatus::Cancelled,
+                        -1,
+                        Some(wire_error(
+                            ErrorCode::Cancelled,
+                            "cancelled before it started running",
+                        )),
+                        0,
+                    ))
+                    .await;
                 return;
             };
             executor.registry.set_running(&execution_id);
 
-            let timeout_ms = if params.timeout_ms == 0 { executor.default_timeout_ms } else { params.timeout_ms };
-            let spawned = SpawnedProcess::spawn(&params.command, &params.args, &params.cwd, &params.env, params.stdin);
+            let timeout_ms = if params.timeout_ms == 0 {
+                executor.default_timeout_ms
+            } else {
+                params.timeout_ms
+            };
+            let started_at = Instant::now();
+            let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms as u64);
+            let spawned = SpawnedProcess::spawn(
+                &params.command,
+                &params.args,
+                &params.cwd,
+                &params.env,
+                params.stdin,
+            );
             let (mut process, killer) = match spawned {
                 Ok(pair) => pair,
                 Err(err) => {
                     executor.registry.finish(&execution_id);
                     sequence += 1;
-                    yield finished_event(&execution_id, sequence, ExecutionStatus::Failed, -1, Some(err.into_wire()), 0);
+                    drop(running_permit);
+                    let _ = event_tx
+                        .send(finished_event(
+                            &execution_id,
+                            sequence,
+                            ExecutionStatus::Failed,
+                            -1,
+                            Some(err.into_wire()),
+                            0,
+                        ))
+                        .await;
                     return;
                 }
             };
 
             let pid = process.pid().unwrap_or(0) as i32;
+            tracing::debug!(%execution_id, pid, command = %params.command, timeout_ms, "execution process started");
             sequence += 1;
-            yield ExecutionEvent {
-                execution_id: execution_id.clone(),
-                sequence,
-                ts: Some(now()),
-                event: Some(execution_event::Event::Started(Started { pid })),
-            };
+            let _ = event_tx
+                .send(ExecutionEvent {
+                    execution_id: execution_id.clone(),
+                    sequence,
+                    ts: Some(now()),
+                    event: Some(execution_event::Event::Started(Started { pid })),
+                })
+                .await;
 
             let stdout = process.take_stdout().expect("stdout was piped at spawn");
             let stderr = process.take_stderr().expect("stderr was piped at spawn");
             let mut output_rx = stream::spawn_readers(stdout, stderr);
 
-            let started_at = Instant::now();
-            let sleep = tokio::time::sleep(Duration::from_millis(timeout_ms as u64));
+            let sleep = tokio::time::sleep_until(deadline);
             tokio::pin!(sleep);
 
             let mut kill_reason: Option<KillReason> = None;
@@ -281,10 +321,29 @@ impl Executor {
             let mut output_done = false;
             let mut process_done = false;
             let mut exit_status = None;
+            let mut pending_output = None;
+            let mut cleanup_truncated = false;
             let mut drain_sleep = Box::pin(tokio::time::sleep(Duration::from_secs(24 * 60 * 60)));
 
-            while !process_done || !output_done {
+            while !process_done || !output_done || pending_output.is_some() {
                 tokio::select! {
+                    permit = event_tx.reserve(), if pending_output.is_some() => {
+                        match permit {
+                            Ok(permit) => {
+                                sequence += 1;
+                                permit.send(ExecutionEvent {
+                                    execution_id: execution_id.clone(),
+                                    sequence,
+                                    ts: Some(now()),
+                                    event: pending_output.take().map(execution_event::Event::Output),
+                                });
+                            }
+                            Err(_) => {
+                                pending_output = None;
+                                truncated = true;
+                            }
+                        }
+                    }
                     result = process.wait(), if !process_done => {
                         process_done = true;
                         exit_status = match result {
@@ -309,11 +368,13 @@ impl Executor {
                         // Shell descendants can retain stdout/stderr after the shell exits.
                         // This execution owns their process group; finish it before draining EOF.
                         killer.kill();
-                        drain_sleep
-                            .as_mut()
-                            .reset(tokio::time::Instant::now() + OUTPUT_DRAIN_GRACE);
+                        if kill_reason.is_none() {
+                            drain_sleep
+                                .as_mut()
+                                .reset(tokio::time::Instant::now() + CLEANUP_GRACE);
+                        }
                     }
-                    maybe_chunk = output_rx.recv(), if !output_done => {
+                    maybe_chunk = output_rx.recv(), if !output_done && pending_output.is_none() => {
                         match maybe_chunk {
                             Some(chunk) => {
                                 if truncated {
@@ -324,33 +385,38 @@ impl Executor {
                                     truncated = true;
                                     continue;
                                 }
-                                sequence += 1;
-                                yield ExecutionEvent {
-                                    execution_id: execution_id.clone(),
-                                    sequence,
-                                    ts: Some(now()),
-                                    event: Some(execution_event::Event::Output(Output { stream: chunk.stream as i32, data: chunk.data })),
-                                };
+                                pending_output = Some(Output { stream: chunk.stream as i32, data: chunk.data });
                             }
                             None => output_done = true,
                         }
                     }
-                    _ = &mut drain_sleep, if process_done && !output_done => {
-                        // An inherited pipe must not turn a completed command into an unbounded
-                        // tool timeout when process-tree termination is incomplete.
-                        output_done = true;
+                    _ = &mut drain_sleep, if process_done || kill_reason.is_some() => {
+                        cleanup_truncated = !output_done || pending_output.is_some();
+                        tracing::warn!(
+                            %execution_id,
+                            category = "execution_cleanup_timeout",
+                            process_done,
+                            output_done,
+                            duration_ms = started_at.elapsed().as_millis() as u64,
+                            "execution cleanup deadline reached; stopping wait for process and output"
+                        );
+                        break;
                     }
-                    _ = &mut sleep, if kill_reason.is_none() => {
+                    _ = &mut sleep, if kill_reason.is_none() && !process_done => {
                         kill_reason = Some(KillReason::TimedOut);
                         tracing::warn!(
                             %execution_id,
                             category = "execution_timeout",
+                            pid,
+                            command = %params.command,
                             timeout_ms,
+                            duration_ms = started_at.elapsed().as_millis() as u64,
                             process_done,
                             output_done,
                             "execution timed out; killing process"
                         );
                         killer.kill();
+                        drain_sleep.as_mut().reset(tokio::time::Instant::now() + CLEANUP_GRACE);
                     }
                     _ = handle.cancel.cancelled(), if kill_reason.is_none() => {
                         kill_reason = Some(KillReason::Cancelled);
@@ -360,31 +426,87 @@ impl Executor {
                             "execution cancelled; killing process"
                         );
                         killer.kill();
+                        drain_sleep.as_mut().reset(tokio::time::Instant::now() + CLEANUP_GRACE);
+                    }
+                    _ = event_tx.closed(), if kill_reason.is_none() => {
+                        kill_reason = Some(KillReason::Cancelled);
+                        killer.kill();
+                        drain_sleep.as_mut().reset(tokio::time::Instant::now() + CLEANUP_GRACE);
                     }
                 }
             }
 
+            // Drop closes the output consumers and invokes kill_on_drop for an unreaped child
+            // before publishing the terminal event.
+            drop(output_rx);
+            drop(process);
             let duration_ms = started_at.elapsed().as_millis() as u64;
             executor.registry.finish(&execution_id);
+            drop(running_permit);
 
             let (status, exit_code, mut error) = match kill_reason {
-                Some(KillReason::Cancelled) => (ExecutionStatus::Cancelled, -1, Some(wire_error(ErrorCode::Cancelled, "cancelled by client request"))),
-                Some(KillReason::TimedOut) => (ExecutionStatus::TimedOut, -1, Some(wire_error(ErrorCode::Timeout, format!("timed out after {timeout_ms}ms")))),
+                Some(KillReason::Cancelled) => (
+                    ExecutionStatus::Cancelled,
+                    -1,
+                    Some(wire_error(
+                        ErrorCode::Cancelled,
+                        "cancelled by client request",
+                    )),
+                ),
+                Some(KillReason::TimedOut) => (
+                    ExecutionStatus::TimedOut,
+                    -1,
+                    Some(wire_error(
+                        ErrorCode::Timeout,
+                        format!("timed out after {timeout_ms}ms"),
+                    )),
+                ),
                 None => match exit_status {
                     // `code()` is None when the process died from a signal we didn't request
                     // (e.g. killed by something outside the Runner) — Phase 1 doesn't model
                     // that as a distinct state, just an exit without a code.
-                    Some(status) => (ExecutionStatus::Completed, status.code().unwrap_or(-1), None),
-                    None => (ExecutionStatus::Failed, -1, Some(wire_error(ErrorCode::Io, "execution task ended without a result"))),
+                    Some(status) => (
+                        ExecutionStatus::Completed,
+                        status.code().unwrap_or(-1),
+                        None,
+                    ),
+                    None => (
+                        ExecutionStatus::Failed,
+                        -1,
+                        Some(wire_error(
+                            ErrorCode::Io,
+                            "execution task ended without a result",
+                        )),
+                    ),
                 },
             };
-            if truncated && error.is_none() {
-                error = Some(wire_error(ErrorCode::TooLarge, format!("output truncated after {MAX_OUTPUT_BYTES} bytes; the process ran to completion")));
+            if cleanup_truncated && error.is_none() {
+                error = Some(wire_error(
+                    ErrorCode::TooLarge,
+                    "output truncated at execution cleanup deadline",
+                ));
+            } else if truncated && error.is_none() {
+                error = Some(wire_error(
+                    ErrorCode::TooLarge,
+                    format!(
+                        "output truncated after {MAX_OUTPUT_BYTES} bytes; the process ran to completion"
+                    ),
+                ));
             }
 
             sequence += 1;
-            yield finished_event(&execution_id, sequence, status, exit_code, error, duration_ms);
-        })
+            let _ = event_tx
+                .send(finished_event(
+                    &execution_id,
+                    sequence,
+                    status,
+                    exit_code,
+                    error,
+                    duration_ms,
+                ))
+                .await;
+        });
+        Ok(tokio_stream::wrappers::ReceiverStream::new(event_rx))
     }
 }
 
@@ -538,6 +660,104 @@ mod tests {
             }
             _ => panic!("last event must be Finished"),
         }
+    }
+
+    #[tokio::test]
+    async fn stalled_event_consumer_does_not_delay_timeout_or_hold_running_slot() {
+        let executor = Executor::new(1, 0, 5_000);
+        let mut events = executor.execute(sleep_params("stalled", 30, 200)).unwrap();
+        let pid = match events.next().await.unwrap().event {
+            Some(execution_event::Event::Started(started)) => started.pid as u32,
+            _ => panic!("expected Started"),
+        };
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while executor.running_count() != 0 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("timeout must run while the event consumer is stalled");
+        assert!(!process_alive(pid));
+        let events: Vec<_> = events.collect().await;
+        let Some(execution_event::Event::Finished(finished)) =
+            events.last().and_then(|event| event.event.as_ref())
+        else {
+            panic!("expected Finished");
+        };
+        assert_eq!(finished.status, ExecutionStatus::TimedOut as i32);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn output_backpressure_does_not_block_timeout_or_cancel() {
+        for cancel in [false, true] {
+            let executor = Executor::new(1, 0, 5_000);
+            let mut params = sleep_params("blocked-output", 0, if cancel { 5_000 } else { 200 });
+            params.command = "sh".into();
+            params.args = vec![
+                "-c".into(),
+                "while :; do printf 'some output\\n'; done".into(),
+            ];
+            let mut events = executor.execute(params).unwrap();
+            let pid = match events.next().await.unwrap().event {
+                Some(execution_event::Event::Started(started)) => started.pid as u32,
+                _ => panic!("expected Started"),
+            };
+            // Let the bounded event channel fill without polling it.
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            if cancel {
+                assert!(executor.cancel("blocked-output"));
+            }
+            tokio::time::timeout(Duration::from_secs(3), async {
+                while executor.running_count() != 0 {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+            })
+            .await
+            .expect("backpressure must not retain the process or running slot");
+            assert!(!process_alive(pid));
+            let events: Vec<_> = events.collect().await;
+            assert!(
+                events
+                    .windows(2)
+                    .all(|pair| pair[1].sequence == pair[0].sequence + 1)
+            );
+            let Some(execution_event::Event::Finished(finished)) =
+                events.last().and_then(|event| event.event.as_ref())
+            else {
+                panic!("expected Finished");
+            };
+            assert_eq!(
+                finished.status,
+                if cancel {
+                    ExecutionStatus::Cancelled
+                } else {
+                    ExecutionStatus::TimedOut
+                } as i32
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn dropping_event_stream_cancels_process_and_releases_capacity() {
+        let executor = Executor::new(1, 0, 30_000);
+        let mut events = executor
+            .execute(sleep_params("dropped", 30, 30_000))
+            .unwrap();
+        let pid = match events.next().await.unwrap().event {
+            Some(execution_event::Event::Started(started)) => started.pid as u32,
+            _ => panic!("expected Started"),
+        };
+        drop(events);
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while executor.is_busy() {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("dropping the consumer must clean up the execution");
+        assert!(!process_alive(pid));
+        assert!(!executor.cancel("dropped"));
     }
 
     #[tokio::test]

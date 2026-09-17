@@ -320,7 +320,7 @@ describe("chat-ui", () => {
           kind: "approval",
           decisionId: "d1",
           toolName: "bash",
-          args: { command: "rm build/output" },
+          args: { command: "git", args: ["reset", "--hard", "HEAD~1"] },
           risk: "exec",
         }}
         onResolve={() => undefined}
@@ -328,7 +328,7 @@ describe("chat-ui", () => {
       />,
     );
     const todo = renderToStaticMarkup(<TodoPanel items={[{ id: "1", text: "verify", status: "in_progress" }]} />);
-    expect(decision).toContain("rm build/output");
+    expect(decision).toContain("git reset --hard HEAD~1");
     expect(decision).toContain("需要授权");
     expect(decision).toContain("允许执行");
     expect(decision).toContain('data-slot="card"');

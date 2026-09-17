@@ -16,8 +16,10 @@ export interface DecisionPromptProps {
 }
 
 function approvalDetails(request: Extract<DecisionRequest, { kind: "approval" }>) {
-  if (request.risk === "exec" && request.args && typeof request.args === "object" && "command" in request.args)
-    return String(request.args.command);
+  if (request.risk === "exec" && request.args && typeof request.args === "object" && "command" in request.args) {
+    const args = "args" in request.args && Array.isArray(request.args.args) ? request.args.args : [];
+    return [String(request.args.command), ...args.map(String)].join(" ");
+  }
   if (typeof request.args === "string") return request.args;
   return JSON.stringify(request.args, null, 2);
 }

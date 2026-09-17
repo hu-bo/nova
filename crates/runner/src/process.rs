@@ -36,8 +36,12 @@ mod platform {
         pub fn kill(&self) {
             if self.pid != 0 {
                 // Negative pid targets the whole process group (see `prepare` below).
-                unsafe {
-                    libc::kill(-self.pid, libc::SIGKILL);
+                if unsafe { libc::kill(-self.pid, libc::SIGKILL) } != 0 {
+                    let error = std::io::Error::last_os_error();
+                    // A normal exit can leave no members in the group before cleanup runs.
+                    if error.raw_os_error() != Some(libc::ESRCH) {
+                        tracing::warn!(pid = self.pid, %error, category = "process_kill_error", "failed to kill execution process group");
+                    }
                 }
             }
         }

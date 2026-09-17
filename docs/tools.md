@@ -120,7 +120,7 @@ risk:    "write"   executionMode: "sequential"
 ### `bash`
 
 ```ts
-args:    { command: string; args?: string[]; cwd?: string; timeoutMs?: number }
+args:    { command: string; args: string[]; cwd?: string; timeoutMs?: number }
 content: stdout + stderr（合并，由 agent-core 截断）
 details: { exitCode, stdout, stderr, durationMs, truncated }
 risk:    常见只读查询命令为 "read"，其他命令为 "exec"
@@ -132,6 +132,7 @@ risk:    常见只读查询命令为 "read"，其他命令为 "exec"
 只接受正整数，最大 2,147,478,647 ms，给 Agent 调用定时器预留 5 秒回传余量；0 不表示无限等待。
 显式长任务同时通过 `AgentTool.timeoutMs` 延长外层调用预算，用户取消仍立即生效。
 
+`args` 为必填数组，无参数时也必须传 `[]`；缺失时在工具参数校验阶段拒绝执行。
 `command` 是可执行文件名或路径，**不会按 shell 命令行解析**；参数必须放在 `args`，例如
 `{ command: "ls", args: ["/workspace/synes/"] }`。把整段 `ls /workspace/synes/` 放进
 `command` 会被当作一个可执行文件名，并以 `SPAWN_FAILED` 结束。

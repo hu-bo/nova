@@ -12,8 +12,11 @@ import { z } from "./shared.js";
 
 it("describes the direct-executable and explicit-shell bash calling conventions to the model", () => {
   const parameters = z.toJSONSchema(bash.schema) as {
+    required?: string[];
     properties?: Record<string, { description?: string }>;
   };
+
+  expect(parameters.required).toEqual(expect.arrayContaining(["command", "args"]));
 
   expect(bash.description).toContain("{command: `pnpm`, args:");
   expect(bash.description).toContain("{command: `sh`, args: [`-lc`");
@@ -37,6 +40,13 @@ it("describes the direct-executable and explicit-shell bash calling conventions 
   expect(parameters.properties?.timeoutMs?.description).toContain("explicitly set");
 });
 
+it("requires explicit bash args and accepts an empty array for programs without arguments", () => {
+  expect(bash.schema.safeParse({ command: "pwd" }).success).toBe(false);
+  expect(bash.schema.safeParse({ command: "grep needle /workspace/backend" }).success).toBe(false);
+  expect(bash.schema.parse({ command: "pwd", args: [] })).toEqual({ command: "pwd", args: [] });
+  expect(bash.schema.safeParse({ command: "grep", args: "needle" }).success).toBe(false);
+});
+
 it.each([undefined, 300_000])("uses the default or explicit bash execution timeout (%s)", async (timeoutMs) => {
   const output = {
     ok: true as const,
@@ -58,20 +68,20 @@ it.each([undefined, 300_000])("uses the default or explicit bash execution timeo
 
 it("rejects timeout values that disable the execution limit or overflow the call timer", () => {
   for (const timeoutMs of [0, -1, 1.5, Infinity, 2_147_478_648]) {
-    expect(bash.schema.safeParse({ command: "pnpm", timeoutMs }).success).toBe(false);
+    expect(bash.schema.safeParse({ command: "pnpm", args: [], timeoutMs }).success).toBe(false);
   }
 });
 
 it("maps Runner failures and non-zero command exits to error", async () => {
   const runnerFailure = await bash.execute(
-    { command: "test" },
+    { command: "test", args: [] },
     ctx({ ok: false, error: { code: "RUNNER_UNAVAILABLE", message: "offline" } }),
   );
   expect(runnerFailure.status).toBe("error");
   expect(runnerFailure.details).toMatchObject({ code: "RUNNER_UNAVAILABLE" });
 
   const nonZero = await bash.execute(
-    { command: "test" },
+    { command: "test", args: [] },
     ctx({ ok: true, value: { exitCode: 2, stdout: "", stderr: "failed", truncated: false, durationMs: 1 } }),
   );
   expect(nonZero.status).toBe("error");
@@ -80,7 +90,7 @@ it("maps Runner failures and non-zero command exits to error", async () => {
 
 it("classifies direct read-only bash queries without relaxing shell or mutating commands", () => {
   for (const command of ["ls", "/usr/bin/find", "WHICH.EXE", "pwd", "rg", "tree"]) {
-    expect(bashRisk({ command })).toBe("read");
+    expect(bashRisk({ command, args: [] })).toBe("read");
   }
   expect(bashRisk({ command: "git", args: ["status", "--short"] })).toBe("read");
   expect(bashRisk({ command: "git", args: ["config", "--file", ".gitmodules", "--list"] })).toBe("read");

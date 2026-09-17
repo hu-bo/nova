@@ -45,6 +45,7 @@ async fn read_and_chunk(
         let elapsed = last_flush.elapsed();
         let until_flush = CHUNK_INTERVAL.saturating_sub(elapsed);
         tokio::select! {
+            _ = tx.closed() => return,
             read = reader.read(&mut read_buf) => {
                 match read {
                     Ok(0) => break, // EOF.
@@ -84,5 +85,22 @@ async fn read_and_chunk(
                 data: pending,
             })
             .await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn closing_consumer_stops_reader_even_when_pipe_has_no_data_or_eof() {
+        let (_writer, reader) = tokio::io::duplex(16);
+        let (tx, rx) = mpsc::channel(1);
+        let task = tokio::spawn(read_and_chunk(reader, Stream::Stdout, tx));
+        drop(rx);
+        tokio::time::timeout(Duration::from_secs(1), task)
+            .await
+            .expect("idle pipe reader must stop when execution drops its receiver")
+            .unwrap();
     }
 }

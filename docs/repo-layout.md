@@ -681,6 +681,9 @@ model-gateway 的**管理后台前端**。与 `agent-web-ui` 平级，都是 Rea
 
 ### 4.13 `crates/runner`
 
+Execution driver 独立拥有进程、超时、取消和运行额度；通过有界事件通道交给 transport。
+事件发送背压只能暂停输出读取，不能暂停进程超时与清理，也不能占住已结束执行的运行额度。
+
 Execution Plane。**单 crate**，内部分模块：
 
 ```text
