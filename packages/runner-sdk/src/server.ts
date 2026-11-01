@@ -1,275 +1,172 @@
-// gRPC Connect 入口与 session 生命周期（docs/runner-sdk.md §2/§3/§8）。
-// Runner 始终是建连方：SDK 在 127.0.0.1 随机端口起 h2c listener，
-// Runner 进程出站连入。没有入站执行端口，没有第二条执行路径。
+import { createServer, type Server } from "node:http";
 import { randomUUID } from "node:crypto";
-import { createServer, type Http2Server } from "node:http2";
-import type { Socket } from "node:net";
-import { Code, ConnectError, type ConnectRouter, type HandlerContext } from "@connectrpc/connect";
-import { connectNodeAdapter } from "@connectrpc/connect-node";
-import { create } from "@bufbuild/protobuf";
-import { AcceptedSchema, RunnerConnection, ServerEnvelopeSchema } from "./gen/runner_pb.js";
-import type { Register, RunnerEnvelope } from "./gen/runner_pb.js";
+import WebSocket, { WebSocketServer } from "ws";
 import {
-  BoundedQueue,
-  RunnerSessionImpl,
-  ended,
-  type RunnerIdentity,
-  type RunnerSession,
-  type ServerEnvelopeInit,
-} from "./session.js";
-import { runnerUnavailable } from "./errors.js";
+  decodeRunnerEnvelope,
+  encodeServerEnvelope,
+  RUNNER_PROTOCOL_VERSION,
+} from "@nova/runner-protocol";
+import { messageBytes } from "./errors.js";
+import { parseIdentity, RunnerSessionImpl } from "./session.js";
+import type {
+  RunnerSdk,
+  RunnerSdkOptions,
+  RunnerSession,
+  RunnerSessionCandidate,
+  RunnerIdentity,
+} from "./types.js";
 
-// The runner shares one bounded outbound stream for heartbeats and work data. Allow a
-// transient proxy/backpressure delay without declaring the whole session stale.
+const DEFAULT_PATH = "/runner/v1/connect";
 const DEFAULT_HEARTBEAT_MS = 10_000;
 const DEFAULT_ADMISSION_TIMEOUT_MS = 30_000;
-const OUTBOUND_CAPACITY = 64; // server→runner 发送缓冲上限，满则背压到 handleEnvelope
-
-export interface RunnerSdkOptions {
-  heartbeatIntervalMs?: number; // 发给 Runner 的心跳周期，缺省 5000
-  // Register 后等待 Runner Module 接纳的上限，避免未装配或异常的控制面挂住 gRPC 流。
-  admissionTimeoutMs?: number;
-  host?: string;
-  port?: number;
-}
-
-export interface RunnerSessionCandidate {
-  readonly identity: RunnerIdentity;
-  readonly token: string;
-  accept(): RunnerSession;
-  reject(code: string, message: string): Promise<void>;
-}
-
-export interface RunnerSdk {
-  // listen() 之后才有值；格式 http://127.0.0.1:<port>，供 Runner --server 使用
-  readonly endpoint: string;
-  listen(): Promise<void>;
-  onSession(listener: (candidate: RunnerSessionCandidate) => void): () => void;
-  close(): Promise<void>;
-}
 
 export function createRunnerSdk(options: RunnerSdkOptions = {}): RunnerSdk {
-  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS;
-  const admissionTimeoutMs = options.admissionTimeoutMs ?? DEFAULT_ADMISSION_TIMEOUT_MS;
-  const host = options.host ?? "127.0.0.1";
-  const port = options.port ?? 0;
-  if (!Number.isFinite(admissionTimeoutMs) || admissionTimeoutMs <= 0) {
-    throw new RangeError("admissionTimeoutMs must be a positive finite number");
-  }
-  if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new RangeError("port must be between 0 and 65535");
+  const ownServer = options.server ? null : createServer((_request, response) => {
+    response.writeHead(404).end();
+  });
+  const httpServer = options.server ?? ownServer!;
+  const websocketServer = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 * 1024, perMessageDeflate: false });
+  const path = options.path ?? DEFAULT_PATH;
+  const sessions = new Map<string, RunnerSessionImpl>();
+  let listener: ((candidate: RunnerSessionCandidate) => void | Promise<void>) | undefined;
+  let listening = false;
+  let closed = false;
 
-  // Session 接纳有唯一 owner（Runner Module）。观察者应由该 Module 自己暴露，避免
-  // 多个 listener 竞争 accept()/reject()，把连接归属变成时序问题。
-  let sessionListener: ((candidate: RunnerSessionCandidate) => void) | null = null;
-  const sessions = new Set<RunnerSessionImpl>();
-  const sockets = new Set<Socket>();
-  const admissions = new Set<{ reject(code: string, message: string): void }>();
-  let server: Http2Server | null = null;
-  let listening: Promise<void> | null = null;
-  let closing: Promise<void> | null = null;
-  let endpoint = "";
-
-  const connectHandler = async function* (
-    requests: AsyncIterable<RunnerEnvelope>,
-    context: HandlerContext,
-  ): AsyncIterable<ServerEnvelopeInit> {
-    const token = bearerToken(context.requestHeader);
-    if (!token) throw new ConnectError("runner token is required", Code.Unauthenticated);
-    // 1. 首帧必须是 Register，否则拒绝连接
-    const iterator = requests[Symbol.asyncIterator]();
-    const first = await iterator.next();
-    if (first.done === true || first.value.payload.case !== "register") {
-      throw new ConnectError("first envelope must be Register", Code.InvalidArgument);
-    }
-    const register: Register = first.value.payload.value;
-
-    // 2. 接纳决策交给唯一的 Runner Module owner。
-    const outbound = new BoundedQueue<ServerEnvelopeInit>(OUTBOUND_CAPACITY);
-    type Decision =
-      { kind: "accepted"; session: RunnerSessionImpl } | { kind: "rejected"; code: string; message: string };
-    let decide!: (decision: Decision) => void;
-    const decided = new Promise<Decision>((resolve) => {
-      decide = resolve;
-    });
-    let settled = false;
-    const settle = (decision: Decision): boolean => {
-      if (settled) return false;
-      settled = true;
-      decide(decision);
-      return true;
-    };
-    const admission = {
-      reject(code: string, message: string) {
-        settle({ kind: "rejected", code, message });
-      },
-    };
-    const candidate: RunnerSessionCandidate = {
-      identity: register,
-      token,
-      accept() {
-        const session = new RunnerSessionImpl(register, `runner-session-${randomUUID()}`, outbound);
-        if (!settle({ kind: "accepted", session })) throw new Error("candidate already settled");
-        return session;
-      },
-      async reject(code: string, message: string) {
-        admission.reject(code, message);
-      },
-    };
-    admissions.add(admission);
-    const timer = setTimeout(() => {
-      admission.reject("ADMISSION_TIMEOUT", "runner admission timed out");
-    }, admissionTimeoutMs);
-    if (sessionListener === null) {
-      admission.reject("UNAVAILABLE", "runner session handler is not registered");
-    } else {
-      try {
-        sessionListener(candidate);
-      } catch {
-        admission.reject("INTERNAL", "runner session handler failed");
-      }
-    }
-    const decision = await decided.finally(() => {
-      clearTimeout(timer);
-      admissions.delete(admission);
-    });
-    if (decision.kind === "rejected") {
-      throw new ConnectError(`${decision.code}: ${decision.message}`, Code.Unauthenticated);
-    }
-    const accepted = decision.session;
-    sessions.add(accepted);
-
-    // 3. 回复 Accepted，之后双向泵送
-    yield {
-      requestId: first.value.requestId,
-      payload: {
-        case: "accepted",
-        value: create(AcceptedSchema, {
-          heartbeatIntervalMs,
-          generation: accepted.generation,
-        }),
-      },
-    };
-
-    // 入站泵：Runner → SDK。handleEnvelope 的 push 挂起 = 背压直达 Runner
-    const pump = (async () => {
-      try {
-        for (;;) {
-          const next = await iterator.next();
-          if (next.done === true) break;
-          await accepted.handleEnvelope(next.value);
-        }
-      } catch {
-        // 传输错误与正常结束同样处理：会话失效，不重放任何请求
-      }
-      accepted.failTransport(runnerUnavailable());
-    })();
-
-    try {
-      // 出站泵：SDK → Runner，经同一个 generator 交给 connect
-      for (;;) {
-        const item = await outbound.shift();
-        if (item === ended) break;
-        yield item;
-      }
-    } finally {
-      accepted.failTransport(runnerUnavailable()); // 幂等
-      sessions.delete(accepted);
-      void pump; // 响应结束后 Runner 会关闭连接，入站泵随之退出
-    }
+  const diagnostic = (code: string) => {
+    try { options.onDiagnostic?.({ code }); } catch { /* Diagnostic callbacks cannot break transport handling. */ }
+  };
+  const endpoint = () => {
+    if (!httpServer.listening) return `ws://${endpointHost(options.host ?? "127.0.0.1")}:${options.port ?? 0}${path}`;
+    const address = httpServer.address();
+    if (!address || typeof address === "string") return `ws://${endpointHost(options.host ?? "127.0.0.1")}:0${path}`;
+    const host = endpointHost(options.host ?? (address.address === "::" ? "::1" : address.address));
+    return `ws://${host}:${address.port}${path}`;
   };
 
-  // h2c prior-knowledge：tonic 客户端用 http:// 连入，Node http2 明文服务直接承接
-  const handler = connectNodeAdapter({
-    routes(router: ConnectRouter) {
-      router.service(RunnerConnection, { connect: connectHandler });
-    },
+  httpServer.on("upgrade", (request, socket, head) => {
+    let url: URL;
+    try { url = new URL(request.url ?? "/", "http://localhost"); }
+    catch { socket.destroy(); return; }
+    if (closed || url.pathname !== path) { socket.destroy(); return; }
+    websocketServer.handleUpgrade(request, socket, head, (client) => {
+      websocketServer.emit("connection", client, request);
+    });
+  });
+
+  websocketServer.on("connection", (socket, request) => {
+    const authorization = request.headers.authorization;
+    const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length)
+      : "";
+    if (!token) { socket.close(1008, "Credentials required"); return; }
+    let accepted = false;
+    const timeout = setTimeout(() => {
+      if (!accepted) socket.close(1008, "Session admission timed out");
+    }, options.admissionTimeoutMs ?? DEFAULT_ADMISSION_TIMEOUT_MS);
+    timeout.unref();
+    const reject = (code: string, message: string) => {
+      if (accepted || socket.readyState !== WebSocket.OPEN) return;
+      try {
+        socket.send(encodeServerEnvelope({ requestId: randomUUID(), rejection: { code, message } }), { binary: true }, () => {
+          socket.close(1008, "Connection not admitted");
+        });
+      } catch { socket.close(1008, "Connection not admitted"); }
+    };
+    const firstMessage = (frame: WebSocket.RawData, binary: boolean) => {
+      socket.off("message", firstMessage);
+      if (!binary) { reject("INVALID", "Binary Protobuf is required."); return; }
+      let identity: RunnerIdentity;
+      try {
+        const envelope = decodeRunnerEnvelope(messageBytes(frame));
+        if (envelope.payload !== "hello") throw new TypeError("Runner Hello is required");
+        identity = parseIdentity(envelope.hello);
+        if (identity.protocolVersion !== RUNNER_PROTOCOL_VERSION) throw new TypeError("Unsupported Runner protocol version");
+      } catch {
+        diagnostic("RUNNER_INVALID_HELLO");
+        reject("INVALID", "Runner handshake is invalid or unsupported.");
+        return;
+      }
+      const currentListener = listener;
+      if (!currentListener) { reject("UNAVAILABLE", "No Session admission callback is registered."); return; }
+      const candidate: RunnerSessionCandidate = {
+        identity,
+        token,
+        accept: async ({ principalId }) => {
+          if (accepted || socket.readyState !== WebSocket.OPEN) throw new Error("Runner candidate is no longer available");
+          if (!principalId || principalId.trim() !== principalId) throw new TypeError("principalId must be a non-empty stable identifier");
+          const key = sessionKey(principalId, identity);
+          for (const [oldKey, oldSession] of sessions) {
+            if (oldSession.principalId !== principalId || oldSession.identity.runnerId !== identity.runnerId || oldSession.bootId === identity.bootId) continue;
+            oldSession.runnerRestarted(identity.bootId);
+            sessions.delete(oldKey);
+          }
+          const prior = sessions.get(key);
+          if (prior && !sameIdentity(prior.identity, identity)) throw new TypeError("Runner identity changed within a boot session");
+          const session = prior ?? new RunnerSessionImpl(identity, principalId, ({ code }) => diagnostic(code));
+          const epoch = randomUUID();
+          session.attach(socket, epoch, options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS);
+          if (!prior) sessions.set(key, session);
+          accepted = true;
+          clearTimeout(timeout);
+          return session;
+        },
+        reject,
+      };
+      void Promise.resolve().then(() => currentListener(candidate)).catch(() => {
+        diagnostic("RUNNER_ADMISSION_CALLBACK_FAILED");
+        reject("DENIED", "Runner Session admission failed.");
+      });
+    };
+    socket.on("message", firstMessage);
+    socket.on("close", () => clearTimeout(timeout));
   });
 
   return {
-    get endpoint() {
-      return endpoint;
-    },
-
+    get endpoint() { return endpoint(); },
     async listen() {
-      if (closing !== null) await closing;
-      if (listening !== null) return listening;
-      if (server !== null) return;
-
-      const httpServer = createServer(handler);
-      server = httpServer; // 在 await 前发布，close() 才能收敛启动中的 listener
-      httpServer.on("connection", (socket: Socket) => {
-        sockets.add(socket);
-        socket.once("close", () => sockets.delete(socket));
+      if (closed) throw new Error("Runner SDK is closed");
+      if (listening || httpServer.listening) { listening = true; return; }
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: Error) => { httpServer.off("listening", onListening); reject(error); };
+        const onListening = () => { httpServer.off("error", onError); resolve(); };
+        httpServer.once("error", onError);
+        httpServer.once("listening", onListening);
+        httpServer.listen(options.port ?? 0, options.host ?? "127.0.0.1");
       });
-      const start = (async () => {
-        try {
-          await new Promise<void>((resolve, reject) => {
-            const onError = (error: Error) => reject(error);
-            httpServer.once("error", onError);
-            httpServer.listen(port, host, () => {
-              httpServer.off("error", onError);
-              resolve();
-            });
-          });
-          const address = httpServer.address();
-          if (address === null || typeof address === "string") {
-            throw new Error("listener has no bound address");
-          }
-          const advertisedHost = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
-          endpoint = `http://${advertisedHost}:${address.port}`;
-        } catch (error) {
-          if (server === httpServer) server = null;
-          endpoint = "";
-          throw error;
-        }
-      })();
-      listening = start;
-      try {
-        await start;
-      } finally {
-        if (listening === start) listening = null;
-      }
+      listening = true;
     },
-
-    onSession(listener) {
-      if (sessionListener !== null) throw new Error("runner session handler is already registered");
-      sessionListener = listener;
-      return () => {
-        if (sessionListener === listener) sessionListener = null;
-      };
+    onSession(nextListener) {
+      if (listener) throw new Error("Only one Runner Session admission callback may be registered");
+      listener = nextListener;
+      return () => { if (listener === nextListener) listener = undefined; };
     },
-
     async close() {
-      if (closing !== null) return closing;
-      const close = (async () => {
-        await listening?.catch(() => undefined);
-        for (const admission of admissions) admission.reject("UNAVAILABLE", "sdk closed");
-        admissions.clear();
-        for (const session of sessions) session.failTransport(runnerUnavailable("sdk closed"));
-        sessions.clear();
-        const httpServer = server;
-        server = null;
-        endpoint = "";
-        if (httpServer === null) return;
-        const closed = new Promise<void>((resolve) => {
-          httpServer.close(() => resolve());
-        });
-        for (const socket of sockets) socket.destroy();
-        sockets.clear();
-        await closed;
-      })();
-      closing = close;
-      try {
-        await close;
-      } finally {
-        if (closing === close) closing = null;
-      }
+      if (closed) return;
+      closed = true;
+      for (const session of sessions.values()) await session.close();
+      sessions.clear();
+      websocketServer.close();
+      if (ownServer?.listening) await new Promise<void>((resolve) => ownServer.close(() => resolve()));
     },
   };
 }
 
-function bearerToken(headers: Headers): string | null {
-  const value = headers.get("authorization");
-  const match = value?.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() || null;
+function sessionKey(principalId: string, identity: RunnerIdentity): string {
+  return JSON.stringify([principalId, identity.runnerId, identity.bootId]);
+}
+
+function sameIdentity(left: RunnerIdentity, right: RunnerIdentity): boolean {
+  return left.runnerId === right.runnerId && left.bootId === right.bootId &&
+    left.protocolVersion === right.protocolVersion &&
+    left.version === right.version && left.platform === right.platform &&
+    left.maxConcurrency === right.maxConcurrency &&
+    JSON.stringify(left.workspaces) === JSON.stringify(right.workspaces) &&
+    JSON.stringify(left.capabilities) === JSON.stringify(right.capabilities);
+}
+
+function endpointHost(value: string): string {
+  if (value === "0.0.0.0") return "127.0.0.1";
+  if (value === "::") return "[::1]";
+  if (value.includes(":") && !value.startsWith("[")) return `[${value}]`;
+  return value;
 }

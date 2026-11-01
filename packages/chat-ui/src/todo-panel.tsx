@@ -1,7 +1,7 @@
 import { ChevronRight, ListTodo } from "lucide-react";
-import type { Todo } from "@nova/protocol";
 import { TodoList } from "./blocks/todo.js";
 import { Card } from "./components/ui/card.js";
+import type { Todo } from "./types.js";
 
 export function TodoPanel({ items, collapsed = false }: { items: Todo[]; collapsed?: boolean | undefined }) {
   const remaining = items.filter((item) => item.status !== "completed").length;

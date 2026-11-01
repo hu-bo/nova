@@ -1,0 +1,61 @@
+name: runner-sdk-release
+
+on:
+  push:
+    tags:
+      - "runner-sdk-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish Runner SDK to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm --filter '@nova/runner-sdk...' install --frozen-lockfile
+      - name: Set release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#runner-sdk-v}"
+          numeric='(0|[1-9][0-9]*)'
+          prerelease='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+          if [[ ! "$version" =~ ^$numeric\.$numeric\.$numeric(-$prerelease(\.$prerelease)*)?$ ]]; then
+            echo "Expected a tag such as runner-sdk-v0.1.0 or runner-sdk-v0.2.0-beta.1" >&2
+            exit 1
+          fi
+          for package in runner-protocol runner-sdk; do
+            npm --prefix "packages/$package" version "$version" \
+              --no-git-tag-version --allow-same-version --ignore-scripts
+          done
+          if [[ "$version" == *-* ]]; then
+            echo "NPM_DIST_TAG=next" >> "$GITHUB_ENV"
+          else
+            echo "NPM_DIST_TAG=latest" >> "$GITHUB_ENV"
+          fi
+      - name: Typecheck
+        run: pnpm --filter '@nova/runner-sdk...' -r typecheck
+      - name: Test protocol
+        run: pnpm --filter @nova/runner-protocol test
+      - name: Build packages
+        run: pnpm --filter '@nova/runner-sdk...' -r build
+      - name: Check packages
+        run: pnpm --filter '@nova/runner-sdk...' -r publish --dry-run --no-git-checks --access public --tag "$NPM_DIST_TAG"
+      - name: Publish protocol and SDK
+        run: pnpm --filter '@nova/runner-sdk...' -r publish --no-git-checks --access public --tag "$NPM_DIST_TAG"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

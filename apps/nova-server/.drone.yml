@@ -1,0 +1,83 @@
+kind: pipeline
+type: docker
+name: nova-nova-server
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+    - custom
+
+concurrency:
+  limit: 1
+
+volumes:
+  - name: pnpm-cache
+    host:
+      path: /var/lib/drone-cache/pnpm/nova-nova-server
+
+steps:
+  - name: build and package
+    image: node:22-alpine
+    volumes:
+      - name: pnpm-cache
+        path: /cache
+    commands:
+      - corepack enable
+      - corepack prepare pnpm@9.15.9 --activate
+      - pnpm config set store-dir /cache/pnpm-store
+      - pnpm config set registry https://registry.npmmirror.com/
+      - pnpm install --frozen-lockfile
+      - pnpm -r --filter '@react-fastify-template/app-server^...' run build
+      - pnpm --filter @react-fastify-template/app-server run build
+      # Keep dev dependencies for the versioned Drizzle migration CLI.
+      - pnpm --filter @react-fastify-template/app-server deploy --node-linker=hoisted --prod=false /drone/src/output/nova-server
+      - cp scripts/deploy-nova.sh output/nova-server/deploy-nova.sh
+
+  - name: production preflight
+    image: node:22-alpine
+    environment:
+      API_CONFIG_TOKEN_SECRET:
+        from_secret: API_CONFIG_TOKEN_SECRET
+    commands:
+      - cd output/nova-server
+      - umask 077
+      - 'wget -q --header="Authorization: Bearer $API_CONFIG_TOKEN_SECRET" "http://config.8and1.cn/api/pull/nova-server/env" -O .env'
+      - test -s .env
+      - node --env-file=.env scripts/check-deployment.mjs
+      - cd /drone/src
+      - tar -czf nova-server.tar.gz -C output/nova-server .
+
+  - name: scp
+    image: appleboy/drone-scp
+    settings:
+      debug: false
+      source:
+        - nova-server.tar.gz
+      host:
+        from_secret: CURRENT_HOST
+      username: root
+      port: 22
+      password:
+        from_secret: SSH_PWD
+      target: /temp/app/nova-dsh/nova-server/${DRONE_BUILD_NUMBER}
+
+  - name: deploy
+    image: appleboy/drone-ssh
+    settings:
+      host:
+        from_secret: CURRENT_HOST
+      username: root
+      password:
+        from_secret: SSH_PWD
+      port: 22
+      command_timeout: 10m
+      script:
+        - set -eu
+        - umask 077
+        - RELEASE_DIR=/temp/app/nova-dsh/nova-server/${DRONE_BUILD_NUMBER}/release
+        - mkdir -p "$RELEASE_DIR"
+        - tar -xzf /temp/app/nova-dsh/nova-server/${DRONE_BUILD_NUMBER}/nova-server.tar.gz -C "$RELEASE_DIR"
+        - sh "$RELEASE_DIR/deploy-nova.sh" nova-server "$RELEASE_DIR"
+        - rm -rf /temp/app/nova-dsh/nova-server/${DRONE_BUILD_NUMBER}

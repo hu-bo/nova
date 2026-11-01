@@ -4,6 +4,7 @@ import type { UploadAttachment } from "./upload-cover.js";
 export interface ComposerOption {
   value: string;
   label: string;
+  description?: string | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -32,6 +33,14 @@ export interface ComposerSubmission<TMetadata = unknown> {
 }
 
 export interface ComposerProps<TMetadata = unknown> {
+  toolbarStart?: ReactNode | undefined;
+  toolbarEnd?: ReactNode | undefined;
+  headerContent?: ReactNode | undefined;
+  submitDisabled?: boolean | undefined;
+  initialText?: string | undefined;
+  value?: string | undefined;
+  onTextChange?: ((text: string) => void) | undefined;
+  onFilesSelected?: ((files: File[]) => void) | undefined;
   disabled?: boolean | undefined;
   isRunning?: boolean | undefined;
   isAborting?: boolean | undefined;

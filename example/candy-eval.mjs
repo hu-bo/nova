@@ -1,33 +1,26 @@
 #!/usr/bin/env node
 /**
- * 糖果题评测脚本（从 packages/coding-agent/test/live-model.integration.test.ts 抽离）。
+ * 糖果题评测脚本：验证 packages/harness 的真实模型调用链路。
  *
  * 用法：
- *   node example/candy-eval.mjs                 两条链路各跑 1 轮
- *   node example/candy-eval.mjs -t dsh -n 5     只测 dsh-agent，串行 5 轮
- *   node example/candy-eval.mjs -t coding --ab  coding 链路 A/B：baseline vs 解题引导，看引导能否修正结论
+ *   node example/candy-eval.mjs                 跑 harness 1 轮
+ *   node example/candy-eval.mjs --ab -n 5       baseline / guided 各跑 5 轮
  *   node example/candy-eval.mjs --check         只预检依赖与 .env，不发请求
  *
- * 同一道题分别走两条模型链路，对比 token 消耗、耗时与正确率：
- * - coding：@nova/model-adapters 的单轮 stream（coding-agent live 测试用的通路），不挂工具，
- *   -e 控制 thinking 档位，reasoning tokens 由 thinking 文本估算。
- * - dsh：@nnova/dsh-agent 的 kernel + agent.send，tools 为空，模型只能靠 reasoning 解题；
- *   该链路不暴露 thinking 文本，Reason Tok 记为 "-"。
+ * 通过 @nnova/harness 的 createAgentKernel + agent.send 跑单轮模型请求，tools 为空；
+ * 当前 Harness 的 AI SDK 插件使用 OpenAI Chat Completions 协议。
  *
- * --ab 给每条链路再加一组"解题引导" system prompt（逐条复述约束 + 双向证明，不含答案），
+ * --ab 再加一组"解题引导" system prompt（逐条复述约束 + 双向证明，不含答案），
  * 与 baseline 各跑 -n 轮并排对比，用来判断答错是"疏忽型"（能被通用引导救回）还是
  * "预算被掐型"（引导也救不动，通常是网关降智/额度问题）。
  *
- * 脚本不依赖 vitest：model-adapters 只导出 TS 源，这里用 node:module 的 resolve hook 把
- * `.js` 说明符重映射到同目录 `.ts`，再交给 Node 的 type stripping 执行（需 Node ≥ 22.18）。
+ * 脚本使用 Harness 的构建产物，不依赖 vitest 或其它模型适配包。
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
-import { registerHooks } from "node:module";
+import { existsSync, readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import { config as loadDotenv } from "dotenv";
 // 题面与判分口径的唯一来源，与 codex_candy_eval.mjs 共用，避免两边各自漂移。
 import {
   ANSWER_PATTERN,
@@ -35,10 +28,9 @@ import {
   NO_TOOL_INSTRUCTION as SYSTEM_PROMPT,
 } from "./candy-prompt.mjs";
 
-const DEFAULT_TIMEOUT_MS = 200_000;
-const TARGETS = ["coding", "dsh"];
-const PROVIDERS = ["anthropic", "openai"];
-const EFFORTS = ["off", "low", "medium", "high", "max"];
+const DEFAULT_TIMEOUT_MS = 600_000;
+const TARGETS = ["harness"];
+const EFFORTS = ["low", "medium", "xhigh"];
 
 /**
  * A/B 的两个提示词变体。guided 只在 baseline 之上追加**通用解题自检**：
@@ -60,48 +52,44 @@ const VARIANT_NAMES = ["baseline", "guided"];
 
 
 const REPO_ROOT = new URL("../", import.meta.url);
-const DSH_ENTRY = new URL("packages/dsh-agent/dist/index.js", REPO_ROOT);
-const ADAPTERS_ENTRY = new URL("packages/model-adapters/src/index.ts", REPO_ROOT);
+const HARNESS_ENTRY = new URL("packages/harness/dist/index.js", REPO_ROOT);
+const HARNESS_MODEL_ENTRY = new URL("packages/harness/dist/plugins/model-ai-sdk/index.js", REPO_ROOT);
+const HARNESS_LOOP_ENTRY = new URL("packages/harness/dist/plugins/basic-loop/index.js", REPO_ROOT);
+const HARNESS_CONTEXT_ENTRY = new URL("packages/harness/dist/plugins/context/index.js", REPO_ROOT);
+const HARNESS_SESSION_ENTRY = new URL("packages/harness/dist/plugins/session-memory/index.js", REPO_ROOT);
+const HARNESS_TOOLS_ENTRY = new URL("packages/harness/dist/plugins/tools/index.js", REPO_ROOT);
 const ENV_FILE = new URL(".env", REPO_ROOT);
 
-// TS 源内部按 Node ESM 惯例写 `./x.js`，而磁盘上只有 `x.ts`：这里补一次重映射，
-// 让脚本能直接加载 @nova/model-adapters 的源码，不必引入 tsx / vitest。
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    if (specifier.endsWith(".js") && (specifier.startsWith("./") || specifier.startsWith("../"))) {
-      const parent = context.parentURL;
-      if (parent?.startsWith("file:")) {
-        const candidate = new URL(`${specifier.slice(0, -3)}.ts`, parent);
-        if (existsSync(fileURLToPath(candidate))) return { url: candidate.href, shortCircuit: true };
-      }
-    }
-    return nextResolve(specifier, context);
-  },
-});
+function loadEnvFile(path) {
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/u)) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/u);
+    if (!match) continue;
+    let value = match[2];
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))
+      value = value.slice(1, -1);
+    process.env[match[1]] = value;
+  }
+}
 
 /**
- * `.env` 里两组供应商配置各带一个 MODEL；评测按组切换，不假设哪一组可达。
- * openai 那组指向的网关在本机常被 WAF 拦截，因此默认走 anthropic（阿里云 MaaS 的 qwen）。
+ * Harness 的内置模型插件当前只支持 OpenAI Chat Completions 协议。
  */
-function readModelConfig(provider) {
-  const apiKey = provider === "anthropic" ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY;
-  const model = (provider === "anthropic" ? process.env.ANTHROPIC_MODEL : undefined) ?? process.env.MODEL;
-  const baseUrl = provider === "anthropic" ? process.env.ANTHROPIC_BASE_URL : process.env.OPENAI_BASE_URL;
-  const wireApi = provider === "openai" ? process.env.MODEL_WIRE_API : undefined;
+function readModelConfig() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const model = process.env.MODEL;
+  const baseUrl = process.env.OPENAI_BASE_URL;
   if (!apiKey || !model) {
-    throw new Error(`${provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"} 与 MODEL 必须在 .env 中配置`);
+    throw new Error("OPENAI_API_KEY 与 MODEL 必须在 .env 中配置");
   }
-  if (!baseUrl)
-    throw new Error(`dsh-agent 链路还需要 ${provider === "anthropic" ? "ANTHROPIC_BASE_URL" : "OPENAI_BASE_URL"}`);
-  return { provider, apiKey, baseUrl, model, wireApi };
+  if (!baseUrl) throw new Error("模型链路还需要 OPENAI_BASE_URL");
+  return { apiKey, baseUrl, model };
 }
 
 function parseArgs(argv) {
   const options = {
-    target: "both",
+    target: "harness",
     runs: 1,
-    provider: "openai",
-    effort: "high",
+    effort: "xhigh",
     variants: ["baseline"],
     timeoutMs: DEFAULT_TIMEOUT_MS,
     contextWindow: Number(process.env.NOVA_TEST_CONTEXT_WINDOW ?? 32768),
@@ -118,17 +106,12 @@ function parseArgs(argv) {
     const flag = argv[index];
     if (flag === "-t" || flag === "--target") {
       const value = needValue(flag, argv[++index]);
-      if (value !== "both" && !TARGETS.includes(value))
-        throw new Error(`-t 取值非法: ${value}（允许 ${TARGETS.join(" | ")} | both）`);
+      if (!TARGETS.includes(value)) throw new Error(`-t 取值非法: ${value}（允许 ${TARGETS.join(" | ")}）`);
       options.target = value;
     } else if (flag === "-n" || flag === "--runs") {
       const value = Number.parseInt(needValue(flag, argv[++index]), 10);
       if (!Number.isSafeInteger(value) || value < 1) throw new Error(`-n 取值非法: ${argv[index]}`);
       options.runs = value;
-    } else if (flag === "-p" || flag === "--provider") {
-      const value = needValue(flag, argv[++index]);
-      if (!PROVIDERS.includes(value)) throw new Error(`-p 取值非法: ${value}（允许 ${PROVIDERS.join(" | ")}）`);
-      options.provider = value;
     } else if (flag === "-e" || flag === "--effort") {
       const value = needValue(flag, argv[++index]);
       if (!EFFORTS.includes(value)) throw new Error(`-e 取值非法: ${value}（允许 ${EFFORTS.join(" | ")}）`);
@@ -171,101 +154,58 @@ function parseArgs(argv) {
 
 function helpText() {
   return [
-    "用法: node example/candy-eval.mjs [-t TARGET] [-n RUNS] [-p PROVIDER] [-e EFFORT] [选项]",
+    "用法: node example/candy-eval.mjs [-n RUNS] [-e EFFORT] [选项]",
     "",
     "选项:",
-    `  -t, --target TARGET         评测链路: ${TARGETS.join(" | ")} | both（默认 both）`,
-    "  -n, --runs N                每条链路的轮数（默认 1，串行执行）",
-    `  -p, --provider PROVIDER     取 .env 的哪组配置: ${PROVIDERS.join(" | ")}（默认 anthropic）`,
-    `  -e, --effort LEVEL          两条链路的 thinking 档位: ${EFFORTS.join(" | ")}（默认 high）`,
-    "      --ab                    对每条链路同时跑 baseline 与 guided 两组 system prompt 并对比",
+    "  -n, --runs N                轮数（默认 1，串行执行）",
+    `  -e, --effort LEVEL          thinking 档位: ${EFFORTS.join(" | ")}（默认 xhigh）`,
+    "      --ab                    同时跑 baseline 与 guided 两组 system prompt 并对比",
     `      --variant NAME          只跑单个变体: ${VARIANT_NAMES.join(" | ")}（默认 baseline）`,
-    "      --timeout MS            单轮超时（默认 200000）",
-    "      --max-output N          dsh 链路的 maxOutputTokens（默认 8192）",
-    "      --context-window N      dsh 链路的 contextWindow（默认取 NOVA_TEST_CONTEXT_WINDOW 或 32768）",
+    "      --timeout MS            单轮超时（默认 600000）",
+    "      --max-output N          harness 链路的 maxOutputTokens（默认 8192）",
+    "      --context-window N      harness 链路的 contextWindow（默认取 NOVA_TEST_CONTEXT_WINDOW 或 32768）",
     "      --debug                 打印每轮回答全文，便于核对判分",
     "      --check                 只加载依赖并校验 .env，不调用模型",
     "  -h, --help                  显示本帮助",
     "",
-    "环境变量: NOVA_TEST_CONTEXT_WINDOW 覆盖 dsh 链路的 contextWindow（默认 32768）。",
+    "环境变量: NOVA_TEST_CONTEXT_WINDOW 覆盖 harness 链路的 contextWindow（默认 32768）。",
   ].join("\n");
 }
 
-/** coding 链路：model-adapters 单轮 stream，无工具，reasoning 由 thinking 文本估算。 */
-async function askCoding(adapters, config, options, system) {
-  const modelRef = {
-    provider: config.provider,
-    model: config.model,
-    apiKey: config.apiKey,
-    baseUrl: config.baseUrl,
-    ...(config.wireApi ? { wireApi: config.wireApi } : {}),
-  };
-  let text = "";
-  let reasoning = "";
-  let usage = { input: 0, output: 0 };
-  let stopReason;
-  const started = performance.now();
-  try {
-    for await (const event of adapters.createModel(modelRef).stream(
-      {
-        system,
-        tools: [],
-        thinking: options.effort,
-        messages: [
-          {
-            id: "candy-eval",
-            role: "user",
-            createdAt: Date.now(),
-            blocks: [{ type: "text", text: CANDY_PROMPT }],
+/** Harness 链路：createAgentKernel + agent.send，模型适配由 Harness 插件持有。 */
+async function askHarness(harness, config, options, system) {
+  const kernel = await harness.core.createAgentKernel({
+    maxConcurrentRuns: 1,
+    defaultTimeoutMs: options.timeoutMs,
+    configure: async (context) => {
+      await context.plugin(
+        harness.model.aiSdkModelPlugin({
+          models: [
+            {
+              id: "candy",
+              protocol: "openai-chat",
+              baseURL: config.baseUrl,
+              apiKey: config.apiKey,
+              model: config.model,
+              contextWindow: options.contextWindow,
+              maxOutputTokens: options.maxOutputTokens,
+            },
+          ],
+          defaultModel: "candy",
+        }, {
+          fetch: async (input, init) => {
+            if (!init?.body || typeof init.body !== "string") return fetch(input, init);
+            const body = JSON.parse(init.body);
+            body.reasoning_effort = options.effort;
+            return fetch(input, { ...init, body: JSON.stringify(body) });
           },
-        ],
-      },
-      AbortSignal.timeout(options.timeoutMs),
-    )) {
-      if (event.type === "block.end" && event.block.type === "text") text = event.block.text;
-      else if (event.type === "block.end" && event.block.type === "thinking") reasoning = event.block.text;
-      else if (event.type === "usage") usage = { input: event.usage.input, output: event.usage.output };
-      else if (event.type === "finish") {
-        stopReason = event.stopReason;
-        if (event.stopReason === "error") throw new Error(`模型调用失败: ${event.errorMessage ?? "unknown error"}`);
-      }
-    }
-  } catch (error) {
-    // AbortSignal.timeout 抛 TimeoutError，转成评测语境下的报错，便于区分慢和挂。
-    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
-      throw new Error(`模型调用超时（${options.timeoutMs}ms）`);
-    }
-    throw error;
-  }
-  if (!stopReason) throw new Error("模型未返回 finish 事件");
-  const seconds = (performance.now() - started) / 1000;
-  return {
-    text,
-    inputTokens: usage.input,
-    outputTokens: usage.output,
-    reasoningTokens: reasoning ? adapters.estimateText(reasoning).tokens : 0,
-    seconds,
-  };
-}
-
-/** dsh 链路：kernel + agent.send；该链路不暴露 thinking 文本，reasoning 记为 null。 */
-async function askDsh(dsh, config, options, system) {
-  const kernel = await dsh.createDshAgentKernel({
-    models: [
-      {
-        id: "candy",
-        protocol: dshProtocol(config),
-        baseURL: config.baseUrl,
-        apiKey: config.apiKey,
-        model: config.model,
-        contextWindow: options.contextWindow,
-        maxOutputTokens: options.maxOutputTokens,
-        // 必须显式给档位：该网关默认开启思考且不限量，不传档位 dsh 就不会下发 thinking 参数，
-        // 模型会把 maxOutputTokens 全部烧在思考上，正文 0 字符（OUTPUT_LIMIT）。
-        reasoning: dshReasoning(options.effort),
-      },
-    ],
-    defaultModel: "candy",
+        }),
+      );
+      await context.plugin(harness.session.memorySessionPlugin());
+      await context.plugin(harness.context.contextPlugin());
+      await context.plugin(harness.tools.toolRuntimePlugin());
+      await context.plugin(harness.loop.basicLoopPlugin());
+    },
   });
   const started = performance.now();
   try {
@@ -273,25 +213,20 @@ async function askDsh(dsh, config, options, system) {
       sessionId: `candy-${randomUUID()}`,
       systemPrompt: system,
       tools: [],
+      allowedTools: [],
     });
     try {
       const result = await agent.send({ text: CANDY_PROMPT, timeoutMs: options.timeoutMs });
-      if (result.status !== "succeeded") {
-        // code 是关键区分：OUTPUT_LIMIT 说明被 maxOutputTokens 截断，MODEL_FAILED 说明请求本身失败。
-        // 再带上现场：已产出多少正文、碰过哪些工具，才能判断是啰嗦还是在反复重试工具调用。
+      if (result.kind !== "completed" || result.status !== "succeeded") {
         const code = result.error?.code ?? "-";
-        const evidence =
-          `正文 ${result.text.length} 字符` +
-          `，工具调用 ${result.toolCalls.map((call) => call.toolName).join(",") || "无"}`;
-        throw new Error(
-          `dsh-agent 运行 ${result.status}(${code}): ${result.error?.message ?? "无错误详情"}（${evidence}）`,
-        );
+        const evidence = `正文 ${result.text.length} 字符，工具调用 ${result.toolCalls.length || "无"}`;
+        throw new Error(`harness 运行 ${result.status}(${code}): ${result.error?.message ?? "无错误详情"}（${evidence}）`);
       }
       return {
         text: result.text,
-        inputTokens: result.usage?.inputTokens ?? 0,
-        outputTokens: result.usage?.outputTokens ?? 0,
-        reasoningTokens: null,
+        inputTokens: result.usage.inputTokens ?? 0,
+        outputTokens: result.usage.outputTokens ?? 0,
+        reasoningTokens: result.usage.reasoningTokens,
         seconds: (performance.now() - started) / 1000,
       };
     } finally {
@@ -300,17 +235,6 @@ async function askDsh(dsh, config, options, system) {
   } finally {
     await kernel.dispose();
   }
-}
-
-/** dsh-agent 的 protocol 是供应商 + wire API 的组合，openai 组要看 MODEL_WIRE_API。 */
-function dshProtocol(config) {
-  if (config.provider === "anthropic") return "anthropic";
-  return config.wireApi === "responses" ? "openai-responses" : "openai-chat";
-}
-
-/** dsh-agent 只认四档推理档位，coding 链路的 max 归并到 high。 */
-function dshReasoning(effort) {
-  return effort === "max" ? "high" : effort;
 }
 
 function formatTable(runs, total) {
@@ -404,22 +328,21 @@ function displayWidth(text) {
   return width;
 }
 
-async function loadCodingModule() {
-  try {
-    return await import(ADAPTERS_ENTRY.href);
-  } catch (error) {
-    throw new Error(
-      `加载 @nova/model-adapters 源码失败（需 Node ≥ 22.18 的 type stripping，` +
-        `旧版本请用 node --experimental-strip-types 执行）: ${error.message}`,
-    );
+async function loadHarnessModules() {
+  const entries = [
+    ["core", HARNESS_ENTRY],
+    ["model", HARNESS_MODEL_ENTRY],
+    ["loop", HARNESS_LOOP_ENTRY],
+    ["context", HARNESS_CONTEXT_ENTRY],
+    ["session", HARNESS_SESSION_ENTRY],
+    ["tools", HARNESS_TOOLS_ENTRY],
+  ];
+  const missing = entries.find(([, entry]) => !existsSync(fileURLToPath(entry)));
+  if (missing) {
+    throw new Error(`未找到 ${fileURLToPath(missing[1])}，先执行 pnpm --filter @nnova/harness build`);
   }
-}
-
-async function loadDshModule() {
-  if (!existsSync(fileURLToPath(DSH_ENTRY))) {
-    throw new Error(`未找到 ${fileURLToPath(DSH_ENTRY)}，先执行 pnpm --filter @nnova/dsh-agent build`);
-  }
-  return import(DSH_ENTRY.href);
+  const modules = await Promise.all(entries.map(async ([name, entry]) => [name, await import(entry.href)]));
+  return Object.fromEntries(modules);
 }
 
 async function main() {
@@ -431,14 +354,11 @@ async function main() {
   // override：.env 优先于同名 shell 变量，保证脚本口径唯一。
   const envPath = fileURLToPath(ENV_FILE);
   if (!existsSync(envPath)) throw new Error(`未找到环境文件 ${envPath}（复制 .env 模板或配置密钥后重试）`);
-  loadDotenv({ path: envPath, override: true, quiet: true });
-  const targets = options.target === "both" ? TARGETS : [options.target];
-  const config = readModelConfig(options.provider);
-  const modules = {
-    coding: targets.includes("coding") ? await loadCodingModule() : undefined,
-    dsh: targets.includes("dsh") ? await loadDshModule() : undefined,
-  };
-  console.log(`provider=${options.provider}  model=${config.model}  baseUrl=${config.baseUrl}`);
+  loadEnvFile(envPath);
+  const targets = [options.target];
+  const config = readModelConfig();
+  const modules = await loadHarnessModules();
+  console.log(`provider=openai  model=${config.model}  baseUrl=${config.baseUrl}`);
   console.log(`targets=${targets.join(",")}  runs=${options.runs}  timeout=${options.timeoutMs}ms`);
   if (options.check) {
     console.log("预检通过：依赖可加载，.env 配置齐全（未调用模型）。");
@@ -457,10 +377,7 @@ async function main() {
     for (let run = 1; run <= options.runs; run++) {
       const record = { run, variant: group.variant };
       try {
-        const answer =
-          group.target === "coding"
-            ? await askCoding(modules.coding, config, options, VARIANTS[group.variant])
-            : await askDsh(modules.dsh, config, options, VARIANTS[group.variant]);
+        const answer = await askHarness(modules, config, options, VARIANTS[group.variant]);
         Object.assign(record, answer, { correct: ANSWER_PATTERN.test(answer.text) });
         if (!record.text.trim()) throw new Error("模型未返回最终回答");
         if (!record.outputTokens) throw new Error("模型未返回 usage");

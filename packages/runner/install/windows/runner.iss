@@ -61,7 +61,7 @@ begin
     '填写 Runner 的连接信息',
     '这些信息只保存在当前 Windows 用户目录中。安装完成后 Runner 会立即在后台启动。'
   );
-  ConnectionPage.Add('Server URL：', False);
+  ConnectionPage.Add('WebSocket URL（含 /runner/v1/connect）：', False);
   ConnectionPage.Add('Runner Token：', True);
   ConnectionPage.Add('Workspace 根目录：', False);
   ConnectionPage.Values[2] := GetEnv('USERPROFILE');
@@ -76,9 +76,9 @@ begin
     exit;
 
   Server := Lowercase(Trim(ConnectionPage.Values[0]));
-  if (Pos('https://', Server) <> 1) and (Pos('http://', Server) <> 1) then
+  if (Pos('wss://', Server) <> 1) and (Pos('ws://', Server) <> 1) then
   begin
-    MsgBox('Server URL 必须以 http:// 或 https:// 开头。', mbError, MB_OK);
+    MsgBox('Server URL 必须以 ws:// 或 wss:// 开头，并包含 /runner/v1/connect 路径。', mbError, MB_OK);
     Result := False;
     exit;
   end;

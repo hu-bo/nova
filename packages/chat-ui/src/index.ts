@@ -1,6 +1,7 @@
 export * from "./block-view.js";
 export * from "./chat.js";
 export * from "./composer.js";
+export * from "./composer-option-menu.js";
 export type * from "./composer-types.js";
 export { contextUsagePercent } from "./composer-context-usage.js";
 export { matchComposerSkills } from "./composer-skill-menu.js";

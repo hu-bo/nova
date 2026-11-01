@@ -267,7 +267,8 @@ export function RemoteExplorer({
 
   return (
     <Dialog.Root open={open} onOpenChange={close}>
-      <Dialog.Portal>
+      {/* Keep React Aria parents from making this portaled dialog inert or treating its clicks as outside. */}
+      <Dialog.Portal data-react-aria-top-layer="">
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 motion-reduce:transition-none" />
         <Dialog.Viewport className="nova-scrollbar fixed inset-0 z-50 grid place-items-center overflow-y-auto p-3 sm:p-6">
           <Dialog.Popup

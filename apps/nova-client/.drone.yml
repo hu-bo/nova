@@ -1,0 +1,77 @@
+kind: pipeline
+type: docker
+name: nova-nova-client
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+    - custom
+
+concurrency:
+  limit: 1
+
+volumes:
+  - name: pnpm-cache
+    host:
+      path: /var/lib/drone-cache/pnpm/nova-nova-client
+
+steps:
+  - name: build and package
+    image: node:22-alpine
+    volumes:
+      - name: pnpm-cache
+        path: /cache
+    environment:
+      VITE_AUTH_BASE_URL: https://auth.8and1.cn/api
+      VITE_AUTH_APP_NAME: nova
+      VITE_API_BASE_URL: ''
+      VITE_SSE_BASE_URL: ''
+    commands:
+      - corepack enable
+      - corepack prepare pnpm@9.15.9 --activate
+      - pnpm config set store-dir /cache/pnpm-store
+      - pnpm config set registry https://registry.npmmirror.com/
+      - pnpm install --frozen-lockfile
+      - pnpm --filter @nova/agent-ui-contracts run build
+      - pnpm --filter @nova/casdoor run build
+      # Generate from the committed nova-server OpenAPI snapshot.
+      - pnpm --filter @react-fastify-template/app-web run build
+      - mkdir -p output/nova-client
+      - cp -R apps/nova-client/dist output/nova-client/dist
+      - cp scripts/deploy-nova.sh output/nova-client/deploy-nova.sh
+      - tar -czf nova-client.tar.gz -C output/nova-client .
+
+  - name: scp
+    image: appleboy/drone-scp
+    settings:
+      debug: false
+      source:
+        - nova-client.tar.gz
+      host:
+        from_secret: CURRENT_HOST
+      username: root
+      port: 22
+      password:
+        from_secret: SSH_PWD
+      target: /temp/app/nova-dsh/nova-client/${DRONE_BUILD_NUMBER}
+
+  - name: deploy
+    image: appleboy/drone-ssh
+    settings:
+      host:
+        from_secret: CURRENT_HOST
+      username: root
+      password:
+        from_secret: SSH_PWD
+      port: 22
+      command_timeout: 2m
+      script:
+        - set -eu
+        - umask 077
+        - RELEASE_DIR=/temp/app/nova-dsh/nova-client/${DRONE_BUILD_NUMBER}/release
+        - mkdir -p "$RELEASE_DIR"
+        - tar -xzf /temp/app/nova-dsh/nova-client/${DRONE_BUILD_NUMBER}/nova-client.tar.gz -C "$RELEASE_DIR"
+        - sh "$RELEASE_DIR/deploy-nova.sh" nova-client "$RELEASE_DIR"
+        - rm -rf /temp/app/nova-dsh/nova-client/${DRONE_BUILD_NUMBER}

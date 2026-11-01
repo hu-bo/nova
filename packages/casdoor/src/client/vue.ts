@@ -1,13 +1,13 @@
-import { ref, readonly, onMounted, onUnmounted, type Ref, type DeepReadonly } from 'vue';
-import type { ClientConfig, AuthState, CasdoorUser, TokenResponse } from '../types.js';
-import { CasdoorClient } from './core.js';
+import { ref, readonly, onMounted, onUnmounted, type Ref, type DeepReadonly } from "vue";
+import type { ClientConfig, AuthState, CasdoorUser, TokenResponse } from "../types.js";
+import { CasdoorClient } from "./core.js";
 
 let globalClient: CasdoorClient | null = null;
 
 type ServerExchangeToken = (
   code: string,
   state: string,
-  appName: string
+  appName: string,
 ) => Promise<{ token: TokenResponse; user: CasdoorUser }>;
 
 export interface CasdoorCallbackOptions {
@@ -20,6 +20,7 @@ export interface CasdoorCallbackOptions {
  */
 export function initCasdoor(config: ClientConfig): CasdoorClient {
   globalClient = new CasdoorClient(config);
+  globalClient.start();
   return globalClient;
 }
 
@@ -28,7 +29,7 @@ export function initCasdoor(config: ClientConfig): CasdoorClient {
  */
 export function getCasdoorClient(): CasdoorClient {
   if (!globalClient) {
-    throw new Error('Casdoor client not initialized. Call initCasdoor() first.');
+    throw new Error("Casdoor client not initialized. Call initCasdoor() first.");
   }
   return globalClient;
 }
@@ -53,7 +54,9 @@ export interface UseCasdoorReturn {
   /** 处理 OAuth 回调 */
   handleCallback: (serverExchangeToken?: ServerExchangeToken) => Promise<boolean>;
   /** 刷新 Token */
-  refreshToken: (serverRefreshToken?: (refreshToken: string, appName: string) => Promise<TokenResponse>) => Promise<boolean>;
+  refreshToken: (
+    serverRefreshToken?: (refreshToken: string, appName: string) => Promise<TokenResponse>,
+  ) => Promise<boolean>;
   /** 获取客户端实例 */
   getClient: () => CasdoorClient;
 }
@@ -116,7 +119,7 @@ export function useCasdoorCallback(options?: CasdoorCallbackOptions): {
 };
 export function useCasdoorCallback(
   serverExchangeToken?: ServerExchangeToken,
-  options?: CasdoorCallbackOptions
+  options?: CasdoorCallbackOptions,
 ): {
   isLoading: DeepReadonly<Ref<boolean>>;
   success: DeepReadonly<Ref<boolean>>;
@@ -124,10 +127,11 @@ export function useCasdoorCallback(
 };
 export function useCasdoorCallback(
   serverExchangeTokenOrOptions?: ServerExchangeToken | CasdoorCallbackOptions,
-  options?: CasdoorCallbackOptions
+  options?: CasdoorCallbackOptions,
 ) {
-  const serverExchangeToken = typeof serverExchangeTokenOrOptions === 'function' ? serverExchangeTokenOrOptions : undefined;
-  const callbackOptions = typeof serverExchangeTokenOrOptions === 'function' ? options : serverExchangeTokenOrOptions;
+  const serverExchangeToken =
+    typeof serverExchangeTokenOrOptions === "function" ? serverExchangeTokenOrOptions : undefined;
+  const callbackOptions = typeof serverExchangeTokenOrOptions === "function" ? options : serverExchangeTokenOrOptions;
   const { isLoading, error, handleCallback } = useCasdoor();
   const success = ref(false);
 

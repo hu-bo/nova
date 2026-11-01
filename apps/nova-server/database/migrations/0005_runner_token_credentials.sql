@@ -1,0 +1,1 @@
+ALTER TABLE "runner_tokens" ADD COLUMN "token_ciphertext" text;

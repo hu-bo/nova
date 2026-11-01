@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package nova.common.v1;
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  OFFLINE = 1;
+  BUSY = 2;
+  UNSUPPORTED = 3;
+  DENIED = 4;
+  OUT_OF_WORKSPACE = 5;
+  CONFLICT = 6;
+  IDEMPOTENCY_CONFLICT = 7;
+  EXPIRED = 8;
+  OUTCOME_UNKNOWN = 9;
+  OUTPUT_GAP = 10;
+  INVALID = 11;
+  NOT_FOUND = 12;
+  PERMISSION = 13;
+  EXISTS = 14;
+  IS_DIR = 15;
+  NOT_DIR = 16;
+  IO = 17;
+  SPAWN_FAILED = 18;
+  TIMEOUT = 19;
+  CANCELLED = 20;
+  TOO_LARGE = 21;
+}
+
+message Error {
+  ErrorCode code = 1;
+  string message = 2;
+  bytes stdout = 3;
+  bytes stderr = 4;
+  bool output_truncated = 5;
+  bool output_gap = 6;
+}

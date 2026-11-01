@@ -58,7 +58,7 @@ export function CopyButton({ text, label, className }: CopyButtonProps) {
   );
 
   async function copy() {
-    setStatus(await copyToClipboard(text) ? "copied" : "error");
+    setStatus((await copyToClipboard(text)) ? "copied" : "error");
 
     if (resetTimer.current) clearTimeout(resetTimer.current);
     resetTimer.current = setTimeout(() => setStatus("idle"), 1_500);

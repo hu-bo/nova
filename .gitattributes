@@ -1,0 +1,2 @@
+# Deployment scripts must remain executable by the Linux Drone/SSH shells.
+*.sh text eol=lf

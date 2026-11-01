@@ -2,7 +2,7 @@
 set -eu
 umask 077
 
-RELEASE_BASE_URL=${NOVA_RUNNER_RELEASE_URL:-https://github.com/hu-bo/nova/releases/latest/download}
+RELEASE_BASE_URL=${NOVA_RUNNER_RELEASE_URL:-https://github.com/hu-bo/nova-dsh/releases/latest/download}
 ASSET=nova-runner-linux-x64.tar.gz
 SERVER=
 TOKEN=
@@ -11,7 +11,7 @@ RUNNER_ID=
 
 usage() {
   printf '%s\n' \
-    'Usage: install-runner.sh --server <url> --token <token> [--workspace <path>] [--runner-id <id>]' \
+    'Usage: install-runner.sh --server <ws(s)://host/runner/v1/connect> --token <token> [--workspace <path>] [--runner-id <id>]' \
     '' \
     'Installs a systemd boot service that runs Nova Runner as the current user.'
 }
@@ -54,8 +54,8 @@ done
 [ -n "$TOKEN" ] || { printf '%s\n' '--token is required' >&2; exit 2; }
 
 case "$SERVER" in
-  http://*|https://*) ;;
-  *) printf '%s\n' '--server must start with http:// or https://' >&2; exit 2 ;;
+  ws://*|wss://*) ;;
+  *) printf '%s\n' '--server must start with ws:// or wss://' >&2; exit 2 ;;
 esac
 
 case "$(uname -s):$(uname -m)" in

@@ -9,8 +9,22 @@ import type { ComposerProps, ComposerSkill, ComposerSubmission } from "./compose
 import { Textarea } from "./components/ui/textarea.js";
 import { UploadCover } from "./upload-cover.js";
 
+/**
+ * Reads the capability signal published by `styles.css`. Must not be replaced with
+ * `CSS.supports("field-sizing", "content")`: that reports engine support even when a build-time CSS
+ * transform drops the rule, which would leave the field pinned to its fixed row height.
+ */
+function growsWithNativeLayout(element: HTMLElement): boolean {
+  return getComputedStyle(element).getPropertyValue("--nova-composer-field-sizing").trim() === "content";
+}
+
 export function Composer<TMetadata = unknown>({
+  initialText,
+  value,
+  onTextChange,
+  onFilesSelected,
   disabled = false,
+  submitDisabled = false,
   isRunning = false,
   isAborting = false,
   onAbort,
@@ -29,43 +43,54 @@ export function Composer<TMetadata = unknown>({
   attachments = [],
   onAttachmentsChange,
   onAttachmentButtonClick,
+  toolbarStart,
+  toolbarEnd,
+  headerContent,
   onSubmit,
 }: ComposerProps<TMetadata>) {
-  const [hasText, setHasText] = useState(false);
+  const [localText, setLocalText] = useState(initialText ?? "");
+  const text = value ?? localText;
+  function setText(next: string) {
+    if (value === undefined) setLocalText(next);
+    onTextChange?.(next);
+  }
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [invokingSkill, setInvokingSkill] = useState(false);
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
   const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
-  const [matchingSkills, setMatchingSkills] = useState<ComposerSkill[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const textRef = useRef("");
-  const hasTextRef = useRef(false);
-  const matchingSkillsRef = useRef<ComposerSkill[]>([]);
   const maxHeightRef = useRef<number | null>(null);
+  const growsNativelyRef = useRef<boolean | null>(null);
   const isCappedRef = useRef(false);
+  const appliedHeightRef = useRef<string | null>(null);
   const previousLengthRef = useRef(0);
   const skillListId = useId();
   const locked = disabled || submitting || invokingSkill;
-  const visibleSkills = skillMenuDismissed ? [] : matchingSkills;
-  const selectedSkill = visibleSkills[Math.min(selectedSkillIndex, Math.max(0, visibleSkills.length - 1))];
-  const hasDraft = Boolean(hasText || files.length || attachments.length);
-  const canSubmit = !locked && hasDraft;
+  const matchingSkills = skillMenuDismissed ? [] : matchComposerSkills(text, skills);
+  const selectedSkill = matchingSkills[Math.min(selectedSkillIndex, Math.max(0, matchingSkills.length - 1))];
+  const hasDraft = Boolean(text.trim() || files.length || attachments.length);
+  const canSubmit = !locked && !submitDisabled && hasDraft;
 
-  function resizeTextarea(value: string) {
+  // Grow the field in the layout engine wherever the stylesheet managed to apply
+  // `field-sizing: content`; measuring here would dirty style and then read layout on every key.
+  useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+
+    if (growsNativelyRef.current === null) growsNativelyRef.current = growsWithNativeLayout(textarea);
+    if (growsNativelyRef.current) return;
 
     if (maxHeightRef.current === null) {
       maxHeightRef.current = Number.parseFloat(getComputedStyle(textarea).maxHeight) || Number.POSITIVE_INFINITY;
     }
     const maxHeight = maxHeightRef.current;
     const previousLength = previousLengthRef.current;
-    previousLengthRef.current = value.length;
+    previousLengthRef.current = text.length;
 
     // A capped field scrolls its own overflow, so adding characters cannot change its box size.
     // Skipping the measurement here is what keeps long drafts from reflowing on every key.
-    if (isCappedRef.current && value.length > previousLength) return;
+    if (isCappedRef.current && text.length >= previousLength) return;
 
     // A fixed box floors `scrollHeight` at its own height, so release it before measuring.
     textarea.style.height = "auto";
@@ -73,62 +98,21 @@ export function Composer<TMetadata = unknown>({
     const contentHeight = textarea.scrollHeight;
     const nextHeight = `${Math.min(contentHeight, maxHeight)}px`;
     isCappedRef.current = contentHeight > maxHeight;
-    textarea.style.height = nextHeight;
-    textarea.style.overflowY = isCappedRef.current ? "auto" : "hidden";
-  }
-
-  function updateDraftText(value: string) {
-    textRef.current = value;
-    const nextHasText = Boolean(value.trim());
-    if (nextHasText !== hasTextRef.current) {
-      hasTextRef.current = nextHasText;
-      setHasText(nextHasText);
+    if (isCappedRef.current) textarea.style.overflowY = "auto";
+    if (appliedHeightRef.current !== nextHeight) {
+      textarea.style.height = nextHeight;
+      appliedHeightRef.current = nextHeight;
     }
-
-    const nextSkills = matchComposerSkills(value, skills);
-    const previousSkills = matchingSkillsRef.current;
-    matchingSkillsRef.current = nextSkills;
-    if (
-      previousSkills.length !== nextSkills.length ||
-      previousSkills.some((skill, index) => skill !== nextSkills[index])
-    ) {
-      setMatchingSkills(nextSkills);
-      setSelectedSkillIndex(0);
-    }
-    if (nextSkills.length > 0 && skillMenuDismissed) setSkillMenuDismissed(false);
-  }
-
-  // Measure only while the field can still grow. Once it owns an overflowing scroll area, its
-  // height is fixed, so more input must not trigger another document-wide layout.
-  useLayoutEffect(() => {
-    resizeTextarea("");
-  }, []);
-
-  useLayoutEffect(() => {
-    const nextSkills = matchComposerSkills(textRef.current, skills);
-    const previousSkills = matchingSkillsRef.current;
-    matchingSkillsRef.current = nextSkills;
-    if (
-      previousSkills.length !== nextSkills.length ||
-      previousSkills.some((skill, index) => skill !== nextSkills[index])
-    ) {
-      setMatchingSkills(nextSkills);
-      setSelectedSkillIndex(0);
-    }
-  }, [skills]);
+  }, [text]);
 
   function clearDraft() {
-    if (textareaRef.current) textareaRef.current.value = "";
-    updateDraftText("");
-    resizeTextarea("");
+    setText("");
     setFiles([]);
     onAttachmentsChange?.([]);
   }
 
   function restoreDraft(draft: ComposerSubmission<TMetadata>) {
-    if (textareaRef.current) textareaRef.current.value = draft.text;
-    updateDraftText(draft.text);
-    resizeTextarea(draft.text);
+    setText(draft.text);
     setFiles(draft.files);
     onAttachmentsChange?.(draft.attachments);
   }
@@ -136,14 +120,13 @@ export function Composer<TMetadata = unknown>({
   function submit(event?: FormEvent) {
     event?.preventDefault();
     if (!canSubmit) return;
-    const draft = { text: textRef.current.trim(), files, attachments: [...attachments], model, reasoningEffort };
+    const draft = { text: text.trim(), files, attachments: [...attachments], model, reasoningEffort };
     const result = onSubmit(draft);
     if (result instanceof Promise) {
       setSubmitting(true);
-      clearDraft();
       void result
         .then((accepted) => {
-          if (accepted === false) restoreDraft(draft);
+          if (accepted !== false) clearDraft();
         })
         .catch(() => restoreDraft(draft))
         .finally(() => setSubmitting(false));
@@ -154,27 +137,19 @@ export function Composer<TMetadata = unknown>({
 
   function invokeSkill(skill: ComposerSkill) {
     if (locked || skill.disabled || !onSkillInvoke) return;
-    const commandDraft = textRef.current;
-    if (textareaRef.current) textareaRef.current.value = "";
-    updateDraftText("");
-    resizeTextarea("");
+    const commandDraft = text;
+    setText("");
     setInvokingSkill(true);
     let result: void | Promise<void>;
     try {
       result = onSkillInvoke(skill);
     } catch {
-      if (textareaRef.current) textareaRef.current.value = commandDraft;
-      updateDraftText(commandDraft);
-      resizeTextarea(commandDraft);
+      setText(commandDraft);
       setInvokingSkill(false);
       return;
     }
     Promise.resolve(result)
-      .catch(() => {
-        if (textareaRef.current) textareaRef.current.value = commandDraft;
-        updateDraftText(commandDraft);
-        resizeTextarea(commandDraft);
-      })
+      .catch(() => setText(commandDraft))
       .finally(() => setInvokingSkill(false));
   }
 
@@ -184,11 +159,11 @@ export function Composer<TMetadata = unknown>({
       void onAbort();
       return;
     }
-    if (visibleSkills.length > 0) {
+    if (matchingSkills.length > 0) {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         const direction = event.key === "ArrowDown" ? 1 : -1;
-        setSelectedSkillIndex((current) => (current + direction + visibleSkills.length) % visibleSkills.length);
+        setSelectedSkillIndex((current) => (current + direction + matchingSkills.length) % matchingSkills.length);
         return;
       }
       if (event.key === "Escape") {
@@ -212,7 +187,10 @@ export function Composer<TMetadata = unknown>({
     <Card className="nova-composer nova-chat-content overflow-visible rounded-2xl">
       <UploadCover
         files={files}
-        onFilesChange={setFiles}
+        onFilesChange={(next) => {
+          if (onFilesSelected) onFilesSelected(next);
+          else setFiles(next);
+        }}
         attachments={attachments}
         onAttachmentsChange={onAttachmentsChange}
         onAttachmentButtonClick={onAttachmentButtonClick}
@@ -222,37 +200,41 @@ export function Composer<TMetadata = unknown>({
       >
         {({ onPaste, trigger }) => (
           <form className="p-1.5" onSubmit={submit}>
+            {headerContent}
             <label className="block px-2">
               <span className="sr-only">消息</span>
               <Textarea
                 ref={textareaRef}
+                value={text}
                 disabled={locked}
                 onChange={(event) => {
-                  const value = event.currentTarget.value;
-                  updateDraftText(value);
-                  resizeTextarea(value);
+                  setText(event.currentTarget.value);
+                  setSelectedSkillIndex(0);
+                  setSkillMenuDismissed(false);
                 }}
                 onKeyDown={keyDown}
                 onPaste={allowFiles ? onPaste : undefined}
                 rows={2}
                 placeholder={placeholder}
                 className="nova-composer-textarea nova-scrollbar min-h-16 max-h-[204px] resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
-                aria-expanded={visibleSkills.length > 0}
-                aria-controls={visibleSkills.length > 0 ? skillListId : undefined}
+                aria-expanded={matchingSkills.length > 0}
+                aria-controls={matchingSkills.length > 0 ? skillListId : undefined}
                 aria-activedescendant={selectedSkill ? `${skillListId}-${selectedSkill.id}` : undefined}
               />
             </label>
 
             <ComposerSkillMenu
               listId={skillListId}
-              skills={visibleSkills}
+              skills={matchingSkills}
               selected={selectedSkill}
               onSelect={onSkillInvoke ? invokeSkill : undefined}
             />
 
             <div className="nova-composer-input-row flex min-w-0 items-center justify-between gap-2  border-slate-100 pt-1.5 dark:border-slate-800/80">
               <div className="nova-composer-options flex min-w-0 flex-wrap items-center gap-1">
-                {models.length > 0 && (
+                {trigger}
+                {toolbarStart}
+                {!toolbarEnd && models.length > 0 && (
                   <ComposerOptionMenu
                     label="选择模型"
                     value={model}
@@ -262,7 +244,7 @@ export function Composer<TMetadata = unknown>({
                     icon={<Cpu className="size-3.5 shrink-0" aria-hidden="true" />}
                   />
                 )}
-                {reasoningEfforts.length > 0 && (
+                {!toolbarEnd && reasoningEfforts.length > 0 && (
                   <ComposerOptionMenu
                     label="选择推理强度"
                     value={reasoningEffort}
@@ -275,8 +257,8 @@ export function Composer<TMetadata = unknown>({
               </div>
 
               <div className="flex shrink-0 items-center gap-1.5">
+                {toolbarEnd}
                 {contextUsage && <ComposerContextUsageIndicator usage={contextUsage} />}
-                {trigger}
                 {isRunning && onAbort && !hasDraft && !submitting ? (
                   <Button
                     type="button"
@@ -300,7 +282,7 @@ export function Composer<TMetadata = unknown>({
                     size="icon"
                     disabled={!canSubmit || submitting}
                     aria-label={submitting ? "正在发送" : "发送消息"}
-                    className="rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 shadow-md shadow-indigo-500/20"
+                    className="rounded-xl"
                   >
                     {submitting ? (
                       <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />

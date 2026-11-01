@@ -1,5 +1,5 @@
 import { AlertTriangle, Check, Circle, LoaderCircle } from "lucide-react";
-import type { Todo } from "@nova/protocol";
+import type { Todo } from "../types.js";
 
 const statusView = {
   pending: { label: "待处理", Icon: Circle, iconClass: "text-slate-300 dark:text-slate-600" },

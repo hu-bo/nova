@@ -10,6 +10,7 @@ output/
 
 apps/agent-server/logs/
 target/
+packages/runner/vendor/
 
 *.log
 .DS_Store
@@ -18,3 +19,4 @@ target/
 .claude
 .workbuddy-ai
 submodule/
+.openchamber

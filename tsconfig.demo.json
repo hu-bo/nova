@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "strict": true,
+    "types": ["node", "react", "react-dom"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": ["demo/main.tsx", "demo/harness-api.ts", "vite.config.ts"]
+}

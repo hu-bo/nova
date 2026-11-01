@@ -1,0 +1,1102 @@
+{
+  "nested": {
+    "nova": {
+      "nested": {
+        "common": {
+          "nested": {
+            "v1": {
+              "nested": {
+                "ErrorCode": {
+                  "values": {
+                    "ERROR_CODE_UNSPECIFIED": 0,
+                    "OFFLINE": 1,
+                    "BUSY": 2,
+                    "UNSUPPORTED": 3,
+                    "DENIED": 4,
+                    "OUT_OF_WORKSPACE": 5,
+                    "CONFLICT": 6,
+                    "IDEMPOTENCY_CONFLICT": 7,
+                    "EXPIRED": 8,
+                    "OUTCOME_UNKNOWN": 9,
+                    "OUTPUT_GAP": 10,
+                    "INVALID": 11,
+                    "NOT_FOUND": 12,
+                    "PERMISSION": 13,
+                    "EXISTS": 14,
+                    "IS_DIR": 15,
+                    "NOT_DIR": 16,
+                    "IO": 17,
+                    "SPAWN_FAILED": 18,
+                    "TIMEOUT": 19,
+                    "CANCELLED": 20,
+                    "TOO_LARGE": 21
+                  }
+                },
+                "Error": {
+                  "fields": {
+                    "code": {
+                      "type": "ErrorCode",
+                      "id": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "stdout": {
+                      "type": "bytes",
+                      "id": 3
+                    },
+                    "stderr": {
+                      "type": "bytes",
+                      "id": 4
+                    },
+                    "outputTruncated": {
+                      "type": "bool",
+                      "id": 5
+                    },
+                    "outputGap": {
+                      "type": "bool",
+                      "id": 6
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "execution": {
+          "nested": {
+            "v1": {
+              "nested": {
+                "ExecutionStatus": {
+                  "values": {
+                    "EXECUTION_STATUS_UNSPECIFIED": 0,
+                    "QUEUED": 1,
+                    "RUNNING": 2,
+                    "COMPLETED": 3,
+                    "FAILED": 4,
+                    "CANCELLED": 5,
+                    "TIMED_OUT": 6
+                  }
+                },
+                "OutputStream": {
+                  "values": {
+                    "OUTPUT_STREAM_UNSPECIFIED": 0,
+                    "STDOUT": 1,
+                    "STDERR": 2
+                  }
+                },
+                "FileKind": {
+                  "values": {
+                    "FILE_KIND_UNSPECIFIED": 0,
+                    "FILE": 1,
+                    "DIRECTORY": 2,
+                    "SYMLINK": 3
+                  }
+                },
+                "Started": {
+                  "fields": {
+                    "pid": {
+                      "type": "int32",
+                      "id": 1
+                    }
+                  }
+                },
+                "Output": {
+                  "fields": {
+                    "stream": {
+                      "type": "OutputStream",
+                      "id": 1
+                    },
+                    "data": {
+                      "type": "bytes",
+                      "id": 2
+                    }
+                  }
+                },
+                "Finished": {
+                  "fields": {
+                    "status": {
+                      "type": "ExecutionStatus",
+                      "id": 1
+                    },
+                    "exitCode": {
+                      "type": "int32",
+                      "id": 2
+                    },
+                    "error": {
+                      "type": "nova.common.v1.Error",
+                      "id": 3
+                    },
+                    "durationMs": {
+                      "type": "uint64",
+                      "id": 4
+                    }
+                  }
+                },
+                "ExecutionEvent": {
+                  "oneofs": {
+                    "event": {
+                      "oneof": [
+                        "started",
+                        "output",
+                        "finished"
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "executionId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "sequence": {
+                      "type": "uint64",
+                      "id": 2
+                    },
+                    "ts": {
+                      "type": "google.protobuf.Timestamp",
+                      "id": 3
+                    },
+                    "started": {
+                      "type": "Started",
+                      "id": 10
+                    },
+                    "output": {
+                      "type": "Output",
+                      "id": 11
+                    },
+                    "finished": {
+                      "type": "Finished",
+                      "id": 12
+                    }
+                  }
+                },
+                "FileInfo": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "kind": {
+                      "type": "FileKind",
+                      "id": 2
+                    },
+                    "size": {
+                      "type": "uint64",
+                      "id": 3
+                    },
+                    "mtime": {
+                      "type": "int64",
+                      "id": 4
+                    }
+                  }
+                },
+                "DirEntry": {
+                  "fields": {
+                    "name": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "kind": {
+                      "type": "FileKind",
+                      "id": 2
+                    }
+                  }
+                },
+                "ReadTextResult": {
+                  "oneofs": {
+                    "_totalLines": {
+                      "oneof": [
+                        "totalLines"
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "text": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "startLine": {
+                      "type": "uint64",
+                      "id": 2
+                    },
+                    "endLine": {
+                      "type": "uint64",
+                      "id": 3
+                    },
+                    "totalLines": {
+                      "type": "uint64",
+                      "id": 4,
+                      "options": {
+                        "proto3_optional": true
+                      }
+                    },
+                    "totalSize": {
+                      "type": "uint64",
+                      "id": 5
+                    },
+                    "truncated": {
+                      "type": "bool",
+                      "id": 6
+                    },
+                    "lineTruncated": {
+                      "type": "bool",
+                      "id": 7
+                    }
+                  }
+                },
+                "GrepMatch": {
+                  "fields": {
+                    "file": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "line": {
+                      "type": "uint32",
+                      "id": 2
+                    },
+                    "text": {
+                      "type": "string",
+                      "id": 3
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "runner": {
+          "nested": {
+            "v1": {
+              "nested": {
+                "WorkspacePermission": {
+                  "values": {
+                    "WORKSPACE_PERMISSION_UNSPECIFIED": 0,
+                    "READ_ONLY": 1,
+                    "READ_WRITE": 2
+                  }
+                },
+                "RunnerState": {
+                  "values": {
+                    "RUNNER_STATE_UNSPECIFIED": 0,
+                    "IDLE": 1,
+                    "BUSY": 2,
+                    "DRAINING": 3
+                  }
+                },
+                "OperationStatus": {
+                  "values": {
+                    "OPERATION_STATUS_UNSPECIFIED": 0,
+                    "ACCEPTED": 1,
+                    "RUNNING": 2,
+                    "SUCCEEDED": 3,
+                    "FAILED": 4,
+                    "CANCELLED": 5,
+                    "TIMED_OUT": 6,
+                    "OUTCOME_UNKNOWN": 7
+                  }
+                },
+                "WorkspaceRegistration": {
+                  "fields": {
+                    "workspaceId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "displayName": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "permission": {
+                      "type": "WorkspacePermission",
+                      "id": 3
+                    }
+                  }
+                },
+                "RunnerHello": {
+                  "fields": {
+                    "runnerId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "bootId": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "protocolVersion": {
+                      "type": "uint32",
+                      "id": 3
+                    },
+                    "version": {
+                      "type": "string",
+                      "id": 4
+                    },
+                    "platform": {
+                      "type": "string",
+                      "id": 5
+                    },
+                    "workspaces": {
+                      "rule": "repeated",
+                      "type": "WorkspaceRegistration",
+                      "id": 6
+                    },
+                    "capabilities": {
+                      "rule": "repeated",
+                      "type": "string",
+                      "id": 7
+                    },
+                    "maxConcurrency": {
+                      "type": "uint32",
+                      "id": 8
+                    }
+                  }
+                },
+                "ServerWelcome": {
+                  "fields": {
+                    "protocolVersion": {
+                      "type": "uint32",
+                      "id": 1
+                    },
+                    "connectionEpoch": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "heartbeatIntervalMs": {
+                      "type": "uint32",
+                      "id": 3
+                    },
+                    "acceptedCapabilities": {
+                      "rule": "repeated",
+                      "type": "string",
+                      "id": 4
+                    }
+                  }
+                },
+                "Heartbeat": {
+                  "fields": {
+                    "bootId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "sequence": {
+                      "type": "uint64",
+                      "id": 2
+                    },
+                    "state": {
+                      "type": "RunnerState",
+                      "id": 3
+                    },
+                    "activeOperationIds": {
+                      "rule": "repeated",
+                      "type": "string",
+                      "id": 4
+                    }
+                  }
+                },
+                "FileEntry": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "kind": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "sizeBytes": {
+                      "type": "uint64",
+                      "id": 3
+                    }
+                  }
+                },
+                "ListFilesRequest": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "depth": {
+                      "type": "uint32",
+                      "id": 2
+                    },
+                    "maxEntries": {
+                      "type": "uint32",
+                      "id": 3
+                    }
+                  }
+                },
+                "ReadFileRequest": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "offset": {
+                      "type": "uint64",
+                      "id": 2
+                    },
+                    "maxBytes": {
+                      "type": "uint32",
+                      "id": 3
+                    }
+                  }
+                },
+                "SearchRequest": {
+                  "fields": {
+                    "query": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "path": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "glob": {
+                      "type": "string",
+                      "id": 3
+                    },
+                    "maxResults": {
+                      "type": "uint32",
+                      "id": 4
+                    }
+                  }
+                },
+                "WriteFileRequest": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "contents": {
+                      "type": "bytes",
+                      "id": 2
+                    },
+                    "expectedSha256": {
+                      "type": "string",
+                      "id": 3
+                    }
+                  }
+                },
+                "TextEdit": {
+                  "fields": {
+                    "oldText": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "newText": {
+                      "type": "string",
+                      "id": 2
+                    }
+                  }
+                },
+                "ApplyPatchRequest": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "edits": {
+                      "rule": "repeated",
+                      "type": "TextEdit",
+                      "id": 2
+                    },
+                    "expectedSha256": {
+                      "type": "string",
+                      "id": 3
+                    }
+                  }
+                },
+                "ExecuteCommandRequest": {
+                  "fields": {
+                    "executable": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "args": {
+                      "rule": "repeated",
+                      "type": "string",
+                      "id": 2
+                    },
+                    "cwd": {
+                      "type": "string",
+                      "id": 3
+                    },
+                    "env": {
+                      "keyType": "string",
+                      "type": "string",
+                      "id": 4
+                    },
+                    "timeoutMs": {
+                      "type": "uint32",
+                      "id": 5
+                    },
+                    "stdin": {
+                      "type": "bytes",
+                      "id": 6
+                    }
+                  }
+                },
+                "Operation": {
+                  "oneofs": {
+                    "params": {
+                      "oneof": [
+                        "listFiles",
+                        "readFile",
+                        "search",
+                        "writeFile",
+                        "executeCommand",
+                        "applyPatch",
+                        "readText"
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "operationId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "targetBootId": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "id": 3
+                    },
+                    "paramsSha256": {
+                      "type": "bytes",
+                      "id": 4
+                    },
+                    "protocolVersion": {
+                      "type": "uint32",
+                      "id": 5
+                    },
+                    "expiresAtUnixMs": {
+                      "type": "uint64",
+                      "id": 6
+                    },
+                    "timeoutMs": {
+                      "type": "uint32",
+                      "id": 7
+                    },
+                    "listFiles": {
+                      "type": "ListFilesRequest",
+                      "id": 10
+                    },
+                    "readFile": {
+                      "type": "ReadFileRequest",
+                      "id": 11
+                    },
+                    "search": {
+                      "type": "SearchRequest",
+                      "id": 12
+                    },
+                    "writeFile": {
+                      "type": "WriteFileRequest",
+                      "id": 13
+                    },
+                    "executeCommand": {
+                      "type": "ExecuteCommandRequest",
+                      "id": 14
+                    },
+                    "applyPatch": {
+                      "type": "ApplyPatchRequest",
+                      "id": 15
+                    },
+                    "readText": {
+                      "type": "ReadTextRequest",
+                      "id": 16
+                    }
+                  }
+                },
+                "CancelOperation": {
+                  "fields": {
+                    "operationId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "targetBootId": {
+                      "type": "string",
+                      "id": 2
+                    }
+                  }
+                },
+                "OperationAccepted": {
+                  "fields": {
+                    "operationId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "bootId": {
+                      "type": "string",
+                      "id": 2
+                    }
+                  }
+                },
+                "OperationOutput": {
+                  "fields": {
+                    "operationId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "bootId": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "sequence": {
+                      "type": "uint64",
+                      "id": 3
+                    },
+                    "stream": {
+                      "type": "nova.execution.v1.OutputStream",
+                      "id": 4
+                    },
+                    "offset": {
+                      "type": "uint64",
+                      "id": 5
+                    },
+                    "data": {
+                      "type": "bytes",
+                      "id": 6
+                    }
+                  }
+                },
+                "AcknowledgeOutput": {
+                  "fields": {
+                    "operationId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "bootId": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "sequence": {
+                      "type": "uint64",
+                      "id": 3
+                    }
+                  }
+                },
+                "SearchMatch": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "line": {
+                      "type": "uint32",
+                      "id": 2
+                    },
+                    "text": {
+                      "type": "string",
+                      "id": 3
+                    }
+                  }
+                },
+                "ListFilesResult": {
+                  "fields": {
+                    "entries": {
+                      "rule": "repeated",
+                      "type": "FileEntry",
+                      "id": 1
+                    },
+                    "truncated": {
+                      "type": "bool",
+                      "id": 2
+                    }
+                  }
+                },
+                "ReadFileResult": {
+                  "fields": {
+                    "contents": {
+                      "type": "bytes",
+                      "id": 1
+                    },
+                    "offset": {
+                      "type": "uint64",
+                      "id": 2
+                    },
+                    "totalSize": {
+                      "type": "uint64",
+                      "id": 3
+                    },
+                    "truncated": {
+                      "type": "bool",
+                      "id": 4
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "id": 5
+                    }
+                  }
+                },
+                "ReadTextRequest": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "offset": {
+                      "type": "uint64",
+                      "id": 2
+                    },
+                    "limit": {
+                      "type": "uint32",
+                      "id": 3
+                    },
+                    "maxBytes": {
+                      "type": "uint32",
+                      "id": 4
+                    }
+                  }
+                },
+                "ReadTextFileResult": {
+                  "oneofs": {
+                    "_totalLines": {
+                      "oneof": [
+                        "totalLines"
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "text": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "startLine": {
+                      "type": "uint64",
+                      "id": 2
+                    },
+                    "endLine": {
+                      "type": "uint64",
+                      "id": 3
+                    },
+                    "totalLines": {
+                      "type": "uint64",
+                      "id": 4,
+                      "options": {
+                        "proto3_optional": true
+                      }
+                    },
+                    "totalSize": {
+                      "type": "uint64",
+                      "id": 5
+                    },
+                    "truncated": {
+                      "type": "bool",
+                      "id": 6
+                    },
+                    "lineTruncated": {
+                      "type": "bool",
+                      "id": 7
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "id": 8
+                    }
+                  }
+                },
+                "SearchResult": {
+                  "fields": {
+                    "matches": {
+                      "rule": "repeated",
+                      "type": "SearchMatch",
+                      "id": 1
+                    },
+                    "truncated": {
+                      "type": "bool",
+                      "id": 2
+                    }
+                  }
+                },
+                "WriteFileResult": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "sizeBytes": {
+                      "type": "uint64",
+                      "id": 3
+                    }
+                  }
+                },
+                "ApplyPatchResult": {
+                  "fields": {
+                    "path": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "sizeBytes": {
+                      "type": "uint64",
+                      "id": 3
+                    },
+                    "editCount": {
+                      "type": "uint32",
+                      "id": 4
+                    }
+                  }
+                },
+                "ExecuteCommandResult": {
+                  "fields": {
+                    "exitCode": {
+                      "type": "int32",
+                      "id": 1
+                    },
+                    "stdout": {
+                      "type": "bytes",
+                      "id": 2
+                    },
+                    "stderr": {
+                      "type": "bytes",
+                      "id": 3
+                    },
+                    "outputTruncated": {
+                      "type": "bool",
+                      "id": 4
+                    },
+                    "durationMs": {
+                      "type": "uint64",
+                      "id": 5
+                    }
+                  }
+                },
+                "OperationResult": {
+                  "oneofs": {
+                    "result": {
+                      "oneof": [
+                        "listFiles",
+                        "readFile",
+                        "search",
+                        "writeFile",
+                        "executeCommand",
+                        "applyPatch",
+                        "readText"
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "operationId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "bootId": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "status": {
+                      "type": "OperationStatus",
+                      "id": 3
+                    },
+                    "error": {
+                      "type": "nova.common.v1.Error",
+                      "id": 4
+                    },
+                    "lastOutputSequence": {
+                      "type": "uint64",
+                      "id": 5
+                    },
+                    "outputGap": {
+                      "type": "bool",
+                      "id": 6
+                    },
+                    "listFiles": {
+                      "type": "ListFilesResult",
+                      "id": 10
+                    },
+                    "readFile": {
+                      "type": "ReadFileResult",
+                      "id": 11
+                    },
+                    "search": {
+                      "type": "SearchResult",
+                      "id": 12
+                    },
+                    "writeFile": {
+                      "type": "WriteFileResult",
+                      "id": 13
+                    },
+                    "executeCommand": {
+                      "type": "ExecuteCommandResult",
+                      "id": 14
+                    },
+                    "applyPatch": {
+                      "type": "ApplyPatchResult",
+                      "id": 15
+                    },
+                    "readText": {
+                      "type": "ReadTextFileResult",
+                      "id": 16
+                    }
+                  }
+                },
+                "ReconcileRequest": {
+                  "fields": {
+                    "bootId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "activeOperationIds": {
+                      "rule": "repeated",
+                      "type": "string",
+                      "id": 2
+                    },
+                    "unacknowledgedTerminalIds": {
+                      "rule": "repeated",
+                      "type": "string",
+                      "id": 3
+                    }
+                  }
+                },
+                "QueryOperation": {
+                  "fields": {
+                    "operationId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "targetBootId": {
+                      "type": "string",
+                      "id": 2
+                    }
+                  }
+                },
+                "AcknowledgeResult": {
+                  "fields": {
+                    "operationId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "bootId": {
+                      "type": "string",
+                      "id": 2
+                    }
+                  }
+                },
+                "RunnerEnvelope": {
+                  "oneofs": {
+                    "payload": {
+                      "oneof": [
+                        "hello",
+                        "heartbeat",
+                        "accepted",
+                        "result",
+                        "reconcile",
+                        "output"
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "requestId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "hello": {
+                      "type": "RunnerHello",
+                      "id": 10
+                    },
+                    "heartbeat": {
+                      "type": "Heartbeat",
+                      "id": 11
+                    },
+                    "accepted": {
+                      "type": "OperationAccepted",
+                      "id": 12
+                    },
+                    "result": {
+                      "type": "OperationResult",
+                      "id": 13
+                    },
+                    "reconcile": {
+                      "type": "ReconcileRequest",
+                      "id": 14
+                    },
+                    "output": {
+                      "type": "OperationOutput",
+                      "id": 15
+                    }
+                  }
+                },
+                "ServerEnvelope": {
+                  "oneofs": {
+                    "payload": {
+                      "oneof": [
+                        "welcome",
+                        "rejection",
+                        "operation",
+                        "cancel",
+                        "query",
+                        "acknowledge",
+                        "acknowledgeOutput"
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "requestId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "welcome": {
+                      "type": "ServerWelcome",
+                      "id": 10
+                    },
+                    "rejection": {
+                      "type": "nova.common.v1.Error",
+                      "id": 11
+                    },
+                    "operation": {
+                      "type": "Operation",
+                      "id": 12
+                    },
+                    "cancel": {
+                      "type": "CancelOperation",
+                      "id": 13
+                    },
+                    "query": {
+                      "type": "QueryOperation",
+                      "id": 14
+                    },
+                    "acknowledge": {
+                      "type": "AcknowledgeResult",
+                      "id": 15
+                    },
+                    "acknowledgeOutput": {
+                      "type": "AcknowledgeOutput",
+                      "id": 16
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "google": {
+      "nested": {
+        "protobuf": {
+          "nested": {
+            "Timestamp": {
+              "fields": {
+                "seconds": {
+                  "type": "int64",
+                  "id": 1
+                },
+                "nanos": {
+                  "type": "int32",
+                  "id": 2
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

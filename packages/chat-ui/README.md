@@ -7,6 +7,8 @@ Nova 的聊天展示组件库，提供消息、结构化 Block、Decision、TODO
 组件只负责渲染和收集用户输入，不请求接口、不保存业务数据，也不持有全局状态。
 宿主应用负责 HTTP / SSE、文件上传、会话状态、模型配置和持久化。
 
+本包维护 UI 所需的最小投影类型（`Block`、`ChatMessage`、`Todo` 和 `Decision`）。这些类型不是服务端协议；宿主可以在边界处把自己的协议对象映射成组件输入。
+
 ## 组件
 
 - `MessageList`：渲染消息列表并配对工具调用与结果。
@@ -34,7 +36,7 @@ Nova 的聊天展示组件库，提供消息、结构化 Block、Decision、TODO
 ```tsx
 import "@nova/chat-ui/styles.css";
 import { MessageList } from "@nova/chat-ui";
-import type { ChatMessage } from "@nova/protocol";
+import type { ChatMessage } from "@nova/chat-ui";
 
 export function Conversation({ messages }: { messages: ChatMessage[] }) {
   return (

@@ -1,9 +1,8 @@
 import { Bot, CircleAlert, LoaderCircle, RotateCcw, UserRound } from "lucide-react";
-import { memo, useLayoutEffect, useRef, type ReactNode, type UIEvent } from "react";
-import type { Block, ChatMessage } from "@nova/protocol";
+import { memo, useCallback, useLayoutEffect, useRef, type ReactNode, type UIEvent } from "react";
 import { BlockView } from "./block-view.js";
 import { ToolBlock } from "./blocks/tool.js";
-import type { BlockRenderers, ExtractBlock } from "./types.js";
+import type { Block, BlockRenderers, ChatMessage, ExtractBlock } from "./types.js";
 import { Button } from "./components/ui/button.js";
 import { CopyButton } from "./components/copy-button.js";
 
@@ -32,7 +31,14 @@ function renderBlocks(
   blocks.forEach((block, index) => {
     if (consumed.has(index)) return;
     if (block.type !== "tool_call") {
-      nodes.push(<BlockView block={block} renderers={renderers} {...(onOpenPath ? { onOpenPath } : {})} key={index} />);
+      nodes.push(
+        <BlockView
+          block={block}
+          renderers={renderers}
+          {...(onOpenPath ? { onOpenPath } : {})}
+          key={block.id ?? index}
+        />,
+      );
       return;
     }
 
@@ -43,24 +49,65 @@ function renderBlocks(
     const result = resultIndex >= 0 ? (blocks[resultIndex] as ExtractBlock<"tool_result">) : undefined;
     if (resultIndex >= 0) consumed.add(resultIndex);
 
-    if (block.name === "todo_write") {
-      result?.blocks.forEach((child, childIndex) =>
-        nodes.push(
-          <BlockView
-            block={child}
-            renderers={renderers}
-            {...(onOpenPath ? { onOpenPath } : {})}
-            key={`${index}-${childIndex}`}
-          />,
-        ),
-      );
-      return;
-    }
-
-    nodes.push(<ToolBlock call={block} {...(result ? { result } : {})} key={index} />);
+    nodes.push(<ToolBlock call={block} {...(result ? { result } : {})} key={block.id ?? index} />);
   });
 
   return nodes;
+}
+
+/**
+ * Protocol messages keep a `tool_result` in its own "tool" message while the matching `tool_call`
+ * lives in the preceding assistant message. Pair them across messages so the result renders inside
+ * the collapsible tool block instead of as a standalone raw dump. Unchanged messages keep identity.
+ */
+const pairedViews = new WeakMap<ChatMessage, ChatMessage>();
+function pairToolResults(messages: ChatMessage[]): ChatMessage[] {
+  const callOwner = new Map<string, number>();
+  messages.forEach((message, index) => {
+    for (const block of message.blocks) if (block.type === "tool_call") callOwner.set(block.callId, index);
+  });
+  const additions = new Map<number, Map<string, Block[]>>();
+  const moved = new Map<number, Set<number>>();
+  messages.forEach((message, index) => {
+    message.blocks.forEach((block, blockIndex) => {
+      if (block.type !== "tool_result") return;
+      const owner = callOwner.get(block.callId);
+      if (owner === undefined || owner === index) return;
+      const byCall = additions.get(owner) ?? new Map<string, Block[]>();
+      byCall.set(block.callId, [...(byCall.get(block.callId) ?? []), block]);
+      additions.set(owner, byCall);
+      const removed = moved.get(index) ?? new Set<number>();
+      removed.add(blockIndex);
+      moved.set(index, removed);
+    });
+  });
+  if (additions.size === 0) return messages;
+  return messages
+    .map((message, index) => {
+      const removed = moved.get(index);
+      const byCall = additions.get(index);
+      if (!removed && !byCall) return message;
+      const blocks: Block[] = [];
+      message.blocks.forEach((block, blockIndex) => {
+        if (removed?.has(blockIndex)) return;
+        blocks.push(block);
+        if (block.type === "tool_call") {
+          const results = byCall?.get(block.callId);
+          if (results) blocks.push(...results);
+        }
+      });
+      const prior = pairedViews.get(message);
+      if (
+        prior &&
+        prior.blocks.length === blocks.length &&
+        prior.blocks.every((block, index) => block === blocks[index])
+      )
+        return prior;
+      const paired = { ...message, blocks };
+      pairedViews.set(message, paired);
+      return paired;
+    })
+    .filter((message, index) => (moved.get(index)?.size ?? 0) === 0 || message.blocks.length > 0);
 }
 
 const MessageRow = memo(function MessageRow({
@@ -103,7 +150,7 @@ const MessageRow = memo(function MessageRow({
               <Bot className="size-3" aria-hidden="true" />
             )}
           </span>
-          <span>{isUser ? "You" : "Nova"}</span>
+          <span>{isUser ? "You" : message.role === "tool" ? "工具" : "Nova"}</span>
           {message.status === "streaming" && (
             <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" aria-label="正在生成" />
           )}
@@ -139,6 +186,12 @@ export function MessageList({
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollState = useRef(initialScrollState ?? { scrollTop: 0, followsBottom: true });
   const onScrollStateChangeRef = useRef(onScrollStateChange);
+  const callbacks = useRef({ onRetry, onOpenPath });
+  useLayoutEffect(() => {
+    callbacks.current = { onRetry, onOpenPath };
+  }, [onRetry, onOpenPath]);
+  const retry = useCallback((id: string) => callbacks.current.onRetry?.(id), []);
+  const openPath = useCallback((path: string, line?: number) => callbacks.current.onOpenPath?.(path, line), []);
 
   useLayoutEffect(() => {
     onScrollStateChangeRef.current = onScrollStateChange;
@@ -187,6 +240,8 @@ export function MessageList({
     };
   }, []);
 
+  const pairedMessages = pairToolResults(messages);
+
   return (
     <div
       ref={containerRef}
@@ -195,12 +250,12 @@ export function MessageList({
       aria-live="polite"
     >
       <div ref={contentRef} className="nova-chat-content space-y-3">
-        {messages.map((message) => (
+        {pairedMessages.map((message) => (
           <MessageRow
             message={message}
             renderers={renderers}
-            onRetry={onRetry}
-            onOpenPath={onOpenPath}
+            onRetry={onRetry ? retry : undefined}
+            onOpenPath={onOpenPath ? openPath : undefined}
             key={message.id}
           />
         ))}

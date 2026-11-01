@@ -5,6 +5,13 @@ on:
     tags:
       - "runner-v*"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-linux:
     name: Build linux-x64 (glibc 2.34)
@@ -24,7 +31,7 @@ jobs:
               dnf install -y gcc gcc-c++ make perl pkg-config openssl-devel
               curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
               source "$HOME/.cargo/env"
-              cargo build -p nova-runner --release --target x86_64-unknown-linux-gnu
+              cargo build -p nova-runner --locked --release --target x86_64-unknown-linux-gnu
               binary=target/x86_64-unknown-linux-gnu/release/nova-runner
               ldd "$binary" | tee /tmp/nova-runner-ldd.txt
               grep -q "libc.so.6 =>" /tmp/nova-runner-ldd.txt
@@ -52,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build -p nova-runner --release
+      - run: cargo build -p nova-runner --locked --release
       - uses: actions/upload-artifact@v6
         with:
           name: nova-runner-${{ matrix.target }}
@@ -114,7 +121,9 @@ jobs:
           tar -C artifacts/nova-runner-darwin-x64 -czf dist/nova-runner-darwin-x64.tar.gz nova-runner
           tar -C artifacts/nova-runner-darwin-arm64 -czf dist/nova-runner-darwin-arm64.tar.gz nova-runner
           cp artifacts/nova-runner-windows-setup/nova-runner-setup.exe dist/
-          cp packages/runner/install/linux/install.sh dist/install-runner.sh
+          # Point the distributed installer at this repository, including forks.
+          sed "s|https://github.com/hu-bo/nova-dsh/releases/latest/download|https://github.com/$GITHUB_REPOSITORY/releases/latest/download|g" \
+            packages/runner/install/linux/install.sh > dist/install-runner.sh
 
           cd dist
           sha256sum \

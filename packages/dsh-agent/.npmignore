@@ -1,9 +1,0 @@
-src/
-test/
-docs/
-*.tsbuildinfo
-tsconfig*.json
-vitest.config.*
-eslint.config.*
-.env*
-!.env.example

@@ -1,10 +1,10 @@
-import type { StorageConfig, CasdoorUser, TokenResponse } from '../types.js';
+import type { StorageConfig, CasdoorUser, TokenResponse } from "../types.js";
 
-const DEFAULT_PREFIX = 'casdoor_';
-const DEFAULT_ACCESS_TOKEN_KEY = 'access_token';
-const DEFAULT_REFRESH_TOKEN_KEY = 'refresh_token';
-const DEFAULT_USER_KEY = 'user';
-const DEFAULT_EXPIRES_AT_KEY = 'expires_at';
+const DEFAULT_PREFIX = "casdoor_";
+const DEFAULT_ACCESS_TOKEN_KEY = "access_token";
+const DEFAULT_REFRESH_TOKEN_KEY = "refresh_token";
+const DEFAULT_USER_KEY = "user";
+const DEFAULT_EXPIRES_AT_KEY = "expires_at";
 
 /**
  * 内存存储 (用于 SSR 或无 localStorage 环境)
@@ -47,14 +47,14 @@ export class TokenStorage {
     this.userKey = config?.userKey ?? DEFAULT_USER_KEY;
     this.expiresAtKey = DEFAULT_EXPIRES_AT_KEY;
 
-    const storageType = config?.type ?? 'localStorage';
+    const storageType = config?.type ?? "localStorage";
 
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       // SSR 环境
       this.storage = new MemoryStorage();
-    } else if (storageType === 'localStorage') {
+    } else if (storageType === "localStorage") {
       this.storage = window.localStorage;
-    } else if (storageType === 'sessionStorage') {
+    } else if (storageType === "sessionStorage") {
       this.storage = window.sessionStorage;
     } else {
       this.storage = new MemoryStorage();
@@ -69,16 +69,18 @@ export class TokenStorage {
    * 保存 Token
    * 兼容 SDK 返回的 { access_token, refresh_token } 和完整的 TokenResponse
    */
-  saveToken(token: Pick<TokenResponse, 'access_token'> & Partial<TokenResponse>): void {
+  saveToken(token: Pick<TokenResponse, "access_token"> & Partial<TokenResponse>): void {
     this.storage.setItem(this.getKey(this.accessTokenKey), token.access_token);
 
     if (token.refresh_token) {
       this.storage.setItem(this.getKey(this.refreshTokenKey), token.refresh_token);
     }
 
-    if (token.expires_in) {
+    if (typeof token.expires_in === "number" && Number.isFinite(token.expires_in)) {
       const expiresAt = Date.now() + token.expires_in * 1000;
       this.storage.setItem(this.getKey(this.expiresAtKey), expiresAt.toString());
+    } else {
+      this.storage.removeItem(this.getKey(this.expiresAtKey));
     }
   }
 

@@ -7,9 +7,9 @@ import {
   useContext,
   createElement,
   type ReactNode,
-} from 'react';
-import type { ClientConfig, AuthState, CasdoorUser, TokenResponse } from '../types.js';
-import { CasdoorClient } from './core.js';
+} from "react";
+import type { ClientConfig, AuthState, CasdoorUser, TokenResponse } from "../types.js";
+import { CasdoorClient } from "./core.js";
 
 /**
  * Casdoor Context
@@ -19,7 +19,7 @@ const CasdoorContext = createContext<CasdoorClient | null>(null);
 type ServerExchangeToken = (
   code: string,
   state: string,
-  appName: string
+  appName: string,
 ) => Promise<{ token: TokenResponse; user: CasdoorUser }>;
 
 export interface CasdoorCallbackOptions {
@@ -39,21 +39,25 @@ export interface CasdoorProviderProps {
  * Casdoor Provider 组件
  */
 export function CasdoorProvider({ config, children }: CasdoorProviderProps): ReactNode {
-  const client = useMemo(() => new CasdoorClient(config), [
-    config.appName,
-    config.authApiBase,
-    config.redirectUri,
-    config.logoutRedirectUri,
-    config.silentRefresh,
-    config.refreshBeforeExpiry,
-    config.storage?.type,
-    config.storage?.prefix,
-    config.storage?.accessTokenKey,
-    config.storage?.refreshTokenKey,
-    config.storage?.userKey,
-  ]);
+  const client = useMemo(
+    () => new CasdoorClient(config),
+    [
+      config.appName,
+      config.authApiBase,
+      config.redirectUri,
+      config.logoutRedirectUri,
+      config.silentRefresh,
+      config.refreshBeforeExpiry,
+      config.storage?.type,
+      config.storage?.prefix,
+      config.storage?.accessTokenKey,
+      config.storage?.refreshTokenKey,
+      config.storage?.userKey,
+    ],
+  );
 
   useEffect(() => {
+    client.start();
     return () => client.destroy();
   }, [client]);
 
@@ -66,7 +70,7 @@ export function CasdoorProvider({ config, children }: CasdoorProviderProps): Rea
 export function useCasdoorClient(): CasdoorClient {
   const client = useContext(CasdoorContext);
   if (!client) {
-    throw new Error('useCasdoorClient must be used within a CasdoorProvider');
+    throw new Error("useCasdoorClient must be used within a CasdoorProvider");
   }
   return client;
 }
@@ -95,7 +99,9 @@ export interface UseCasdoorReturn {
   /** 处理 OAuth 回调 */
   handleCallback: (serverExchangeToken?: ServerExchangeToken) => Promise<boolean>;
   /** 刷新 Token */
-  refreshToken: (serverRefreshToken?: (refreshToken: string, appName: string) => Promise<TokenResponse>) => Promise<boolean>;
+  refreshToken: (
+    serverRefreshToken?: (refreshToken: string, appName: string) => Promise<TokenResponse>,
+  ) => Promise<boolean>;
 }
 
 /**
@@ -115,14 +121,15 @@ export function useCasdoor(): UseCasdoorReturn {
   const getLoginUrl = useCallback(() => client.getLoginUrl(), [client]);
   const getSignupUrl = useCallback(() => client.getSignupUrl(), [client]);
 
-  const handleCallback = useCallback((serverExchangeToken?: ServerExchangeToken) => client.handleCallback(serverExchangeToken), [
-    client,
-  ]);
+  const handleCallback = useCallback(
+    (serverExchangeToken?: ServerExchangeToken) => client.handleCallback(serverExchangeToken),
+    [client],
+  );
 
   const refreshToken = useCallback(
     (serverRefreshToken?: (refreshToken: string, appName: string) => Promise<TokenResponse>) =>
       client.refreshToken(serverRefreshToken),
-    [client]
+    [client],
   );
 
   return {
@@ -151,14 +158,15 @@ export function useCasdoorCallback(options?: CasdoorCallbackOptions): {
 };
 export function useCasdoorCallback(
   serverExchangeToken?: ServerExchangeToken,
-  options?: CasdoorCallbackOptions
+  options?: CasdoorCallbackOptions,
 ): { isLoading: boolean; success: boolean; error: Error | null };
 export function useCasdoorCallback(
   serverExchangeTokenOrOptions?: ServerExchangeToken | CasdoorCallbackOptions,
-  options?: CasdoorCallbackOptions
+  options?: CasdoorCallbackOptions,
 ): { isLoading: boolean; success: boolean; error: Error | null } {
-  const serverExchangeToken = typeof serverExchangeTokenOrOptions === 'function' ? serverExchangeTokenOrOptions : undefined;
-  const callbackOptions = typeof serverExchangeTokenOrOptions === 'function' ? options : serverExchangeTokenOrOptions;
+  const serverExchangeToken =
+    typeof serverExchangeTokenOrOptions === "function" ? serverExchangeTokenOrOptions : undefined;
+  const callbackOptions = typeof serverExchangeTokenOrOptions === "function" ? options : serverExchangeTokenOrOptions;
   const client = useCasdoorClient();
   const [isLoading, setIsLoading] = useState(true);
   const [success, setSuccess] = useState(false);
@@ -198,10 +206,10 @@ export function useCasdoorCallback(
 /**
  * React Hook - 需要认证的路由保护
  */
-export function useRequireAuth(options?: {
-  redirectTo?: string;
-  enabled?: boolean;
-}): { isAuthenticated: boolean; isLoading: boolean } {
+export function useRequireAuth(options?: { redirectTo?: string; enabled?: boolean }): {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+} {
   const { isAuthenticated, isLoading, login } = useCasdoor();
   const enabled = options?.enabled ?? true;
 

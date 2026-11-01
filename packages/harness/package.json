@@ -1,24 +1,49 @@
 {
-  "name": "@nova/harness",
-  "version": "0.0.0",
+  "name": "@nnova/harness",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
-  "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "test": "vitest run --no-cache",
-    "test:live-model": "cross-env NOVA_TEST_LIVE=1 vitest run --no-cache test/live-model.integration.test.ts"
+  "description": "插件化进程内 Agent 与 Task 框架（目录和 Coding 场景测试优先）",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./plugins/*": {
+      "types": "./dist/plugins/*/index.d.ts",
+      "import": "./dist/plugins/*/index.js"
+    }
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node scripts/test.mjs",
+    "lint": "eslint src tests",
+    "check:boundaries": "node scripts/boundaries.mjs",
+    "test:coding": "node --import tsx --test --test-concurrency=1 tests/scenarios/coding.scenario.test.ts",
+    "format": "prettier --write src tests examples scripts eslint.config.mjs README.md docs/TESTING.md docs/IMPLEMENTATION_TASKS.md package.json tsconfig*.json",
+    "format:check": "prettier --check src tests examples scripts eslint.config.mjs README.md docs/TESTING.md docs/IMPLEMENTATION_TASKS.md package.json tsconfig*.json"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@9.15.9",
   "dependencies": {
-    "@nova/agent-core": "workspace:*"
+    "@ai-sdk/openai": "4.0.66",
+    "ai": "7.0.99",
+    "zod": "4.6.4"
   },
   "devDependencies": {
-    "@nova/model-adapters": "workspace:*",
-    "cross-env": "^10.1.0",
-    "dotenv": "^17.4.2",
-    "vitest": "^2.1.3"
-  }
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.4",
+    "eslint": "10.10.0",
+    "prettier": "3.6.2",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

@@ -1,0 +1,182 @@
+@import 'tailwindcss';
+@import '@heroui/styles';
+@import '@nova/chat-ui/styles.css';
+@source '../../../../packages/chat-ui/src';
+
+/* 应用仅提供浅色主题，`.dark` class 不会被挂载；保留 class 版 dark variant，
+   避免 chat-ui 等依赖包里的 `dark:` 工具类回退到 prefers-color-scheme 媒体查询。 */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Plus Jakarta Sans', 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-secondary-foreground: var(--surface-secondary-foreground);
+  --color-overlay: var(--overlay);
+  --color-overlay-foreground: var(--overlay-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-foreground: var(--accent-soft-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-separator: var(--separator);
+  --color-field-background: var(--field-background);
+  --color-field-foreground: var(--field-foreground);
+  --color-field-placeholder: var(--field-placeholder);
+  --color-field-border: var(--field-border);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-focus: var(--focus);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--surface-foreground);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-foreground);
+  --color-destructive: var(--danger);
+  --color-secondary: var(--surface-secondary);
+  --color-ring: var(--focus);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  /*
+   * ⚠ 这里是 HeroUI 的运行时 token 契约，不是 shadcn 语义：
+   * - `--muted` 在 HeroUI 组件里用作文字色（如 toast 描述 `text-muted`），必须是可读的中性灰；
+   *   需要浅色背景请另起 token（如 `--surface-secondary`），不要复用 `--muted`。
+   * - 覆盖 `--warning` / `--success` / `--danger` / `--accent` 等基础色时，必须同时显式定义
+   *   对应的 `*-soft-foreground` 文字色：默认主题用 color-mix 派生它们，自定义色板混出的颜色会偏浑浊。
+   * 提交前运行 `pnpm check:theme` 可机械校验以上约束（见 scripts/check-theme.mjs）。
+   */
+
+  /* Shared brand color matches the Nova logo (#4f39f6). */
+  --accent: oklch(0.510155 0.261804 276.936);
+  --accent-foreground: oklch(0.985 0 0);
+  --accent-soft: oklch(0.96 0.025 276.936);
+  --accent-soft-foreground: oklch(0.42 0.2 276.936);
+
+  --background: oklch(0.985 0.004 240); /* ~ #fbfbfa */
+  --foreground: oklch(0.21 0.04 245); /* ~ #17202d */
+
+  --surface: oklch(1 0 0);
+  --surface-foreground: var(--foreground);
+  --surface-secondary: oklch(0.965 0.012 276.936);
+  --surface-secondary-foreground: var(--foreground);
+  --surface-tertiary: oklch(0.96 0.005 240);
+
+  --overlay: oklch(1 0 0);
+  --overlay-foreground: var(--foreground);
+
+  --border: oklch(0.92 0.01 240);
+  --separator: oklch(0.92 0.01 240);
+
+  --field-background: oklch(1 0 0);
+  --field-foreground: var(--foreground);
+  --field-placeholder: oklch(0.55 0.03 245);
+  --field-border: oklch(0.92 0.01 240);
+
+  --muted: oklch(0.5 0.03 245); /* HeroUI 文字色语义：中性灰，非背景 */
+  --muted-foreground: oklch(0.5 0.03 245); /* 应用自有 text-muted-foreground 类 */
+
+  --success: oklch(0.65 0.15 160);
+  --success-foreground: oklch(0.985 0 0);
+  --success-soft-foreground: oklch(0.45 0.13 155);
+  --warning: oklch(0.78 0.16 80);
+  --warning-foreground: oklch(0.18 0.04 80);
+  --warning-soft-foreground: oklch(0.52 0.13 70);
+  --danger: oklch(0.6 0.18 22);
+  --danger-foreground: oklch(0.985 0 0);
+  --danger-soft-foreground: oklch(0.52 0.19 25);
+
+  --focus: var(--accent);
+
+  --radius: 0.75rem;
+}
+
+.nova-chat .nova-composer-textarea::placeholder {
+  color: var(--field-placeholder);
+}
+
+.conversation-workspace .nova-chat {
+  --nova-chat-accent-rgb: 79 57 246;
+  --nova-chat-accent-alt-rgb: 139 92 246;
+  --nova-chat-content-max-width: 60rem;
+}
+
+@layer base {
+  body {
+    @apply m-0 bg-background font-sans text-foreground antialiased;
+  }
+  button:not(:disabled),
+  a {
+    cursor: pointer;
+  }
+  button,
+  a,
+  input {
+    outline-offset: 4px;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--accent-soft-foreground);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-thumb {
+  background: #a5b2bd66;
+  border-radius: 99px;
+}
+/* Surrounding chat layout follows OpenChamber; HeroUI component styles stay native. */
+.conversation-workspace .nova-composer {
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 3px 12px -6px rgb(15 23 42 / 0.12);
+  backdrop-filter: none;
+  transform: none;
+}
+.conversation-workspace .nova-composer::before {
+  display: none;
+}
+.conversation-workspace .nova-composer:focus-within {
+  box-shadow: 0 0 0 1px var(--accent);
+  transform: none;
+}
+.conversation-workspace .nova-composer-input-row {
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+.conversation-workspace .nova-composer-input-row::before {
+  display: none;
+}
+.conversation-workspace .nova-composer-textarea {
+  min-height: 5.5rem;
+}
+@media (max-width: 640px) {
+  .conversation-workspace .nova-composer-input-row > div:last-child {
+    width: 100%;
+    min-width: 0;
+    flex-shrink: 1;
+    justify-content: flex-end;
+  }
+  .conversation-workspace .nova-model-controls {
+    flex: 1;
+  }
+}

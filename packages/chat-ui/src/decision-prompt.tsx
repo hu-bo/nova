@@ -1,10 +1,11 @@
 import { Check, CheckCircle2, Circle, CircleStop, HelpCircle, LoaderCircle, ShieldCheck, X, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import type { DecisionRequest, DecisionResponse } from "@nova/protocol";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Button } from "./components/ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./components/ui/card.js";
 import { Checkbox } from "./components/ui/checkbox.js";
-import { DiffBlock, unifiedPatchOf } from "./blocks/diff.js";
+import { unifiedPatchOf } from "./blocks/diff-utils.js";
+const DiffBlock = lazy(() => import("./blocks/diff.js").then((module) => ({ default: module.DiffBlock })));
+import type { DecisionRequest, DecisionResponse } from "./types.js";
 
 export interface DecisionPromptProps {
   request: DecisionRequest;
@@ -34,6 +35,7 @@ export function DecisionPrompt({
 }: DecisionPromptProps) {
   const [submitted, setSubmitted] = useState(false);
   const [answers, setAnswers] = useState<string[]>([]);
+  const [customText, setCustomText] = useState("");
   const codeChanges = request.kind === "approval" ? request.codeChanges : undefined;
   const patches = useMemo(
     () => codeChanges?.map((change) => ({ path: change.path, ...unifiedPatchOf(change) })) ?? [],
@@ -43,6 +45,7 @@ export function DecisionPrompt({
   useEffect(() => {
     setSubmitted(false);
     setAnswers([]);
+    setCustomText("");
   }, [request.decisionId]);
 
   const locked = disabled || submitted || resolved !== undefined || isAborting;
@@ -60,7 +63,7 @@ export function DecisionPrompt({
     const value =
       resolved.kind === "approval"
         ? { allow: "允许", allow_always: "总是允许", deny: "拒绝" }[resolved.decision]
-        : resolved.answers.join("、");
+        : [...resolved.optionIds, resolved.customText ?? ""].filter(Boolean).join("、");
     return (
       <Card
         className="nova-decision-resolved nova-chat-content flex-row items-center gap-2.5 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 ring-emerald-200/80 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900"
@@ -107,13 +110,9 @@ export function DecisionPrompt({
           {patches.length ? (
             <div className="flex flex-col gap-2 p-px">
               {patches.map((patch, index) => (
-                <DiffBlock
-                  key={`${patch.path}-${index}`}
-                  path={patch.path}
-                  diff={patch.diff}
-                  added={patch.added}
-                  removed={patch.removed}
-                />
+                <Suspense key={`${patch.path}-${index}`} fallback={<pre className="text-xs">{patch.diff}</pre>}>
+                  <DiffBlock path={patch.path} diff={patch.diff} added={patch.added} removed={patch.removed} />
+                </Suspense>
               ))}
             </div>
           ) : (
@@ -151,7 +150,7 @@ export function DecisionPrompt({
             type="button"
             variant="ghost"
             size="xs"
-            disabled={locked}
+            disabled={locked || !request.allowedScopes?.includes("session")}
             onClick={() => void resolve({ kind: "approval", decision: "allow_always" })}
           >
             <ShieldCheck aria-hidden="true" />
@@ -206,14 +205,14 @@ export function DecisionPrompt({
         className="nova-scrollbar grid min-h-0 gap-1.5 overflow-y-auto overscroll-contain pb-2"
       >
         {question.options.map((option) => {
-          const selected = answers.includes(option);
+          const selected = answers.includes(option.id);
           return (
             <label
-              key={option}
+              key={option.id}
               className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm ring-1 ring-inset transition-all ${selected ? "bg-indigo-50 text-indigo-950 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-100 dark:ring-indigo-800" : "text-slate-600 ring-slate-200 hover:bg-slate-50 hover:ring-slate-300 dark:text-slate-300 dark:ring-slate-800 dark:hover:bg-slate-900"} ${locked ? "cursor-not-allowed opacity-50" : ""}`}
             >
               {question.multiSelect ? (
-                <Checkbox checked={selected} disabled={locked} onCheckedChange={() => toggle(option)} />
+                <Checkbox checked={selected} disabled={locked} onCheckedChange={() => toggle(option.id)} />
               ) : (
                 <>
                   <input
@@ -221,7 +220,7 @@ export function DecisionPrompt({
                     name={question.decisionId}
                     checked={selected}
                     disabled={locked}
-                    onChange={() => toggle(option)}
+                    onChange={() => toggle(option.id)}
                     className="sr-only"
                   />
                   <span
@@ -235,10 +234,23 @@ export function DecisionPrompt({
                   </span>
                 </>
               )}
-              <span>{option}</span>
+              <span>{option.label}</span>
             </label>
           );
         })}
+        {question.allowCustom && (
+          <label className="text-sm">
+            补充回答
+            <textarea
+              aria-label="补充回答"
+              value={customText}
+              onChange={(event) => setCustomText(event.target.value)}
+              disabled={locked}
+              maxLength={8000}
+              className="mt-1 w-full rounded-lg border p-2"
+            />
+          </label>
+        )}
       </CardContent>
       <CardFooter className="shrink-0 justify-end">
         {onAbort && (
@@ -250,8 +262,14 @@ export function DecisionPrompt({
         <Button
           type="button"
           size="sm"
-          disabled={locked || answers.length === 0}
-          onClick={() => void resolve({ kind: "question", answers })}
+          disabled={locked || (answers.length === 0 && !customText.trim())}
+          onClick={() =>
+            void resolve({
+              kind: "question",
+              optionIds: answers,
+              ...(customText.trim() ? { customText: customText.trim() } : {}),
+            })
+          }
         >
           {submitted && (
             <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />

@@ -54,7 +54,9 @@ export function ComposerSkillMenu({
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline gap-2">
-                <code className="text-xs text-slate-400">/{skill.command} {skill.label}</code>
+                <code className="text-xs text-slate-400">
+                  /{skill.command} {skill.label}
+                </code>
               </span>
             </span>
           </button>

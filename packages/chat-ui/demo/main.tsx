@@ -1,5 +1,5 @@
-import type { ChatMessage, DecisionResponse, Todo } from "@nova/protocol";
 import { Composer, DecisionPrompt, MessageList, TodoPanel, type ComposerSubmission } from "../src/index.js";
+import type { ChatMessage, DecisionResponse, Todo } from "../src/index.js";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
@@ -174,7 +174,8 @@ function Demo() {
                 kind: "question",
                 decisionId: "demo-question",
                 question: "下一步重点调试哪些状态？",
-                options: ["Loading", "Error", "Streaming"],
+                options: ["Loading", "Error", "Streaming"].map((label) => ({ id: label.toLowerCase(), label })),
+                allowCustom: false,
                 multiSelect: true,
               }}
               onResolve={(response) => alert(JSON.stringify(response))}

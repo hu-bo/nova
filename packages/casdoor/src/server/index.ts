@@ -8,6 +8,8 @@ import type {
 } from '../types.js';
 
 export * from '../types.js';
+export { createAuthServiceClient, AuthServiceError } from './auth-service.js';
+export type { AuthServiceConfig, AuthServiceIdentity, AuthServiceErrorCode } from './auth-service.js';
 
 /**
  * Casdoor 服务端 SDK

@@ -1,6 +1,7 @@
-import { renderToStaticMarkup } from "react-dom/server";
+import { PassThrough } from "node:stream";
+import type { ReactNode } from "react";
+import { renderToPipeableStream, renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ChatMessage } from "@nova/protocol";
 import { ComposerSkillMenu } from "./composer-skill-menu.js";
 import {
   BlockView,
@@ -14,6 +15,26 @@ import {
   contextUsagePercent,
   matchComposerSkills,
 } from "./index.js";
+import type { ChatMessage } from "./types.js";
+
+// Wait for lazy code/Diff viewers; static rendering intentionally only emits their fallback.
+function renderLoaded(element: ReactNode): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const output = new PassThrough();
+    let html = "";
+    output.on("data", (chunk: Buffer) => {
+      html += chunk.toString();
+    });
+    output.on("end", () => resolve(html.replace(/<!--.*?-->/gs, "")));
+    output.on("error", reject);
+    const stream = renderToPipeableStream(element, {
+      onAllReady() {
+        stream.pipe(output);
+      },
+      onError: reject,
+    });
+  });
+}
 
 describe("chat-ui", () => {
   it("renders image attachments with an accessible preview and an unavailable fallback", () => {
@@ -89,10 +110,37 @@ describe("chat-ui", () => {
     expect(composer).toBeGreaterThan(approvalCard);
   });
 
-  it("renders markdown and structured code", () => {
+  it.each([
+    { isRunning: false, canSteer: true },
+    { isRunning: true, canSteer: false },
+  ])("hides steering for an ineligible queued input: %j", ({ isRunning, canSteer }) => {
+    const html = renderToStaticMarkup(
+      <Chat
+        state={{
+          messages: [],
+          todos: [],
+          queuedMessages: [{ id: "queued", text: "待处理消息", canSteer }],
+          connection: "open",
+          isRunning,
+        }}
+        composer={{}}
+        actions={{
+          onSubmit: () => undefined,
+          onResolveDecision: () => undefined,
+          onSteerQueuedMessage: () => undefined,
+          onRemoveQueuedMessage: () => undefined,
+        }}
+      />,
+    );
+    expect(html).toContain("待处理消息");
+    expect(html).toContain("删除待处理消息");
+    expect(html).not.toContain("调整方向");
+  });
+
+  it("renders markdown and structured code", async () => {
     const markdown = renderToStaticMarkup(<BlockView block={{ type: "text", text: "**完成**" }} />);
     const fencedCode = renderToStaticMarkup(<BlockView block={{ type: "text", text: "```text\n.\n└── src/\n```" }} />);
-    const code = renderToStaticMarkup(
+    const code = await renderLoaded(
       <BlockView block={{ type: "code", language: "ts", code: "const done = true", path: "src/a.ts", startLine: 4 }} />,
     );
     expect(markdown).toContain("<strong>完成</strong>");
@@ -131,8 +179,8 @@ describe("chat-ui", () => {
     expect(html.match(/aria-label="复制消息"/g)).toHaveLength(1);
   });
 
-  it("renders diff blocks through git-diff-view", () => {
-    const html = renderToStaticMarkup(
+  it("renders diff blocks through git-diff-view", async () => {
+    const html = await renderLoaded(
       <BlockView
         block={{
           type: "diff",
@@ -159,8 +207,8 @@ describe("chat-ui", () => {
     { oldText: "", newText: "first\nsecond\nthird\nfourth\n", added: 4, removed: 0 },
     { oldText: "first\nsecond\n", newText: "", added: 0, removed: 2 },
     { oldText: "before", newText: "after", added: 1, removed: 1 },
-  ])("renders approval code lines for +$added/-$removed", ({ oldText, newText, added, removed }) => {
-    const html = renderToStaticMarkup(
+  ])("renders approval code lines for +$added/-$removed", async ({ oldText, newText, added, removed }) => {
+    const html = await renderLoaded(
       <DecisionPrompt
         request={{
           kind: "approval",
@@ -182,8 +230,8 @@ describe("chat-ui", () => {
     expect(text).toContain("允许执行");
   });
 
-  it("renders complete patches with separate hunks and original line numbers", () => {
-    const html = renderToStaticMarkup(
+  it("renders complete patches with separate hunks and original line numbers", async () => {
+    const html = await renderLoaded(
       <BlockView
         block={{
           type: "diff",
@@ -214,7 +262,7 @@ describe("chat-ui", () => {
     expect(html).not.toContain('data-line-new-num="10"');
   });
 
-  it("pairs tool calls and results while hiding todo_write", () => {
+  it("pairs tool calls and results independent of tool names", () => {
     const messages: ChatMessage[] = [
       {
         id: "message-1",
@@ -238,8 +286,37 @@ describe("chat-ui", () => {
     const html = renderToStaticMarkup(<MessageList messages={messages} />);
     expect(html.match(/read_file/g)).toHaveLength(1);
     expect(html).toContain('title="a.ts">a.ts</span>');
-    expect(html).not.toContain("todo_write");
+    expect(html).toContain("todo_write");
     expect(html).toContain("ship");
+  });
+
+  it("merges a tool result from its own message into the matching tool block", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "assistant-1",
+        conversationId: "conversation-1",
+        role: "assistant",
+        status: "done",
+        createdAt: 1,
+        blocks: [{ type: "tool_call", callId: "call-1", name: "list_dir", args: { path: "." }, status: "ok" }],
+      },
+      {
+        id: "tool-1",
+        conversationId: "conversation-1",
+        role: "tool",
+        status: "done",
+        createdAt: 2,
+        blocks: [
+          { type: "tool_result", callId: "call-1", status: "ok", blocks: [{ type: "text", text: "Cargo.toml" }] },
+        ],
+      },
+    ];
+    const html = renderToStaticMarkup(<MessageList messages={messages} />);
+    expect(html).toContain("list_dir");
+    expect(html).toContain("Cargo.toml");
+    // The result renders inside the tool block's output section, not as a standalone tool message.
+    expect(html).not.toContain("data-tool-result");
+    expect(html).not.toContain("工具");
   });
 
   it("shows the command and arguments in a bash tool summary", () => {

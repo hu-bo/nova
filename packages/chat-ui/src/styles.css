@@ -134,10 +134,17 @@
   transform: translateY(-1px) translateZ(0);
 }
 
-/* Keep the line width stable when the field starts scrolling. Composer measures the field only
-   until this max-height is reached, then pins the box and lets the textarea scroll internally. */
-.nova-chat .nova-composer-textarea {
-  scrollbar-gutter: stable;
+/* Growing the draft must stay inside the layout engine: measuring it from JavaScript on every
+   keystroke dirties style and then reads a layout property, which forces a synchronous reflow that
+   scales with draft length. `--nova-composer-field-sizing` publishes the outcome so the Composer
+   can trust the stylesheet instead of `CSS.supports`: a bundler that drops the unsupported
+   `field-sizing` declaration must not leave the field stuck at its fixed row height. */
+@supports (field-sizing: content) {
+  .nova-chat .nova-composer-textarea {
+    --nova-composer-field-sizing: content;
+    overflow-y: auto;
+    field-sizing: content;
+  }
 }
 
 .nova-chat .nova-composer-input-row {
@@ -153,6 +160,88 @@
   height: 1px;
   background: linear-gradient(90deg, transparent, rgb(148 163 184 / 0.3), transparent);
   content: "";
+}
+
+.nova-chat .nova-composer-option-trigger {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  width: max-content;
+  max-width: 10rem;
+  min-width: 0;
+  height: 2.25rem;
+  overflow: hidden;
+  padding: 0 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background: rgb(var(--nova-chat-subtle-surface-rgb, 248 250 252));
+  color: rgb(51 65 85);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.nova-chat .nova-composer-option-trigger:hover:not(:disabled),
+.nova-chat .nova-composer-option-trigger[data-popup-open] {
+  background: rgb(var(--nova-chat-border-rgb, 148 163 184) / 0.18);
+  color: rgb(15 23 42);
+}
+
+.nova-chat .nova-composer-option-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--nova-chat-accent-rgb, 79 70 229) / 0.24);
+}
+
+.nova-chat .nova-composer-option-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.nova-chat .nova-composer-option-icon,
+.nova-chat .nova-composer-option-chevron {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.nova-chat .nova-composer-option-icon,
+.nova-chat .nova-composer-option-icon > svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.nova-chat .nova-composer-option-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nova-chat .nova-composer-option-chevron {
+  width: 0.875rem;
+  height: 0.875rem;
+  opacity: 0.6;
+}
+
+.dark .nova-chat .nova-composer-option-trigger {
+  color: rgb(203 213 225);
+}
+
+.dark .nova-chat .nova-composer-option-trigger:hover:not(:disabled),
+.dark .nova-chat .nova-composer-option-trigger[data-popup-open] {
+  background: rgb(51 65 85 / 0.72);
+  color: rgb(248 250 252);
 }
 
 .nova-chat .nova-composer button.bg-gradient-to-br {
@@ -340,6 +429,12 @@
 .nova-chat .nova-error-block::before {
   background: linear-gradient(rgb(244 63 94 / 0.82), rgb(251 113 133 / 0.25));
   box-shadow: 0 0 18px rgb(244 63 94 / 0.2);
+}
+
+.dark .nova-chat {
+  --nova-chat-surface-rgb: 15 23 42;
+  --nova-chat-subtle-surface-rgb: 30 41 59;
+  --nova-chat-shadow-rgb: 0 0 0;
 }
 
 .dark .nova-chat .nova-message-list {

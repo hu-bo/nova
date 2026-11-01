@@ -1,7 +1,6 @@
 import { CheckCircle2, ChevronRight, CircleOff, LoaderCircle, TerminalSquare, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Block } from "@nova/protocol";
-import type { ExtractBlock } from "../types.js";
+import type { Block, ExtractBlock } from "../types.js";
 
 const MAX_OUTPUT_CHARS = 12_000;
 
@@ -26,9 +25,12 @@ function formatOutput(blocks: Block[]): string {
           return block.diff;
         case "error":
           return `${block.code}: ${block.message}`;
-        // Compatibility for persisted messages created before tool output became plain text.
         case "file":
           return block.path;
+        case "image":
+          return block.name;
+        case "custom":
+          return block.fallback;
         case "todo":
           return block.items.map((item) => `- [${item.status}] ${item.text}`).join("\n");
         case "tool_call":
@@ -54,7 +56,7 @@ function formatSize(chars: number): string {
 function getCallSummary(call: ExtractBlock<"tool_call">): string | undefined {
   if (!call.args || typeof call.args !== "object") return undefined;
 
-  if (call.name === "bash" && "command" in call.args && typeof call.args.command === "string") {
+  if ("command" in call.args && typeof call.args.command === "string") {
     const args = "args" in call.args && Array.isArray(call.args.args) ? call.args.args : [];
     return [call.args.command, ...args.map(String)].join(" ");
   }
@@ -66,18 +68,16 @@ function Section({
   label,
   badge,
   defaultOpen,
-  forceOpen,
   children,
 }: {
   label: string;
   badge?: string;
   defaultOpen: boolean;
-  forceOpen?: boolean;
   children: ReactNode;
 }) {
   return (
     <details
-      open={forceOpen || defaultOpen}
+      open={defaultOpen}
       className="nova-tool-section group/section border-t border-slate-200/70 first:border-t-0 dark:border-slate-800/80"
     >
       <summary className="flex cursor-pointer list-none items-center gap-1.5 bg-slate-100/60 px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-500 uppercase select-none hover:bg-slate-200/60 hover:text-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800/60 dark:hover:text-slate-300 [&::-webkit-details-marker]:hidden">
@@ -105,30 +105,40 @@ export function ToolBlock({
   result?: ExtractBlock<"tool_result"> | undefined;
 }) {
   const status = result?.status ?? call.status;
-  const open = call.status === "running" || result?.status === "error";
   const StatusIcon =
     status === "running" ? LoaderCircle : status === "ok" ? CheckCircle2 : status === "cancelled" ? CircleOff : XCircle;
   const statusLabel =
-    status === "running" ? "运行中" : status === "ok" ? "已完成" : status === "cancelled" ? "已取消" : "失败";
+    status === "queued"
+      ? "等待执行"
+      : status === "unknown"
+        ? "待核实"
+        : status === "running"
+          ? "运行中"
+          : status === "ok"
+            ? "已完成"
+            : status === "cancelled"
+              ? "已取消"
+              : "失败";
   const statusColor =
-    status === "running"
-      ? "text-indigo-500"
-      : status === "ok"
-        ? "text-emerald-500"
-        : status === "cancelled"
-          ? "text-slate-400"
-          : "text-rose-500";
+    status === "queued" || status === "unknown"
+      ? "text-amber-500"
+      : status === "running"
+        ? "text-indigo-500"
+        : status === "ok"
+          ? "text-emerald-500"
+          : status === "cancelled"
+            ? "text-slate-400"
+            : "text-rose-500";
 
   const argsText = formatArgs(call.args);
   const output = result ? truncateOutput(formatOutput(result.blocks)) : "";
-  const isRunning = status === "running";
   const summary = getCallSummary(call);
 
   return (
     <details
       data-status={status}
+      open
       className="nova-tool-block group overflow-hidden rounded-xl bg-slate-50/70 ring-1 ring-slate-200/70 open:bg-white dark:bg-slate-900/60 dark:ring-slate-800 dark:open:bg-slate-950"
-      open={open}
     >
       <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-2.5 text-xs select-none [&::-webkit-details-marker]:hidden">
         <ChevronRight
@@ -163,12 +173,7 @@ export function ToolBlock({
       </Section>
 
       {output && (
-        <Section
-          label={result?.status === "error" ? "错误输出" : "输出"}
-          badge={formatSize(output.length)}
-          defaultOpen={false}
-          forceOpen={isRunning || status === "error"}
-        >
+        <Section label={result?.status === "error" ? "错误输出" : "输出"} badge={formatSize(output.length)} defaultOpen>
           <pre className="nova-scrollbar m-0 max-h-80 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-slate-300">
             {output}
           </pre>

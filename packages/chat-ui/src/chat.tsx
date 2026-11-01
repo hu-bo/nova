@@ -1,5 +1,4 @@
 import { CornerDownLeft, CornerDownRight, Trash2 } from "lucide-react";
-import type { ChatMessage, DecisionRequest, DecisionResponse, Todo } from "@nova/protocol";
 import { useEffect, type ReactNode } from "react";
 import { Composer } from "./composer.js";
 import type { ComposerProps, ComposerSubmission } from "./composer-types.js";
@@ -7,11 +6,13 @@ import { DecisionPrompt } from "./decision-prompt.js";
 import { MessageList, type MessageListProps } from "./message-list.js";
 import { RemoteExplorer, type RemoteExplorerProps } from "./remote-explorer.js";
 import { TodoPanel } from "./todo-panel.js";
+import type { BlockRenderers, ChatMessage, DecisionRequest, DecisionResponse, Todo } from "./types.js";
 
 export interface ChatQueuedMessage {
   id: string;
   text: string;
   isSteering?: boolean | undefined;
+  canSteer?: boolean | undefined;
 }
 
 export interface ChatFeedback {
@@ -57,6 +58,11 @@ export interface ChatProps<TMetadata = unknown> {
   actions: ChatActions<TMetadata>;
   emptyState?: ReactNode | undefined;
   explorer?: RemoteExplorerProps | undefined;
+  /** Passed through to `MessageList` so hosts can override block rendering (e.g. signed attachment images). */
+  renderers?: BlockRenderers | undefined;
+  sidebar?: ReactNode | undefined;
+  /** Hosts may let users hide context while retaining a focused message view. */
+  sidebarOpen?: boolean | undefined;
 }
 
 const feedbackClasses: Record<ChatFeedback["tone"], string> = {
@@ -72,8 +78,12 @@ export function Chat<TMetadata = unknown>({
   emptyState,
   explorer,
   initialScrollState,
+  renderers,
+  sidebar,
+  sidebarOpen = true,
 }: ChatProps<TMetadata>) {
   const incompleteTodos = state.todos.filter((todo) => todo.status !== "completed").length;
+  const hasSidebar = sidebarOpen && (Boolean(sidebar) || incompleteTodos > 0);
   const connectionMessage =
     state.connection === "connecting"
       ? "正在连接实时消息流"
@@ -104,13 +114,14 @@ export function Chat<TMetadata = unknown>({
 
   return (
     <div
-      className={`nova-chat nova-chat-view grid min-h-0 flex-1 overflow-hidden bg-white ${incompleteTodos ? "xl:grid-cols-[minmax(0,1fr)_280px]" : ""}`}
+      className={`nova-chat nova-chat-view grid min-h-0 flex-1 overflow-hidden bg-white ${hasSidebar ? "xl:grid-cols-[minmax(0,1fr)_260px]" : ""}`}
     >
       <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
         <div className="relative min-h-0 flex-1 overflow-hidden px-1 py-1 sm:px-0">
           {state.messages.length ? (
             <MessageList
               messages={state.messages}
+              renderers={renderers}
               initialScrollState={initialScrollState}
               onScrollStateChange={actions.onScrollStateChange}
               {...(actions.onRetryMessage ? { onRetry: actions.onRetryMessage } : {})}
@@ -134,7 +145,13 @@ export function Chat<TMetadata = unknown>({
 
         <div className="min-w-0 shrink-0 overflow-visible border-slate-200 bg-white px-3 pb-0 pt-1 sm:px-4 sm:pb-1.5">
           <div className="nova-chat-content">
-            {incompleteTodos > 0 && (
+            {sidebarOpen && sidebar && (
+              <details open className="mb-2 rounded-xl border border-slate-200 px-3 py-2 text-xs xl:hidden">
+                <summary className="cursor-pointer text-slate-500">任务详情</summary>
+                <div className="mt-3 max-h-[28dvh] overflow-y-auto">{sidebar}</div>
+              </details>
+            )}
+            {sidebarOpen && incompleteTodos > 0 && (
               <div className="mb-2 xl:hidden">
                 <TodoPanel items={state.todos} collapsed />
               </div>
@@ -178,7 +195,7 @@ export function Chat<TMetadata = unknown>({
                     >
                       <CornerDownRight className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
                       <span className="min-w-0 flex-1 truncate text-slate-800">{message.text}</span>
-                      {actions.onSteerQueuedMessage && (
+                      {state.isRunning && message.canSteer !== false && actions.onSteerQueuedMessage && (
                         <button
                           type="button"
                           disabled={state.isSteeringQueuedMessage}
@@ -219,11 +236,16 @@ export function Chat<TMetadata = unknown>({
         </div>
       </div>
 
-      {incompleteTodos > 0 && (
+      {hasSidebar && (
         <aside className="nova-scrollbar hidden min-h-0 overflow-x-hidden overflow-y-auto border-l border-slate-200 bg-white p-3 xl:block">
           <div className="sticky top-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">当前计划</p>
-            <TodoPanel items={state.todos} />
+            {sidebar}
+            {incompleteTodos > 0 && (
+              <>
+                <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">当前计划</p>
+                <TodoPanel items={state.todos} />
+              </>
+            )}
           </div>
         </aside>
       )}

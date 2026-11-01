@@ -103,30 +103,31 @@ export function UploadCover<TMetadata = unknown>({
     addFiles(images);
   }
 
-  const trigger = allowFiles ? (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              disabled={disabled}
-              onClick={() => {
-                if (onAttachmentButtonClick) void onAttachmentButtonClick();
-                else fileInput.current?.click();
-              }}
-              aria-label={onAttachmentButtonClick ? "添加附件" : "添加文件"}
-            />
-          }
-        >
-          <Paperclip aria-hidden="true" />
-        </TooltipTrigger>
-        <TooltipContent>{onAttachmentButtonClick ? "添加附件" : "添加文件或粘贴截图"}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  ) : null;
+  const trigger =
+    allowFiles || onAttachmentButtonClick ? (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={disabled}
+                onClick={() => {
+                  if (onAttachmentButtonClick) void onAttachmentButtonClick();
+                  else fileInput.current?.click();
+                }}
+                aria-label={onAttachmentButtonClick ? "添加附件" : "添加文件"}
+              />
+            }
+          >
+            <Paperclip aria-hidden="true" />
+          </TooltipTrigger>
+          <TooltipContent>{onAttachmentButtonClick ? "添加附件" : "添加文件或粘贴截图"}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    ) : null;
 
   return (
     <div className="relative" onDragEnter={dragEnter} onDragOver={dragOver} onDragLeave={dragLeave} onDrop={drop}>

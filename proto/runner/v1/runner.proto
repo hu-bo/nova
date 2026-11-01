@@ -1,0 +1,233 @@
+syntax = "proto3";
+
+package nova.runner.v1;
+
+import "runner/v1/common.proto";
+import "runner/v1/execution.proto";
+
+enum WorkspacePermission {
+  WORKSPACE_PERMISSION_UNSPECIFIED = 0;
+  READ_ONLY = 1;
+  READ_WRITE = 2;
+}
+
+enum RunnerState {
+  RUNNER_STATE_UNSPECIFIED = 0;
+  IDLE = 1;
+  BUSY = 2;
+  DRAINING = 3;
+}
+
+enum OperationStatus {
+  OPERATION_STATUS_UNSPECIFIED = 0;
+  ACCEPTED = 1;
+  RUNNING = 2;
+  SUCCEEDED = 3;
+  FAILED = 4;
+  CANCELLED = 5;
+  TIMED_OUT = 6;
+  OUTCOME_UNKNOWN = 7;
+}
+
+message WorkspaceRegistration {
+  string workspace_id = 1;
+  string display_name = 2;
+  WorkspacePermission permission = 3;
+}
+
+message RunnerHello {
+  string runner_id = 1;
+  string boot_id = 2;
+  uint32 protocol_version = 3;
+  string version = 4;
+  string platform = 5;
+  repeated WorkspaceRegistration workspaces = 6;
+  repeated string capabilities = 7;
+  uint32 max_concurrency = 8;
+}
+
+message ServerWelcome {
+  uint32 protocol_version = 1;
+  string connection_epoch = 2;
+  uint32 heartbeat_interval_ms = 3;
+  repeated string accepted_capabilities = 4;
+}
+
+message Heartbeat {
+  string boot_id = 1;
+  uint64 sequence = 2;
+  RunnerState state = 3;
+  repeated string active_operation_ids = 4;
+}
+
+message FileEntry {
+  string path = 1;
+  string kind = 2;
+  uint64 size_bytes = 3;
+}
+
+message ListFilesRequest { string path = 1; uint32 depth = 2; uint32 max_entries = 3; }
+message ReadFileRequest { string path = 1; uint64 offset = 2; uint32 max_bytes = 3; }
+message SearchRequest {
+  string query = 1;
+  string path = 2;
+  string glob = 3;
+  uint32 max_results = 4;
+}
+message WriteFileRequest {
+  string path = 1;
+  bytes contents = 2;
+  string expected_sha256 = 3;
+}
+message TextEdit {
+  string old_text = 1;
+  string new_text = 2;
+}
+message ApplyPatchRequest {
+  string path = 1;
+  repeated TextEdit edits = 2;
+  string expected_sha256 = 3;
+}
+message ExecuteCommandRequest {
+  string executable = 1;
+  repeated string args = 2;
+  string cwd = 3;
+  map<string, string> env = 4;
+  uint32 timeout_ms = 5;
+  bytes stdin = 6;
+}
+
+message Operation {
+  string operation_id = 1;
+  string target_boot_id = 2;
+  string workspace_id = 3;
+  bytes params_sha256 = 4;
+  uint32 protocol_version = 5;
+  uint64 expires_at_unix_ms = 6;
+  uint32 timeout_ms = 7;
+  oneof params {
+    ListFilesRequest list_files = 10;
+    ReadFileRequest read_file = 11;
+    SearchRequest search = 12;
+    WriteFileRequest write_file = 13;
+    ExecuteCommandRequest execute_command = 14;
+    ApplyPatchRequest apply_patch = 15;
+    ReadTextRequest read_text = 16;
+  }
+}
+
+message CancelOperation {
+  string operation_id = 1;
+  string target_boot_id = 2;
+}
+
+message OperationAccepted {
+  string operation_id = 1;
+  string boot_id = 2;
+}
+
+message OperationOutput {
+  string operation_id = 1;
+  string boot_id = 2;
+  uint64 sequence = 3;
+  nova.execution.v1.OutputStream stream = 4;
+  uint64 offset = 5;
+  bytes data = 6;
+}
+message AcknowledgeOutput {
+  string operation_id = 1;
+  string boot_id = 2;
+  uint64 sequence = 3;
+}
+
+message SearchMatch { string path = 1; uint32 line = 2; string text = 3; }
+message ListFilesResult { repeated FileEntry entries = 1; bool truncated = 2; }
+message ReadFileResult {
+  bytes contents = 1;
+  uint64 offset = 2;
+  uint64 total_size = 3;
+  bool truncated = 4;
+  string sha256 = 5;
+}
+message ReadTextRequest {
+  string path = 1;
+  uint64 offset = 2;
+  uint32 limit = 3;
+  uint32 max_bytes = 4;
+}
+message ReadTextFileResult {
+  string text = 1;
+  uint64 start_line = 2;
+  uint64 end_line = 3;
+  optional uint64 total_lines = 4;
+  uint64 total_size = 5;
+  bool truncated = 6;
+  bool line_truncated = 7;
+  string sha256 = 8;
+}
+message SearchResult { repeated SearchMatch matches = 1; bool truncated = 2; }
+message WriteFileResult { string path = 1; string sha256 = 2; uint64 size_bytes = 3; }
+message ApplyPatchResult {
+  string path = 1;
+  string sha256 = 2;
+  uint64 size_bytes = 3;
+  uint32 edit_count = 4;
+}
+message ExecuteCommandResult {
+  int32 exit_code = 1;
+  bytes stdout = 2;
+  bytes stderr = 3;
+  bool output_truncated = 4;
+  uint64 duration_ms = 5;
+}
+
+message OperationResult {
+  string operation_id = 1;
+  string boot_id = 2;
+  OperationStatus status = 3;
+  nova.common.v1.Error error = 4;
+  uint64 last_output_sequence = 5;
+  bool output_gap = 6;
+  oneof result {
+    ListFilesResult list_files = 10;
+    ReadFileResult read_file = 11;
+    SearchResult search = 12;
+    WriteFileResult write_file = 13;
+    ExecuteCommandResult execute_command = 14;
+    ApplyPatchResult apply_patch = 15;
+    ReadTextFileResult read_text = 16;
+  }
+}
+
+message ReconcileRequest {
+  string boot_id = 1;
+  repeated string active_operation_ids = 2;
+  repeated string unacknowledged_terminal_ids = 3;
+}
+message QueryOperation { string operation_id = 1; string target_boot_id = 2; }
+message AcknowledgeResult { string operation_id = 1; string boot_id = 2; }
+
+message RunnerEnvelope {
+  string request_id = 1;
+  oneof payload {
+    RunnerHello hello = 10;
+    Heartbeat heartbeat = 11;
+    OperationAccepted accepted = 12;
+    OperationResult result = 13;
+    ReconcileRequest reconcile = 14;
+    OperationOutput output = 15;
+  }
+}
+
+message ServerEnvelope {
+  string request_id = 1;
+  oneof payload {
+    ServerWelcome welcome = 10;
+    nova.common.v1.Error rejection = 11;
+    Operation operation = 12;
+    CancelOperation cancel = 13;
+    QueryOperation query = 14;
+    AcknowledgeResult acknowledge = 15;
+    AcknowledgeOutput acknowledge_output = 16;
+  }
+}

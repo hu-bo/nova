@@ -1,0 +1,50 @@
+services:
+  agent-server:
+    image: node:22-alpine
+    container_name: nova-agent-server
+    working_dir: /app/agent-server
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 9203
+      # Runner connections and execution currently share process-local state.
+      ROLE: all
+      AUTH_MODE: casdoor
+      SWAGGER_UI_ENABLED: "false"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      MODEL_CONFIG_ENCRYPTION_KEY: ${MODEL_CONFIG_ENCRYPTION_KEY:?Set MODEL_CONFIG_ENCRYPTION_KEY in .env}
+      CASDOOR_ENDPOINT: ${CASDOOR_ENDPOINT:?Set CASDOOR_ENDPOINT in .env}
+      CASDOOR_AUDIENCE: ${CASDOOR_AUDIENCE:?Set CASDOOR_AUDIENCE in .env}
+    ports:
+      - "9203:9203"
+    volumes:
+      - .:/app/agent-server:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - shared_network
+    command: ["node", "dist/src/server.js"]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:9203/health/ready', { signal: AbortSignal.timeout(4000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+    init: true
+    stop_grace_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+networks:
+  shared_network:
+    external: true

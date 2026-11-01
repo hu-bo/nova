@@ -17,6 +17,11 @@
       "import": "./dist/server/index.js",
       "require": "./dist/server/index.cjs"
     },
+    "./server/auth-service": {
+      "types": "./dist/server/auth-service.d.ts",
+      "import": "./dist/server/auth-service.js",
+      "require": "./dist/server/auth-service.cjs"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
@@ -41,7 +46,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "casdoor-nodejs-sdk": "^1.22.0"
+    "casdoor-nodejs-sdk": "^1.22.0",
+    "zod": "^4.6.4"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
