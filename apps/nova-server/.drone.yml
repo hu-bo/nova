@@ -1,6 +1,6 @@
-kind: pipeline
+nova-serverkind: pipeline
 type: docker
-name: nova-nova-server
+name: nova-server
 
 trigger:
   branch:
@@ -15,7 +15,7 @@ concurrency:
 volumes:
   - name: pnpm-cache
     host:
-      path: /var/lib/drone-cache/pnpm/nova-nova-server
+      path: /var/lib/drone-cache/pnpm/nova-server
 
 steps:
   - name: build and package

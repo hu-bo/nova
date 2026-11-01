@@ -1,5 +1,5 @@
 {
-  "name": "@react-fastify-template/app-web",
+  "name": "@nova/nova-client",
   "version": "0.1.0",
   "private": true,
   "type": "module",

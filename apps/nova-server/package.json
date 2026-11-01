@@ -1,5 +1,5 @@
 {
-  "name": "@react-fastify-template/app-server",
+  "name": "@nova/nova-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
