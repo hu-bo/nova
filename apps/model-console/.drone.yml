@@ -1,6 +1,6 @@
 kind: pipeline
 type: docker
-name: nova-dsh-model-console
+name: nova-model-console
 
 trigger:
   branch:

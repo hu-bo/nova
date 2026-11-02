@@ -1,6 +1,6 @@
 kind: pipeline
 type: docker
-name: nova-nova-client
+name: nova-client
 
 trigger:
   branch:
