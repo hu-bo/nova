@@ -20,6 +20,86 @@ const text = (message: AgentMessage) =>
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("\n");
+const tokenCount = (value: unknown): number | null => {
+  if (value === undefined || value === null) return null;
+  if (!Number.isSafeInteger(value) || Number(value) < 0)
+    throw new FrameworkError("MODEL_USAGE", "Invalid provider token usage");
+  return Number(value);
+};
+/** Accumulated per-stream facts; protocol consumers mutate it, the generator reads it after the loop. */
+type ProviderStreamState = {
+  calls: Map<number, { id: string; name: string; args: string }>;
+  native: Map<number, Record<string, unknown>>;
+  usage: import("@nnova/harness").UsageSummary;
+  finish: string;
+  stopped: boolean;
+  reasoning: string;
+};
+type ProviderEventResult = { text: string; thinking: string };
+// Native continuation blocks and signed thinking stay in `native`/`reasoning` for the Harness replay.
+function consumeAnthropicEvent(event: Record<string, unknown>, state: ProviderStreamState): ProviderEventResult {
+  const observed = record(event.usage ?? record(event.message).usage);
+  state.usage.inputTokens = tokenCount(observed.input_tokens) ?? state.usage.inputTokens;
+  state.usage.outputTokens = tokenCount(observed.output_tokens) ?? state.usage.outputTokens;
+  state.usage.cachedInputTokens = tokenCount(observed.cache_read_input_tokens) ?? state.usage.cachedInputTokens;
+  let deltaText = "",
+    deltaThinking = "";
+  const index = Number(event.index ?? 0);
+  if (event.type === "content_block_start") {
+    const block = record(event.content_block);
+    state.native.set(index, { ...block });
+    if (block.type === "tool_use") state.calls.set(index, { id: string(block.id), name: string(block.name), args: "" });
+    if (block.type === "text") deltaText = string(block.text);
+  }
+  if (event.type === "content_block_delta") {
+    const delta = record(event.delta),
+      block = state.native.get(index);
+    if (delta.type === "text_delta") {
+      deltaText = string(delta.text);
+      if (block) block.text = string(block.text) + deltaText;
+    }
+    if (delta.type === "thinking_delta" && block) {
+      deltaThinking = string(delta.thinking);
+      block.thinking = string(block.thinking) + deltaThinking;
+    }
+    if (delta.type === "signature_delta" && block)
+      block.signature = string(block.signature) + string(delta.signature);
+    if (delta.type === "input_json_delta") {
+      const call = state.calls.get(index);
+      if (call) call.args += string(delta.partial_json);
+    }
+  }
+  if (event.type === "message_delta") state.finish = string(record(event.delta).stop_reason);
+  if (event.type === "message_stop") state.stopped = true;
+  return { text: deltaText, thinking: deltaThinking };
+}
+function consumeOpenAIEvent(event: Record<string, unknown>, state: ProviderStreamState): ProviderEventResult {
+  const observed = record(event.usage ?? record(event.message).usage);
+  state.usage.inputTokens = tokenCount(observed.prompt_tokens) ?? state.usage.inputTokens;
+  state.usage.outputTokens = tokenCount(observed.completion_tokens) ?? state.usage.outputTokens;
+  state.usage.cachedInputTokens =
+    tokenCount(record(observed.prompt_tokens_details).cached_tokens) ?? state.usage.cachedInputTokens;
+  state.usage.reasoningTokens =
+    tokenCount(record(observed.completion_tokens_details).reasoning_tokens) ?? state.usage.reasoningTokens;
+  const choices = Array.isArray(event.choices) ? event.choices : [];
+  const choice = record(choices[0]),
+    delta = record(choice.delta);
+  const deltaText = string(delta.content),
+    deltaThinking = string(delta.reasoning_content);
+  state.reasoning += deltaThinking;
+  if (choice.finish_reason) state.finish = string(choice.finish_reason);
+  for (const value of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+    const item = record(value),
+      index = Number(item.index),
+      fn = record(item.function);
+    const call = state.calls.get(index) ?? { id: "", name: "", args: "" };
+    call.id += string(item.id);
+    call.name += string(fn.name);
+    call.args += string(fn.arguments);
+    state.calls.set(index, call);
+  }
+  return { text: deltaText, thinking: deltaThinking };
+}
 
 export function modelRequest(route: Route, request: ModelStepRequest) {
   const { model, provider } = route;
@@ -165,106 +245,37 @@ export function configuredModelPlugin(route: Route): PluginDefinition {
             throw new FrameworkError(code, "Model request failed (HTTP " + response.status + ").");
           }
           const parts: MessagePart[] = [];
-          const calls = new Map<number, { id: string; name: string; args: string }>();
-          const native = new Map<number, Record<string, unknown>>();
+          const state: ProviderStreamState = {
+            calls: new Map<number, { id: string; name: string; args: string }>(),
+            native: new Map<number, Record<string, unknown>>(),
+            usage: { inputTokens: null, outputTokens: null, cachedInputTokens: null, reasoningTokens: null },
+            finish: "",
+            stopped: false,
+            reasoning: "",
+          };
+          const consume = route.provider.protocol === "anthropic" ? consumeAnthropicEvent : consumeOpenAIEvent;
           let answer = "",
-            reasoning = "",
-            finish = "",
-            stopped = false,
             bytes = 0;
-          const usage: import("@nnova/harness").UsageSummary = {
-            inputTokens: null,
-            outputTokens: null,
-            cachedInputTokens: null,
-            reasoningTokens: null,
-          };
-          const tokenCount = (value: unknown): number | null => {
-            if (value === undefined || value === null) return null;
-            if (!Number.isSafeInteger(value) || Number(value) < 0)
-              throw new FrameworkError("MODEL_USAGE", "Invalid provider token usage");
-            return Number(value);
-          };
           for await (const value of providerEvents(response.body)) {
             request.signal.throwIfAborted();
             if (value === "[DONE]") {
-              stopped = true;
+              state.stopped = true;
               break;
             }
             const event = record(value);
             if (event.error || event.type === "error")
               throw new FrameworkError("MODEL_REQUEST_FAILED", "Model stream failed.");
-            let deltaText = "",
-              deltaThinking = "";
-            const observed = record(event.usage ?? record(event.message).usage);
-            if (route.provider.protocol === "anthropic") {
-              usage.inputTokens = tokenCount(observed.input_tokens) ?? usage.inputTokens;
-              usage.outputTokens = tokenCount(observed.output_tokens) ?? usage.outputTokens;
-              usage.cachedInputTokens = tokenCount(observed.cache_read_input_tokens) ?? usage.cachedInputTokens;
-            } else {
-              usage.inputTokens = tokenCount(observed.prompt_tokens) ?? usage.inputTokens;
-              usage.outputTokens = tokenCount(observed.completion_tokens) ?? usage.outputTokens;
-              usage.cachedInputTokens =
-                tokenCount(record(observed.prompt_tokens_details).cached_tokens) ?? usage.cachedInputTokens;
-              usage.reasoningTokens =
-                tokenCount(record(observed.completion_tokens_details).reasoning_tokens) ?? usage.reasoningTokens;
-            }
-            if (route.provider.protocol === "anthropic") {
-              const index = Number(event.index ?? 0);
-              if (event.type === "content_block_start") {
-                const block = record(event.content_block);
-                native.set(index, { ...block });
-                if (block.type === "tool_use")
-                  calls.set(index, { id: string(block.id), name: string(block.name), args: "" });
-                if (block.type === "text") deltaText = string(block.text);
-              }
-              if (event.type === "content_block_delta") {
-                const delta = record(event.delta),
-                  block = native.get(index);
-                if (delta.type === "text_delta") {
-                  deltaText = string(delta.text);
-                  if (block) block.text = string(block.text) + deltaText;
-                }
-                if (delta.type === "thinking_delta" && block) {
-                  deltaThinking = string(delta.thinking);
-                  block.thinking = string(block.thinking) + deltaThinking;
-                }
-                if (delta.type === "signature_delta" && block)
-                  block.signature = string(block.signature) + string(delta.signature);
-                if (delta.type === "input_json_delta") {
-                  const call = calls.get(index);
-                  if (call) call.args += string(delta.partial_json);
-                }
-              }
-              if (event.type === "message_delta") finish = string(record(event.delta).stop_reason);
-              if (event.type === "message_stop") stopped = true;
-            } else {
-              const choices = Array.isArray(event.choices) ? event.choices : [];
-              const choice = record(choices[0]),
-                delta = record(choice.delta);
-              deltaText = string(delta.content);
-              deltaThinking = string(delta.reasoning_content);
-              reasoning += deltaThinking;
-              if (choice.finish_reason) finish = string(choice.finish_reason);
-              for (const value of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
-                const item = record(value),
-                  index = Number(item.index),
-                  fn = record(item.function);
-                const call = calls.get(index) ?? { id: "", name: "", args: "" };
-                call.id += string(item.id);
-                call.name += string(fn.name);
-                call.args += string(fn.arguments);
-                calls.set(index, call);
-              }
-            }
+            const delta = consume(event, state);
             bytes += Buffer.byteLength(JSON.stringify(event));
             if (bytes > 8 * 1024 * 1024)
               throw new FrameworkError("MODEL_OUTPUT_LIMIT", "Model output exceeded its limit.");
-            if (deltaThinking) yield { type: "thinking.delta", partId: "thinking", text: deltaThinking };
-            if (deltaText) {
-              answer += deltaText;
-              yield { type: "text.delta", partId: "text", text: deltaText };
+            if (delta.thinking) yield { type: "thinking.delta", partId: "thinking", text: delta.thinking };
+            if (delta.text) {
+              answer += delta.text;
+              yield { type: "text.delta", partId: "text", text: delta.text };
             }
           }
+          const { calls, native, usage, finish, stopped, reasoning } = state;
           if (!stopped || !finish) throw new FrameworkError("MODEL_PROTOCOL", "Model stream ended before completion.");
           if (answer) parts.push({ id: "text", type: "text", text: answer });
           for (const [index, call] of calls) {

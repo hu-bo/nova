@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { requirePrincipal } from "../../shared/authorization.js";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import {
   createProjectBodySchema,
   okEnvelope,
@@ -54,7 +54,7 @@ export async function projectRoutes(
         operationId: "getProjectBinding",
         tags: ["projects"],
         params: projectParamsSchema,
-        response: { 200: okEnvelope(bindingSchema.nullable()), 404: errorResponseSchema },
+        response: { 200: okEnvelope(bindingSchema.nullable()), ...errorResponses(404) },
       },
     },
     async (request) => success(await bindings.get(request.params.id, requirePrincipal(request).localUserId)),
@@ -69,9 +69,7 @@ export async function projectRoutes(
         body: bindProjectBodySchema,
         response: {
           200: okEnvelope(bindingSchema),
-          400: errorResponseSchema,
-          409: errorResponseSchema,
-          404: errorResponseSchema,
+          ...errorResponses(400, 409, 404),
         },
       },
     },
@@ -85,7 +83,7 @@ export async function projectRoutes(
         operationId: "listProjects",
         tags: ["projects"],
         querystring: paginationQuerySchema,
-        response: { 200: okEnvelope(projectListSchema), 401: errorResponseSchema, 500: errorResponseSchema },
+        response: { 200: okEnvelope(projectListSchema), ...errorResponses(401, 500) },
       },
     },
     async (request) => {
@@ -104,7 +102,7 @@ export async function projectRoutes(
         operationId: "createProject",
         tags: ["projects"],
         body: createProjectBodySchema,
-        response: { 200: okEnvelope(projectSchema), 401: errorResponseSchema, 500: errorResponseSchema },
+        response: { 200: okEnvelope(projectSchema), ...errorResponses(401, 500) },
       },
     },
     async (request) => {
@@ -121,9 +119,7 @@ export async function projectRoutes(
         params: projectParamsSchema,
         response: {
           200: okEnvelope(projectSchema),
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 404, 500),
         },
       },
     },
@@ -142,10 +138,7 @@ export async function projectRoutes(
         body: updateProjectBodySchema,
         response: {
           200: okEnvelope(projectSchema),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 404, 500),
         },
       },
     },
@@ -163,9 +156,7 @@ export async function projectRoutes(
         params: projectParamsSchema,
         response: {
           200: okEnvelope(z.null()),
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 404, 500),
         },
       },
     },

@@ -34,10 +34,6 @@ export function domainErrorStatusCode(code: DomainErrorCode): number {
   return domainErrorCodes[code] ?? 400;
 }
 
-export function isDomainErrorCode(value: unknown): value is DomainErrorCode {
-  return typeof value === "string" && value in domainErrorCodes;
-}
-
 export class DomainError extends Error {
   constructor(
     public readonly code: DomainErrorCode,

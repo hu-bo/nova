@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ApiError } from './api-error';
-import { notifyApiFailure } from './api-notify';
+import { notifyApiFailure, type ApiFailureKind } from './api-notify';
 
 const envelopeSchema = z.object({
   code: z.number(),
@@ -10,6 +10,22 @@ const envelopeSchema = z.object({
   details: z.record(z.string(), z.unknown()).optional(),
   data: z.unknown().optional(),
 });
+type Envelope = z.infer<typeof envelopeSchema>;
+
+/** HTTP 成功但信封携带业务错误码时，以信封码为准；无法归类视为网关错误。 */
+function resolveStatus(response: Response, envelope: Envelope | null): number {
+  if (!response.ok) return response.status;
+  if (envelope?.code === 200) return 200;
+  if (envelope && envelope.code >= 400 && envelope.code <= 599) return envelope.code;
+  return 502;
+}
+
+/** 通知的语义分类：网络/超时、响应解析、服务端与请求错误分别对应不同提示样式。 */
+function failureKindOf(error: ApiError): ApiFailureKind {
+  if (error.status === 0) return error.code === 'TIMEOUT' ? 'timeout' : 'network';
+  if (error.code === 'INVALID_RESPONSE') return 'response';
+  return error.status >= 500 ? 'server' : 'request';
+}
 const messages: Record<number, string> = {
   400: '请检查填写的内容后重试。',
   401: '登录状态已过期，请重新登录。',
@@ -119,14 +135,8 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
         return null;
       }),
     );
-    const envelope = parsed.success ? parsed.data : null;
-    const status = !response.ok
-      ? response.status
-      : envelope?.code === 200
-        ? 200
-        : envelope && envelope.code >= 400 && envelope.code <= 599
-          ? envelope.code
-          : 502;
+    const envelope: Envelope | null = parsed.success ? parsed.data : null;
+    const status = resolveStatus(response, envelope);
     if (status === 401 && allowRefresh && (await refreshAuth())) {
       if (generation !== authGeneration) throw new DOMException('Identity changed', 'AbortError');
       return send(false);
@@ -162,18 +172,8 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     return await send(true);
   } catch (error) {
     if (!silent && !init.signal?.aborted && error instanceof ApiError) {
-      const kind =
-        error.status === 0
-          ? error.code === 'TIMEOUT'
-            ? 'timeout'
-            : 'network'
-          : error.code === 'INVALID_RESPONSE'
-            ? 'response'
-            : error.status >= 500
-              ? 'server'
-              : 'request';
       notifyApiFailure(
-        kind,
+        failureKindOf(error),
         error.message,
         error.requestId ? `请求编号：${error.requestId}` : undefined,
       );

@@ -29,6 +29,12 @@ const EMPTY: RawRunStreamSnapshot = {
   error: null,
   retryAt: null,
 };
+/** 订阅失败的 HTTP 状态 → 用户可读提示；未列出的状态不额外提示。 */
+const STREAM_ERROR_BY_STATUS: Record<number, string> = {
+  429: '实时订阅受到限制，请等待后重试。',
+  503: '服务正在切换，已接收的任务状态会保留。',
+  403: '没有权限订阅该会话。',
+};
 class Session {
   snapshot: RawRunStreamSnapshot = EMPTY;
   projected: RunState | null = null;
@@ -179,14 +185,7 @@ export class RunStreamManager {
             retryAfterSeconds ?? 0,
           );
         session.publish({
-          error:
-            status === 429
-              ? '实时订阅受到限制，请等待后重试。'
-              : status === 503
-                ? '服务正在切换，已接收的任务状态会保留。'
-                : status === 403
-                  ? '没有权限订阅该会话。'
-                  : null,
+          error: STREAM_ERROR_BY_STATUS[status] ?? null,
           retryAt: retryAfterSeconds ? Date.now() + retryAfterSeconds * 1000 : null,
         });
       },

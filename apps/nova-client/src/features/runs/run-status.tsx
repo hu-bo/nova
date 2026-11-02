@@ -20,6 +20,15 @@ const connections = {
   reconnecting: '正在重连',
   offline: '连接已断开',
 };
+/** 运行状态 → 状态点颜色；未列出的活跃状态用 accent，其余用中性色。 */
+const runIndicators: Record<string, string> = {
+  waiting: 'bg-amber-500',
+  paused: 'bg-amber-500',
+  cancelled_unconfirmed: 'bg-amber-500',
+  failed: 'bg-rose-500',
+  timed_out: 'bg-rose-500',
+  succeeded: 'bg-emerald-500',
+};
 
 /**
  * 会话标题栏的运行状态指示（与参考实现一致，放在任务详情开关左侧）。
@@ -41,18 +50,10 @@ export function RunStatus({
   const { cancelling, now } = controls;
   const runState = projection?.run?.state;
   const indicator =
-    stream.state !== 'live' ||
-    runState === 'waiting' ||
-    runState === 'paused' ||
-    runState === 'cancelled_unconfirmed'
+    stream.state !== 'live'
       ? 'bg-amber-500'
-      : runState === 'failed' || runState === 'timed_out'
-        ? 'bg-rose-500'
-        : runState === 'succeeded'
-          ? 'bg-emerald-500'
-          : isActiveRun(runState)
-            ? 'bg-accent'
-            : 'bg-slate-400';
+      : ((runState ? runIndicators[runState] : undefined) ??
+        (isActiveRun(runState) ? 'bg-accent' : 'bg-slate-400'));
   if (!projection?.run && stream.state === 'live') return null;
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">

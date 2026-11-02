@@ -11,8 +11,13 @@ export type UploadEntry = {
   attachment?: Attachment | undefined;
   error?: unknown;
 };
+const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/gif,image/webp';
+/** 图片上传的格式与大小门槛；add 与 retry 共用同一规则。 */
+const isAccepted = (file: File) =>
+  ALLOWED.has(file.type) && file.size > 0 && file.size <= MAX_BYTES;
+const REJECTED_MESSAGE = '请选择不超过 5 MiB 的 PNG、JPEG、GIF 或 WebP 图片。';
 export const statusLabel = (status: UploadStatus) =>
   ({
     selected: '等待上传',
@@ -33,37 +38,34 @@ export class UploadQueue {
     return () => this.listeners.delete(listener);
   };
   getSnapshot = () => this.entries;
+  private emit() {
+    for (const listener of this.listeners) listener();
+  }
   private update(id: string, values: Partial<UploadEntry>) {
     this.entries = this.entries.map((entry) => (entry.id === id ? { ...entry, ...values } : entry));
-    for (const listener of this.listeners) listener();
+    this.emit();
   }
   add(files: Iterable<File>) {
     if (this.disposed) return;
     const added = Array.from(files)
       .slice(0, Math.max(0, 32 - this.entries.length))
-      .map((file): UploadEntry => ({
-        id: crypto.randomUUID(),
-        file,
-        status:
-          ALLOWED.has(file.type) && file.size > 0 && file.size <= 5 * 1024 * 1024
-            ? 'selected'
-            : 'failed',
-        ...(!ALLOWED.has(file.type) || !file.size || file.size > 5 * 1024 * 1024
-          ? { error: new ApiError(400, 400, '请选择不超过 5 MiB 的 PNG、JPEG、GIF 或 WebP 图片。') }
-          : {}),
-      }));
+      .map((file): UploadEntry =>
+        isAccepted(file)
+          ? { id: crypto.randomUUID(), file, status: 'selected' }
+          : {
+              id: crypto.randomUUID(),
+              file,
+              status: 'failed',
+              error: new ApiError(400, 400, REJECTED_MESSAGE),
+            },
+      );
     this.entries = [...this.entries, ...added];
-    for (const listener of this.listeners) listener();
+    this.emit();
     this.pump();
   }
   retry(id: string) {
     const entry = this.entries.find((item) => item.id === id);
-    if (
-      entry &&
-      ALLOWED.has(entry.file.type) &&
-      entry.file.size > 0 &&
-      entry.file.size <= 5 * 1024 * 1024
-    ) {
+    if (entry && isAccepted(entry.file)) {
       this.update(id, { status: 'selected', error: undefined, attachment: undefined });
       this.pump();
     }
@@ -71,12 +73,12 @@ export class UploadQueue {
   remove(id: string) {
     this.controllers.get(id)?.abort();
     this.entries = this.entries.filter((item) => item.id !== id);
-    for (const listener of this.listeners) listener();
+    this.emit();
   }
   clear() {
     for (const controller of this.controllers.values()) controller.abort();
     this.entries = [];
-    for (const listener of this.listeners) listener();
+    this.emit();
   }
   dispose() {
     this.disposed = true;

@@ -31,6 +31,12 @@ export class RemoteConnectionService {
     if (!row) throw new DomainError("NOT_FOUND", "SSH connection not found");
     return row;
   }
+  /** 加载连接并强制主机指纹已验证; details 保留各调用方原有的错误 reason。 */
+  private async requireVerified(id: string, owner: string, details?: Record<string, unknown>) {
+    const row = await this.require(id, owner);
+    if (!row.hostFingerprint) throw new DomainError("CONFLICT", "Verify the SSH host first", details);
+    return row;
+  }
   async create(input: RemoteConnectionInput, owner: string) {
     const { credential, passphrase, ...fields } = input;
     return toDto(
@@ -93,9 +99,7 @@ export class RemoteConnectionService {
     return { id: row.id, name: row.name, rootPath: row.rootPath, workspaceId: `ssh:${row.id}` };
   }
   async files(id: string, owner: string, path = "/") {
-    const row = await this.require(id, owner);
-    if (!row.hostFingerprint)
-      throw new DomainError("CONFLICT", "Verify the SSH host first", { reason: "SSH_VERIFICATION_REQUIRED" });
+    const row = await this.requireVerified(id, owner, { reason: "SSH_VERIFICATION_REQUIRED" });
     return withSftp(this.credentials(row), async (sftp) => {
       const canonical = await canonicalRemotePath(sftp, row.rootPath, path);
       const entries = await readRemoteDirectory(sftp, canonical);
@@ -120,8 +124,7 @@ export class RemoteConnectionService {
     });
   }
   async readText(id: string, owner: string, path: string, signal?: AbortSignal) {
-    const row = await this.require(id, owner);
-    if (!row.hostFingerprint) throw new DomainError("CONFLICT", "Verify the SSH host first");
+    const row = await this.requireVerified(id, owner);
     return withSftp(
       this.credentials(row),
       async (sftp) => {
@@ -138,8 +141,7 @@ export class RemoteConnectionService {
     expectedSha256?: string,
     signal?: AbortSignal,
   ) {
-    const row = await this.require(id, owner);
-    if (!row.hostFingerprint) throw new DomainError("CONFLICT", "Verify the SSH host first");
+    const row = await this.requireVerified(id, owner);
     return withSftp(
       this.credentials(row),
       async (sftp) => writeRemoteText(sftp, row.rootPath, path, content, expectedSha256),
@@ -147,8 +149,7 @@ export class RemoteConnectionService {
     );
   }
   async execute(id: string, owner: string, cwd: string, executable: string, args: string[], signal?: AbortSignal) {
-    const row = await this.require(id, owner);
-    if (!row.hostFingerprint) throw new DomainError("CONFLICT", "Verify the SSH host first");
+    const row = await this.requireVerified(id, owner);
     const listing = await this.files(id, owner, cwd);
     const quote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
     const command = "cd -- " + quote(listing.path) + " && " + [executable, ...args].map(quote).join(" ");
@@ -216,8 +217,7 @@ export class RemoteConnectionService {
     };
   }
   async summaries(id: string, owner: string, paths: string[]) {
-    const row = await this.require(id, owner);
-    if (!row.hostFingerprint) throw new DomainError("CONFLICT", "Verify the SSH host first");
+    const row = await this.requireVerified(id, owner);
     return withSftp(this.credentials(row), async (sftp) => {
       const items: Awaited<ReturnType<typeof summarizeRemoteFile>>[] = [];
       let total = 0;

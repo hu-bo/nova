@@ -19,6 +19,9 @@ import type { ComponentProps, ReactNode } from "react";
  * For form fields, callers should compose these inside a HeroUI `<TextField>` to get error/description slots.
  */
 
+/** 常规字段输入控件的统一外观（高度、圆角、边框）。 */
+export const fieldInputClass = "h-10 rounded-xl border border-field-border bg-field-background px-3";
+
 export interface FieldLabelProps {
   label: string;
   hint?: string | undefined;

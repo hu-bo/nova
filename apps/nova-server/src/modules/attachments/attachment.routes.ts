@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { requirePrincipal } from "../../shared/authorization.js";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "./attachment.schema.js";
 import {
   createUploadBodySchema,
@@ -27,9 +27,7 @@ export async function attachmentRoutes(app: FastifyInstance, service: Attachment
         body: createUploadBodySchema,
         response: {
           200: okEnvelope(createUploadResponseSchema),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 500),
         },
       },
     },
@@ -54,10 +52,7 @@ export async function attachmentRoutes(app: FastifyInstance, service: Attachment
         body: uploadCompleteBodySchema,
         response: {
           200: okEnvelope(uploadCompleteResponseSchema),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          403: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 403, 500),
         },
       },
     },
@@ -83,10 +78,7 @@ export async function attachmentRoutes(app: FastifyInstance, service: Attachment
         body: readImageBodySchema,
         response: {
           200: okEnvelope(readImageResponseSchema),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          403: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 403, 500),
         },
       },
     },
@@ -105,10 +97,7 @@ export async function attachmentRoutes(app: FastifyInstance, service: Attachment
         querystring: imageUrlQuerySchema,
         response: {
           200: okEnvelope(imageUrlResponseSchema),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          403: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 403, 500),
         },
       },
     },

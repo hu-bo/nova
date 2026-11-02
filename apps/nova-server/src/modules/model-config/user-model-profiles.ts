@@ -7,7 +7,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { requirePrincipal } from "../../shared/authorization.js";
 import { DomainError } from "../../shared/domain-error.js";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 import { createCredentialCipher, maskCredential } from "../../shared/credential-cipher.js";
 import { type ModelRow, type ProviderRow } from "./model-config.repository.js";
@@ -191,13 +191,7 @@ export async function userModelProfilesModule(app: FastifyInstance) {
   const service = createUserModelProfilesService(app);
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const params = z.object({ id: z.string().uuid() }).strict();
-  const errors = {
-    400: errorResponseSchema,
-    401: errorResponseSchema,
-    404: errorResponseSchema,
-    409: errorResponseSchema,
-    500: errorResponseSchema,
-  };
+  const errors = errorResponses(400, 401, 404, 409, 500);
   typed.post(
     "/model-profiles",
     {

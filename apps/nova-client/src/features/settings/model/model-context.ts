@@ -11,6 +11,18 @@ export interface ModelProfile extends ModelProfileForm {
   editable?: boolean;
 }
 
+/** ModelProfile → 表单值：剔除 id/source 等运行时字段；新增表单项时无需再维护手写映射。 */
+export function profileToFormValues(profile: ModelProfile): ModelProfileForm {
+  const {
+    id: _id,
+    source: _source,
+    serverModelId: _serverModelId,
+    editable: _editable,
+    ...values
+  } = profile;
+  return values;
+}
+
 interface PersistedSettings {
   profiles: ModelProfile[];
   defaultProfileId: string;

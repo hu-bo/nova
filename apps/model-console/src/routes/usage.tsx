@@ -8,26 +8,25 @@ import { PageHeader, TableFrame, tableCellClass, tableHeadClass } from "../compo
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
-import { FieldLabel, Input, NativeSelect } from "../components/ui/form.js";
+import { FieldLabel, Input, NativeSelect, fieldInputClass } from "../components/ui/form.js";
 
 export function UsageRoute() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialFrom = searchParams.get("from") ?? firstDayOfMonth();
-  const initialTo = searchParams.get("to") ?? today();
-  const [draft, setDraft] = useState({
-    from: initialFrom,
-    to: initialTo,
+  const params = {
+    from: searchParams.get("from") ?? firstDayOfMonth(),
+    to: searchParams.get("to") ?? today(),
     modelId: searchParams.get("modelId") ?? "",
     status: searchParams.get("status") ?? "",
-  });
+  };
+  const [draft, setDraft] = useState(params);
   const filters = useMemo<GetUsageParams>(
     () => ({
-      from: startOfDay(searchParams.get("from") ?? initialFrom),
-      to: endOfDay(searchParams.get("to") ?? initialTo),
-      ...(searchParams.get("modelId") ? { modelId: searchParams.get("modelId")! } : {}),
-      ...(searchParams.get("status") ? { status: searchParams.get("status") as UsageStatus } : {}),
+      from: startOfDay(params.from),
+      to: endOfDay(params.to),
+      ...(params.modelId ? { modelId: params.modelId } : {}),
+      ...(params.status ? { status: params.status as UsageStatus } : {}),
     }),
-    [initialFrom, initialTo, searchParams],
+    [params.from, params.to, params.modelId, params.status],
   );
   const usageQuery = useQuery({
     queryKey: queryKeys.usage(filters),
@@ -67,7 +66,7 @@ export function UsageRoute() {
               value={draft.from}
               max={draft.to}
               onChange={(event) => setDraft((current) => ({ ...current, from: event.target.value }))}
-              className="h-10 rounded-xl border border-field-border bg-field-background px-3"
+              className={fieldInputClass}
             />
           </FieldLabel>
           <FieldLabel label="结束日期">
@@ -76,7 +75,7 @@ export function UsageRoute() {
               value={draft.to}
               min={draft.from}
               onChange={(event) => setDraft((current) => ({ ...current, to: event.target.value }))}
-              className="h-10 rounded-xl border border-field-border bg-field-background px-3"
+              className={fieldInputClass}
             />
           </FieldLabel>
           <FieldLabel label="模型">
@@ -98,10 +97,11 @@ export function UsageRoute() {
               onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}
             >
               <option value="">全部状态</option>
-              <option value="succeeded">完成</option>
-              <option value="failed">失败</option>
-              <option value="cancelled">已停止</option>
-              <option value="timed_out">超时</option>
+              {USAGE_STATUSES.map((value) => (
+                <option key={value} value={value}>
+                  {USAGE_STATUS_VIEWS[value].label}
+                </option>
+              ))}
             </NativeSelect>
           </FieldLabel>
           <Button type="submit" variant="primary">
@@ -205,18 +205,20 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   );
 }
 
+/** 运行状态的文案与配色注册表：筛选下拉与表格徽标共用；未知状态按“失败”呈现。 */
+const USAGE_STATUS_VIEWS: Record<UsageStatus, { label: string; className: string }> = {
+  succeeded: { label: "完成", className: "bg-success/10 text-success" },
+  failed: { label: "失败", className: "bg-danger/10 text-danger" },
+  cancelled: { label: "已停止", className: "bg-warning/10 text-warning-foreground" },
+  timed_out: { label: "超时", className: "bg-warning/10 text-warning-foreground" },
+};
+const USAGE_STATUSES = Object.keys(USAGE_STATUS_VIEWS) as UsageStatus[];
+
 function UsageBadge({ status, estimated }: { status: UsageStatus; estimated: boolean }) {
-  const [label, style] =
-    status === "succeeded"
-      ? ["完成", "bg-success/10 text-success"]
-      : status === "cancelled"
-        ? ["已停止", "bg-warning/10 text-warning-foreground"]
-        : status === "timed_out"
-          ? ["超时", "bg-warning/10 text-warning-foreground"]
-          : ["失败", "bg-danger/10 text-danger"];
+  const view = USAGE_STATUS_VIEWS[status] ?? USAGE_STATUS_VIEWS.failed;
   return (
     <span className="flex flex-wrap gap-1.5">
-      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${style}`}>{label}</span>
+      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${view.className}`}>{view.label}</span>
       {estimated && (
         <span className="rounded-full bg-surface-tertiary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
           估算

@@ -5,9 +5,6 @@
  * 切换身份时由 clearAll() 把 cache 清空; 不能跨身份复用 query key. 后续 team 功能接入
  * space 时, 在 identity 与 resource 之间追加 activeSpaceId 一段.
  */
-type Primitive = string | number | boolean | null | undefined;
-type KeyPart = Primitive | readonly KeyPart[];
-
 export const queryKeys = {
   root: () => ['nova'] as const,
   forIdentity: (identityId: string) => ['nova', identityId] as const,
@@ -17,6 +14,8 @@ export const queryKeys = {
       ['nova', identityId, 'projects', 'list', filters] as const,
     detail: (identityId: string, id: string) =>
       ['nova', identityId, 'projects', 'detail', id] as const,
+    binding: (identityId: string, id: string) =>
+      ['nova', identityId, 'projects', 'binding', id] as const,
   },
   conversations: {
     history: (identityId: string, id: string) =>
@@ -46,9 +45,3 @@ export const queryKeys = {
       ['nova', identityId, 'runners', 'files', runnerId, path] as const,
   },
 };
-
-export type QueryKeyPart = KeyPart;
-
-export function identityPrefix(identityId: string | null): readonly string[] {
-  return identityId ? ['nova', identityId] : ['nova', 'anonymous'];
-}

@@ -19,6 +19,11 @@ const CommandPalette = lazy(() =>
   import('./command-palette').then((module) => ({ default: module.CommandPalette })),
 );
 
+/** 把 react-query 状态映射成侧栏列表需要的加载态。 */
+function feedState(query: { isPending: boolean; isError: boolean }): 'loading' | 'error' | 'ready' {
+  return query.isPending ? 'loading' : query.isError ? 'error' : 'ready';
+}
+
 export function AppShell() {
   const { pathname } = useLocation();
   if (pathname === '/' || pathname === '/callback') return <Outlet />;
@@ -105,16 +110,8 @@ function WorkspaceShell() {
   }));
   const sidebarProps = {
     activeProjectId: selectedProjectId,
-    projectsState: projectsQuery.isPending
-      ? ('loading' as const)
-      : projectsQuery.isError
-        ? ('error' as const)
-        : ('ready' as const),
-    conversationsState: conversationsQuery.isPending
-      ? ('loading' as const)
-      : conversationsQuery.isError
-        ? ('error' as const)
-        : ('ready' as const),
+    projectsState: feedState(projectsQuery),
+    conversationsState: feedState(conversationsQuery),
     projects: sidebarProjects,
     conversations,
     onNewChat: newChat,

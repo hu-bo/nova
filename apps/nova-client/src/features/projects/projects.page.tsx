@@ -27,6 +27,27 @@ function formatDate(value: string) {
   return Number.isNaN(date.valueOf()) ? '—' : dateFormat.format(date);
 }
 
+type ProjectEnvironmentInfo = { bindingState: string; runnerState: string } | undefined;
+const DOT_BY_RUNNER_STATE: Record<string, string> = {
+  ready: 'bg-emerald-500',
+  verified: 'bg-emerald-500',
+  offline: 'bg-amber-500',
+};
+const LABEL_BY_RUNNER_STATE: Record<string, string> = {
+  verified: 'SSH 已验证',
+  ready: '设备在线',
+  offline: '环境离线',
+};
+
+/** 项目卡片的环境徽章：文案先按绑定状态再看 Runner 状态，圆点颜色只跟随 Runner 状态。 */
+function environmentBadge(info: ProjectEnvironmentInfo) {
+  const dot = DOT_BY_RUNNER_STATE[info?.runnerState ?? ''] ?? 'bg-slate-300';
+  if (info?.bindingState === 'loading') return { label: '读取环境…', dot };
+  if (info?.bindingState === 'error') return { label: '环境读取失败', dot };
+  if (info?.bindingState !== 'bound') return { label: '待配置环境', dot };
+  return { label: LABEL_BY_RUNNER_STATE[info.runnerState] ?? '环境状态待确认', dot };
+}
+
 export function ProjectsPage() {
   const projectsQuery = useProjectsQuery();
   const conversationsQuery = useConversationsQuery({ limit: 100 });
@@ -205,26 +226,7 @@ export function ProjectsPage() {
             const latest = chats[0];
             const activeCount = chats.filter((item) => item.activeRunId).length;
             const bound = info?.bindingState === 'bound';
-            const label =
-              info?.bindingState === 'loading'
-                ? '读取环境…'
-                : info?.bindingState === 'error'
-                  ? '环境读取失败'
-                  : !bound
-                    ? '待配置环境'
-                    : info?.runnerState === 'verified'
-                      ? 'SSH 已验证'
-                      : info?.runnerState === 'ready'
-                        ? '设备在线'
-                        : info?.runnerState === 'offline'
-                          ? '环境离线'
-                          : '环境状态待确认';
-            const color =
-              info?.runnerState === 'ready' || info?.runnerState === 'verified'
-                ? 'bg-emerald-500'
-                : info?.runnerState === 'offline'
-                  ? 'bg-amber-500'
-                  : 'bg-slate-300';
+            const badge = environmentBadge(info);
             return (
               <article
                 key={project.id}
@@ -264,8 +266,8 @@ export function ProjectsPage() {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     <span className="flex items-center gap-1.5">
-                      <span className={'size-1.5 rounded-full ' + color} />
-                      {label}
+                      <span className={'size-1.5 rounded-full ' + badge.dot} />
+                      {badge.label}
                     </span>
                     {activeCount > 0 && (
                       <span className="flex items-center gap-1 text-accent">

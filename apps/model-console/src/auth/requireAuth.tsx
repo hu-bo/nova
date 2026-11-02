@@ -5,6 +5,9 @@ import { Button } from "../components/ui/button.js";
 import { LoadingState } from "../components/ui/feedback.js";
 import { useAuth } from "./provider.js";
 
+/** 登录接口可能抛出非 Error，统一归一化后才能安全展示。 */
+const toLoginError = (error: unknown) => (error instanceof Error ? error : new Error("无法发起登录"));
+
 export function RequireAuth({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const location = useLocation();
@@ -17,7 +20,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     sessionStorage.setItem("nova_return_to", `${location.pathname}${location.search}`);
     void auth.login().catch((error) => {
       requested.current = false;
-      setLoginError(error instanceof Error ? error : new Error("无法发起登录"));
+      setLoginError(toLoginError(error));
     });
   }, [auth, location.pathname, location.search]);
 
@@ -36,11 +39,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
             onPress={() => {
               setLoginError(null);
               requested.current = false;
-              void auth
-                .login()
-                .catch((loginFailure) =>
-                  setLoginError(loginFailure instanceof Error ? loginFailure : new Error("无法发起登录")),
-                );
+              void auth.login().catch((loginFailure) => setLoginError(toLoginError(loginFailure)));
             }}
           >
             重新登录

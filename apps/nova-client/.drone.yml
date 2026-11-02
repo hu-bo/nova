@@ -4,7 +4,7 @@ name: nova-nova-client
 
 trigger:
   branch:
-    - main
+    - master
   event:
     - push
     - custom

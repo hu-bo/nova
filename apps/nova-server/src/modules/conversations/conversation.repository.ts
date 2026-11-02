@@ -34,6 +34,12 @@ import type { RunJournal } from "../runs/index.js";
 import type { GoalInput } from "./conversation.schema.js";
 export type ConversationRow = typeof conversations.$inferSelect;
 const owned = (id: string, owner: string) => and(eq(conversations.id, id), eq(conversations.ownerUserId, owner));
+/** Caller holds the conversation row lock. Missing or foreign-owned conversations surface as NOT_FOUND. */
+async function lockOwned(tx: Transaction, id: string, owner: string): Promise<ConversationRow> {
+  const [conversation] = await tx.select().from(conversations).where(owned(id, owner)).for("update");
+  if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
+  return conversation;
+}
 async function messagePage(db: Pick<Database, "select">, id: string, before?: string) {
   const rows = await db
     .select()
@@ -269,12 +275,7 @@ export const conversationRepository = defineRepository(
       ) {
         const tx = requireTransaction();
 
-        const [conversation] = await tx
-          .select()
-          .from(conversations)
-          .where(owned(input.conversationId, input.ownerUserId))
-          .for("update");
-        if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
+        const conversation = await lockOwned(tx, input.conversationId, input.ownerUserId);
         return enqueue(
           tx,
           conversation,
@@ -291,12 +292,7 @@ export const conversationRepository = defineRepository(
       async removePendingInput(input: { conversationId: string; inputId: string; ownerUserId: string }) {
         const tx = requireTransaction();
 
-        const [conversation] = await tx
-          .select()
-          .from(conversations)
-          .where(owned(input.conversationId, input.ownerUserId))
-          .for("update");
-        if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
+        const conversation = await lockOwned(tx, input.conversationId, input.ownerUserId);
         const [row] = await tx
           .select()
           .from(pendingInputs)
@@ -318,12 +314,7 @@ export const conversationRepository = defineRepository(
       async steerPendingInput(input: { conversationId: string; inputId: string; ownerUserId: string }) {
         const tx = requireTransaction();
 
-        const [conversation] = await tx
-          .select()
-          .from(conversations)
-          .where(owned(input.conversationId, input.ownerUserId))
-          .for("update");
-        if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
+        const conversation = await lockOwned(tx, input.conversationId, input.ownerUserId);
         const [row] = await tx
           .select()
           .from(pendingInputs)
@@ -374,8 +365,7 @@ export const conversationRepository = defineRepository(
       ) {
         const tx = requireTransaction();
 
-        const [conversation] = await tx.select().from(conversations).where(owned(id, owner)).for("update");
-        if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
+        const conversation = await lockOwned(tx, id, owner);
         const goal = conversation.metadata.goal;
         if (!goal) throw new DomainError("NOT_FOUND", "Goal not found");
         if (goal.revision !== revision)
@@ -408,8 +398,7 @@ export const conversationRepository = defineRepository(
       async maintain(id: string, owner: string, action: "clear" | "delete") {
         const tx = requireTransaction();
 
-        const [conversation] = await tx.select().from(conversations).where(owned(id, owner)).for("update");
-        if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
+        const conversation = await lockOwned(tx, id, owner);
         const [unknown] = await tx
           .select({ id: runs.id })
           .from(runs)

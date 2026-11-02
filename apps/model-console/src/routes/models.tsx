@@ -17,8 +17,25 @@ import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/feedback.js";
 import { ModelForm } from "../models/model-form.js";
+import { toModelInput } from "../models/model-input.js";
 
 type Confirmation = { kind: "disable" | "delete"; model: Model } | null;
+
+/** 停用/删除确认弹窗的文案表：新增操作种类只需在此登记。 */
+const CONFIRMATION_COPY = {
+  disable: {
+    verb: "停用",
+    description: "后续新配置将不能选择该模型，已有运行不会被中断。",
+    confirmLabel: "确认停用",
+    danger: false,
+  },
+  delete: {
+    verb: "删除",
+    description: "该公开模型名将不会被复用，历史用量仍保留原关联。",
+    confirmLabel: "确认删除",
+    danger: true,
+  },
+} as const;
 
 export function ModelsRoute() {
   const queryClient = useQueryClient();
@@ -30,30 +47,37 @@ export function ModelsRoute() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Model | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
+  const invalidateModels = () => queryClient.invalidateQueries({ queryKey: queryKeys.models });
   const saveMutation = useMutation({
     mutationFn: (input: CreateModel) => (editing ? updateModel(editing.id, input) : createModel(input)),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.models });
-    },
+    onSuccess: () => invalidateModels(),
   });
   const stateMutation = useMutation({
     mutationFn: ({ model, enabled }: { model: Model; enabled: boolean }) =>
-      updateModel(model.id, toModelInput(model, enabled)),
+      updateModel(model.id, { ...toModelInput(model), enabled }),
     onSuccess: async () => {
       setConfirmation(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.models });
+      await invalidateModels();
     },
   });
   const deleteMutation = useMutation({
     mutationFn: (model: Model) => deleteModel(model.id),
     onSuccess: async () => {
       setConfirmation(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.models });
+      await invalidateModels();
     },
   });
   const models = modelsQuery.data ?? [];
   const providers = providersQuery.data ?? [];
   const error = modelsQuery.error ?? providersQuery.error;
+  const confirm = confirmation
+    ? {
+        ...CONFIRMATION_COPY[confirmation.kind],
+        title: `${CONFIRMATION_COPY[confirmation.kind].verb} ${confirmation.model.publicName}`,
+        isDelete: confirmation.kind === "delete",
+        model: confirmation.model,
+      }
+    : null;
 
   return (
     <div className="space-y-8">
@@ -205,28 +229,22 @@ export function ModelsRoute() {
         }}
         onSubmit={(input) => saveMutation.mutateAsync(input)}
       />
-      <ConfirmDialog
-        open={confirmation !== null}
-        title={
-          confirmation?.kind === "delete"
-            ? `删除 ${confirmation.model.publicName}`
-            : `停用 ${confirmation?.model.publicName ?? "模型"}`
-        }
-        description={
-          confirmation?.kind === "delete"
-            ? "该公开模型名将不会被复用，历史用量仍保留原关联。"
-            : "后续新配置将不能选择该模型，已有运行不会被中断。"
-        }
-        confirmLabel={confirmation?.kind === "delete" ? "确认删除" : "确认停用"}
-        danger={confirmation?.kind === "delete"}
-        pending={stateMutation.isPending || deleteMutation.isPending}
-        onClose={() => setConfirmation(null)}
-        onConfirm={() => {
-          if (!confirmation) return;
-          if (confirmation.kind === "delete") deleteMutation.mutate(confirmation.model);
-          else stateMutation.mutate({ model: confirmation.model, enabled: false });
-        }}
-      />
+      {confirm && (
+        <ConfirmDialog
+          open
+          title={confirm.title}
+          description={confirm.description}
+          confirmLabel={confirm.confirmLabel}
+          danger={confirm.danger}
+          pending={stateMutation.isPending || deleteMutation.isPending}
+          onClose={() => setConfirmation(null)}
+          onConfirm={() =>
+            confirm.isDelete
+              ? deleteMutation.mutate(confirm.model)
+              : stateMutation.mutate({ model: confirm.model, enabled: false })
+          }
+        />
+      )}
     </div>
   );
 }
@@ -235,21 +253,4 @@ function formatTokens(value: number) {
   return value >= 1000
     ? `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value / 1000)}K`
     : String(value);
-}
-function toModelInput(model: Model, enabled: boolean): CreateModel {
-  return {
-    publicName: model.publicName,
-    providerId: model.providerId,
-    upstreamName: model.upstreamName,
-    contextWindow: model.contextWindow,
-    maxOutput: model.maxOutput,
-    thinkingLevels: model.thinkingLevels,
-    parallelToolCalls: model.parallelToolCalls,
-    reasoningFormat: model.reasoningFormat,
-    inputModalities: model.inputModalities,
-    enabled,
-    priceIn: model.priceIn,
-    priceOut: model.priceOut,
-    priceCacheRead: model.priceCacheRead,
-  };
 }

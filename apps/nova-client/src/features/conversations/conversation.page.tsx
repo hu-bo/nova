@@ -24,7 +24,13 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react';
-import { messageSchema, operationsFromMessages, type Attachment } from '@nova/agent-ui-contracts';
+import {
+  messageSchema,
+  operationsFromMessages,
+  type Attachment,
+  type Message,
+  type ToolOperation,
+} from '@nova/agent-ui-contracts';
 import { ApiError, errorMessage } from '@/api/api-error';
 import {
   clearConversationContext,
@@ -81,6 +87,32 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useAppendPendingInputMutation, useConversationSnapshot } from './conversation.queries';
 
 const scrollPositions = new Map<string, MessageListScrollState>();
+
+/** SSE 连接状态 → Chat 组件的连接状态。 */
+const CHAT_CONNECTION_BY_STREAM_STATE = {
+  live: 'open',
+  connecting: 'connecting',
+  reconnecting: 'reconnecting',
+  offline: 'closed',
+} as const;
+/** RunnerBadge 的状态徽章呈现（文案为会话页专用）。 */
+const RUNNER_BADGE_BY_STATUS = {
+  online: { variant: 'success', label: '设备在线' },
+  revoked: { variant: 'danger', label: '凭据已撤销' },
+  offline: { variant: 'warning', label: '设备未连接' },
+} as const;
+
+/** 已保存消息 → 聊天视图消息（系统消息等无视图形态的会被过滤掉）。 */
+function toMessageViews(
+  messages: readonly Message[],
+  conversationId: string,
+  operations: ToolOperation[],
+): ChatMessage[] {
+  return messages.flatMap((message) => {
+    const view = messageView(message, conversationId, operations);
+    return view ? [view] : [];
+  });
+}
 
 export function ConversationPage() {
   const { id } = useParams({ strict: false }) as { id?: string };
@@ -491,15 +523,8 @@ function ConversationWorkspace({
     [rawMessages, projection?.data.operations, data.operations],
   );
   const currentMessages =
-    projection?.messages ??
-    savedMessages.flatMap((message) => {
-      const view = messageView(message, id, historicalOperations);
-      return view ? [view] : [];
-    });
-  const older = olderMessages.flatMap((message) => {
-    const view = messageView(message, id, historicalOperations);
-    return view ? [view] : [];
-  });
+    projection?.messages ?? toMessageViews(savedMessages, id, historicalOperations);
+  const older = toMessageViews(olderMessages, id, historicalOperations);
   const ids = new Set(currentMessages.map((message) => message.id));
   const messages = [...older.filter((message) => !ids.has(message.id)), ...currentMessages];
   const todos = projection?.todos ?? data.plan ?? [];
@@ -539,14 +564,7 @@ function ConversationWorkspace({
     feedback.push({ id: 'composer', message: errorMessage(ctl.error), tone: 'error' });
   if (clearNotice)
     feedback.push({ id: 'clear-notice', message: clearNotice, tone: 'info', dismissible: true });
-  const connection =
-    stream.state === 'live'
-      ? ('open' as const)
-      : stream.state === 'connecting'
-        ? ('connecting' as const)
-        : stream.state === 'reconnecting'
-          ? ('reconnecting' as const)
-          : ('closed' as const);
+  const connection = CHAT_CONNECTION_BY_STREAM_STATE[stream.state];
   return (
     <div className="conversation-workspace flex h-dvh min-h-0 flex-col">
       <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 pr-4 pl-16 text-xs text-slate-500 lg:pl-6">
@@ -834,17 +852,11 @@ function RunnerBadge({ runnerId }: { runnerId: string }) {
     (item) => item.id === runnerId || item.runnerId === runnerId,
   );
   if (runners.isPending) return null;
-  const status = runner ? runnerStatus(runner) : 'offline';
-  const detail =
-    status === 'online'
-      ? (['success', '设备在线'] as const)
-      : status === 'revoked'
-        ? (['danger', '凭据已撤销'] as const)
-        : (['warning', '设备未连接'] as const);
+  const detail = RUNNER_BADGE_BY_STATUS[runner ? runnerStatus(runner) : 'offline'];
   return (
-    <Badge variant={detail[0]} className="shrink-0 gap-1 px-2 py-0.5 whitespace-nowrap">
+    <Badge variant={detail.variant} className="shrink-0 gap-1 px-2 py-0.5 whitespace-nowrap">
       <span className="size-1.5 shrink-0 rounded-full bg-current" />
-      {detail[1]}
+      {detail.label}
     </Badge>
   );
 }

@@ -4,16 +4,12 @@ import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import {
-  ApiClientError,
-  errorMessage,
-  type CreateProvider,
-  type Provider,
-  type UpdateProvider,
-} from "../api/client.js";
+import { formFeedbackFrom, type CreateProvider, type Provider, type UpdateProvider } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Dialog } from "../components/ui/dialog.js";
-import { FieldLabel, Input, NativeSelect } from "../components/ui/form.js";
+import { FieldLabel, Input } from "../components/ui/form.js";
+
+const fieldClass = "h-9 rounded-xl border border-field-border bg-field-background px-3";
 
 const providerSchema = z.object({
   protocol: z.enum(["openai", "anthropic"]),
@@ -82,31 +78,25 @@ export function ProviderForm({
       return;
     }
     setFormError(null);
-    const input = editing
-      ? {
-          protocol: values.protocol,
-          name: values.name.trim(),
-          baseUrl: values.baseUrl,
-          isPublic: values.isPublic,
-          ...(values.credential.trim() ? { credential: values.credential.trim() } : {}),
-        }
-      : {
-          protocol: values.protocol,
-          name: values.name.trim(),
-          baseUrl: values.baseUrl,
-          credential: values.credential.trim(),
-          enabled: values.enabled,
-          isPublic: values.isPublic,
-        };
+    const credential = values.credential.trim();
+    const shared = {
+      protocol: values.protocol,
+      name: values.name.trim(),
+      baseUrl: values.baseUrl,
+      isPublic: values.isPublic,
+    };
+    const input: CreateProvider | UpdateProvider = editing
+      ? { ...shared, ...(credential ? { credential } : {}) }
+      : { ...shared, credential, enabled: values.enabled };
     try {
       await onSubmit(input);
       reset();
       onClose();
     } catch (error) {
-      if (error instanceof ApiClientError)
-        for (const [field, message] of Object.entries(error.fieldErrors))
-          setError(field as keyof ProviderFormValues, { message });
-      if (!(error instanceof ApiClientError && error.notified)) setFormError(errorMessage(error));
+      const feedback = formFeedbackFrom(error);
+      for (const [field, message] of Object.entries(feedback.fieldErrors))
+        setError(field as keyof ProviderFormValues, { message });
+      setFormError(feedback.message);
     }
   });
 
@@ -163,7 +153,7 @@ export function ProviderForm({
               data-initial-focus
               placeholder="例如 Nova Production"
               autoFocus
-              className="h-9 rounded-xl border border-field-border bg-field-background px-3"
+              className={fieldClass}
             />
           </FieldLabel>
           <FieldLabel label="Base URL" hint="必须为 HTTPS" error={errors.baseUrl?.message}>
@@ -172,7 +162,7 @@ export function ProviderForm({
               type="url"
               placeholder="https://api.example.com/v1"
               spellCheck={false}
-              className="h-9 rounded-xl border border-field-border bg-field-background px-3"
+              className={fieldClass}
             />
           </FieldLabel>
         </div>
@@ -187,7 +177,7 @@ export function ProviderForm({
             autoComplete="new-password"
             placeholder={editing ? "留空保持不变" : "输入 API key"}
             spellCheck={false}
-            className="h-9 rounded-xl border border-field-border bg-field-background px-3"
+            className={fieldClass}
           />
         </FieldLabel>
         {!editing && (

@@ -13,7 +13,6 @@ import {
   submitInputSchema,
   attachmentSchema,
 } from "@nova/agent-ui-contracts";
-import { errorResponseSchema } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 import { bindingSchema } from "../projects/index.js";
 export const runtimeConfigurationSchema = configurationSchema;
@@ -46,7 +45,7 @@ export const updateConversationGoalSchema = z
   .object({ action: z.enum(["pause", "resume", "complete", "remove"]), expectedRevision: z.number().int().positive() })
   .strict();
 export const conversationListSchema = z.object({ items: z.array(conversationSchema) });
-export { errorResponseSchema, okEnvelope, success };
+export { okEnvelope, success };
 export type CreateConversationInput = z.infer<typeof createConversationBodySchema>;
 export type ConversationDTO = z.infer<typeof conversationSchema>;
 export type ConversationSnapshotDTO = z.infer<typeof conversationSnapshotSchema>;

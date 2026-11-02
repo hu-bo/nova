@@ -10,10 +10,6 @@ import { JobHost, type JobHandler } from "./job-host.js";
  */
 export type Registry = Map<import("./postgres-job-store.js").JobKind, JobHandler>;
 
-export function emptyRegistry(): Registry {
-  return new Map();
-}
-
 export function createJobHost(input: {
   db: Database;
   workerLeaseSeconds: number;

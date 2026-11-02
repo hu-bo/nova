@@ -1,4 +1,9 @@
-import type { Block as ViewBlock, ChatMessage, ComposerContextUsage } from '@nova/chat-ui';
+import type {
+  Block as ViewBlock,
+  ChatMessage,
+  ComposerContextUsage,
+  ToolStatus,
+} from '@nova/chat-ui';
 import {
   operationsFromMessages,
   type Block,
@@ -10,6 +15,24 @@ import {
 import type { GetConversationSnapshot200 } from '@/api/generated/projectsAPI.schemas';
 import { initialRunState, reduceRunState, type RunState } from './run-state';
 export { isActiveRun } from '@nova/agent-ui-contracts';
+
+/** 工具操作状态 → 视图状态：单一映射表，新增操作状态时只需补一行。 */
+const TOOL_STATUS_BY_OPERATION_STATE: Record<ToolOperation['state'], ToolStatus> = {
+  queued: 'queued',
+  running: 'running',
+  succeeded: 'ok',
+  failed: 'error',
+  denied: 'error',
+  cancelled: 'cancelled',
+  unknown: 'unknown',
+};
+/** 消息持久化状态 → 视图状态。 */
+const MESSAGE_STATUS_BY_STATE: Record<Message['state'], ChatMessage['status']> = {
+  streaming: 'streaming',
+  completed: 'done',
+  failed: 'error',
+  cancelled: 'aborted',
+};
 function blockView(block: Block, operations: ToolOperation[]): ViewBlock {
   switch (block.type) {
     case 'text':
@@ -51,18 +74,7 @@ function blockView(block: Block, operations: ToolOperation[]): ViewBlock {
       const operation = operations.find((item) => item.callId === block.callId);
       return {
         ...block,
-        status:
-          operation?.state === 'unknown'
-            ? 'unknown'
-            : operation?.state === 'succeeded'
-              ? 'ok'
-              : operation?.state === 'cancelled'
-                ? 'cancelled'
-                : operation && ['failed', 'denied'].includes(operation.state)
-                  ? 'error'
-                  : operation?.state === 'running'
-                    ? 'running'
-                    : 'queued',
+        status: operation ? TOOL_STATUS_BY_OPERATION_STATE[operation.state] : 'queued',
       };
     }
     case 'tool_result':
@@ -113,14 +125,7 @@ export function messageView(
               };
             return converted;
           }),
-          status:
-            message.state === 'streaming'
-              ? 'streaming'
-              : message.state === 'failed'
-                ? 'error'
-                : message.state === 'cancelled'
-                  ? 'aborted'
-                  : 'done',
+          status: MESSAGE_STATUS_BY_STATE[message.state],
         };
   messageViews.set(message, { conversationId, signature, view });
   return view;

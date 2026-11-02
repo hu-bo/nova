@@ -30,20 +30,16 @@ export type JobRecord = {
   updatedAt: Date;
 };
 
-export class JobStoreUnavailableError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "JobStoreUnavailableError";
-  }
-}
-
 export type ClaimOutcome = { kind: "claimed"; jobs: readonly JobRecord[] } | { kind: "empty" };
+
+/** 只需 execute 端口: 既可在 scope 外以 Database 调用, 也可在事务内以仓库执行器调用. */
+type JobExecutor = Pick<Database, "execute">;
 
 /**
  * 单次 claim 有界批, 短事务 SKIP LOCKED. 大批数据由 worker 调高 limit 与并发度.
  */
 export async function claim(input: {
-  db: Database;
+  db: JobExecutor;
   kinds: readonly JobKind[];
   limit: number;
   leaseSeconds: number;
@@ -78,7 +74,7 @@ export async function claim(input: {
   return jobs.length ? { kind: "claimed", jobs } : { kind: "empty" };
 }
 
-export async function succeed(input: { db: Database; jobId: string }): Promise<void> {
+export async function succeed(input: { db: JobExecutor; jobId: string }): Promise<void> {
   await input.db.execute(sql`
     UPDATE jobs
     SET status = 'succeeded', updated_at = now()
@@ -87,7 +83,7 @@ export async function succeed(input: { db: Database; jobId: string }): Promise<v
 }
 
 export async function fail(input: {
-  db: Database;
+  db: JobExecutor;
   jobId: string;
   safeErrorCode: string;
   rescheduleAfterSeconds?: number;
@@ -116,7 +112,8 @@ export type EnqueueRequest = {
   maxAttempts?: number;
 };
 
-export async function enqueue(input: { db: Database; job: EnqueueRequest }): Promise<void> {
+/** 入队唯一入口: 业务代码通过它写入 jobs 表, 不再各自拼接 INSERT. */
+export async function enqueue(input: { db: JobExecutor; job: EnqueueRequest }): Promise<void> {
   const availableAt = input.job.availableAt ?? new Date();
   const maxAttempts = input.job.maxAttempts ?? 5;
   await input.db.execute(sql`
@@ -157,7 +154,7 @@ function mapRows(rows: unknown): JobRecord[] {
   });
 }
 
-export async function heartbeat(input: { db: Database; jobId: string; leaseSeconds: number }): Promise<void> {
+export async function heartbeat(input: { db: JobExecutor; jobId: string; leaseSeconds: number }): Promise<void> {
   await input.db.execute(
     sql`update jobs set lease_until = now() + ${input.leaseSeconds} * interval '1 second' where id = ${input.jobId}::uuid and status = 'running'`,
   );

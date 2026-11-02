@@ -6,6 +6,6 @@ export { RunStatus } from './run-status';
 export const RunPanel = lazy(() =>
   import('./run-panel').then((module) => ({ default: module.RunPanel })),
 );
-export { cancelRun, respondInteraction, isOutcomeUnknown } from './run.commands';
+export { cancelRun, respondInteraction } from './run.commands';
 export { messageView, isActiveRun, type RunProjection } from './run-event-reducer';
 export type { RunStreamSnapshot } from './run-stream-manager';

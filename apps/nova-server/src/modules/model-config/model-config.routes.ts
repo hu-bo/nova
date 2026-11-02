@@ -1,5 +1,5 @@
 import { okEnvelope, success } from "../../shared/response.schema.js";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { requirePrincipal } from "../../shared/authorization.js";
@@ -16,15 +16,7 @@ import {
 } from "./model-config.schema.js";
 import type { ModelConfigService } from "./model-config.service.js";
 
-const errorResponses = {
-  400: errorResponseSchema,
-  401: errorResponseSchema,
-  403: errorResponseSchema,
-  404: errorResponseSchema,
-  409: errorResponseSchema,
-  500: errorResponseSchema,
-  503: errorResponseSchema,
-};
+const adminErrorResponses = errorResponses(400, 401, 403, 404, 409, 500, 503);
 
 export async function modelConfigRoutes(app: FastifyInstance, service: ModelConfigService): Promise<void> {
   const typed = app.withTypeProvider<ZodTypeProvider>();
@@ -34,7 +26,7 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
       schema: {
         operationId: "listProviders",
         tags: ["model-config"],
-        response: { 200: okEnvelope(providerSchema.array()), ...errorResponses },
+        response: { 200: okEnvelope(providerSchema.array()), ...adminErrorResponses },
       },
     },
     async () => success(await service.listProviders()),
@@ -47,7 +39,7 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
         operationId: "createProvider",
         tags: ["model-config"],
         body: createProviderBodySchema,
-        response: { 200: okEnvelope(providerSchema), ...errorResponses },
+        response: { 200: okEnvelope(providerSchema), ...adminErrorResponses },
       },
     },
     async (request, reply) =>
@@ -62,7 +54,7 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
         tags: ["model-config"],
         params: providerIdParamsSchema,
         body: updateProviderBodySchema,
-        response: { 200: okEnvelope(providerSchema), ...errorResponses },
+        response: { 200: okEnvelope(providerSchema), ...adminErrorResponses },
       },
     },
     async (request) =>
@@ -76,7 +68,7 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
         operationId: "deleteProvider",
         tags: ["model-config"],
         params: providerIdParamsSchema,
-        response: { 200: okEnvelope(z.null()), ...errorResponses },
+        response: { 200: okEnvelope(z.null()), ...adminErrorResponses },
       },
     },
     async (request, reply) => {
@@ -91,7 +83,7 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
       schema: {
         operationId: "listModels",
         tags: ["model-config"],
-        response: { 200: okEnvelope(modelSchema.array()), ...errorResponses },
+        response: { 200: okEnvelope(modelSchema.array()), ...adminErrorResponses },
       },
     },
     async () => success(await service.listModels()),
@@ -104,7 +96,7 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
         operationId: "createModel",
         tags: ["model-config"],
         body: createModelBodySchema,
-        response: { 200: okEnvelope(modelSchema), ...errorResponses },
+        response: { 200: okEnvelope(modelSchema), ...adminErrorResponses },
       },
     },
     async (request, reply) => reply.send(success(await service.createModel(request.body))),
@@ -118,7 +110,7 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
         tags: ["model-config"],
         params: modelIdParamsSchema,
         body: updateModelBodySchema,
-        response: { 200: okEnvelope(modelSchema), ...errorResponses },
+        response: { 200: okEnvelope(modelSchema), ...adminErrorResponses },
       },
     },
     async (request) => success(await service.updateModel(request.params.modelId, request.body)),
@@ -131,7 +123,7 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
         operationId: "deleteModel",
         tags: ["model-config"],
         params: modelIdParamsSchema,
-        response: { 200: okEnvelope(z.null()), ...errorResponses },
+        response: { 200: okEnvelope(z.null()), ...adminErrorResponses },
       },
     },
     async (request, reply) => {

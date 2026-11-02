@@ -2,9 +2,9 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { requirePrincipal } from "../../shared/authorization.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import { createRunService } from "./run.service.js";
 import {
-  errorResponseSchema,
   interactionParamsSchema,
   interactionResponseResultSchema,
   respondInteractionBodySchema,
@@ -26,10 +26,7 @@ export async function registerRunRoutes(app: FastifyInstance) {
         body: z.object({}).strict().default({}),
         response: {
           200: okEnvelope(runCancelResponseSchema),
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          409: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 404, 409, 500),
         },
       },
     },
@@ -45,11 +42,7 @@ export async function registerRunRoutes(app: FastifyInstance) {
         body: respondInteractionBodySchema,
         response: {
           200: okEnvelope(interactionResponseResultSchema),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          409: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 404, 409, 500),
         },
       },
     },

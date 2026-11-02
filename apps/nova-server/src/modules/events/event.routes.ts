@@ -3,7 +3,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { decimalSequenceSchema } from "@nova/agent-ui-contracts";
 import { requirePrincipal } from "../../shared/authorization.js";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import { SseSubscriber } from "../../transport/sse.js";
 import { followEvents } from "./event-stream.js";
 import type { EventService } from "./event.service.js";
@@ -18,13 +18,7 @@ export async function eventRoutes(app: FastifyInstance, service: EventService) {
           tags: ["events"],
           params: z.object({ id: z.uuid() }).strict(),
           querystring: z.object({ cursor: decimalSequenceSchema.optional() }).strict(),
-          response: {
-            400: errorResponseSchema,
-            401: errorResponseSchema,
-            404: errorResponseSchema,
-            410: errorResponseSchema,
-            500: errorResponseSchema,
-          },
+          response: errorResponses(400, 401, 404, 410, 500),
         },
       },
       async (request, reply) => {

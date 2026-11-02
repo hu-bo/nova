@@ -23,7 +23,7 @@ export function useProjectQuery(id: string | null) {
 export function useProjectBinding(id: string | null) {
   const { identity } = useIdentity();
   return useQuery({
-    queryKey: ['nova', identity?.identityId ?? 'anonymous', 'projects', 'binding', id],
+    queryKey: queryKeys.projects.binding(identity?.identityId ?? 'anonymous', id ?? ''),
     enabled: Boolean(identity && id),
     queryFn: ({ signal }) => getProjectBinding(id!, { signal }),
     staleTime: 10000,
@@ -35,7 +35,7 @@ export function useProjectSidebarInfo(projectIds: string[]) {
   const { identity } = useIdentity();
   const bindings = useQueries({
     queries: projectIds.map((id) => ({
-      queryKey: ['nova', identity?.identityId ?? 'anonymous', 'projects', 'binding', id] as const,
+      queryKey: queryKeys.projects.binding(identity?.identityId ?? 'anonymous', id),
       enabled: Boolean(identity),
       queryFn: ({ signal }: { signal: AbortSignal }) => getProjectBinding(id, { signal }),
       staleTime: 10_000,

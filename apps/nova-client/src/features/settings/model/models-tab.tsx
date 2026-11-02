@@ -25,7 +25,7 @@ import {
   type ModelProfileForm,
 } from './schemas';
 import { useModelSettings } from './provider';
-import type { ModelProfile } from './model-context';
+import { profileToFormValues, type ModelProfile } from './model-context';
 
 /** Manage server-backed model profiles and legacy local configurations. */
 export function ModelsTab() {
@@ -41,23 +41,7 @@ export function ModelsTab() {
 
   useEffect(() => {
     if (!profileOpen) return;
-    form.reset(
-      editing
-        ? {
-            providerName: editing.providerName,
-            provider: editing.provider,
-            endpoint: editing.endpoint,
-            model: editing.model,
-            credential: editing.credential,
-            contextWindow: editing.contextWindow,
-            maxOutput: editing.maxOutput,
-            reasoningFormat: editing.reasoningFormat,
-            thinkingLevels: editing.thinkingLevels,
-            parallelToolCalls: editing.parallelToolCalls,
-            supportsImages: editing.supportsImages,
-          }
-        : emptyModelProfile(),
-    );
+    form.reset(editing ? profileToFormValues(editing) : emptyModelProfile());
   }, [profileOpen, editing, form]);
 
   function openCreate() {

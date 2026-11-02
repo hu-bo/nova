@@ -27,4 +27,4 @@ export type {
   UpdateProviderBody as UpdateProvider,
 } from "./generated/model-config.js";
 
-export { ApiClientError, errorMessage } from "./errors.js";
+export { ApiClientError, errorMessage, formFeedbackFrom } from "./errors.js";

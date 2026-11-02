@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { requirePrincipal } from "../../shared/authorization.js";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "./runner.schema.js";
 import {
   createRunnerTokenBodySchema,
@@ -80,7 +80,7 @@ export async function runnerRoutes(
       schema: {
         operationId: "getRunnerConnectionInfo",
         tags: ["runners"],
-        response: { 200: okEnvelope(z.object({ endpoint: z.string() })), 401: errorResponseSchema },
+        response: { 200: okEnvelope(z.object({ endpoint: z.string() })), ...errorResponses(401) },
       },
     },
     async (request) => {
@@ -96,7 +96,7 @@ export async function runnerRoutes(
       schema: {
         operationId: "listRunnerTokens",
         tags: ["runners"],
-        response: { 200: okEnvelope(runnerTokenListSchema), 401: errorResponseSchema, 500: errorResponseSchema },
+        response: { 200: okEnvelope(runnerTokenListSchema), ...errorResponses(401, 500) },
       },
     },
     async (request, reply) => {
@@ -116,8 +116,7 @@ export async function runnerRoutes(
         body: createRunnerTokenBodySchema,
         response: {
           200: okEnvelope(runnerTokenWithSecretSchema),
-          401: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 500),
         },
       },
     },
@@ -143,9 +142,7 @@ export async function runnerRoutes(
         params: runnerIdParamsSchema,
         response: {
           200: okEnvelope(runnerTokenSchema.nullable()),
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 404, 500),
         },
       },
     },
@@ -166,9 +163,7 @@ export async function runnerRoutes(
         body: rotateRunnerTokenBodySchema,
         response: {
           200: okEnvelope(runnerTokenWithSecretSchema),
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 404, 500),
         },
       },
     },
@@ -190,7 +185,7 @@ export async function runnerRoutes(
       schema: {
         operationId: "listRunners",
         tags: ["runners"],
-        response: { 200: okEnvelope(runnerListSchema), 401: errorResponseSchema, 500: errorResponseSchema },
+        response: { 200: okEnvelope(runnerListSchema), ...errorResponses(401, 500) },
       },
     },
     async (request) => {
@@ -210,10 +205,7 @@ export async function runnerRoutes(
         querystring: fileListingQuerySchema,
         response: {
           200: okEnvelope(remoteFileListingSchema),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 404, 500),
         },
       },
     },
@@ -239,10 +231,7 @@ export async function runnerRoutes(
         body: fileSummaryBodySchema,
         response: {
           200: okEnvelope(fileSummaryResponseSchema),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 404, 500),
         },
       },
     },

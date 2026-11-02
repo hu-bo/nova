@@ -38,11 +38,6 @@ export function notify(message: ReactNode, options: NotifyOptions = {}): string 
   return toast(message, toToastOptions(options));
 }
 
-/** 关闭指定通知。 */
-export function closeNotification(id: string): void {
-  toast.close(id);
-}
-
 /** 正在显示的通知：key -> HeroUI toast id。 */
 const activeNotifications = new Map<string, string>();
 

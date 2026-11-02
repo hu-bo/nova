@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { errorResponseSchema } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 
 /**
@@ -87,4 +86,4 @@ export const fileSummaryResponseSchema = z.object({
   ),
 });
 
-export { errorResponseSchema, okEnvelope, success };
+export { okEnvelope, success };

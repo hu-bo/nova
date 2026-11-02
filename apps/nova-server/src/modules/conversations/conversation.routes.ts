@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { requirePrincipal } from "../../shared/authorization.js";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "./conversation.schema.js";
 import {
   conversationListSchema,
@@ -35,7 +35,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         tags: ["conversations"],
         params: pendingInputParamsSchema,
         body: z.object({}).strict(),
-        response: { 200: okEnvelope(pendingInputReceiptSchema), 404: errorResponseSchema, 409: errorResponseSchema },
+        response: { 200: okEnvelope(pendingInputReceiptSchema), ...errorResponses(404, 409) },
       },
     },
     async (request) =>
@@ -57,8 +57,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         body: updateConversationGoalSchema,
         response: {
           200: okEnvelope(conversationGoalSchema.nullable()),
-          404: errorResponseSchema,
-          409: errorResponseSchema,
+          ...errorResponses(404, 409),
         },
       },
     },
@@ -80,7 +79,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         tags: ["conversations"],
         params: conversationParamsSchema,
         querystring: messageQuerySchema,
-        response: { 200: okEnvelope(messagePageSchema), 404: errorResponseSchema },
+        response: { 200: okEnvelope(messagePageSchema), ...errorResponses(404) },
       },
     },
     async (request) =>
@@ -94,7 +93,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         tags: ["conversations"],
         params: conversationParamsSchema,
         body: updateConversationBodySchema,
-        response: { 200: okEnvelope(conversationListSchema.shape.items.element), 404: errorResponseSchema },
+        response: { 200: okEnvelope(conversationListSchema.shape.items.element), ...errorResponses(404) },
       },
     },
     async (request) =>
@@ -107,7 +106,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         operationId: "deleteConversation",
         tags: ["conversations"],
         params: conversationParamsSchema,
-        response: { 200: okEnvelope(z.null()), 409: errorResponseSchema, 404: errorResponseSchema },
+        response: { 200: okEnvelope(z.null()), ...errorResponses(409, 404) },
       },
     },
     async (request) => {
@@ -125,8 +124,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         body: z.object({}).strict(),
         response: {
           200: okEnvelope(z.object({ epoch: z.number().int().positive() }).nullable()),
-          409: errorResponseSchema,
-          404: errorResponseSchema,
+          ...errorResponses(409, 404),
         },
       },
     },
@@ -140,7 +138,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         operationId: "listConversations",
         tags: ["conversations"],
         querystring: z.object({ limit: z.coerce.number().int().positive().max(100).default(50) }).strict(),
-        response: { 200: okEnvelope(conversationListSchema), 401: errorResponseSchema, 500: errorResponseSchema },
+        response: { 200: okEnvelope(conversationListSchema), ...errorResponses(401, 500) },
       },
     },
     async (request) => {
@@ -158,10 +156,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         body: createConversationBodySchema,
         response: {
           200: okEnvelope(conversationListSchema.shape.items.element),
-          400: errorResponseSchema,
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(400, 401, 404, 500),
         },
       },
     },
@@ -185,9 +180,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         params: conversationParamsSchema,
         response: {
           200: okEnvelope(conversationSnapshotSchema),
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 404, 500),
         },
       },
     },
@@ -207,9 +200,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         body: pendingInputBodySchema,
         response: {
           200: okEnvelope(pendingInputReceiptSchema),
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 404, 500),
         },
       },
     },
@@ -240,9 +231,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         params: pendingInputParamsSchema,
         response: {
           200: okEnvelope(z.null()),
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-          500: errorResponseSchema,
+          ...errorResponses(401, 404, 500),
         },
       },
     },

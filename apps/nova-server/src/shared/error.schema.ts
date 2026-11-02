@@ -9,3 +9,17 @@ export const errorResponseSchema = z.object({
   requestId: z.string(),
   details: z.record(z.string(), z.unknown()).optional(),
 });
+
+/**
+ * 路由 schema 中错误响应声明的简写: errorResponses(401, 404) 等价于
+ * { 401: errorResponseSchema, 404: errorResponseSchema }。
+ * 逐路由声明的状态码集合保持不变, 因此 OpenAPI 文档输出与内联写法完全一致。
+ */
+export function errorResponses<const Codes extends readonly number[]>(
+  ...codes: Codes
+): Record<Codes[number], typeof errorResponseSchema> {
+  return Object.fromEntries(codes.map((code) => [code, errorResponseSchema])) as Record<
+    Codes[number],
+    typeof errorResponseSchema
+  >;
+}

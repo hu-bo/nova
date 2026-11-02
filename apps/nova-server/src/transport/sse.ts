@@ -2,7 +2,7 @@ import type { FastifyReply } from "fastify";
 import type { ProductEvent } from "@nova/agent-ui-contracts";
 export type SseAdapterConfig = { heartbeatMs: number; queueFrames: number; queueBytes: number };
 export type SseEnvelope = { eventId: string; sequence: string; type: string; data: ProductEvent };
-export function formatSseFrame(envelope: SseEnvelope) {
+function formatSseFrame(envelope: SseEnvelope) {
   return "id: " + envelope.eventId + "\nevent: " + envelope.type + "\ndata: " + JSON.stringify(envelope.data) + "\n\n";
 }
 export class SseSubscriber {

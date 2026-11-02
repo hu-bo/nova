@@ -4,12 +4,21 @@ import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { ApiClientError, errorMessage, type CreateModel, type Model, type Provider } from "../api/client.js";
+import { formFeedbackFrom, type CreateModel, type Model, type Provider } from "../api/client.js";
 import { Button } from "../components/ui/button.js";
 import { Dialog } from "../components/ui/dialog.js";
-import { FieldLabel, Input } from "../components/ui/form.js";
+import { FieldLabel, Input, fieldInputClass } from "../components/ui/form.js";
+import { toModelInput } from "./model-input.js";
 
 const price = z.string().regex(/^\d+(\.\d{1,8})?$/, "请输入非负金额，最多 8 位小数");
+
+/** 自定义校验失败：挂到指定字段，避免每条规则手工拼装 issue 对象。 */
+const customIssue = (input: unknown, path: [string], message: string) => ({
+  input,
+  code: "custom" as const,
+  path,
+  message,
+});
 const modelSchema = z
   .object({
     publicName: z.string().trim().min(1, "请输入公开模型名").max(100),
@@ -28,35 +37,15 @@ const modelSchema = z
   })
   .check(({ value: values, issues }) => {
     if (values.maxOutput > values.contextWindow)
-      issues.push({ input: values.maxOutput, code: "custom", path: ["maxOutput"], message: "不能超过上下文窗口" });
+      issues.push(customIssue(values.maxOutput, ["maxOutput"], "不能超过上下文窗口"));
     if (!values.inputModalities.includes("text"))
-      issues.push({
-        input: values.inputModalities,
-        code: "custom",
-        path: ["inputModalities"],
-        message: "必须支持文本输入",
-      });
+      issues.push(customIssue(values.inputModalities, ["inputModalities"], "必须支持文本输入"));
     if (new Set(values.thinkingLevels).size !== values.thinkingLevels.length)
-      issues.push({
-        input: values.thinkingLevels,
-        code: "custom",
-        path: ["thinkingLevels"],
-        message: "Thinking 等级不能重复",
-      });
+      issues.push(customIssue(values.thinkingLevels, ["thinkingLevels"], "Thinking 等级不能重复"));
     if (values.reasoningFormat === "none" && values.thinkingLevels.length > 0)
-      issues.push({
-        input: values.thinkingLevels,
-        code: "custom",
-        path: ["thinkingLevels"],
-        message: "无 reasoning 格式时等级必须为空",
-      });
+      issues.push(customIssue(values.thinkingLevels, ["thinkingLevels"], "无 reasoning 格式时等级必须为空"));
     if (values.reasoningFormat !== "none" && values.thinkingLevels.length === 0)
-      issues.push({
-        input: values.thinkingLevels,
-        code: "custom",
-        path: ["thinkingLevels"],
-        message: "请选择至少一个 Thinking 等级",
-      });
+      issues.push(customIssue(values.thinkingLevels, ["thinkingLevels"], "请选择至少一个 Thinking 等级"));
   });
 
 type ModelFormValues = z.infer<typeof modelSchema>;
@@ -93,21 +82,7 @@ export function ModelForm({
 }) {
   const [formError, setFormError] = useState<string | null>(null);
   const values = model
-    ? {
-        publicName: model.publicName,
-        providerId: model.providerId,
-        upstreamName: model.upstreamName,
-        contextWindow: model.contextWindow,
-        maxOutput: model.maxOutput,
-        thinkingLevels: model.thinkingLevels,
-        parallelToolCalls: model.parallelToolCalls,
-        reasoningFormat: model.reasoningFormat,
-        inputModalities: model.inputModalities,
-        enabled: model.enabled,
-        priceIn: model.priceIn,
-        priceOut: model.priceOut,
-        priceCacheRead: model.priceCacheRead,
-      }
+    ? toModelInput(model)
     : { ...defaults, providerId: providers.find((item) => item.enabled)?.id ?? providers[0]?.id ?? "" };
   const {
     register,
@@ -133,14 +108,12 @@ export function ModelForm({
       reset();
       onClose();
     } catch (error) {
-      if (error instanceof ApiClientError)
-        for (const [field, message] of Object.entries(error.fieldErrors))
-          setError(field as keyof ModelFormValues, { message });
-      if (!(error instanceof ApiClientError && error.notified)) setFormError(errorMessage(error));
+      const feedback = formFeedbackFrom(error);
+      for (const [field, message] of Object.entries(feedback.fieldErrors))
+        setError(field as keyof ModelFormValues, { message });
+      setFormError(feedback.message);
     }
   });
-
-  const inputClass = "h-10 rounded-xl border border-field-border bg-field-background px-3";
 
   return (
     <Dialog
@@ -160,7 +133,7 @@ export function ModelForm({
           <h3 className="text-sm font-semibold text-foreground">映射与容量</h3>
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <FieldLabel label="公开模型名" error={errors.publicName?.message}>
-              <Input {...register("publicName")} placeholder="nova-fast" autoFocus className={inputClass} />
+              <Input {...register("publicName")} placeholder="nova-fast" autoFocus className={fieldInputClass} />
             </FieldLabel>
             <FieldLabel label="Provider" error={errors.providerId?.message}>
               <Controller
@@ -174,7 +147,7 @@ export function ModelForm({
                       if (typeof key === "string") field.onChange(key);
                     }}
                   >
-                    <Select.Trigger className={inputClass}>
+                    <Select.Trigger className={fieldInputClass}>
                       <Select.Value>
                         {field.value ? (providers.find((p) => p.id === field.value)?.name ?? "") : "请选择"}
                       </Select.Value>
@@ -196,7 +169,7 @@ export function ModelForm({
               />
             </FieldLabel>
             <FieldLabel label="上游模型名" error={errors.upstreamName?.message}>
-              <Input {...register("upstreamName")} placeholder="deepseek-chat" className={inputClass} />
+              <Input {...register("upstreamName")} placeholder="deepseek-chat" className={fieldInputClass} />
             </FieldLabel>
             <FieldLabel label="上下文窗口" hint="tokens" error={errors.contextWindow?.message}>
               <Input
@@ -204,7 +177,7 @@ export function ModelForm({
                 type="number"
                 min={1}
                 step={1}
-                className={inputClass}
+                className={fieldInputClass}
               />
             </FieldLabel>
             <FieldLabel label="最大输出" hint="tokens" error={errors.maxOutput?.message}>
@@ -213,7 +186,7 @@ export function ModelForm({
                 type="number"
                 min={1}
                 step={1}
-                className={inputClass}
+                className={fieldInputClass}
               />
             </FieldLabel>
             <FieldLabel label="Reasoning 格式" error={errors.reasoningFormat?.message}>
@@ -231,7 +204,7 @@ export function ModelForm({
                       }
                     }}
                   >
-                    <Select.Trigger className={inputClass}>
+                    <Select.Trigger className={fieldInputClass}>
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
@@ -290,13 +263,13 @@ export function ModelForm({
           </p>
           <div className="mt-4 grid gap-5 sm:grid-cols-3">
             <FieldLabel label="输入" error={errors.priceIn?.message}>
-              <Input {...register("priceIn")} inputMode="decimal" className={inputClass} />
+              <Input {...register("priceIn")} inputMode="decimal" className={fieldInputClass} />
             </FieldLabel>
             <FieldLabel label="输出" error={errors.priceOut?.message}>
-              <Input {...register("priceOut")} inputMode="decimal" className={inputClass} />
+              <Input {...register("priceOut")} inputMode="decimal" className={fieldInputClass} />
             </FieldLabel>
             <FieldLabel label="缓存读取" error={errors.priceCacheRead?.message}>
-              <Input {...register("priceCacheRead")} inputMode="decimal" className={inputClass} />
+              <Input {...register("priceCacheRead")} inputMode="decimal" className={fieldInputClass} />
             </FieldLabel>
           </div>
         </section>

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 import type { createHealthRepository } from "./health.repository.js";
 
@@ -31,7 +31,7 @@ export async function healthRoutes(
       schema: {
         operationId: "getReadiness",
         tags: ["health"],
-        response: { 200: okEnvelope(healthStatusSchema), 500: errorResponseSchema },
+        response: { 200: okEnvelope(healthStatusSchema), ...errorResponses(500) },
       },
     },
     async () => {

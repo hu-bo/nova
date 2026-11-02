@@ -1,6 +1,6 @@
 import { expireSession, getSessionToken, refreshSession } from "../auth/session.js";
 import { ApiClientError } from "./errors.js";
-import { notifyApiFailure } from "./api-notify.js";
+import { notifyApiFailure, type ApiFailureKind } from "./api-notify.js";
 
 export type BodyType<BodyData> = BodyData;
 export type ErrorType<ErrorData> = ApiClientError & { data?: ErrorData };
@@ -16,21 +16,26 @@ interface RequestOptions {
   silent?: boolean;
 }
 
+/** 通知的语义分类：网络、响应解析、服务端与请求错误分别对应不同提示样式。 */
+function failureKindOf(error: ApiClientError): ApiFailureKind {
+  if (error.status === 0) return "network";
+  if (error.code === "INVALID_RESPONSE") return "response";
+  return error.status >= 500 ? "server" : "request";
+}
+
+/** HTTP 成功但信封携带业务错误码时，以信封码为准；无法归类视为网关错误。 */
+function resolveStatus(response: Response, payload: { code?: number } | null): number {
+  if (!response.ok) return response.status;
+  if (typeof payload?.code !== "number" || payload.code === 200) return 200;
+  return payload.code >= 400 && payload.code <= 599 ? payload.code : 502;
+}
+
 export async function apiMutator<T>(url: string, options: RequestOptions): Promise<T> {
   try {
     return await sendRequest<T>(url, options);
   } catch (error) {
     if (!options.silent && !options.signal?.aborted && error instanceof ApiClientError) {
-      notifyApiFailure(
-        error.status === 0
-          ? "network"
-          : error.code === "INVALID_RESPONSE"
-            ? "response"
-            : error.status >= 500
-              ? "server"
-              : "request",
-        error.message,
-      );
+      notifyApiFailure(failureKindOf(error), error.message);
       error.notified = true;
     }
     throw error;
@@ -77,13 +82,7 @@ async function sendRequest<T>(url: string, options: RequestOptions, allowRefresh
           data?: T;
         })
       : null;
-  const status = !response.ok
-    ? response.status
-    : typeof payload?.code === "number" && payload.code !== 200
-      ? payload.code >= 400 && payload.code <= 599
-        ? payload.code
-        : 502
-      : 200;
+  const status = resolveStatus(response, payload);
   if (status === 401) {
     if (allowRefresh && (await refreshSession())) return sendRequest<T>(url, options, false);
     expireSession();

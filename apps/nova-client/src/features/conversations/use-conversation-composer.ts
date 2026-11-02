@@ -61,6 +61,69 @@ const summarySchema = z.array(
     mtime: z.string().datetime(),
   }),
 );
+type SummaryItem = z.infer<typeof summarySchema>[number];
+
+/** SSH 与 Runner 两种目录的差异点：展示名、引用与失败文案；流程本身只保留一份实现。 */
+interface DirectoryAttachmentsSource {
+  title: string;
+  initialPath: string;
+  selectedPaths: string[];
+  loadDirectory: RemoteExplorerProps['loadDirectory'];
+  summarise: (paths: string[]) => Promise<{ items: unknown }>;
+  displayName: (item: SummaryItem) => string;
+  describe?: (name: string) => string;
+  makeRef: (item: SummaryItem) => Attachment['ref'];
+  failureMessage: string;
+}
+
+/** 统一的「浏览目录 → 摘要校验 → 去重合并 → 关闭」附件选择流程；原先 SSH/Runner 两分支各写一遍。 */
+function buildAttachmentsExplorer(
+  source: DirectoryAttachmentsSource,
+  state: {
+    open: boolean;
+    close: () => void;
+    append: (files: ComposerAttachment<Attachment>[]) => void;
+    fail: (error: unknown) => void;
+  },
+): RemoteExplorerProps {
+  return {
+    open: state.open,
+    onClose: state.close,
+    mode: 'file',
+    multiple: true,
+    title: source.title,
+    initialPath: source.initialPath,
+    selectedPaths: source.selectedPaths,
+    loadDirectory: source.loadDirectory,
+    onConfirm: async (entries) => {
+      try {
+        const result = await source.summarise(entries.map((entry) => entry.path));
+        const verified = summarySchema.parse(result.items);
+        state.append(
+          verified.map((item): ComposerAttachment<Attachment> => {
+            const name = source.displayName(item);
+            return {
+              id: crypto.randomUUID(),
+              name,
+              description: source.describe ? source.describe(name) : name,
+              metadata: {
+                ref: source.makeRef(item),
+                name,
+                mimeType: 'text/plain',
+                size: item.size,
+                sha256: item.sha256,
+              },
+            };
+          }),
+        );
+        state.close();
+      } catch (cause) {
+        state.fail(cause);
+        throw new Error(source.failureMessage, { cause });
+      }
+    },
+  };
+}
 
 export interface ConversationComposerOptions {
   conversationId: string | null;
@@ -402,111 +465,60 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   }
   const sshRoot = selectedRemote?.rootPath ?? '';
   const runnerId = binding?.runnerId;
+  const appendRemoteFiles = (files: ComposerAttachment<Attachment>[]) =>
+    setRemote((current) =>
+      [
+        ...current,
+        ...files.filter((file) => !current.some((existing) => existing.name === file.name)),
+      ].slice(0, 32),
+    );
+  const explorerState = {
+    open: explorerOpen,
+    close: () => setExplorerOpen(false),
+    append: appendRemoteFiles,
+    fail: (cause: unknown) => setError(cause),
+  };
   const explorerProps: RemoteExplorerProps | undefined =
     remoteConnectionId && selectedRemote
-      ? {
-          open: explorerOpen,
-          onClose: () => setExplorerOpen(false),
-          mode: 'file',
-          multiple: true,
-          initialPath: '/',
-          title: '从 SSH 远程添加附件',
-          selectedPaths: remote.flatMap((item) =>
-            item.metadata.ref.kind === 'ssh'
-              ? [resolveRemotePath(sshRoot, item.metadata.ref.path)]
-              : [],
-          ),
-          loadDirectory: (path, signal) => loadRemoteDirectory(remoteConnectionId, path, signal),
-          onConfirm: async (entries) => {
-            try {
-              const result = await summariseRemoteFiles(remoteConnectionId, {
-                paths: entries.map((entry) => entry.path),
-              });
-              const verified = summarySchema.parse(result.items);
-              setRemote((current) =>
-                [
-                  ...current,
-                  ...verified
-                    .filter(
-                      (item) =>
-                        !current.some(
-                          (existing) => existing.name === relativeRemotePath(sshRoot, item.path),
-                        ),
-                    )
-                    .map((item): ComposerAttachment<Attachment> => ({
-                      id: crypto.randomUUID(),
-                      name: relativeRemotePath(sshRoot, item.path),
-                      description: 'SSH · ' + relativeRemotePath(sshRoot, item.path),
-                      metadata: {
-                        ref: {
-                          kind: 'ssh',
-                          remoteConnectionId,
-                          path: item.path,
-                        },
-                        name: relativeRemotePath(sshRoot, item.path),
-                        mimeType: 'text/plain',
-                        size: item.size,
-                        sha256: item.sha256,
-                      },
-                    })),
-                ].slice(0, 32),
-              );
-              setExplorerOpen(false);
-            } catch (cause) {
-              setError(cause);
-              throw new Error('无法读取远程文件摘要，请重试。', { cause });
-            }
-          },
-        }
-      : mode === 'project' && binding && runnerId
-        ? {
-            open: explorerOpen,
-            onClose: () => setExplorerOpen(false),
-            mode: 'file',
-            multiple: true,
-            initialPath: binding.canonicalCwd,
+      ? buildAttachmentsExplorer(
+          {
+            title: '从 SSH 远程添加附件',
+            initialPath: '/',
             selectedPaths: remote.flatMap((item) =>
-              item.metadata.ref.kind === 'runner' ? [item.metadata.ref.path] : [],
+              item.metadata.ref.kind === 'ssh'
+                ? [resolveRemotePath(sshRoot, item.metadata.ref.path)]
+                : [],
             ),
-            title: '从项目 Runner 添加附件',
-            loadDirectory: (path, signal) => loadRunnerDirectory(runnerId, path, signal),
-            onConfirm: async (entries) => {
-              try {
-                const result = await summariseRunnerFiles(runnerId, {
-                  paths: entries.map((entry) => entry.path),
-                });
-                const verified = summarySchema.parse(result.items);
-                setRemote((current) =>
-                  [
-                    ...current,
-                    ...verified
-                      .filter((item) => !current.some((existing) => existing.name === item.path))
-                      .map((item): ComposerAttachment<Attachment> => ({
-                        id: crypto.randomUUID(),
-                        name: item.path,
-                        description: item.path,
-                        metadata: {
-                          ref: {
-                            kind: 'runner',
-                            runnerId,
-                            workspaceId: binding.workspaceId,
-                            path: item.path,
-                          },
-                          name: item.path,
-                          mimeType: 'text/plain',
-                          size: item.size,
-                          sha256: item.sha256,
-                        },
-                      })),
-                  ].slice(0, 32),
-                );
-                setExplorerOpen(false);
-              } catch (cause) {
-                setError(cause);
-                throw new Error('无法获取文件摘要，请重试。', { cause });
-              }
+            loadDirectory: (path, signal) => loadRemoteDirectory(remoteConnectionId, path, signal),
+            summarise: (paths) => summariseRemoteFiles(remoteConnectionId, { paths }),
+            displayName: (item) => relativeRemotePath(sshRoot, item.path),
+            describe: (name) => 'SSH · ' + name,
+            makeRef: (item) => ({ kind: 'ssh', remoteConnectionId, path: item.path }),
+            failureMessage: '无法读取远程文件摘要，请重试。',
+          },
+          explorerState,
+        )
+      : mode === 'project' && binding && runnerId
+        ? buildAttachmentsExplorer(
+            {
+              title: '从项目 Runner 添加附件',
+              initialPath: binding.canonicalCwd,
+              selectedPaths: remote.flatMap((item) =>
+                item.metadata.ref.kind === 'runner' ? [item.metadata.ref.path] : [],
+              ),
+              loadDirectory: (path, signal) => loadRunnerDirectory(runnerId, path, signal),
+              summarise: (paths) => summariseRunnerFiles(runnerId, { paths }),
+              displayName: (item) => item.path,
+              makeRef: (item) => ({
+                kind: 'runner',
+                runnerId,
+                workspaceId: binding.workspaceId,
+                path: item.path,
+              }),
+              failureMessage: '无法获取文件摘要，请重试。',
             },
-          }
+            explorerState,
+          )
         : undefined;
 
   const composer: ChatComposerConfig<Attachment> = {

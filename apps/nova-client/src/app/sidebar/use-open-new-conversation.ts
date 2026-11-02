@@ -18,8 +18,3 @@ export function useOpenNewConversation(): SidebarNewConversation {
     }
   };
 }
-
-/** 源参考 `newConversationPath(project)` 的等价路径表达式。 */
-export function newConversationPath(project?: SidebarNewConversationProject) {
-  return project ? `/conversations?projectId=${project.id}` : '/conversations';
-}

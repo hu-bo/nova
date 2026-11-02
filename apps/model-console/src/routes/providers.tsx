@@ -20,6 +20,22 @@ import { ProviderForm } from "../providers/provider-form.js";
 
 type Confirmation = { kind: "disable" | "delete"; provider: Provider } | null;
 
+/** 停用/删除确认弹窗的文案表：新增操作种类只需在此登记。 */
+const CONFIRMATION_COPY = {
+  disable: {
+    verb: "停用",
+    description: "关联模型将无法用于后续配置，重新启用前不会恢复。",
+    confirmLabel: "确认停用",
+    danger: false,
+  },
+  delete: {
+    verb: "删除",
+    description: "凭据会被永久擦除，关联模型会一并停用；历史用量仍会保留。",
+    confirmLabel: "确认删除",
+    danger: true,
+  },
+} as const;
+
 export function ProvidersRoute() {
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: queryKeys.providers, queryFn: ({ signal }) => listProviders({ signal }) });
@@ -33,32 +49,41 @@ export function ProvidersRoute() {
     setCopiedId(provider.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+  // Provider 变更会级联影响模型展示，两个列表都要失效。
+  const invalidateConfig = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.providers }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.models }),
+    ]);
   const saveMutation = useMutation({
     mutationFn: (input: CreateProvider | UpdateProvider) =>
       editing ? updateProvider(editing.id, input) : createProvider(input as CreateProvider),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.providers });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.models });
-    },
+    onSuccess: () => invalidateConfig(),
   });
   const stateMutation = useMutation({
     mutationFn: ({ provider, enabled }: { provider: Provider; enabled: boolean }) =>
       updateProvider(provider.id, { enabled }),
     onSuccess: async () => {
       setConfirmation(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.providers });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.models });
+      await invalidateConfig();
     },
   });
   const deleteMutation = useMutation({
     mutationFn: (provider: Provider) => deleteProvider(provider.id),
     onSuccess: async () => {
       setConfirmation(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.providers });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.models });
+      await invalidateConfig();
     },
   });
   const providers = query.data ?? [];
+  const confirm = confirmation
+    ? {
+        ...CONFIRMATION_COPY[confirmation.kind],
+        title: `${CONFIRMATION_COPY[confirmation.kind].verb} ${confirmation.provider.name}`,
+        isDelete: confirmation.kind === "delete",
+        provider: confirmation.provider,
+      }
+    : null;
 
   return (
     <div className="space-y-8">
@@ -217,28 +242,22 @@ export function ProvidersRoute() {
         }}
         onSubmit={(input) => saveMutation.mutateAsync(input)}
       />
-      <ConfirmDialog
-        open={confirmation !== null}
-        title={
-          confirmation?.kind === "delete"
-            ? `删除 ${confirmation.provider.name}`
-            : `停用 ${confirmation?.provider.name ?? "Provider"}`
-        }
-        description={
-          confirmation?.kind === "delete"
-            ? "凭据会被永久擦除，关联模型会一并停用；历史用量仍会保留。"
-            : "关联模型将无法用于后续配置，重新启用前不会恢复。"
-        }
-        confirmLabel={confirmation?.kind === "delete" ? "确认删除" : "确认停用"}
-        danger={confirmation?.kind === "delete"}
-        pending={stateMutation.isPending || deleteMutation.isPending}
-        onClose={() => setConfirmation(null)}
-        onConfirm={() => {
-          if (!confirmation) return;
-          if (confirmation.kind === "delete") deleteMutation.mutate(confirmation.provider);
-          else stateMutation.mutate({ provider: confirmation.provider, enabled: false });
-        }}
-      />
+      {confirm && (
+        <ConfirmDialog
+          open
+          title={confirm.title}
+          description={confirm.description}
+          confirmLabel={confirm.confirmLabel}
+          danger={confirm.danger}
+          pending={stateMutation.isPending || deleteMutation.isPending}
+          onClose={() => setConfirmation(null)}
+          onConfirm={() =>
+            confirm.isDelete
+              ? deleteMutation.mutate(confirm.provider)
+              : stateMutation.mutate({ provider: confirm.provider, enabled: false })
+          }
+        />
+      )}
     </div>
   );
 }

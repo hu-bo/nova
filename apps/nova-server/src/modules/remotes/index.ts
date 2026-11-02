@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { bearerToken, requirePrincipal } from "../../shared/authorization.js";
-import { errorResponseSchema } from "../../shared/error.schema.js";
+import { errorResponses } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 import { fileListingQuerySchema, remoteFileListingSchema, fileSummaryResponseSchema } from "../runners/index.js";
 import { RemoteCredentialTransport, CREDENTIAL_MAX_LENGTH, PASSPHRASE_MAX_LENGTH } from "./credential-transport.js";
@@ -32,13 +32,7 @@ export async function remotesModule(app: FastifyInstance) {
   const service = createRemoteService(app);
   const transport = new RemoteCredentialTransport(app.credentialEncryptionKey);
   const typed = app.withTypeProvider<ZodTypeProvider>();
-  const errors = {
-    400: errorResponseSchema,
-    401: errorResponseSchema,
-    404: errorResponseSchema,
-    409: errorResponseSchema,
-    500: errorResponseSchema,
-  };
+  const errors = errorResponses(400, 401, 404, 409, 500);
   typed.get(
     "/remote-connections",
     {

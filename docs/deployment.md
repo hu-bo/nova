@@ -1,6 +1,6 @@
 # nova-dsh 上线部署
 
-nova-dsh 接替 nova，沿用 nova 的三个独立 Drone 配置。各应用分别构建、打包、SCP 上传并通过 SSH 发布，后端使用 Docker Compose。默认仅在 `main` 分支的 push / 手动构建触发，PR 不发布。
+nova-dsh 接替 nova，沿用 nova 的三个独立 Drone 配置。各应用分别构建、打包、SCP 上传并通过 SSH 发布，后端使用 Docker Compose。默认仅在 `master` 分支的 push / 手动构建触发，PR 不发布。
 
 | 源码目录             | 当前包名                             | 服务器目录                     |
 | -------------------- | ------------------------------------ | ------------------------------ |
@@ -20,7 +20,11 @@ nova-dsh 接替 nova，沿用 nova 的三个独立 Drone 配置。各应用分�
 | nova-server   | `apps/nova-server/.drone.yml`   |
 | model-console | `apps/model-console/.drone.yml` |
 
-每个任务都需要 checkout 整个 nova-dsh 仓库，构建命令从仓库根目录执行。仓库根目录不再提供统一发布的 `.drone.yml`。如果生产分支不是 `main`，修改三个文件中的 `trigger.branch`。停止旧 nova 的发布任务，避免覆盖同一组服务器目录。
+每个任务都需要 checkout 整个 nova-dsh 仓库，构建命令从仓库根目录执行。仓库根目录不再提供统一发布的 `.drone.yml`。如果生产分支不是 `master`，修改三个文件中的 `trigger.branch`。停止旧 nova 的发布任务，避免覆盖同一组服务器目录。
+
+日志出现 `does not match branch` / `no matching pipelines` 时，核对触发分支与 `trigger.branch`；`branch` 填 `master`，完整的 `refs/heads/master` 应写在 `trigger.ref`。`push` 和手动构建的 `custom` 事件都需要通过分支条件。修改配置后，使用包含修复的新提交重新构建。
+
+若日志是 `cannot find yaml` 且包含向 HTTP 地址发起的 POST 错误，先核对 Drone Server 的 `DRONE_YAML_ENDPOINT` 与配置扩展服务日志。`context canceled` 表示请求被取消，不能据此认定仓库缺少 YAML；需从 Drone Server 容器内确认扩展地址可达，并检查同一时刻服务是否重启、请求是否被取消或触及超时。配置扩展负责返回 YAML，只有返回 HTTP 204 时才回退到仓库配置，见 [Drone Configuration Extension](https://docs.drone.io/extend/config/)。
 
 复用三个 Drone secrets：
 

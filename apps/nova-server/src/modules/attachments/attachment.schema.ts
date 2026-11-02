@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { errorResponseSchema } from "../../shared/error.schema.js";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 
 export const createUploadBodySchema = z
@@ -65,5 +64,5 @@ export const imageUrlResponseSchema = z.object({
   expiresAt: z.string().datetime(),
 });
 
-export { errorResponseSchema, okEnvelope, success };
+export { okEnvelope, success };
 export type CreateUploadInput = z.infer<typeof createUploadBodySchema>;

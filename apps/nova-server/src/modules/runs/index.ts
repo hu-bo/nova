@@ -11,6 +11,8 @@ export async function runsModule(app: FastifyInstance): Promise<void> {
 export {
   runJournal,
   type RunJournal,
+} from "./run.repository.js";
+export {
   conversationView,
   effectiveCapabilities,
   emptyProjection,
@@ -19,6 +21,6 @@ export {
   messageDTO,
   publicInteraction,
   queuedInput,
-} from "./run.repository.js";
+} from "./run-dto.js";
 export { runtimeAdapters } from "./runtime-adapter.js";
 export { runProjectionReader } from "./run-projection.repository.js";

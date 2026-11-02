@@ -53,6 +53,13 @@ const remoteFormSchema = z.object({
 });
 type RemoteForm = z.infer<typeof remoteFormSchema>;
 
+/** 连接状态徽章呈现；未列出的状态一律回落为「待验证」。 */
+const STATUS_BADGE_BY_STATE: Record<string, { className: string; label: string }> = {
+  verified: { className: 'bg-success/10 text-success', label: '已验证' },
+  offline: { className: 'bg-danger/10 text-danger', label: '连接失败' },
+};
+const UNVERIFIED_BADGE = { className: 'bg-slate-100 text-slate-500', label: '待验证' };
+
 export function RemoteConnectionsPage() {
   const connections = useRemoteConnectionsQuery();
   const [editor, setEditor] = useState<RemoteConnection | 'new' | null>(null);
@@ -161,18 +168,10 @@ export function RemoteConnectionsPage() {
               <span
                 className={
                   'rounded-full px-2.5 py-1 text-xs ' +
-                  (connection.status === 'verified'
-                    ? 'bg-success/10 text-success'
-                    : connection.status === 'offline'
-                      ? 'bg-danger/10 text-danger'
-                      : 'bg-slate-100 text-slate-500')
+                  (STATUS_BADGE_BY_STATE[connection.status] ?? UNVERIFIED_BADGE).className
                 }
               >
-                {connection.status === 'verified'
-                  ? '已验证'
-                  : connection.status === 'offline'
-                    ? '连接失败'
-                    : '待验证'}
+                {(STATUS_BADGE_BY_STATE[connection.status] ?? UNVERIFIED_BADGE).label}
               </span>
             </div>
             <p className="mt-4 flex items-center gap-2 break-all text-sm text-slate-600">
