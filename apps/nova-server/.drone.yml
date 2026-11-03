@@ -43,6 +43,8 @@ steps:
       - test -s .env
       - node --env-file=.env scripts/check-deployment.mjs
       - tar -czf /drone/src/$APP_NAME.tar.gz .
+      - chmod 644 /drone/src/$APP_NAME.tar.gz
+      - ls -ld /drone /drone/src /drone/src/$APP_NAME.tar.gz
 
   - name: scp
     image: appleboy/drone-scp
