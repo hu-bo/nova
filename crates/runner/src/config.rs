@@ -59,8 +59,7 @@ impl Config {
         let server =
             choose(cli.server, file.server).ok_or("missing --server or NOVA_RUNNER_SERVER")?;
         let token = choose(cli.token, file.token).ok_or("missing --token or NOVA_RUNNER_TOKEN")?;
-        let workspace = choose(cli.workspace, file.workspace)
-            .ok_or("missing --workspace or NOVA_RUNNER_WORKSPACE")?;
+        let workspace = choose(cli.workspace, file.workspace).unwrap_or_else(|| PathBuf::from("."));
         if token.trim().is_empty() {
             return Err("Runner token cannot be empty".into());
         }
@@ -105,5 +104,36 @@ fn choose<T>(first: Option<T>, second: Option<T>) -> Option<T> {
 impl Cli {
     pub fn parse() -> Self {
         <Self as Parser>::parse()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cli(workspace: Option<PathBuf>) -> Cli {
+        Cli {
+            config: None,
+            server: Some("ws://127.0.0.1:9203/runner/v1/connect".into()),
+            token: Some("test-token".into()),
+            workspace,
+            workspace_id: None,
+            display_name: None,
+            runner_id: None,
+            max_concurrency: None,
+            read_only: false,
+        }
+    }
+
+    #[test]
+    fn workspace_defaults_to_current_directory() {
+        let config = Config::load(cli(None)).unwrap();
+        assert_eq!(config.workspace, fs::canonicalize(".").unwrap());
+    }
+
+    #[test]
+    fn explicit_workspace_overrides_current_directory() {
+        let config = Config::load(cli(Some(PathBuf::from("..")))).unwrap();
+        assert_eq!(config.workspace, fs::canonicalize("..").unwrap());
     }
 }

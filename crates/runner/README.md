@@ -4,7 +4,7 @@
 
 Prebuilt binaries are distributed as [`@nnova/runner`](../../packages/runner/README.md) on npm and through the `runner-release` GitHub workflow. Push a `runner-v<version>` tag to build the four supported platforms, Windows installer, Linux installer, and checksums.
 
-Configure it with command-line options, a TOML file (`--config runner.toml`), or `NOVA_RUNNER_*` environment variables. Command-line options take precedence over TOML values; the workspace must already exist.
+Configure it with command-line options, a TOML file (`--config runner.toml`), or `NOVA_RUNNER_*` environment variables. Command-line options take precedence over TOML values; the workspace must already exist. When no workspace is configured, the Runner uses the directory from which it was started.
 
 ```toml
 server = "ws://127.0.0.1:4100/runner/v1/connect"

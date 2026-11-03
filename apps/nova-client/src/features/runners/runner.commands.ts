@@ -1,7 +1,7 @@
-import type { RunnerToken } from '@/features/runners';
+import type { RunnerToken } from './runner.queries';
 
 export type RunnerCommandShell = 'powershell' | 'bash';
-export type RunnerCommandRuntime = 'cargo' | 'binary';
+export type RunnerCommandRuntime = 'cargo' | 'binary' | 'npx';
 
 export function runnerTokenCanStart(token: RunnerToken) {
   return (
@@ -27,7 +27,6 @@ export function runnerStartCommand(
   if (!endpoint) return { command: null, error: '正在加载 Runner 连接地址…' };
   if (!token)
     return { command: null, error: '未获取可用的 Runner Token，请刷新或先轮换旧版凭据。' };
-  if (!workspace) return { command: null, error: '请填写 Runner 工作目录。' };
   if (
     [options.endpoint, options.token, options.workspace].some((value) =>
       Array.from(value).some((character) => {
@@ -49,7 +48,12 @@ export function runnerStartCommand(
 
   const quote = (value: string) =>
     "'" + value.replaceAll("'", options.shell === 'powershell' ? "''" : "'\\''") + "'";
-  const executable = options.runtime === 'cargo' ? 'cargo run -p nova-runner --' : 'nova-runner';
+  const executable =
+    options.runtime === 'cargo'
+      ? 'cargo run -p nova-runner --'
+      : options.runtime === 'npx'
+        ? 'npx --yes --package @nnova/runner nova-runner'
+        : 'nova-runner';
   return {
     command:
       executable +
@@ -57,8 +61,7 @@ export function runnerStartCommand(
       quote(endpoint) +
       ' --token ' +
       quote(token) +
-      ' --workspace ' +
-      quote(workspace),
+      (workspace ? ' --workspace ' + quote(workspace) : ''),
     error: null,
   };
 }

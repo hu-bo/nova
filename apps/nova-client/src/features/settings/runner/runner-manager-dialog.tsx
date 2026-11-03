@@ -23,9 +23,9 @@ import { displayWorkspacePath } from '@/lib/workspace-path';
 import { queryKeys } from '@/api/query-keys';
 import { useIdentity } from '@/features/auth';
 import { useRunnerCatalog } from './use-runner-catalog';
-import { useRunnerConnection } from './use-runner-connection';
+import { useRunnerConnection } from '@/features/runners';
 import { useRunnerTokens } from './use-runner-tokens';
-import { runnerTokenCanStart } from './commands';
+import { runnerTokenCanStart } from '@/features/runners';
 import { RunnerStartCommandDialog } from './runner-start-command-dialog';
 
 interface RunnerManagerDialogProps {

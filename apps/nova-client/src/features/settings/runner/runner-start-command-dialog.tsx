@@ -11,8 +11,8 @@ import {
   runnerTokenCanStart,
   type RunnerCommandRuntime,
   type RunnerCommandShell,
-} from './commands';
-import { useRunnerConnection } from './use-runner-connection';
+  useRunnerConnection,
+} from '@/features/runners';
 
 export function RunnerStartCommandDialog({
   token,
