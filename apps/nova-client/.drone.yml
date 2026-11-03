@@ -69,14 +69,14 @@ steps:
       command_timeout: 2m
       script:
         - APP_NAME=nova-client
-        - APP_DIR=/data/app/agent-web-ui
-        - RELEASE_ROOT=/temp/app/nova-dsh/nova-client/${DRONE_BUILD_NUMBER}
+        - APP_DIR=/data/app/nova-client
+        - RELEASE_ROOT=/temp/app/nova/nova-client/${DRONE_BUILD_NUMBER}
         - RELEASE_DIR=$RELEASE_ROOT/release
         - BACKUP_DIR=/data/app/nova-dsh-backups/$APP_NAME-${DRONE_BUILD_NUMBER}-$(date -u +%Y%m%dT%H%M%SZ)
         - mkdir -p "$RELEASE_DIR" "$BACKUP_DIR"
         - tar -xzf "$RELEASE_ROOT/nova-client.tar.gz" -C "$RELEASE_DIR"
         - test -s "$RELEASE_DIR/dist/index.html"
-        - if [ -e "$APP_DIR" ]; then mv "$APP_DIR" "$BACKUP_DIR/agent-web-ui"; fi
+        - if [ -e "$APP_DIR" ]; then mv "$APP_DIR" "$BACKUP_DIR/nova-client"; fi
         - mv "$RELEASE_DIR" "$APP_DIR"
         - chmod 755 "$APP_DIR"
         - chmod -R a+rX "$APP_DIR/dist"
