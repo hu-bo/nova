@@ -17,7 +17,7 @@ const environmentSchema = z
       .regex(/^[\da-f]{64}$/i)
       .optional(),
     AUTH_MODE: z.enum(["dev", "casdoor"]).default("casdoor"),
-    AUTH_SERVICE_URL: z.string().url().default("http://auth.8and1.cn"),
+    AUTH_SERVICE_URL: z.string().default("http://auth.8and1.cn"),
     // Historical auth-service accepts ?token=. Switch explicitly once Bearer is supported.
     AUTH_SERVICE_TOKEN_TRANSPORT: z.enum(["header", "query"]).default("query"),
     AUTH_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().max(30_000).default(5000),
@@ -54,6 +54,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   return environmentSchema.parse({
     ...environment,
     // Compatibility with the previous deployment configuration; this is an Auth Service origin.
-    AUTH_SERVICE_URL: environment.AUTH_SERVICE_URL ?? environment.CASDOOR_ENDPOINT,
+    AUTH_SERVICE_URL: environment.AUTH_SERVICE_URL,
   });
 }
