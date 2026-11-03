@@ -29,6 +29,7 @@ steps:
     commands:
       - APP_NAME=nova-client
       - APP_PACKAGE=@nova/$APP_NAME
+      - echo "Building commit $DRONE_COMMIT_SHA"
       - corepack enable
       - corepack prepare pnpm@9.15.9 --activate
       - pnpm config set store-dir /cache/pnpm-store
@@ -37,8 +38,9 @@ steps:
       # chat-ui imports declarations exported from agent-ui-contracts/dist.
       - pnpm --fail-if-no-match --filter @nova/agent-ui-contracts run build
       - test -s packages/agent-ui-contracts/dist/index.d.ts
+      - test -s packages/chat-ui/node_modules/@nova/agent-ui-contracts/dist/index.d.ts
       # Generate from the committed nova-server OpenAPI snapshot.
-      - pnpm --fail-if-no-match --filter "$APP_PACKAGE" run build
+      - pnpm --fail-if-no-match --filter "@nova/nova-client" run build
       - tar -czf /drone/src/$APP_NAME.tar.gz -C apps/$APP_NAME dist
 
   - name: scp
