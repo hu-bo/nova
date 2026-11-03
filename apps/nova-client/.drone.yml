@@ -15,7 +15,7 @@ concurrency:
 volumes:
   - name: pnpm-cache
     host:
-      path: /var/lib/drone-cache/pnpm/nova-nova-client
+      path: /var/lib/drone-cache/pnpm/nova-client
 
 steps:
   - name: build and package
@@ -26,8 +26,6 @@ steps:
     environment:
       VITE_AUTH_BASE_URL: https://auth.8and1.cn/api
       VITE_AUTH_APP_NAME: nova
-      VITE_API_BASE_URL: ''
-      VITE_SSE_BASE_URL: ''
     commands:
       - APP_NAME=nova-client
       - APP_PACKAGE=@nova/$APP_NAME
@@ -65,8 +63,6 @@ steps:
       port: 22
       command_timeout: 2m
       script:
-        - set -eu
-        - umask 077
         - APP_NAME=nova-client
         - APP_DIR=/data/app/agent-web-ui
         - RELEASE_ROOT=/temp/app/nova-dsh/nova-client/${DRONE_BUILD_NUMBER}
