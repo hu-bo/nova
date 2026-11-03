@@ -26,6 +26,8 @@ nova-dsh 接替 nova，沿用 nova 的三个独立 Drone 配置。各应用分�
 
 日志出现 `No projects matched the filters` 时，核对 `pnpm --filter` 与应用 `package.json` 的 `name`。三个配置都通过 `APP_PACKAGE` 指定当前应用，并使用 `--fail-if-no-match`，避免未匹配到项目时跳过构建，直到复制产物才失败。
 
+SCP 日志出现 `tar: can't open 'nova-server.tar.gz': Permission denied` 时，检查构建产物的本地文件权限。server 构建打包步骤使用容器默认权限创建压缩包，SCP 步骤使用镜像默认用户，压缩包需允许该用户读取。`settings.username: root` 只指定远端 SSH 账号，不改变本地插件进程的用户。
+
 若日志是 `cannot find yaml` 且包含向 HTTP 地址发起的 POST 错误，先核对 Drone Server 的 `DRONE_YAML_ENDPOINT` 与配置扩展服务日志。`context canceled` 表示请求被取消，不能据此认定仓库缺少 YAML；需从 Drone Server 容器内确认扩展地址可达，并检查同一时刻服务是否重启、请求是否被取消或触及超时。配置扩展负责返回 YAML，只有返回 HTTP 204 时才回退到仓库配置，见 [Drone Configuration Extension](https://docs.drone.io/extend/config/)。
 
 复用三个 Drone secrets：

@@ -39,7 +39,6 @@ steps:
       # Keep dev dependencies for the versioned Drizzle migration CLI.
       - pnpm --fail-if-no-match --filter "$APP_PACKAGE" deploy --node-linker=hoisted --prod=false "$APP_DEPLOY_DIR"
       - cd "$APP_DEPLOY_DIR"
-      - umask 077
       - 'wget -q --header="Authorization: Bearer $API_CONFIG_TOKEN_SECRET" "http://config.8and1.cn/api/pull/nova-server/env" -O .env'
       - test -s .env
       - node --env-file=.env scripts/check-deployment.mjs
