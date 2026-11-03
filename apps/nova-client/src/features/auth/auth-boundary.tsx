@@ -12,9 +12,11 @@ import {
 const devAuthEnabled = import.meta.env.DEV && import.meta.env.VITE_AUTH_MODE === 'dev';
 const DevLogin = devAuthEnabled ? lazy(() => import('./dev-login')) : null;
 const authConfigured = !devAuthEnabled;
+const authApiBase = import.meta.env.VITE_AUTH_BASE_URL || 'https://auth.8and1.cn/api';
 const config = {
   appName: import.meta.env.VITE_AUTH_APP_NAME || 'nova',
-  authApiBase: import.meta.env.VITE_AUTH_BASE_URL || 'https://auth.8and1.cn/api',
+  authApiBase:
+    window.location.protocol === 'http:' ? authApiBase.replace(/^https:/i, 'http:') : authApiBase,
   redirectUri: `${window.location.origin}/callback`,
   storage: { type: 'sessionStorage' as const, prefix: 'nova_' },
   silentRefresh: true,
