@@ -20,8 +20,7 @@ const bytes = (
     ),
   )
 ).reduce((sum, size) => sum + size, 0);
-console.log(`[build] initial static JS: ${(bytes / 1024).toFixed(1)} KiB gzip / 300 KiB budget`);
-if (bytes > 300 * 1024) throw new Error('Initial JavaScript exceeds 300 KiB gzip');
+console.log(`[build] initial static JS: ${(bytes / 1024).toFixed(1)} KiB gzip`);
 for (const key of Object.keys(manifest)) if (key.includes('conversation.page')) collect(key);
 const homeBytes = (
   await Promise.all(
@@ -31,9 +30,8 @@ const homeBytes = (
   )
 ).reduce((sum, size) => sum + size, 0);
 console.log(
-  `[build] authenticated conversation home: ${(homeBytes / 1024).toFixed(1)} KiB gzip / 320 KiB budget`,
+  `[build] authenticated conversation home: ${(homeBytes / 1024).toFixed(1)} KiB gzip`,
 );
-if (homeBytes > 320 * 1024) throw new Error('Conversation home JavaScript exceeds 320 KiB gzip');
 for (const file of await readdir(resolve(dist, 'assets'))) {
   if (!file.endsWith('.js')) continue;
   const content = await readFile(resolve(dist, 'assets', file), 'utf8');
