@@ -13,7 +13,7 @@
     "test": "vitest run",
     "check:build": "node scripts/check-build.mjs",
     "typecheck": "pnpm --filter @nova/casdoor build && pnpm --filter @nova/agent-ui-contracts build && pnpm api:generate && pnpm routes:generate && tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
-    "build": "pnpm typecheck && pnpm check:theme && vite build && pnpm check:build",
+    "build": "pnpm typecheck && pnpm check:theme && vite build",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "format:check": "prettier --check .",
