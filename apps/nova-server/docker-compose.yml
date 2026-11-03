@@ -1,8 +1,8 @@
 services:
-  agent-server:
+  nova-server:
     image: node:22-alpine
-    container_name: nova-agent-server
-    working_dir: /app/agent-server
+    container_name: nova-server
+    working_dir: /data/app/agent-server
     env_file:
       - .env
     environment:
@@ -20,7 +20,7 @@ services:
     ports:
       - "9203:9203"
     volumes:
-      - .:/app/agent-server:ro
+      - .:/data/app/agent-server:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

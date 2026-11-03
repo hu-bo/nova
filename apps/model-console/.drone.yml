@@ -24,17 +24,16 @@ steps:
       - name: pnpm-cache
         path: /cache
     commands:
+      - APP_NAME=model-console
+      - APP_PACKAGE=@nova/$APP_NAME
       - corepack enable
       - corepack prepare pnpm@9.15.9 --activate
       - pnpm config set store-dir /cache/pnpm-store
       - pnpm config set registry https://registry.npmmirror.com/
-      - pnpm install --frozen-lockfile
+      - pnpm --fail-if-no-match --filter "$APP_PACKAGE..." install --frozen-lockfile
       # prebuild builds the contracts and Casdoor packages, then generates the API.
-      - pnpm --filter @nova/model-console run build
-      - mkdir -p output/model-console
-      - cp -R apps/model-console/dist output/model-console/dist
-      - cp scripts/deploy-nova.sh output/model-console/deploy-nova.sh
-      - tar -czf model-console.tar.gz -C output/model-console .
+      - pnpm --fail-if-no-match --filter "$APP_PACKAGE" run build
+      - tar -czf /drone/src/$APP_NAME.tar.gz -C apps/$APP_NAME dist
 
   - name: scp
     image: appleboy/drone-scp
@@ -63,8 +62,17 @@ steps:
       script:
         - set -eu
         - umask 077
-        - RELEASE_DIR=/temp/app/nova-dsh/model-console/${DRONE_BUILD_NUMBER}/release
-        - mkdir -p "$RELEASE_DIR"
-        - tar -xzf /temp/app/nova-dsh/model-console/${DRONE_BUILD_NUMBER}/model-console.tar.gz -C "$RELEASE_DIR"
-        - sh "$RELEASE_DIR/deploy-nova.sh" model-console "$RELEASE_DIR"
-        - rm -rf /temp/app/nova-dsh/model-console/${DRONE_BUILD_NUMBER}
+        - APP_NAME=model-console
+        - APP_DIR=/data/app/model-console
+        - RELEASE_ROOT=/temp/app/nova-dsh/model-console/${DRONE_BUILD_NUMBER}
+        - RELEASE_DIR=$RELEASE_ROOT/release
+        - BACKUP_DIR=/data/app/nova-dsh-backups/$APP_NAME-${DRONE_BUILD_NUMBER}-$(date -u +%Y%m%dT%H%M%SZ)
+        - mkdir -p "$RELEASE_DIR" "$BACKUP_DIR"
+        - tar -xzf "$RELEASE_ROOT/model-console.tar.gz" -C "$RELEASE_DIR"
+        - test -s "$RELEASE_DIR/dist/index.html"
+        - if [ -e "$APP_DIR" ]; then mv "$APP_DIR" "$BACKUP_DIR/model-console"; fi
+        - mv "$RELEASE_DIR" "$APP_DIR"
+        - chmod 755 "$APP_DIR"
+        - chmod -R a+rX "$APP_DIR/dist"
+        - rm -rf "$RELEASE_ROOT"
+        - echo "$APP_NAME deployment complete. Previous files are in $BACKUP_DIR."
