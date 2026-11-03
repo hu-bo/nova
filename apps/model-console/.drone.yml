@@ -15,7 +15,7 @@ concurrency:
 volumes:
   - name: pnpm-cache
     host:
-      path: /var/lib/drone-cache/pnpm/nova-dsh-model-console
+      path: /var/lib/drone-cache/pnpm/nova-model-console
 
 steps:
   - name: build and package
@@ -47,7 +47,7 @@ steps:
       port: 22
       password:
         from_secret: SSH_PWD
-      target: /temp/app/nova-dsh/model-console/${DRONE_BUILD_NUMBER}
+      target: /temp/app/nova/model-console/${DRONE_BUILD_NUMBER}
 
   - name: deploy
     image: appleboy/drone-ssh
@@ -64,7 +64,7 @@ steps:
         - umask 077
         - APP_NAME=model-console
         - APP_DIR=/data/app/model-console
-        - RELEASE_ROOT=/temp/app/nova-dsh/model-console/${DRONE_BUILD_NUMBER}
+        - RELEASE_ROOT=/temp/app/nova/model-console/${DRONE_BUILD_NUMBER}
         - RELEASE_DIR=$RELEASE_ROOT/release
         - BACKUP_DIR=/data/app/nova-dsh-backups/$APP_NAME-${DRONE_BUILD_NUMBER}-$(date -u +%Y%m%dT%H%M%SZ)
         - mkdir -p "$RELEASE_DIR" "$BACKUP_DIR"
