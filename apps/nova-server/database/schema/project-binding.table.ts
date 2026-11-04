@@ -9,6 +9,7 @@ import { boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from "
  *   docs/nova-server.md §3.1)。
  */
 export type InstructionConfig = {
+  readonly source?: "agents" | "claude" | "custom" | "none";
   readonly baselineFiles?: readonly { readonly path: string; readonly sha256: string }[];
   readonly customPrompt?: string;
 };

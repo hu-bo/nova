@@ -65,6 +65,18 @@ test("SSH project bindings persist absolute directories, including /", async () 
     assert.equal(stored.canonicalCwd, canonicalCwd);
     assert.equal(binding.canonicalCwd, canonicalCwd);
   }
+  for (const source of ["agents", "claude", "custom", "none"] as const) {
+    const binding = await service.bind(projectId, "owner", {
+      remoteConnectionId,
+      canonicalCwd: "/project",
+      expectedRevision: 0,
+      instructionSource: source,
+      customPrompt: "custom instructions",
+    });
+    const expected = { source, customPrompt: source === "custom" ? "custom instructions" : "" };
+    assert.deepEqual(stored.instructions, expected);
+    assert.deepEqual(binding.instructions, expected);
+  }
   await assert.rejects(
     service.bind(projectId, "owner", {
       runnerId: projectId,

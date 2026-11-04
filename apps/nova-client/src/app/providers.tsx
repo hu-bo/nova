@@ -1,13 +1,13 @@
-import { QueryClientProvider } from '@tanstack/react-query';
-import type { QueryClient } from '@tanstack/react-query';
+import { AuthBoundary } from '@/features/auth';
+import { PreferencesProvider } from '@/features/settings';
 import { Spinner, Toast } from '@heroui/react';
+import type { QueryClient } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { AccountProviders } from './account-providers';
 
 /** 与下方 <Toast.Provider placement> 及 <Toast placement> 保持一致（堆叠方向/变换原点依赖它）。 */
 const TOAST_PLACEMENT = 'top' as const;
-import { AuthBoundary, useIdentity } from '@/features/auth';
-import { RunRuntimeHost } from '@/features/runs/runtime';
-import { ModelSettingsProvider, PreferencesProvider } from '@/features/settings';
 
 export function AppProviders({
   queryClient,
@@ -54,15 +54,5 @@ export function AppProviders({
         </AuthBoundary>
       </PreferencesProvider>
     </QueryClientProvider>
-  );
-}
-
-function AccountProviders({ children }: { children: ReactNode }) {
-  const { identity } = useIdentity();
-  if (!identity) return children;
-  return (
-    <ModelSettingsProvider>
-      <RunRuntimeHost>{children}</RunRuntimeHost>
-    </ModelSettingsProvider>
   );
 }

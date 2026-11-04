@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const instructionSourceSchema = z.enum(["agents", "claude", "custom", "none"]);
+
 export const bindingSchema = z.object({
   id: z.string().uuid(),
   revision: z.number().int().positive(),
@@ -7,7 +9,7 @@ export const bindingSchema = z.object({
   remoteConnectionId: z.string().uuid().nullable().optional(),
   workspaceId: z.string(),
   canonicalCwd: z.string(),
-  instructions: z.object({ customPrompt: z.string().optional() }),
+  instructions: z.object({ source: instructionSourceSchema.optional(), customPrompt: z.string().optional() }),
 });
 export const bindProjectBodySchema = z
   .object({
@@ -16,6 +18,7 @@ export const bindProjectBodySchema = z
     workspaceId: z.string().min(1).max(256).optional(),
     canonicalCwd: z.string().min(1).max(1024),
     customPrompt: z.string().max(32000).default(""),
+    instructionSource: instructionSourceSchema.optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()

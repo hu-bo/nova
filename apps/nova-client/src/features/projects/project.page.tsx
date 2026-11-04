@@ -1,6 +1,9 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ErrorNotice } from '@/components/error-notice';
+import { Button } from '@/components/ui/button';
+import { useConversationsQuery } from '@/features/conversations';
+import { useRemoteConnectionsQuery } from '@/features/remotes';
+import { runnerStatus, useRunnersQuery } from '@/features/runners';
+import { Link, useParams } from '@tanstack/react-router';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -9,35 +12,12 @@ import {
   Pencil,
   Settings2,
 } from 'lucide-react';
-import { bindProjectEnvironment, deleteProject, updateProject } from '@/api/generated/projects';
-import type { GetProjectBinding200 } from '@/api/generated/projectsAPI.schemas';
-import { queryKeys } from '@/api/query-keys';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogBody,
-} from '@/components/ui/dialog';
-import { ErrorNotice } from '@/components/error-notice';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { useIdentity } from '@/features/auth';
-import { useConversationsQuery } from '@/features/conversations';
-import { useRunnersQuery, runnerStatus } from '@/features/runners';
-import { useModelSettings } from '@/features/settings';
+import { useState } from 'react';
+import { DeleteProjectDialog } from './delete-project-dialog';
+import { EnvironmentDialog } from './environment-dialog';
+import { instructionSource } from './project.page.shared';
 import { useProjectBinding, useProjectQuery } from './project.queries';
-import { useRemoteConnectionsQuery } from '@/features/remotes';
-import { ProjectEnvironmentPicker } from './project-environment-picker';
-import {
-  useProjectEnvironmentRequest,
-  validWorkspacePath,
-  type ProjectEnvironment,
-} from './project-environment';
+import { RenameProjectDialog } from './rename-project-dialog';
 
 export function ProjectPage() {
   const { id } = useParams({ strict: false }) as { id: string };
@@ -160,7 +140,11 @@ export function ProjectPage() {
             <div className="border-t pt-4">
               <p className="mb-2 text-xs text-muted-foreground">项目指令</p>
               <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                {binding.data.instructions.customPrompt || '未配置自定义指令'}
+                {instructionSource(binding.data.instructions) === 'custom'
+                  ? binding.data.instructions.customPrompt || '未填写自定义提示词'
+                  : instructionSource(binding.data.instructions) === 'none'
+                    ? '不使用项目指令'
+                    : `每次运行从工作目录读取 ${instructionSource(binding.data.instructions) === 'agents' ? 'AGENTS.md' : 'CLAUDE.md'}`}
               </p>
             </div>
           </div>
@@ -239,222 +223,5 @@ export function ProjectPage() {
         />
       )}
     </div>
-  );
-}
-function RenameProjectDialog({
-  projectId,
-  name,
-  onClose,
-}: {
-  projectId: string;
-  name: string;
-  onClose: () => void;
-}) {
-  const { identity } = useIdentity();
-  const client = useQueryClient();
-  const [next, setNext] = useState(name);
-  const save = useMutation({
-    mutationFn: () => updateProject(projectId, { name: next.trim() }),
-    onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: queryKeys.projects.root(identity!.identityId) });
-      onClose();
-    },
-  });
-  const valid = next.trim().length > 0 && next.trim().length <= 200;
-  return (
-    <Dialog
-      open
-      isPending={save.isPending}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent closeDisabled={save.isPending}>
-        <form
-          className="flex min-h-0 flex-col"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (valid) save.mutate();
-          }}
-        >
-          <DialogHeader icon={<Pencil />}>
-            <DialogTitle>重命名项目</DialogTitle>
-            <DialogDescription>为这个项目设置一个清楚的名字。</DialogDescription>
-          </DialogHeader>
-          <DialogBody className="space-y-3">
-            <Input
-              autoFocus
-              aria-label="项目名称"
-              value={next}
-              maxLength={200}
-              onChange={(event) => setNext(event.target.value)}
-            />
-            {save.error && <ErrorNotice error={save.error} />}
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="ghost" disabled={save.isPending} onPress={onClose}>
-              取消
-            </Button>
-            <Button type="submit" disabled={save.isPending || !valid}>
-              {save.isPending ? '正在保存…' : '保存'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-function DeleteProjectDialog({
-  projectId,
-  name,
-  onClose,
-}: {
-  projectId: string;
-  name: string;
-  onClose: () => void;
-}) {
-  const { identity } = useIdentity();
-  const client = useQueryClient();
-  const navigate = useNavigate();
-  const [confirm, setConfirm] = useState('');
-  const remove = useMutation({
-    mutationFn: () => deleteProject(projectId),
-    onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: queryKeys.projects.root(identity!.identityId) });
-      void navigate({ to: '/projects' });
-    },
-  });
-  return (
-    <ConfirmationDialog
-      open
-      onClose={onClose}
-      title="删除项目"
-      subject={name}
-      description="项目将从列表移除，环境绑定会失效；已有会话历史与设备文件会保留。"
-      confirmLabel="删除项目"
-      pendingLabel="正在删除…"
-      isPending={remove.isPending}
-      confirmDisabled={confirm.trim() !== name}
-      error={remove.error}
-      onConfirm={() => {
-        if (confirm.trim() === name && !remove.isPending) remove.mutate();
-      }}
-    >
-      <div className="space-y-2">
-        <label htmlFor="delete-project-name" className="text-sm font-medium">
-          输入项目名称以确认
-        </label>
-        <Input
-          id="delete-project-name"
-          autoFocus
-          disabled={remove.isPending}
-          value={confirm}
-          autoComplete="off"
-          placeholder={name}
-          onChange={(event) => setConfirm(event.target.value)}
-        />
-      </div>
-    </ConfirmationDialog>
-  );
-}
-
-function EnvironmentDialog({
-  projectId,
-  binding,
-  onClose,
-}: {
-  projectId: string;
-  binding: GetProjectBinding200 | null;
-  onClose: () => void;
-}) {
-  const { identity } = useIdentity();
-  const client = useQueryClient();
-  const settings = useModelSettings();
-  const [environment, setEnvironment] = useState<ProjectEnvironment>({
-    target: binding?.remoteConnectionId
-      ? 'ssh:' + binding.remoteConnectionId
-      : binding?.runnerId
-        ? 'runner:' + binding.runnerId
-        : settings.defaultRunnerId
-          ? 'runner:' + settings.defaultRunnerId
-          : '',
-    canonicalCwd: binding?.canonicalCwd ?? '.',
-  });
-  const [customPrompt, setCustomPrompt] = useState(binding?.instructions.customPrompt ?? '');
-  const { request } = useProjectEnvironmentRequest(environment);
-  const save = useMutation({
-    mutationFn: () => {
-      if (!request) throw new Error('请选择有效的运行环境。');
-      return bindProjectEnvironment(projectId, {
-        ...request,
-        customPrompt,
-        expectedRevision: binding?.revision ?? 0,
-      });
-    },
-    onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: queryKeys.projects.root(identity!.identityId) });
-      onClose();
-    },
-    onError: () =>
-      client.invalidateQueries({ queryKey: queryKeys.projects.root(identity!.identityId) }),
-  });
-  return (
-    <Dialog
-      open
-      isPending={save.isPending}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent closeDisabled={save.isPending}>
-        <form
-          className="flex min-h-0 flex-col"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (request && validWorkspacePath(environment.canonicalCwd, environment.target))
-              save.mutate();
-          }}
-        >
-          <DialogHeader icon={<Settings2 />}>
-            <DialogTitle>配置项目环境</DialogTitle>
-            <DialogDescription>
-              选择工作目录，设置项目指令。已有会话保留创建时的环境。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody className="space-y-5">
-            <ProjectEnvironmentPicker value={environment} onChange={setEnvironment} />
-            <div>
-              <label htmlFor="project-instructions" className="mb-2 block text-sm font-medium">
-                项目指令
-              </label>
-              <Textarea
-                id="project-instructions"
-                value={customPrompt}
-                rows={5}
-                maxLength={32000}
-                onChange={(event) => setCustomPrompt(event.target.value)}
-                placeholder="例如：使用 TypeScript，遵守仓库约定。"
-              />
-            </div>
-            {save.error && <ErrorNotice error={save.error} />}
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="ghost" disabled={save.isPending} onPress={onClose}>
-              取消
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                save.isPending ||
-                !request ||
-                !validWorkspacePath(environment.canonicalCwd, environment.target)
-              }
-            >
-              {save.isPending ? '正在保存…' : '保存环境'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }

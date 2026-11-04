@@ -1,23 +1,21 @@
-import { Popover } from '@base-ui/react/popover';
-import { useLocation, useMatchRoute } from '@tanstack/react-router';
+import { Button } from '@/components/ui/button';
+import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import {
-  Folder,
-  Search,
   ChevronRight,
-  PanelLeftClose,
+  Folder,
   LoaderCircle,
   LogOut,
   MessageCircle,
+  PanelLeftClose,
   Plus,
+  Search,
   Settings,
-  Settings2,
   Sparkles,
-  Trash2,
 } from 'lucide-react';
-import { Link } from '@tanstack/react-router';
-import { useState, type ComponentPropsWithRef, type ReactElement, type ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
-import { displayWorkspacePath } from '@/lib/workspace-path';
+import { useState } from 'react';
+import { ConversationNavItem } from './conversation-nav-item';
+import { NavItem } from './nav-item';
+import { ProjectDetailsPopover } from './project-details-popover';
 import type { SidebarConversation, SidebarIdentity, SidebarProject } from './sidebar.types';
 
 /**
@@ -329,154 +327,8 @@ export function SidebarContent({
   );
 }
 
-function ConversationNavItem({
-  conversation,
-  to,
-  onClick,
-  onDelete,
-}: {
-  conversation: SidebarConversation;
-  to: string;
-  onClick?: (() => void) | undefined;
-  onDelete: (conversation: SidebarConversation) => void;
-}) {
-  const isRunning = Boolean(conversation.activeRunId);
-  return (
-    <div className="group relative">
-      <NavItem
-        to={to}
-        icon={
-          isRunning ? (
-            <span className="relative flex size-4 items-center justify-center">
-              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-              <span className="sr-only">正在处理中</span>
-            </span>
-          ) : (
-            <MessageCircle className="size-4" aria-hidden="true" />
-          )
-        }
-        label={conversation.title || '未命名会话'}
-        onClick={onClick}
-        className="pr-11"
-      />
-      <button
-        type="button"
-        className="absolute top-1/2 right-2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-slate-500 opacity-100 lg:opacity-0 hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100 group-focus-within:opacity-100"
-        disabled={isRunning}
-        title={isRunning ? '任务执行中，请先停止运行' : '删除会话'}
-        aria-label={`删除 ${conversation.title || '未命名会话'}`}
-        onClick={() => onDelete(conversation)}
-      >
-        <Trash2 className="size-3.5" />
-      </button>
-    </div>
-  );
-}
-
-function NavItem({
-  to,
-  icon,
-  label,
-  onClick,
-  className,
-  params,
-  contextActive = false,
-  ...linkProps
-}: {
-  to: string;
-  icon: ReactNode;
-  label: string;
-  onClick?: (() => void) | undefined;
-  className?: string | undefined;
-  params?: Record<string, string> | undefined;
-  contextActive?: boolean | undefined;
-} & Omit<ComponentPropsWithRef<'a'>, 'onClick' | 'ref' | 'href' | 'target'> &
-  Pick<ComponentPropsWithRef<typeof Link>, 'ref'>) {
-  const matchRoute = useMatchRoute();
-  const isActive = Boolean(matchRoute({ to, ...(params ? { params } : {}), fuzzy: true }));
-  return (
-    <Link
-      {...linkProps}
-      to={to}
-      {...(params ? { params } : {})}
-      {...(onClick ? { onClick } : {})}
-      className={`flex min-w-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
-        isActive
-          ? 'bg-slate-200/60 font-medium text-slate-950'
-          : contextActive
-            ? 'bg-slate-100 font-medium text-slate-800'
-            : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-      } ${className ?? ''}`}
-    >
-      <span className="shrink-0">{icon}</span>
-      <span className="truncate">{label}</span>
-    </Link>
-  );
-}
-
 function runnerDot(state: string) {
   if (state === 'ready' || state === 'verified') return 'bg-emerald-500';
   if (state === 'busy' || state === 'draining') return 'bg-amber-500';
   return state === 'offline' ? 'bg-rose-500' : 'bg-slate-300';
-}
-
-function ProjectDetailsPopover({
-  project,
-  taskCount,
-  children,
-  onEdit,
-}: {
-  project: SidebarProject;
-  taskCount: number;
-  children: ReactElement;
-  onEdit: () => void;
-}) {
-  return (
-    <Popover.Root modal={false}>
-      <Popover.Trigger
-        render={children}
-        nativeButton={false}
-        role="link"
-        openOnHover
-        delay={250}
-        closeDelay={150}
-      />
-      <Popover.Portal>
-        <Popover.Positioner side="right" sideOffset={8} className="z-50">
-          <Popover.Popup className="w-72 overflow-hidden rounded-2xl bg-white p-3 text-sm text-slate-700 shadow-xl ring-1 ring-slate-200/80">
-            <div className="flex items-center gap-2 px-0.5 py-1.5 text-slate-950">
-              <Folder className="size-5 shrink-0 text-slate-700" aria-hidden="true" />
-              <Popover.Title className="min-w-0 truncate text-lg font-semibold">
-                {project.name}
-              </Popover.Title>
-            </div>
-            <div className="flex items-center gap-2 px-0.5 py-2.5">
-              <MessageCircle className="size-5 shrink-0 text-slate-500" aria-hidden="true" />
-              <span>{taskCount} 个任务</span>
-            </div>
-            <div className="border-t border-slate-200 py-2.5">
-              <div className="flex items-start gap-2 px-0.5">
-                <Folder className="mt-0.5 size-5 shrink-0 text-slate-500" aria-hidden="true" />
-                <p className="min-w-0 break-all leading-5 text-slate-600">
-                  {project.workspace
-                    ? displayWorkspacePath(project.workspace)
-                    : '尚未绑定 workspace'}
-                </p>
-              </div>
-            </div>
-            <div className="border-t border-slate-200 pt-1.5">
-              <Popover.Close
-                type="button"
-                onClick={onEdit}
-                className="flex w-full items-center gap-2 rounded-lg px-1.5 py-2 text-left font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-              >
-                <Settings2 className="size-5 text-slate-500" aria-hidden="true" />
-                编辑项目
-              </Popover.Close>
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  );
 }

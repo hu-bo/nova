@@ -5,7 +5,6 @@ export function useRunnerConnection() {
   const { identity } = useIdentity();
   return useQuery({
     queryKey: ['nova', identity?.identityId ?? 'anonymous', 'runner-connection'],
-    enabled: Boolean(identity),
     queryFn: ({ signal }) => getRunnerConnectionInfo({ signal }),
     staleTime: 60000,
   });

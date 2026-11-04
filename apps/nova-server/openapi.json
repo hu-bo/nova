@@ -298,6 +298,15 @@
                         "instructions": {
                           "type": "object",
                           "properties": {
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "agents",
+                                "claude",
+                                "custom",
+                                "none"
+                              ]
+                            },
                             "customPrompt": {
                               "type": "string"
                             }
@@ -441,6 +450,15 @@
                     "type": "string",
                     "maxLength": 32000
                   },
+                  "instructionSource": {
+                    "type": "string",
+                    "enum": [
+                      "agents",
+                      "claude",
+                      "custom",
+                      "none"
+                    ]
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
@@ -520,6 +538,15 @@
                         "instructions": {
                           "type": "object",
                           "properties": {
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "agents",
+                                "claude",
+                                "custom",
+                                "none"
+                              ]
+                            },
                             "customPrompt": {
                               "type": "string"
                             }
@@ -7775,6 +7802,15 @@
                             "instructions": {
                               "type": "object",
                               "properties": {
+                                "source": {
+                                  "type": "string",
+                                  "enum": [
+                                    "agents",
+                                    "claude",
+                                    "custom",
+                                    "none"
+                                  ]
+                                },
                                 "customPrompt": {
                                   "type": "string"
                                 }
@@ -10011,44 +10047,6 @@
                     "code",
                     "message",
                     "data"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "subCode": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "requestId": {
-                      "type": "string"
-                    },
-                    "details": {
-                      "type": "object",
-                      "additionalProperties": {}
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "message",
-                    "requestId"
                   ],
                   "additionalProperties": false
                 }

@@ -27,7 +27,18 @@ export type GetReadiness200 = {
   status: GetReadiness200Status;
 };
 
+export type GetProjectBinding200InstructionsSource = typeof GetProjectBinding200InstructionsSource[keyof typeof GetProjectBinding200InstructionsSource];
+
+
+export const GetProjectBinding200InstructionsSource = {
+  agents: 'agents',
+  claude: 'claude',
+  custom: 'custom',
+  none: 'none',
+} as const;
+
 export type GetProjectBinding200Instructions = {
+  source?: GetProjectBinding200InstructionsSource;
   customPrompt?: string;
 };
 
@@ -57,6 +68,16 @@ export type GetProjectBinding200 = {
   instructions: GetProjectBinding200Instructions;
 } | null;
 
+export type BindProjectEnvironmentBodyInstructionSource = typeof BindProjectEnvironmentBodyInstructionSource[keyof typeof BindProjectEnvironmentBodyInstructionSource];
+
+
+export const BindProjectEnvironmentBodyInstructionSource = {
+  agents: 'agents',
+  claude: 'claude',
+  custom: 'custom',
+  none: 'none',
+} as const;
+
 export type BindProjectEnvironmentBody = {
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   runnerId?: string;
@@ -74,6 +95,7 @@ export type BindProjectEnvironmentBody = {
   canonicalCwd: string;
   /** @maxLength 32000 */
   customPrompt?: string;
+  instructionSource?: BindProjectEnvironmentBodyInstructionSource;
   /**
      * @minimum 0
      * @maximum 9007199254740991
@@ -81,7 +103,18 @@ export type BindProjectEnvironmentBody = {
   expectedRevision: number;
 };
 
+export type BindProjectEnvironment200InstructionsSource = typeof BindProjectEnvironment200InstructionsSource[keyof typeof BindProjectEnvironment200InstructionsSource];
+
+
+export const BindProjectEnvironment200InstructionsSource = {
+  agents: 'agents',
+  claude: 'claude',
+  custom: 'custom',
+  none: 'none',
+} as const;
+
 export type BindProjectEnvironment200Instructions = {
+  source?: BindProjectEnvironment200InstructionsSource;
   customPrompt?: string;
 };
 
@@ -2405,7 +2438,18 @@ export type GetConversationSnapshot200Capabilities = {
   files: boolean;
 };
 
+export type GetConversationSnapshot200BindingInstructionsSource = typeof GetConversationSnapshot200BindingInstructionsSource[keyof typeof GetConversationSnapshot200BindingInstructionsSource];
+
+
+export const GetConversationSnapshot200BindingInstructionsSource = {
+  agents: 'agents',
+  claude: 'claude',
+  custom: 'custom',
+  none: 'none',
+} as const;
+
 export type GetConversationSnapshot200BindingInstructions = {
+  source?: GetConversationSnapshot200BindingInstructionsSource;
   customPrompt?: string;
 };
 

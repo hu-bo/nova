@@ -80,11 +80,11 @@ export async function runnerRoutes(
       schema: {
         operationId: "getRunnerConnectionInfo",
         tags: ["runners"],
-        response: { 200: okEnvelope(z.object({ endpoint: z.string() })), ...errorResponses(401) },
+        response: { 200: okEnvelope(z.object({ endpoint: z.string() })) },
       },
     },
     async (request) => {
-      requirePrincipal(request);
+      // Public metadata allows command previews without exposing Runner credentials.
       return success({
         endpoint: (request.protocol === "https" ? "wss://" : "ws://") + request.headers.host + "/runner/v1/connect",
       });

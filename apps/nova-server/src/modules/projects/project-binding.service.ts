@@ -56,7 +56,10 @@ export class ProjectBindingService {
         remoteConnectionId: input.remoteConnectionId ?? null,
         workspaceId,
         canonicalCwd: remote ? posix.normalize(path) : path,
-        instructions: { customPrompt: input.customPrompt },
+        instructions: {
+          source: input.instructionSource ?? (input.customPrompt ? "custom" : "none"),
+          customPrompt: !input.instructionSource || input.instructionSource === "custom" ? input.customPrompt : "",
+        },
       });
       await repository.touchProject(id);
       return bindingSchema.parse(binding);
