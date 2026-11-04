@@ -27,6 +27,7 @@ import {
 } from '@/features/remotes';
 import { useClientConfig } from '@/features/models';
 import { LocalStore } from '@/lib/local-store';
+import { uuid } from '@/lib/uuid';
 import { useModelSettings } from '@/features/settings';
 import type { ModelThinkingLevel } from '@/features/settings';
 import {
@@ -103,7 +104,7 @@ function buildAttachmentsExplorer(
           verified.map((item): ComposerAttachment<Attachment> => {
             const name = source.displayName(item);
             return {
-              id: crypto.randomUUID(),
+              id: uuid(),
               name,
               description: source.describe ? source.describe(name) : name,
               metadata: {

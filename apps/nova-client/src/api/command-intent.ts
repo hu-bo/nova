@@ -1,3 +1,5 @@
+import { uuid } from '@/lib/uuid';
+
 // One key per user intent, including manual retries after an ambiguous network response.
 export class CommandIntent {
   private payload: string | null = null;
@@ -6,7 +8,7 @@ export class CommandIntent {
     const encoded = JSON.stringify(payload);
     if (this.payload !== encoded || !this.key) {
       this.payload = encoded;
-      this.key = crypto.randomUUID();
+      this.key = uuid();
     }
     return this.key;
   }

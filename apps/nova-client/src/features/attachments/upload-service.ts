@@ -3,6 +3,7 @@ import { createAttachmentUpload, completeAttachmentUpload } from '@/api/generate
 import type { CreateAttachmentUpload200 } from '@/api/generated/projectsAPI.schemas';
 import type { Attachment } from '@nova/agent-ui-contracts';
 import { ApiError, errorMessage } from '@/api/api-error';
+import { uuid } from '@/lib/uuid';
 export type UploadStatus = 'selected' | 'ticketed' | 'uploading' | 'verifying' | 'ready' | 'failed';
 export type UploadEntry = {
   id: string;
@@ -49,15 +50,16 @@ export class UploadQueue {
     if (this.disposed) return;
     const added = Array.from(files)
       .slice(0, Math.max(0, 32 - this.entries.length))
-      .map((file): UploadEntry =>
-        isAccepted(file)
-          ? { id: crypto.randomUUID(), file, status: 'selected' }
-          : {
-              id: crypto.randomUUID(),
-              file,
-              status: 'failed',
-              error: new ApiError(400, 400, REJECTED_MESSAGE),
-            },
+      .map(
+        (file): UploadEntry =>
+          isAccepted(file)
+            ? { id: uuid(), file, status: 'selected' }
+            : {
+                id: uuid(),
+                file,
+                status: 'failed',
+                error: new ApiError(400, 400, REJECTED_MESSAGE),
+              },
       );
     this.entries = [...this.entries, ...added];
     this.emit();
@@ -105,7 +107,7 @@ export class UploadQueue {
     try {
       const ticket: CreateAttachmentUpload200 = await createAttachmentUpload(
         { filename: entry.file.name, mime: entry.file.type, size: entry.file.size },
-        { signal, idempotencyKey: crypto.randomUUID() },
+        { signal, idempotencyKey: uuid() },
       );
       this.update(entry.id, { status: 'ticketed' });
       if (Date.parse(ticket.upload.expiresAt) <= Date.now())
