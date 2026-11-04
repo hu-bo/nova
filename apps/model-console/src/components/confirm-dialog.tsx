@@ -1,6 +1,6 @@
 import { AlertTriangle, LoaderCircle } from "lucide-react";
-import { Button } from "./ui/button.js";
-import { Dialog } from "./ui/dialog.js";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 
 export function ConfirmDialog({
   open,
@@ -41,12 +41,7 @@ export function ConfirmDialog({
         <Button type="button" onPress={onClose} isDisabled={pending}>
           取消
         </Button>
-        <Button
-          type="button"
-          variant={danger ? "danger" : "primary"}
-          onPress={onConfirm}
-          isDisabled={pending}
-        >
+        <Button type="button" variant={danger ? "danger" : "primary"} onPress={onConfirm} isDisabled={pending}>
           {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
           {pending ? "正在处理" : confirmLabel}
         </Button>

@@ -1,5 +1,5 @@
-import { notifyOnce } from "../lib/notify.js";
-import type { NotifyVariant } from "../lib/notify.js";
+import { notifyOnce } from "@/lib/notify";
+import type { NotifyVariant } from "@/lib/notify";
 
 /** 需要以通知形式提示的 API 失败类型。 */
 export type ApiFailureKind = "network" | "server" | "response" | "request";

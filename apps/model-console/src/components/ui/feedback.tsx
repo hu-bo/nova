@@ -2,8 +2,8 @@ import { Alert as HeroUIAlert, Skeleton as HeroUISkeleton } from "@heroui/react"
 import { AlertCircle, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { ApiClientError, errorMessage } from "../../api/errors.js";
-import { Button } from "./button.js";
+import { ApiClientError, errorMessage } from "@/api/errors";
+import { Button } from "@/components/ui/button";
 
 export function LoadingState({ label = "正在加载" }: { label?: string }) {
   return (

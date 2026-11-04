@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { configureSession } from "../src/auth/session.js";
+import { configureSession } from "../src/api/session.js";
 import { apiMutator } from "../src/api/orval-mutator.js";
 
 vi.mock("../src/api/api-notify.js", () => ({ notifyApiFailure: vi.fn() }));

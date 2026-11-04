@@ -1,6 +1,6 @@
-import { expireSession, getSessionToken, refreshSession } from "../auth/session.js";
-import { ApiClientError } from "./errors.js";
-import { notifyApiFailure, type ApiFailureKind } from "./api-notify.js";
+import { expireSession, getSessionToken, refreshSession } from "@/api/session";
+import { ApiClientError } from "@/api/errors";
+import { notifyApiFailure, type ApiFailureKind } from "@/api/api-notify";
 
 export type BodyType<BodyData> = BodyData;
 export type ErrorType<ErrorData> = ApiClientError & { data?: ErrorData };

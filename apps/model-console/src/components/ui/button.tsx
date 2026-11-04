@@ -2,15 +2,7 @@ import { Button as HeroUIButton, type ButtonProps as HeroUIButtonProps } from "@
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
-type LegacyVariant =
-  | "default"
-  | "primary"
-  | "outline"
-  | "secondary"
-  | "ghost"
-  | "destructive"
-  | "danger"
-  | "link";
+type LegacyVariant = "default" | "primary" | "outline" | "secondary" | "ghost" | "destructive" | "danger" | "link";
 
 type LegacySize = "default" | "sm" | "lg" | "icon";
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Badge } from "./ui/badge.js";
+import { Badge } from "@/components/ui/badge";
 
 export function PageHeader({
   eyebrow,
@@ -36,7 +36,10 @@ export function StatusBadge({
 }) {
   return (
     <Badge variant={enabled ? "success" : "default"}>
-      <span className={cn("size-1.5 rounded-full", enabled ? "bg-success" : "bg-muted-foreground")} aria-hidden="true" />
+      <span
+        className={cn("size-1.5 rounded-full", enabled ? "bg-success" : "bg-muted-foreground")}
+        aria-hidden="true"
+      />
       {enabled ? enabledLabel : disabledLabel}
     </Badge>
   );

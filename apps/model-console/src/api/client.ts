@@ -1,5 +1,5 @@
-import { listModels as fetchModels, listProviders as fetchProviders } from "./generated/model-config.js";
-import { ApiClientError } from "./errors.js";
+import { listModels as fetchModels, listProviders as fetchProviders } from "@/api/generated/model-config";
+import { ApiClientError } from "@/api/errors";
 
 export {
   createModel,
@@ -9,7 +9,7 @@ export {
   getUsage,
   updateModel,
   updateProvider,
-} from "./generated/model-config.js";
+} from "@/api/generated/model-config";
 
 // 在查询进入缓存前校验列表结构，让协议错误进入页面的错误/重试状态。
 function requireList<T>(data: T[], label: string): T[] {
@@ -42,6 +42,6 @@ export type {
   ListProviders200Item as Provider,
   UpdateModelBody as UpdateModel,
   UpdateProviderBody as UpdateProvider,
-} from "./generated/model-config.js";
+} from "@/api/generated/model-config";
 
-export { ApiClientError, errorMessage, formFeedbackFrom } from "./errors.js";
+export { ApiClientError, errorMessage, formFeedbackFrom } from "@/api/errors";
