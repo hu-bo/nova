@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError, errorMessage } from '@/api/api-error';
+import { copyText } from '@/lib/clipboard';
 import { Button } from './ui/button';
 export function ErrorNotice({
   error,
@@ -38,8 +39,7 @@ export function ErrorNotice({
             variant="ghost"
             size="sm"
             onPress={() => {
-              void navigator.clipboard
-                .writeText(error.requestId!)
+              void copyText(error.requestId!)
                 .then(() => setCopied(true))
                 .catch(() => setCopied(false));
             }}

@@ -5,6 +5,7 @@ import { ErrorNotice } from '@/components/error-notice';
 import { Button } from '@/components/ui/button';
 import { SettingsDialog } from '@/components/ui/settings-dialog';
 import { Input } from '@/components/ui/input';
+import { copyText } from '@/lib/clipboard';
 import type { RunnerToken } from '@/features/runners';
 import {
   runnerStartCommand,
@@ -24,7 +25,9 @@ export function RunnerStartCommandDialog({
   const connection = useRunnerConnection();
   const [workspace, setWorkspace] = useState('.');
   const [shell, setShell] = useState<RunnerCommandShell>('powershell');
-  const [runtime, setRuntime] = useState<RunnerCommandRuntime>('cargo');
+  const [runtime, setRuntime] = useState<RunnerCommandRuntime>(
+    import.meta.env.DEV ? 'cargo' : 'npx',
+  );
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
   const [copyError, setCopyError] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -49,7 +52,7 @@ export function RunnerStartCommandDialog({
     setCopyError(false);
     setCopying(true);
     try {
-      await navigator.clipboard.writeText(command);
+      await copyText(command);
       setCopiedCommand(command);
     } catch {
       setCopyError(true);
@@ -95,9 +98,7 @@ export function RunnerStartCommandDialog({
           value={workspace}
           onChange={(event) => setWorkspace(event.target.value)}
           placeholder={
-            shell === 'powershell'
-              ? '例如 E:\\Project\\my-project\\nova-dsh'
-              : '例如 /home/me/project'
+            shell === 'powershell' ? '例如 E:\\Project\\my-project\\nova' : '例如 /home/me/project'
           }
         />
         <p id={workspaceHintId} className="text-xs leading-5 text-muted-foreground">
@@ -132,7 +133,7 @@ export function RunnerStartCommandDialog({
         <Select
           value={runtime}
           onChange={(key) => {
-            if (key === 'cargo' || key === 'binary') setRuntime(key);
+            if (key === 'cargo' || key === 'npx' || key === 'binary') setRuntime(key);
           }}
         >
           <Label>启动方式</Label>
@@ -142,6 +143,10 @@ export function RunnerStartCommandDialog({
           </Select.Trigger>
           <Select.Popover>
             <ListBox>
+              <ListBox.Item id="npx" textValue="快速运行 · npx">
+                快速运行 · npx
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
               <ListBox.Item id="cargo" textValue="从源码启动 · Cargo">
                 从源码启动 · Cargo
                 <ListBox.ItemIndicator />
@@ -164,8 +169,10 @@ export function RunnerStartCommandDialog({
         </code>
         <p className="mt-3 text-xs leading-5 text-muted-foreground">
           {runtime === 'cargo'
-            ? '在 nova-dsh 源码仓库根目录执行，需要安装 Rust / Cargo。'
-            : '设备需已安装当前版本的 nova-runner，并将其加入 PATH。'}{' '}
+            ? '在 nova 源码仓库根目录执行，需要安装 Rust / Cargo。'
+            : runtime === 'npx'
+              ? '在项目目录中执行，需要安装 Node.js 18+，npx 会下载并运行 Runner。'
+              : '设备需已安装当前版本的 nova-runner，并将其加入 PATH。'}{' '}
           复制的命令包含完整 Token。
         </p>
       </section>
@@ -177,9 +184,20 @@ export function RunnerStartCommandDialog({
         </p>
       ) : null}
       {copyError && (
-        <p role="alert" className="text-sm text-danger">
-          无法写入剪贴板，请检查浏览器的剪贴板权限后重试。
-        </p>
+        <div className="space-y-2">
+          <p role="alert" className="text-sm text-danger">
+            自动复制失败，请选中下方完整命令，按 Ctrl+C（macOS 为 ⌘C）复制。
+          </p>
+          <textarea
+            aria-label="手动复制启动命令"
+            readOnly
+            value={command ?? ''}
+            rows={4}
+            spellCheck={false}
+            onFocus={(event) => event.currentTarget.select()}
+            className="w-full rounded-lg border border-border bg-surface p-3 font-mono text-xs"
+          />
+        </div>
       )}
     </SettingsDialog>
   );

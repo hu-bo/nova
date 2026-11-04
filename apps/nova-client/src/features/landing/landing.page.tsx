@@ -31,6 +31,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { copyText } from '@/lib/clipboard';
 import { useIdentity } from '@/features/auth';
 import {
   runnerStartCommand,
@@ -101,7 +102,7 @@ function ConnectPanel() {
     if (!command) return;
     clearTimeout(timerRef.current);
     try {
-      await navigator.clipboard.writeText(command);
+      await copyText(command);
       setCopyState('copied');
     } catch {
       setCopyState('error');

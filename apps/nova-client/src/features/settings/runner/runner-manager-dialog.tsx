@@ -26,6 +26,7 @@ import { useRunnerCatalog } from './use-runner-catalog';
 import { useRunnerConnection } from '@/features/runners';
 import { useRunnerTokens } from './use-runner-tokens';
 import { runnerTokenCanStart } from '@/features/runners';
+import { copyText } from '@/lib/clipboard';
 import { RunnerStartCommandDialog } from './runner-start-command-dialog';
 
 interface RunnerManagerDialogProps {
@@ -457,13 +458,13 @@ function CopyButton({
       variant="outline"
       icon={copied ? <Check /> : <Clipboard />}
       disabled={!value || copying}
-      {...(failed ? { title: '请检查浏览器剪贴板权限后重试' } : {})}
+      {...(failed ? { title: '自动复制失败，请重试或手动复制' } : {})}
       onPress={async () => {
         if (!value || copying) return;
         setFailed(false);
         setCopying(true);
         try {
-          await navigator.clipboard.writeText(value);
+          await copyText(value);
           setCopiedValue(value);
         } catch {
           setFailed(true);
