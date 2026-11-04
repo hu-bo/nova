@@ -6,7 +6,7 @@ import { AuthContext } from "./provider.js";
 
 const config = {
   appName: import.meta.env.VITE_AUTH_APP_NAME || "nova",
-  authApiBase: import.meta.env.VITE_AUTH_BASE_URL || "https://auth.8and1.cn/api",
+  authApiBase: import.meta.env.VITE_AUTH_BASE_URL || "//auth.8and1.cn/api",
   redirectUri: `${window.location.origin}/callback`,
   storage: {
     type: "sessionStorage" as const,
