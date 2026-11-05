@@ -1,11 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useIdentity } from '@/features/auth';
-import {
-  runnerStartCommand,
-  runnerTokenCanStart,
-  useRunnerConnection,
-  useRunnerTokensQuery,
-} from '@/features/runners';
+import { runnerStartCommand, runnerTokenCanStart, useRunnerTokensQuery } from '@/features/runners';
 import { copyText } from '@/lib/clipboard';
 import { Link } from '@tanstack/react-router';
 import { ArrowRight, Check, Code2, Copy, Globe2, Terminal } from 'lucide-react';
@@ -17,40 +12,34 @@ const runnerEnvironments = [
     id: 'local',
     label: '本地开发',
     runtime: 'cargo',
+    endpoint: 'ws://127.0.0.1:9203/runner/v1/connect',
   },
   {
     id: 'production',
     label: '正式部署',
     runtime: 'npx',
+    endpoint: 'wss://nova.8and1.cn/runner/v1/connect',
   },
 ] as const;
 
 export function ConnectPanel() {
   const { identity, login } = useIdentity();
-  const tokens = useRunnerTokensQuery();
-  const connection = useRunnerConnection();
+  const tokens = useRunnerTokensQuery({ silent: true });
   const [envIndex, setEnvIndex] = useState(import.meta.env.DEV ? 0 : 1);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loginError, setLoginError] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const env = runnerEnvironments[envIndex]!;
-  const token = tokens.data?.items.find((item) => runnerTokenCanStart(item) && item.token)?.token;
-  const result = runnerStartCommand({
-    endpoint: connection.data?.endpoint ?? '',
-    token: identity ? (token ?? '') : '<token>',
+  const token = identity
+    ? tokens.data?.items.find((item) => runnerTokenCanStart(item) && item.token)?.token
+    : undefined;
+  const { command, error } = runnerStartCommand({
+    endpoint: env.endpoint,
+    token: token ?? '<token>',
     workspace: '',
     shell: navigator.platform.startsWith('Win') ? 'powershell' : 'bash',
     runtime: env.runtime,
   });
-  const command = !connection.isError && (!identity || !tokens.isError) ? result.command : null;
-  const placeholder =
-    connection.isError || (identity && tokens.isError)
-      ? '连接信息加载失败，请重试。'
-      : connection.isPending || (identity && tokens.isPending)
-        ? '正在加载连接命令…'
-        : identity && !token
-          ? '暂无可用 Token，请在设备管理中创建或轮换凭据。'
-          : result.error;
   useEffect(() => () => clearTimeout(timerRef.current), []);
   async function copy() {
     if (!command) return;
@@ -68,9 +57,6 @@ export function ConnectPanel() {
       <div className="landing-connect-head">
         <Terminal size={16} />
         <h2 id="connect-title">连接你的设备</h2>
-        <span className="landing-connect-scheme">
-          {connection.data?.endpoint.startsWith('wss:') ? 'wss · 加密回连' : 'ws · 设备回连'}
-        </span>
       </div>
       <div className="landing-connect-tabs" role="group" aria-label="部署环境">
         {runnerEnvironments.map((item, index) => (
@@ -111,13 +97,13 @@ export function ConnectPanel() {
                 {command}
               </>
             ) : (
-              placeholder
+              error
             )}
           </code>
         </pre>
       </div>
       <p className="landing-connect-note">
-        {!identity && '请将 <token> 替换为你的 Runner Token，登录后可自动填入。'}
+        {!token && '请将 <token> 替换为你的 Runner Token。'}
         在项目目录中运行，默认使用当前目录作为 workspace。
         {env.id === 'production' ? '需要已安装 Node.js。' : ''}
       </p>
@@ -130,20 +116,10 @@ export function ConnectPanel() {
               ? '复制失败，请手动复制上方命令。'
               : ''}
       </div>
-      {connection.isError || (identity && tokens.isError) ? (
-        <Button
-          variant="ghost"
-          className="landing-connect-action"
-          onPress={() => {
-            if (identity) void tokens.refetch();
-            void connection.refetch();
-          }}
-        >
-          重新加载连接信息
-        </Button>
-      ) : identity ? (
+      {identity ? (
         <Link to="/settings/runners" className="landing-connect-action">
-          {token ? '管理设备和 Token' : '去设备管理创建 Token'} <ArrowRight size={14} />
+          {tokens.isSuccess && !token ? '去设备管理创建 Token' : '管理设备和 Token'}{' '}
+          <ArrowRight size={14} />
         </Link>
       ) : (
         <Button

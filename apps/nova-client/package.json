@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @nova/casdoor build && pnpm --filter @nova/agent-ui-contracts build && vite",
+    "dev": "vite",
     "routes:generate": "tsr generate",
     "api:generate": "orval --config orval.config.ts",
     "api:check": "tsx scripts/api-check.ts",

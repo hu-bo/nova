@@ -15,12 +15,12 @@ export function runnerStatus(runner: Runner, now = Date.now()): 'online' | 'offl
       ? 'online'
       : 'offline';
 }
-export function useRunnerTokensQuery() {
+export function useRunnerTokensQuery({ silent = false } = {}) {
   const { identity } = useIdentity();
   return useQuery({
     queryKey: queryKeys.runners.tokens(identity?.identityId ?? 'anonymous'),
     enabled: Boolean(identity),
-    queryFn: ({ signal }) => listRunnerTokens({ signal }),
+    queryFn: ({ signal }) => listRunnerTokens({ signal, silent }),
   });
 }
 export function useRunnersQuery() {
