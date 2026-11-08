@@ -16,6 +16,7 @@ export default tseslint.config(
     files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}', '*.ts'],
     extends: [eslint.configs.recommended, ...tseslint.configs.recommended],
     rules: {
+      'no-nested-ternary': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

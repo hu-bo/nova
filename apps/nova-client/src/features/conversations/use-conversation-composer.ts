@@ -230,11 +230,14 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const [storedReasoning, setStoredReasoning] = useState(
     () => runtime?.reasoningEffort ?? reasoningStore.get(),
   );
-  const modelProfileId = modelSettings.profiles.some((profile) => profile.id === storedProfileId)
-    ? storedProfileId
-    : modelSettings.profiles.some((profile) => profile.id === modelSettings.defaultProfileId)
-      ? modelSettings.defaultProfileId
-      : (modelSettings.profiles[0]?.id ?? '');
+  function resolveModelProfileId(): string {
+    if (modelSettings.profiles.some((profile) => profile.id === storedProfileId))
+      return storedProfileId;
+    if (modelSettings.profiles.some((profile) => profile.id === modelSettings.defaultProfileId))
+      return modelSettings.defaultProfileId;
+    return modelSettings.profiles[0]?.id ?? '';
+  }
+  const modelProfileId = resolveModelProfileId();
   const selectedProfile = modelSettings.profiles.find((profile) => profile.id === modelProfileId);
   const modelOptions = useMemo(
     () =>
@@ -518,48 +521,52 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     append: appendRemoteFiles,
     fail: (cause: unknown) => setError(cause),
   };
-  const explorerProps: RemoteExplorerProps | undefined =
-    remoteConnectionId && selectedRemote
-      ? buildAttachmentsExplorer(
-          {
-            title: '从 SSH 远程添加附件',
-            initialPath: '/',
-            selectedPaths: remote.flatMap((item) =>
-              item.metadata.ref.kind === 'ssh'
-                ? [resolveRemotePath(sshRoot, item.metadata.ref.path)]
-                : [],
-            ),
-            loadDirectory: (path, signal) => loadRemoteDirectory(remoteConnectionId, path, signal),
-            summarise: (paths) => summariseRemoteFiles(remoteConnectionId, { paths }),
-            displayName: (item) => relativeRemotePath(sshRoot, item.path),
-            describe: (name) => 'SSH · ' + name,
-            makeRef: (item) => ({ kind: 'ssh', remoteConnectionId, path: item.path }),
-            failureMessage: '无法读取远程文件摘要，请重试。',
-          },
-          explorerState,
-        )
-      : mode === 'project' && binding && runnerId
-        ? buildAttachmentsExplorer(
-            {
-              title: '从项目 Runner 添加附件',
-              initialPath: binding.canonicalCwd,
-              selectedPaths: remote.flatMap((item) =>
-                item.metadata.ref.kind === 'runner' ? [item.metadata.ref.path] : [],
-              ),
-              loadDirectory: (path, signal) => loadRunnerDirectory(runnerId, path, signal),
-              summarise: (paths) => summariseRunnerFiles(runnerId, { paths }),
-              displayName: (item) => item.path,
-              makeRef: (item) => ({
-                kind: 'runner',
-                runnerId,
-                workspaceId: binding.workspaceId,
-                path: item.path,
-              }),
-              failureMessage: '无法获取文件摘要，请重试。',
-            },
-            explorerState,
-          )
-        : undefined;
+  function buildExplorerProps(): RemoteExplorerProps | undefined {
+    if (remoteConnectionId && selectedRemote) {
+      return buildAttachmentsExplorer(
+        {
+          title: '从 SSH 远程添加附件',
+          initialPath: '/',
+          selectedPaths: remote.flatMap((item) =>
+            item.metadata.ref.kind === 'ssh'
+              ? [resolveRemotePath(sshRoot, item.metadata.ref.path)]
+              : [],
+          ),
+          loadDirectory: (path, signal) => loadRemoteDirectory(remoteConnectionId, path, signal),
+          summarise: (paths) => summariseRemoteFiles(remoteConnectionId, { paths }),
+          displayName: (item) => relativeRemotePath(sshRoot, item.path),
+          describe: (name) => 'SSH · ' + name,
+          makeRef: (item) => ({ kind: 'ssh', remoteConnectionId, path: item.path }),
+          failureMessage: '无法读取远程文件摘要，请重试。',
+        },
+        explorerState,
+      );
+    }
+    if (mode === 'project' && binding && runnerId) {
+      return buildAttachmentsExplorer(
+        {
+          title: '从项目 Runner 添加附件',
+          initialPath: binding.canonicalCwd,
+          selectedPaths: remote.flatMap((item) =>
+            item.metadata.ref.kind === 'runner' ? [item.metadata.ref.path] : [],
+          ),
+          loadDirectory: (path, signal) => loadRunnerDirectory(runnerId, path, signal),
+          summarise: (paths) => summariseRunnerFiles(runnerId, { paths }),
+          displayName: (item) => item.path,
+          makeRef: (item) => ({
+            kind: 'runner',
+            runnerId,
+            workspaceId: binding.workspaceId,
+            path: item.path,
+          }),
+          failureMessage: '无法获取文件摘要，请重试。',
+        },
+        explorerState,
+      );
+    }
+    return undefined;
+  }
+  const explorerProps = buildExplorerProps();
 
   let placeholder = '想规划、实现或讨论什么？/ 使用命令…';
   if (isRunning) {

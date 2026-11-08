@@ -27,6 +27,13 @@ import {
 import { useModelSettings } from './provider';
 import { profileToFormValues, type ModelProfile } from './model-context';
 
+/** 凭据状态文案：服务端目录的凭据由服务端管理；本地配置按是否已带密钥区分。 */
+function credentialStateLabel(profile: ModelProfile) {
+  if (profile.source === 'server') return '已加密保存';
+  if (profile.credential) return '已加载';
+  return '需 API Key';
+}
+
 /** Manage server-backed model profiles and legacy local configurations. */
 export function ModelsTab() {
   const settings = useModelSettings();
@@ -133,11 +140,7 @@ export function ModelsTab() {
                               : 'text-amber-600'
                           }
                         >
-                          {profile.source === 'server'
-                            ? '已加密保存'
-                            : profile.credential
-                              ? '已加载'
-                              : '需 API Key'}
+                          {credentialStateLabel(profile)}
                         </span>
                       </TableCell>
                       <TableCell>

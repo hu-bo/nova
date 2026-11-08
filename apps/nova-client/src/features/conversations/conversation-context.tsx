@@ -8,6 +8,9 @@ export function ConversationContext({
   controller: ConversationComposerController;
 }) {
   const model = ctl.modelProfiles.find((profile) => profile.id === ctl.modelProfileId);
+  let workEnvironment = '普通 Chat';
+  if (ctl.selectedRemote) workEnvironment = ctl.selectedRemote.name + ' · SSH';
+  else if (ctl.binding?.runnerId) workEnvironment = '项目 Runner';
   return (
     <section className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
       <h2 className="text-xs font-semibold text-slate-500">会话上下文</h2>
@@ -27,13 +30,7 @@ export function ConversationContext({
         </div>
         <div>
           <dt className="text-slate-500">工作环境</dt>
-          <dd className="mt-1 break-all text-slate-700">
-            {ctl.selectedRemote
-              ? ctl.selectedRemote.name + ' · SSH'
-              : ctl.binding?.runnerId
-                ? '项目 Runner'
-                : '普通 Chat'}
-          </dd>
+          <dd className="mt-1 break-all text-slate-700">{workEnvironment}</dd>
           {(ctl.binding || ctl.selectedRemote) && (
             <dd className="mt-1 break-all font-mono leading-5 text-slate-500">
               {ctl.selectedRemote

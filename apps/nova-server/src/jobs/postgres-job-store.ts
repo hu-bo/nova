@@ -1,4 +1,5 @@
-import { sql } from "drizzle-orm";
+import { and, eq, getTableName, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { jobs, runs } from "../../database/index.js";
 import type { Database } from "../../database/index.js";
 
 /**
@@ -32,8 +33,8 @@ export type JobRecord = {
 
 export type ClaimOutcome = { kind: "claimed"; jobs: readonly JobRecord[] } | { kind: "empty" };
 
-/** 只需 execute 端口: 既可在 scope 外以 Database 调用, 也可在事务内以仓库执行器调用. */
-type JobExecutor = Pick<Database, "execute">;
+/** 只需查询/写入端口: 既可在 scope 外以 Database 调用, 也可在事务内以仓库执行器调用. */
+type JobExecutor = Pick<Database, "execute" | "select" | "insert" | "update">;
 
 /**
  * 单次 claim 有界批, 短事务 SKIP LOCKED. 大批数据由 worker 调高 limit 与并发度.
@@ -70,16 +71,12 @@ export async function claim(input: {
               j.safe_error_code, j.created_at, j.updated_at
   `);
   if (!rows || (Array.isArray(rows) && rows.length === 0)) return { kind: "empty" };
-  const jobs: JobRecord[] = mapRows(rows);
-  return jobs.length ? { kind: "claimed", jobs } : { kind: "empty" };
+  const claimed = mapRows(rows);
+  return claimed.length ? { kind: "claimed", jobs: claimed } : { kind: "empty" };
 }
 
 export async function succeed(input: { db: JobExecutor; jobId: string }): Promise<void> {
-  await input.db.execute(sql`
-    UPDATE jobs
-    SET status = 'succeeded', updated_at = now()
-    WHERE id = ${input.jobId}::uuid
-  `);
+  await input.db.update(jobs).set({ status: "succeeded", updatedAt: sql`now()` }).where(eq(jobs.id, input.jobId));
 }
 
 export async function fail(input: {
@@ -91,15 +88,17 @@ export async function fail(input: {
   const availableAt = input.rescheduleAfterSeconds
     ? new Date(Date.now() + input.rescheduleAfterSeconds * 1000)
     : new Date(Date.now() + 30_000);
-  await input.db.execute(sql`
-    UPDATE jobs
-    SET status = CASE WHEN attempt >= max_attempts THEN 'dead' ELSE 'queued' END,
-        available_at = ${availableAt},
-        lease_until = NULL,
-        safe_error_code = ${input.safeErrorCode},
-        updated_at = now()
-    WHERE id = ${input.jobId}::uuid
-  `);
+  await input.db
+    .update(jobs)
+    .set({
+      // dead/queued 取决于行内 attempt 与 max_attempts 的比较, 留在引用类型列的 SQL 片段里.
+      status: sql`case when ${jobs.attempt} >= ${jobs.maxAttempts} then 'dead' else 'queued' end`,
+      availableAt,
+      leaseUntil: null,
+      safeErrorCode: input.safeErrorCode,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(jobs.id, input.jobId));
 }
 
 export type EnqueueRequest = {
@@ -116,24 +115,55 @@ export type EnqueueRequest = {
 export async function enqueue(input: { db: JobExecutor; job: EnqueueRequest }): Promise<void> {
   const availableAt = input.job.availableAt ?? new Date();
   const maxAttempts = input.job.maxAttempts ?? 5;
+  await input.db
+    .insert(jobs)
+    .values({
+      kind: input.job.kind,
+      aggregateId: input.job.aggregateId ?? null,
+      dedupeKey: input.job.dedupeKey ?? null,
+      payload: input.job.payload,
+      schemaVersion: input.job.schemaVersion ?? 1,
+      availableAt,
+      attempt: 0,
+      maxAttempts,
+      status: "queued",
+    })
+    .onConflictDoNothing({ target: [jobs.kind, jobs.aggregateId, jobs.dedupeKey] });
+}
+
+/**
+ * 崩溃恢复: 把仍在活跃态但租约已过期的 run 批量重排为 run.wake 任务.
+ * set-based INSERT..SELECT 单语句覆盖全表, 保留在跑 job 的既有租约. 表/列名一律由类型化列
+ * 派生 (标识符位走 sql.identifier), schema 改名或删列编译期即报错, 不写裸字符串.
+ */
+export async function rearmStaleRuns(input: { db: JobExecutor }): Promise<void> {
+  const id = (column: { name: string }) => sql.identifier(column.name);
+  const active = and(
+    inArray(runs.state, ["running", "waiting", "cancelling"]),
+    or(isNull(runs.leaseUntil), lt(runs.leaseUntil, sql`now()`)),
+  );
   await input.db.execute(sql`
-    INSERT INTO jobs (kind, aggregate_id, dedupe_key, payload, schema_version, available_at, attempt, max_attempts, status)
-    VALUES (${input.job.kind}, ${input.job.aggregateId ?? null}, ${input.job.dedupeKey ?? null},
-            ${JSON.stringify(input.job.payload)}, ${input.job.schemaVersion ?? 1},
-            ${availableAt}, 0, ${maxAttempts}, 'queued')
-    ON CONFLICT (kind, aggregate_id, dedupe_key)
-    DO NOTHING
+    INSERT INTO ${sql.identifier(getTableName(jobs))} (${id(jobs.kind)}, ${id(jobs.aggregateId)}, ${id(jobs.dedupeKey)}, ${id(jobs.payload)},
+      ${id(jobs.status)}, ${id(jobs.availableAt)}, ${id(jobs.maxAttempts)})
+    SELECT 'run.wake', ${runs.conversationId}, 'recover:' || ${runs.id} || ':' || ${runs.revision},
+      jsonb_build_object('conversationId', ${runs.conversationId}), 'queued', now(), 5
+    FROM ${sql.identifier(getTableName(runs))}
+    WHERE ${active}
+    ON CONFLICT (${id(jobs.kind)}, ${id(jobs.aggregateId)}, ${id(jobs.dedupeKey)}) DO UPDATE SET
+      ${id(jobs.status)} = CASE WHEN ${jobs.status} = 'running' THEN ${jobs.status} ELSE 'queued' END,
+      ${id(jobs.availableAt)} = now()
   `);
 }
 
-function mapRows(rows: unknown): JobRecord[] {
-  // drizzle node-postgres execute 返回 unknown, 由 SQL 后置处理保持稳定.
-  const items = Array.isArray(rows)
-    ? rows
-    : rows && typeof rows === "object" && "rows" in rows && Array.isArray(rows.rows)
-      ? rows.rows
-      : [];
-  return items.map((row) => {
+function rowsOf(result: unknown): unknown[] {
+  // drizzle node-postgres execute 的返回形态不稳定: 数组或 { rows }, 先收敛成行数组.
+  if (Array.isArray(result)) return result;
+  if (result && typeof result === "object" && "rows" in result && Array.isArray(result.rows)) return result.rows;
+  return [];
+}
+
+function mapRows(result: unknown): JobRecord[] {
+  return rowsOf(result).map((row) => {
     const r = row as Record<string, unknown>;
     return {
       jobId: String(r.id),
@@ -155,7 +185,8 @@ function mapRows(rows: unknown): JobRecord[] {
 }
 
 export async function heartbeat(input: { db: JobExecutor; jobId: string; leaseSeconds: number }): Promise<void> {
-  await input.db.execute(
-    sql`update jobs set lease_until = now() + ${input.leaseSeconds} * interval '1 second' where id = ${input.jobId}::uuid and status = 'running'`,
-  );
+  await input.db
+    .update(jobs)
+    .set({ leaseUntil: sql`now() + ${input.leaseSeconds} * interval '1 second'` })
+    .where(and(eq(jobs.id, input.jobId), eq(jobs.status, "running")));
 }

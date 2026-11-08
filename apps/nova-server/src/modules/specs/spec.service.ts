@@ -162,11 +162,17 @@ export class SpecService {
       if (active) throw new DomainError("CONFLICT", "Settle the active task before editing the specification", { reason: "SPEC_BUSY" });
       const value = stage === "tasks" ? taskPlanSchema.parse(content) : content;
       if (stage !== "tasks" && typeof value !== "string") throw new DomainError("VALIDATION_ERROR", "Markdown content required");
-      const same = stage === "requirements" ? current.requirementsMd === value : stage === "design" ? current.designMd === value : JSON.stringify(current.taskPlan) === JSON.stringify(value);
+      const stageContent = { requirements: current.requirementsMd, design: current.designMd } satisfies Partial<Record<Stage, string | null>>;
+      const same = stage !== "tasks" ? stageContent[stage] === value : JSON.stringify(current.taskPlan) === JSON.stringify(value);
       if (same) return expected;
       const next = expected + 1;
       const carry = (review: NonNullable<typeof current.reviews.requirements>) => ({ ...review, revision: next, sourceRevision: review.sourceRevision ?? current.revision });
-      const reviews = stage === "requirements" ? {} : stage === "design" ? (current.reviews.requirements ? { requirements: carry(current.reviews.requirements) } : {}) : { ...(current.reviews.requirements ? { requirements: carry(current.reviews.requirements) } : {}), ...(current.reviews.design ? { design: carry(current.reviews.design) } : {}) };
+      const carryReviews = { requirements: [], design: ["requirements"], tasks: ["requirements", "design"] } as const satisfies Record<Stage, readonly (keyof typeof current.reviews)[]>;
+      const reviews: typeof current.reviews = {};
+      for (const key of carryReviews[stage]) {
+        const review = current.reviews[key];
+        if (review) reviews[key] = carry(review);
+      }
       await tx.insert(specRevisions).values({ specId, revision: next,
         requirementsMd: stage === "requirements" ? value as string : current.requirementsMd,
         designMd: stage === "design" ? value as string : current.designMd,

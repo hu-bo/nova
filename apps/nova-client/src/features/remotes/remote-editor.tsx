@@ -31,6 +31,13 @@ const remoteFormSchema = z.object({
 
 type RemoteForm = z.infer<typeof remoteFormSchema>;
 
+/** 依次封装凭据与口令，保持原有封装顺序；passphrase 为空串表示清除已保存的私钥口令。 */
+async function sealCredentialPair(credential: string, passphrase: string) {
+  const sealedCredential = await sealRemoteCredential(credential);
+  const sealedPassphrase = passphrase ? await sealRemoteCredential(passphrase) : '';
+  return { credential: sealedCredential, passphrase: sealedPassphrase };
+}
+
 export function RemoteEditor({
   connection,
   onClose,
@@ -69,13 +76,7 @@ export function RemoteEditor({
       const { credential, passphrase, ...fields } = values;
       // 凭据先封装成传输信封再提交, 请求体里不出现明文密码或私钥。
       const submit = async () => {
-        const sealed = credential
-          ? {
-              credential: await sealRemoteCredential(credential),
-              // 空串表示清除已保存的私钥口令。
-              passphrase: passphrase ? await sealRemoteCredential(passphrase) : '',
-            }
-          : null;
+        const sealed = credential ? await sealCredentialPair(credential, passphrase) : null;
         if (connection)
           return updateRemoteConnection(connection.id, {
             ...fields,

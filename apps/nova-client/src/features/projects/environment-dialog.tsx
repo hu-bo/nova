@@ -33,6 +33,14 @@ const instructionSources: { value: InstructionSource; label: string }[] = [
   { value: 'none', label: '不使用项目指令' },
 ];
 
+/** 环境初始选中项：优先绑定中的 SSH，其次绑定中的 Runner，最后默认 Runner，均无则留空。 */
+function initialEnvironmentTarget(binding: GetProjectBinding200 | null, defaultRunnerId: string) {
+  if (binding?.remoteConnectionId) return 'ssh:' + binding.remoteConnectionId;
+  if (binding?.runnerId) return 'runner:' + binding.runnerId;
+  if (defaultRunnerId) return 'runner:' + defaultRunnerId;
+  return '';
+}
+
 export function EnvironmentDialog({
   projectId,
   binding,
@@ -46,13 +54,7 @@ export function EnvironmentDialog({
   const client = useQueryClient();
   const settings = useModelSettings();
   const [environment, setEnvironment] = useState<ProjectEnvironment>({
-    target: binding?.remoteConnectionId
-      ? 'ssh:' + binding.remoteConnectionId
-      : binding?.runnerId
-        ? 'runner:' + binding.runnerId
-        : settings.defaultRunnerId
-          ? 'runner:' + settings.defaultRunnerId
-          : '',
+    target: initialEnvironmentTarget(binding, settings.defaultRunnerId),
     canonicalCwd: binding?.canonicalCwd ?? '.',
   });
   const [customPrompt, setCustomPrompt] = useState(binding?.instructions.customPrompt ?? '');

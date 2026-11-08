@@ -121,6 +121,13 @@ function pairToolResults(messages: ChatMessage[]): ChatMessage[] {
     .filter((message, index) => (moved.get(index)?.size ?? 0) === 0 || message.blocks.length > 0);
 }
 
+/** 发送者标签表：覆盖 ChatMessage["role"] 的全部取值。 */
+const senderLabels = {
+  user: "You",
+  assistant: "Nova",
+  tool: "工具",
+} satisfies Record<ChatMessage["role"], string>;
+
 const MessageRow = memo(function MessageRow({
   message,
   renderers,
@@ -172,7 +179,7 @@ const MessageRow = memo(function MessageRow({
               <Bot className="size-3" aria-hidden="true" />
             )}
           </span>
-          <span>{isUser ? "You" : message.role === "tool" ? "工具" : "Nova"}</span>
+          <span>{senderLabels[message.role]}</span>
           {message.status === "streaming" && (
             <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" aria-label="正在生成" />
           )}

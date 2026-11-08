@@ -90,6 +90,12 @@ const CHAT_CONNECTION_BY_STREAM_STATE = {
   offline: 'closed',
 } as const;
 
+/** 编辑对话框 → 提交按钮文案；pending 文案在渲染处按优先级先行处理。 */
+const DIALOG_SUBMIT_LABELS = {
+  rename: '保存标题',
+  clear: '清空上下文',
+} satisfies Record<'rename' | 'clear', string>;
+
 /** 已保存消息 → 聊天视图消息（系统消息等无视图形态的会被过滤掉）。 */
 function toMessageViews(
   messages: readonly Message[],
@@ -263,6 +269,7 @@ export function ConversationWorkspace({
   if (clearNotice)
     feedback.push({ id: 'clear-notice', message: clearNotice, tone: 'info', dismissible: true });
   const connection = CHAT_CONNECTION_BY_STREAM_STATE[stream.state];
+  const workingDirectory = data.binding ? data.binding.canonicalCwd : '项目工作目录';
   return (
     <div
       className={'conversation-workspace flex min-h-0 flex-col ' + (embedded ? 'h-full' : 'h-dvh')}
@@ -464,7 +471,7 @@ export function ConversationWorkspace({
             }
             description={
               data.conversation.mode === 'project'
-                ? `Agent 将在 ${data.binding ? data.binding.canonicalCwd : '项目工作目录'} 中工作，过程会实时显示在这里。`
+                ? `Agent 将在 ${workingDirectory} 中工作，过程会实时显示在这里。`
                 : '可以讨论方案、分析代码或制定多步计划。'
             }
           />
@@ -536,7 +543,7 @@ export function ConversationWorkspace({
                   取消
                 </Button>
                 <Button type="submit" variant="default" disabled={edit.isPending}>
-                  {edit.isPending ? '正在处理…' : dialog === 'rename' ? '保存标题' : '清空上下文'}
+                  {edit.isPending ? '正在处理…' : DIALOG_SUBMIT_LABELS[dialog]}
                 </Button>
               </DialogFooter>
             </form>

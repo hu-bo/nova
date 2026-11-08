@@ -3,10 +3,11 @@ import { Check, Clipboard, KeyRound, Pencil, Plus, Power, ServerCog, Trash2 } fr
 import { useState } from "react";
 import type { Provider } from "@/api/client";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { PageHeader, StatusBadge, TableFrame, tableCellClass, tableHeadClass } from "@/components/page";
+import { PageHeader, StatusBadge } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
+import { Table, tableCellClass, tableHeadClass } from "@/components/ui/table";
 import { ProviderForm, providerQueryOptions, useProviderMutations } from "@/features/providers";
 
 type Confirmation = { kind: "disable" | "delete"; provider: Provider } | null;
@@ -50,45 +51,12 @@ export function ProvidersPage() {
       }
     : null;
 
-  return (
-    <div className="space-y-8">
-      <PageHeader
-        eyebrow="Connections"
-        title="Provider 连接"
-        description="管理模型服务的协议、HTTPS 地址和加密凭据。模型请求仍由 adapter 直连上游。"
-        action={
-          <Button
-            variant="primary"
-            onPress={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            添加 Provider
-          </Button>
-        }
-      />
-      {!query.isLoading && !query.error && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Metric label="Provider" value={providers.length} icon={<ServerCog className="size-5" />} />
-          <Metric
-            label="已启用"
-            value={providers.filter((item) => item.enabled).length}
-            icon={<Power className="size-5" />}
-          />
-          <Metric
-            label="已托管凭据"
-            value={providers.filter((item) => item.credentialMasked).length}
-            icon={<KeyRound className="size-5" />}
-          />
-        </div>
-      )}
-      {query.isLoading ? (
-        <LoadingState label="正在加载 Provider" />
-      ) : query.error ? (
-        <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-      ) : providers.length === 0 ? (
+  /** Provider 主体按优先级呈现：加载中 → 出错 → 空列表 → Provider 表格。 */
+  function renderProviderList() {
+    if (query.isLoading) return <LoadingState label="正在加载 Provider" />;
+    if (query.error) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
+    if (providers.length === 0)
+      return (
         <Card>
           <EmptyState
             icon={<ServerCog className="size-5" />}
@@ -101,33 +69,35 @@ export function ProvidersPage() {
             }
           />
         </Card>
-      ) : (
-        <TableFrame>
-          <table className="w-full min-w-[840px]">
-            <thead className={tableHeadClass}>
-              <tr>
-                <th className="px-5 py-3">名称</th>
-                <th className="px-5 py-3">协议</th>
-                <th className="px-5 py-3">连接地址</th>
-                <th className="px-5 py-3">凭据</th>
-                <th className="px-5 py-3">可见范围</th>
-                <th className="px-5 py-3">状态</th>
-                <th className="px-5 py-3 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+      );
+    return (
+      <Table variant="secondary" className="overflow-clip rounded-xl bg-surface ring-1 ring-border">
+        <Table.ScrollContainer>
+          <Table.Content aria-label="Provider 列表" className="w-full min-w-[840px]">
+            <Table.Header>
+              <Table.Column isRowHeader className={`${tableHeadClass} rounded-none px-5 py-3`}>名称</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-5 py-3`}>协议</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-5 py-3`}>连接地址</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-5 py-3`}>凭据</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-5 py-3`}>可见范围</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-5 py-3`}>状态</Table.Column>
+              <Table.Column className={`${tableHeadClass} rounded-none px-5 py-3 text-right`}>操作</Table.Column>
+            </Table.Header>
+            <Table.Body>
               {providers.map((provider) => (
-                <tr key={provider.id} className="transition hover:bg-surface-secondary">
-                  <td className={`${tableCellClass} font-semibold text-foreground`}>{provider.name}</td>
-                  <td className={tableCellClass}>
+                <Table.Row key={provider.id}>
+                  <Table.Cell className={`${tableCellClass} font-semibold text-foreground`}>{provider.name}</Table.Cell>
+                  <Table.Cell className={tableCellClass}>
                     <span className="rounded-lg bg-surface-tertiary px-2 py-1 font-mono text-xs text-foreground">
                       {provider.protocol}
                     </span>
-                  </td>
-                  <td className={`${tableCellClass} max-w-xs truncate font-mono text-xs`} title={provider.baseUrl}>
-                    {provider.baseUrl}
-                  </td>
-                  <td className={tableCellClass}>
+                  </Table.Cell>
+                  <Table.Cell className={`${tableCellClass} max-w-xs font-mono text-xs`}>
+                    <span className="block truncate" title={provider.baseUrl}>
+                      {provider.baseUrl}
+                    </span>
+                  </Table.Cell>
+                  <Table.Cell className={tableCellClass}>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs">{provider.credentialMasked}</span>
                       <button
@@ -142,18 +112,18 @@ export function ProvidersPage() {
                         )}
                       </button>
                     </div>
-                  </td>
-                  <td className={tableCellClass}>
+                  </Table.Cell>
+                  <Table.Cell className={tableCellClass}>
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-semibold ${provider.isPublic ? "bg-success/10 text-success" : "bg-surface-tertiary text-muted-foreground"}`}
                     >
                       {provider.isPublic ? "公开" : "仅创建者"}
                     </span>
-                  </td>
-                  <td className={tableCellClass}>
+                  </Table.Cell>
+                  <Table.Cell className={tableCellClass}>
                     <StatusBadge enabled={provider.enabled} />
-                  </td>
-                  <td className={`${tableCellClass} text-right`}>
+                  </Table.Cell>
+                  <Table.Cell className={`${tableCellClass} text-right`}>
                     <div className="flex justify-end gap-1">
                       <Button
                         variant="ghost"
@@ -190,13 +160,51 @@ export function ProvidersPage() {
                         <Trash2 className="size-4" />
                       </Button>
                     </div>
-                  </td>
-                </tr>
+                  </Table.Cell>
+                </Table.Row>
               ))}
-            </tbody>
-          </table>
-        </TableFrame>
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Connections"
+        title="Provider 连接"
+        description="管理模型服务的协议、HTTPS 地址和加密凭据。模型请求仍由 adapter 直连上游。"
+        action={
+          <Button
+            variant="primary"
+            onPress={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            添加 Provider
+          </Button>
+        }
+      />
+      {!query.isLoading && !query.error && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Metric label="Provider" value={providers.length} icon={<ServerCog className="size-5" />} />
+          <Metric
+            label="已启用"
+            value={providers.filter((item) => item.enabled).length}
+            icon={<Power className="size-5" />}
+          />
+          <Metric
+            label="已托管凭据"
+            value={providers.filter((item) => item.credentialMasked).length}
+            icon={<KeyRound className="size-5" />}
+          />
+        </div>
       )}
+      {renderProviderList()}
       <ProviderForm
         open={formOpen}
         provider={editing}

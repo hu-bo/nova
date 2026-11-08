@@ -21,7 +21,9 @@ const CommandPalette = lazy(() =>
 
 /** 把 react-query 状态映射成侧栏列表需要的加载态。 */
 function feedState(query: { isPending: boolean; isError: boolean }): 'loading' | 'error' | 'ready' {
-  return query.isPending ? 'loading' : query.isError ? 'error' : 'ready';
+  if (query.isPending) return 'loading';
+  if (query.isError) return 'error';
+  return 'ready';
 }
 
 export function WorkspaceShell() {

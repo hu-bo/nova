@@ -101,6 +101,19 @@ function consumeOpenAIEvent(event: Record<string, unknown>, state: ProviderStrea
   return { text: deltaText, thinking: deltaThinking };
 }
 
+/** Failed HTTP status maps to a stable code; rate limits stay distinguishable from auth failures. */
+function requestFailureCode(status: number): "MODEL_RATE_LIMITED" | "MODEL_AUTH_FAILED" | "MODEL_REQUEST_FAILED" {
+  if (status === 429) return "MODEL_RATE_LIMITED";
+  if (status === 401 || status === 403) return "MODEL_AUTH_FAILED";
+  return "MODEL_REQUEST_FAILED";
+}
+/** Provider stop reasons map onto Harness finished reasons; unknown reasons read as a normal stop. */
+function finishedReason(finish: string): "tool-calls" | "length" | "stop" {
+  if (finish === "tool_use" || finish === "tool_calls") return "tool-calls";
+  if (finish === "length" || finish === "max_tokens") return "length";
+  return "stop";
+}
+
 export async function modelRequest(
   route: Route,
   request: ModelStepRequest,
@@ -213,7 +226,9 @@ export async function modelRequest(
     }
   }
   const base = provider.baseUrl.replace(/\/$/, "");
-  return { url: base + (anthropic ? (/\/v1$/.test(base) ? "/messages" : "/v1/messages") : "/chat/completions"), body };
+  let path = "/chat/completions";
+  if (anthropic) path = /\/v1$/.test(base) ? "/messages" : "/v1/messages";
+  return { url: base + path, body };
 }
 
 /** The provider's native continuation blocks stay inside Harness, never in the UI event journal. */
@@ -258,12 +273,7 @@ export function configuredModelPlugin(route: Route, uploads: UploadStorage, owne
           });
           if (!response.ok || !response.body) {
             await response.body?.cancel();
-            const code =
-              response.status === 429
-                ? "MODEL_RATE_LIMITED"
-                : response.status === 401 || response.status === 403
-                  ? "MODEL_AUTH_FAILED"
-                  : "MODEL_REQUEST_FAILED";
+            const code = requestFailureCode(response.status);
             throw new FrameworkError(code, "Model request failed (HTTP " + response.status + ").");
           }
           const parts: MessagePart[] = [];
@@ -312,31 +322,20 @@ export function configuredModelPlugin(route: Route, uploads: UploadStorage, owne
             parts.push({ type: "tool-call", callId: call.id, name: call.name, input });
             yield { type: "tool.call", callId: call.id, name: call.name, input };
           }
+          const metadata = {
+            ...(native.size ? { anthropicContent: json([...native.values()]) } : {}),
+            ...(reasoning ? { reasoningContent: reasoning } : {}),
+          };
           yield {
             type: "message.completed",
             message: {
               role: "assistant",
               parts,
-              ...(native.size || reasoning
-                ? {
-                    metadata: {
-                      ...(native.size ? { anthropicContent: json([...native.values()]) } : {}),
-                      ...(reasoning ? { reasoningContent: reasoning } : {}),
-                    },
-                  }
-                : {}),
+              ...(native.size || reasoning ? { metadata } : {}),
             },
           };
           yield { type: "usage", usage };
-          yield {
-            type: "finished",
-            reason:
-              finish === "tool_use" || finish === "tool_calls"
-                ? "tool-calls"
-                : finish === "length" || finish === "max_tokens"
-                  ? "length"
-                  : "stop",
-          };
+          yield { type: "finished", reason: finishedReason(finish) };
         },
       });
     },

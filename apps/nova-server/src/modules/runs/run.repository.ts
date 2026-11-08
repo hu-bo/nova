@@ -1,6 +1,6 @@
 import { createScope, defineRepository, type RepositoryDatabase, type TransactionOptions } from "../../shared/scope.js";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, getTableColumns, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gt, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import {
   applyEvent,
   configurationSchema,
@@ -29,7 +29,7 @@ import {
   type RunState,
 } from "../../../database/index.js";
 import { eventWriter, type UiEventWriter } from "../events/index.js";
-import { enqueue } from "../../jobs/postgres-job-store.js";
+import { enqueue, rearmStaleRuns } from "../../jobs/postgres-job-store.js";
 import { DomainError } from "../../shared/domain-error.js";
 import { runtimeAdapters, runView, type Checkpoint } from "./runtime-adapter.js";
 import { bindingSchema } from "../projects/index.js";
@@ -48,6 +48,7 @@ import {
   nativeBlocks,
   nativeThinkingBlocks,
   publicInteraction,
+  publicOutcome,
   queuedInput,
   type ConversationRow,
 } from "./run-dto.js";
@@ -201,25 +202,19 @@ export class RunRepository {
           eq(specRevisions.specId, execution.specId), eq(specRevisions.revision, execution.revision),
         )).limit(1)
       : [];
+    const startInput = input
+      ? { blocks: input.payload.blocks, mode: input.mode }
+      : { blocks: [{ id: "text", type: "text" as const, text: "继续推进当前目标，复核完成标准。" }], mode: "next_run" as const };
+    const recoverRequested = Boolean(run.checkpoint.continuation || (run.checkpoint.outcome && !continueGoal));
     return {
       run,
       conversation,
       specRevision: specRevision ?? null,
       configuration: run.checkpoint.configuration,
       binding: conversation.metadata.binding ? bindingSchema.parse(conversation.metadata.binding) : null,
-      command:
-        run.checkpoint.continuation || (run.checkpoint.outcome && !continueGoal)
-          ? { kind: "recover" as const }
-          : {
-              kind: "start" as const,
-              messageId: reserved?.messageId ?? randomUUID(),
-              input: input
-                ? { blocks: input.payload.blocks, mode: input.mode }
-                : {
-                    blocks: [{ id: "text", type: "text" as const, text: "继续推进当前目标，复核完成标准。" }],
-                    mode: "next_run" as const,
-                  },
-            },
+      command: recoverRequested
+        ? { kind: "recover" as const }
+        : { kind: "start" as const, messageId: reserved?.messageId ?? randomUUID(), input: startInput },
     };
   }
   /**
@@ -412,23 +407,25 @@ export class RunRepository {
       .from(conversations)
       .where(eq(conversations.id, claim.conversationId))
       .for("update");
-    const [run] =
-      outputOnly === true
-        ? await tx
-            .select({
-              id: runs.id,
-              workerId: runs.workerId,
-              fence: runs.fence,
-              leaseUntil: runs.leaseUntil,
-              streamState: runs.streamState,
-              hasCheckpoint: sql<boolean>`${runs.checkpoint} is not null`,
-            })
-            .from(runs)
-            .where(eq(runs.id, claim.id))
-            .for("update")
-        : outputOnly === "session"
-          ? await tx.select(sessionColumns).from(runs).where(eq(runs.id, claim.id)).for("update")
-          : await tx.select().from(runs).where(eq(runs.id, claim.id)).for("update");
+    // claim 的三种读取形态: output 只取租约列, session 读 checkpoint 元数据列, 其余读完整行.
+    const selectClaimedRun = async () => {
+      if (outputOnly === true)
+        return tx
+          .select({
+            id: runs.id,
+            workerId: runs.workerId,
+            fence: runs.fence,
+            leaseUntil: runs.leaseUntil,
+            streamState: runs.streamState,
+            hasCheckpoint: sql<boolean>`${runs.checkpoint} is not null`,
+          })
+          .from(runs)
+          .where(eq(runs.id, claim.id))
+          .for("update");
+      if (outputOnly === "session") return tx.select(sessionColumns).from(runs).where(eq(runs.id, claim.id)).for("update");
+      return tx.select().from(runs).where(eq(runs.id, claim.id)).for("update");
+    };
+    const [run] = await selectClaimedRun();
     if (
       !conversation ||
       conversation.activeRunId !== claim.id ||
@@ -468,8 +465,8 @@ export class RunRepository {
           eq(runs.id, claim.id),
           eq(runs.workerId, claim.workerId),
           eq(runs.fence, claim.fence),
-          sql`${runs.leaseUntil}>now()`,
-          sql`${runs.state} in ('running','cancelling','waiting')`,
+          gt(runs.leaseUntil, sql`now()`),
+          inArray(runs.state, ["running", "cancelling", "waiting"]),
         ),
       )
       .returning({ id: runs.id });
@@ -761,26 +758,10 @@ export class RunRepository {
     }
     if (batch.execution) {
       const entry = batch.execution;
-      const result = entry.result;
-
       emitted.push({
         runId: run.id,
         type: "tool.changed",
-        payload: {
-          operation: {
-            id: entry.executionId,
-            callId: entry.callId,
-            state: result
-              ? result.outcome === "unknown"
-                ? "unknown"
-                : result.error?.code === "TOOL_DENIED"
-                  ? "denied"
-                  : result.status
-              : entry.dispatch === "dispatched"
-                ? "running"
-                : "queued",
-          },
-        },
+        payload: { operation: { id: entry.executionId, callId: entry.callId, state: operationState(entry) } },
       });
     }
     if (batch.run)
@@ -927,7 +908,7 @@ export class RunRepository {
           eq(pendingInputs.conversationId, conversation.id),
           eq(pendingInputs.status, "queued"),
           eq(pendingInputs.mode, "steer"),
-          sql`${pendingInputs.runId} is null`,
+          isNull(pendingInputs.runId),
         ),
       )
       .orderBy(asc(pendingInputs.sequence))
@@ -1230,15 +1211,7 @@ export class RunRepository {
       }
     }
     for (const draft of run.projection?.messages.filter((message) => message.state === "streaming") ?? []) {
-      const message = {
-        ...draft,
-        state:
-          state === "succeeded"
-            ? ("completed" as const)
-            : state.startsWith("cancelled")
-              ? ("cancelled" as const)
-              : ("failed" as const),
-      };
+      const message = { ...draft, state: draftMessageStates[state] };
       await insertMessage(tx, conversation.id, { ...message, runId: run.id });
       await this.journal.append(conversation, { runId: run.id, type: "message.committed", payload: { message } });
     }
@@ -1354,9 +1327,7 @@ export class RunRepository {
     await this.journal.append(conversation, { runId: run.id, type: "plan.changed", payload: { plan } });
   }
   async recover() {
-    await this.db.execute(
-      sql`insert into jobs(kind,aggregate_id,dedupe_key,payload,status,available_at,max_attempts) select 'run.wake',conversation_id,'recover:' || id || ':' || revision,jsonb_build_object('conversationId',conversation_id),'queued',now(),5 from runs where state in ('running','waiting','cancelling') and (lease_until is null or lease_until<now()) on conflict(kind,aggregate_id,dedupe_key) do update set status=case when jobs.status='running' then jobs.status else 'queued' end,available_at=now()`,
-    );
+    await rearmStaleRuns({ db: this.db });
   }
 }
 /** Committed message row; the source column stays NULL unless the message carries one. */
@@ -1378,19 +1349,46 @@ function checkpointStorage(checkpoint: Checkpoint | null) {
   const { nativeState: _nativeState, executions: _executions, ...metadata } = checkpoint;
   return { checkpoint, checkpointMetadata: metadata };
 }
+/** 日志里的工具状态: 未返回结果时按 dispatch 区分, 结果里再优先透出 unknown/denied. */
+function operationState(entry: import("@nnova/harness").ExecutionRecord) {
+  if (entry.result) return publicOutcome(entry.result) ?? entry.result.status;
+  return entry.dispatch === "dispatched" ? "running" : "queued";
+}
+/** Run 结束时流式草稿的终态; 既非成功也非取消的一律按失败落定. */
+const draftMessageStates = {
+  queued: "failed",
+  running: "failed",
+  waiting: "failed",
+  paused: "failed",
+  cancelling: "failed",
+  succeeded: "completed",
+  failed: "failed",
+  timed_out: "failed",
+  cancelled: "cancelled",
+  cancelled_unconfirmed: "cancelled",
+} satisfies Record<RunState, Message["state"]>;
 function executionEffectState(executions: readonly import("@nnova/harness").ExecutionRecord[]): RunRow["effectState"] {
   const effects = executions.filter((entry) => entry.effects !== "read");
   if (effects.some((entry) => entry.result?.outcome === "unknown")) return "unknown";
   return effects.some((entry) => !entry.result && entry.dispatch === "dispatched") ? "pending" : "known";
 }
-function environmentKey(conversation: ConversationRow, configuration: SubmitInput["configuration"]) {
+type Environment = { kind: "none" } | { kind: "ssh"; remoteId: string } | { kind: "runner"; runnerId: string; workspaceId: string | null };
+
+/** 执行环境标识的唯一来源: ssh 连接优先, 其次 runner 工作区; 其余数据都从 parts 派生. */
+function environmentParts(conversation: ConversationRow, configuration: SubmitInput["configuration"]): Environment {
   const binding = conversation.metadata.binding;
   const remoteId = binding?.remoteConnectionId ?? configuration?.remoteConnectionId;
-  return remoteId
-    ? "ssh:" + remoteId
-    : binding?.runnerId
-      ? "runner:" + binding.runnerId + ":" + binding.workspaceId
-      : "none";
+  if (remoteId) return { kind: "ssh", remoteId };
+  if (binding?.runnerId)
+    return { kind: "runner", runnerId: binding.runnerId, workspaceId: binding.workspaceId ?? null };
+  return { kind: "none" };
+}
+
+function environmentKey(conversation: ConversationRow, configuration: SubmitInput["configuration"]) {
+  const parts = environmentParts(conversation, configuration);
+  if (parts.kind === "ssh") return "ssh:" + parts.remoteId;
+  if (parts.kind === "runner") return "runner:" + parts.runnerId + ":" + parts.workspaceId;
+  return "none";
 }
 
 async function environmentUnsettled(
@@ -1398,18 +1396,38 @@ async function environmentUnsettled(
   conversation: ConversationRow,
   configuration: SubmitInput["configuration"],
 ) {
+  const parts = environmentParts(conversation, configuration);
+  if (parts.kind === "none") return false;
   const environment = environmentKey(conversation, configuration);
-  if (environment === "none") return false;
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${environment}))`);
-  const rows = await tx.execute(sql`
- select r.id from runs r join conversations c on c.id=r.conversation_id
- where c.owner_user_id=${conversation.ownerUserId}::uuid
- and (case when coalesce(c.metadata->'binding'->>'remoteConnectionId',r.checkpoint->'configuration'->>'remoteConnectionId',c.metadata->'configuration'->>'remoteConnectionId') is not null
- then 'ssh:' || coalesce(c.metadata->'binding'->>'remoteConnectionId',r.checkpoint->'configuration'->>'remoteConnectionId',c.metadata->'configuration'->>'remoteConnectionId')
- when c.metadata->'binding'->>'runnerId' is not null then 'runner:' || (c.metadata->'binding'->>'runnerId') || ':' || (c.metadata->'binding'->>'workspaceId') else 'none' end)=${environment}
- and (r.state='cancelled_unconfirmed' or r.effect_state='unknown' or (r.effect_state='pending' and (r.lease_until is null or r.lease_until<now()))) limit 1
- `);
-  return rows.rows.length > 0;
+  // 归属写在 jsonb 里, 路径取值只能用 SQL 片段; 其余谓词走类型化列.
+  const remoteId = sql`(coalesce(${conversations.metadata}->'binding'->>'remoteConnectionId',${runs.checkpoint}->'configuration'->>'remoteConnectionId',${conversations.metadata}->'configuration'->>'remoteConnectionId'))`;
+  let settled: SQL | undefined;
+  if (parts.kind === "ssh") settled = eq(remoteId, parts.remoteId);
+  else if (parts.workspaceId === null) return false;
+  else
+    settled = and(
+      isNull(remoteId),
+      eq(sql`${conversations.metadata}->'binding'->>'runnerId'`, parts.runnerId),
+      eq(sql`${conversations.metadata}->'binding'->>'workspaceId'`, parts.workspaceId),
+    );
+  const [row] = await tx
+    .select({ id: runs.id })
+    .from(runs)
+    .innerJoin(conversations, eq(conversations.id, runs.conversationId))
+    .where(
+      and(
+        eq(conversations.ownerUserId, conversation.ownerUserId),
+        settled,
+        or(
+          eq(runs.state, "cancelled_unconfirmed"),
+          eq(runs.effectState, "unknown"),
+          and(eq(runs.effectState, "pending"), or(isNull(runs.leaseUntil), lt(runs.leaseUntil, sql`now()`))),
+        ),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }
 
 export const runRepository = defineRepository(

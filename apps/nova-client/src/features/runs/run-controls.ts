@@ -8,6 +8,22 @@ import { isActiveRun } from './run-event-reducer';
 import { cancelRun, respondInteraction } from './run.commands';
 import type { RunStreamSnapshot } from './run-stream-manager';
 
+/** 决策应答 → interaction 请求体：审批收敛为 allow/deny，allow_always 放宽为会话范围。 */
+function buildResponsePayload(response: DecisionResponse) {
+  if (response.kind === 'approval') {
+    return {
+      kind: 'approval' as const,
+      decision: response.decision === 'deny' ? ('deny' as const) : ('allow' as const),
+      scope: response.decision === 'allow_always' ? ('session' as const) : ('once' as const),
+    };
+  }
+  return {
+    kind: 'question' as const,
+    optionIds: response.optionIds,
+    ...(response.customText ? { customText: response.customText } : {}),
+  };
+}
+
 /**
  * 运行控制（停止 / 决策裁决）的共享状态。
  *
@@ -49,19 +65,7 @@ export function useRunControls(stream: RunStreamSnapshot) {
         throw new Error('Expired decision');
       const payload = {
         expectedRevision: decision.revision,
-        response:
-          response.kind === 'approval'
-            ? {
-                kind: 'approval' as const,
-                decision: response.decision === 'deny' ? ('deny' as const) : ('allow' as const),
-                scope:
-                  response.decision === 'allow_always' ? ('session' as const) : ('once' as const),
-              }
-            : {
-                kind: 'question' as const,
-                optionIds: response.optionIds,
-                ...(response.customText ? { customText: response.customText } : {}),
-              },
+        response: buildResponsePayload(response),
       };
       const runId = projection?.run?.id;
       if (!runId) throw new Error('No interaction run');
@@ -90,26 +94,28 @@ export function useRunControls(stream: RunStreamSnapshot) {
   const remaining = decision?.expiresAt
     ? Math.max(0, Math.ceil((Date.parse(decision.expiresAt) - now) / 1000))
     : null;
-  const request: DecisionRequest | null = decision
-    ? decision.kind === 'question'
-      ? {
-          kind: 'question',
-          decisionId: decision.id,
-          question: decision.question,
-          options: decision.options,
-          multiSelect: decision.multiSelect,
-          allowCustom: decision.allowCustom,
-        }
-      : {
-          kind: 'approval',
-          decisionId: decision.id,
-          toolName: decision.toolName,
-          args: decision.args,
-          allowedScopes: decision.allowedScopes,
-          risk: decision.risk,
-          ...(decision.codeChanges ? { codeChanges: decision.codeChanges } : {}),
-        }
-    : null;
+  let request: DecisionRequest | null = null;
+  if (decision) {
+    request =
+      decision.kind === 'question'
+        ? {
+            kind: 'question',
+            decisionId: decision.id,
+            question: decision.question,
+            options: decision.options,
+            multiSelect: decision.multiSelect,
+            allowCustom: decision.allowCustom,
+          }
+        : {
+            kind: 'approval',
+            decisionId: decision.id,
+            toolName: decision.toolName,
+            args: decision.args,
+            allowedScopes: decision.allowedScopes,
+            risk: decision.risk,
+            ...(decision.codeChanges ? { codeChanges: decision.codeChanges } : {}),
+          };
+  }
   const cancelling =
     projection?.run?.state === 'cancelling' || cancel.isSuccess || cancel.isPending;
   const canCancel = Boolean(

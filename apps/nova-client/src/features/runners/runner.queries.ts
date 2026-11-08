@@ -9,11 +9,9 @@ import { useIdentity } from '@/features/auth';
 export type Runner = ListRunners200ItemsItem;
 export type RunnerToken = ListRunnerTokens200ItemsItem;
 export function runnerStatus(runner: Runner, now = Date.now()): 'online' | 'offline' | 'revoked' {
-  return runner.revokedAt
-    ? 'revoked'
-    : runner.lastSeenAt && now - Date.parse(runner.lastSeenAt) < 60000
-      ? 'online'
-      : 'offline';
+  if (runner.revokedAt) return 'revoked';
+  if (runner.lastSeenAt && now - Date.parse(runner.lastSeenAt) < 60000) return 'online';
+  return 'offline';
 }
 export function useRunnerTokensQuery({ silent = false } = {}) {
   const { identity } = useIdentity();

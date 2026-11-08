@@ -17,18 +17,16 @@ export type MessageRow = typeof messages.$inferSelect;
 export type PendingInputRow = typeof pendingInputs.$inferSelect;
 
 /** Order-insensitive stable hash; backs every idempotency signature in the runs aggregate. */
-export const fingerprint = (value: unknown): string =>
-  Array.isArray(value)
-    ? "[" + value.map(fingerprint).join(",") + "]"
-    : value && typeof value === "object"
-      ? "{" +
-        Object.entries(value)
-          .filter(([, item]) => item !== undefined)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([key, item]) => JSON.stringify(key) + ":" + fingerprint(item))
-          .join(",") +
-        "}"
-      : (JSON.stringify(value) ?? "null");
+export function fingerprint(value: unknown): string {
+  if (Array.isArray(value)) return "[" + value.map(fingerprint).join(",") + "]";
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return "{" + entries.map(([key, item]) => JSON.stringify(key) + ":" + fingerprint(item)).join(",") + "}";
+  }
+  return JSON.stringify(value) ?? "null";
+}
 
 export const conversationView = (conversation: ConversationRow) => ({
   id: conversation.id,
@@ -102,6 +100,13 @@ export function publicInteraction(interaction: Checkpoint["interactions"][number
   return view;
 }
 
+/** 工具调用对外状态里盖过 status 的两种事实: 效果未知与权限拒绝. */
+export function publicOutcome(result: import("@nnova/harness").ExecutionRecord["result"]): "unknown" | "denied" | null {
+  if (result?.outcome === "unknown") return "unknown";
+  if (result?.error?.code === "TOOL_DENIED") return "denied";
+  return null;
+}
+
 /** Native parts keep stable identity; text block ids stay compatible with streaming offsets. */
 export function nativeBlocks(
   parts: readonly import("@nnova/harness").MessagePart[],
@@ -109,18 +114,17 @@ export function nativeBlocks(
   messageId: string,
 ): Block[] {
   let textIndex = 0;
+  const fallbackBlockId = (part: (typeof parts)[number], index: number): string => {
+    if (part.type === "text") {
+      const ordinal = textIndex++;
+      return ordinal === 0 ? "text" : "text:" + (ordinal + 1);
+    }
+    if (part.type === "tool-call") return "call:" + part.callId;
+    if (part.type === "tool-result") return "result:" + part.callId;
+    return "part:" + index;
+  };
   return parts.map((part, index) => {
-    const blockId =
-      part.id ??
-      (part.type === "text"
-        ? textIndex++ === 0
-          ? "text"
-          : "text:" + textIndex
-        : part.type === "tool-call"
-          ? "call:" + part.callId
-          : part.type === "tool-result"
-            ? "result:" + part.callId
-            : "part:" + index);
+    const blockId = part.id ?? fallbackBlockId(part, index);
     if (part.type === "text") return { id: blockId, type: "text", text: part.text };
     if (part.type === "thinking") return { id: "thinking", type: "thinking", text: part.text };
     if (part.type === "tool-call")
@@ -134,12 +138,7 @@ export function nativeBlocks(
         type: "tool_result",
         callId: part.callId,
         operationId: execution?.executionId ?? messageId,
-        outcome:
-          execution?.result?.outcome === "unknown"
-            ? "unknown"
-            : execution?.result?.error?.code === "TOOL_DENIED"
-              ? "denied"
-              : part.status,
+        outcome: publicOutcome(execution?.result) ?? part.status,
         content: projectToolContent(part.name, part.value),
       };
     }

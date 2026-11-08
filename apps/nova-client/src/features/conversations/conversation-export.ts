@@ -99,13 +99,11 @@ async function downloadConversation(
     '导出时间：' + new Date().toLocaleString('zh-CN'),
     '包含导出开始时的已保存历史及当前草稿；执行中的输出可能继续更新。附件保留元数据，文件内容不包含在导出中。',
     ...Array.from(messages.values())
-      .sort((a, b) =>
-        BigInt(a.sequence) < BigInt(b.sequence)
-          ? -1
-          : BigInt(a.sequence) > BigInt(b.sequence)
-            ? 1
-            : 0,
-      )
+      .sort((a, b) => {
+        if (BigInt(a.sequence) < BigInt(b.sequence)) return -1;
+        if (BigInt(a.sequence) > BigInt(b.sequence)) return 1;
+        return 0;
+      })
       .map(
         (message) =>
           '## ' +

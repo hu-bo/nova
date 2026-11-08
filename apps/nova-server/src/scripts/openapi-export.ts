@@ -6,11 +6,9 @@ import { buildApp } from "../app.js";
 import { loadConfig } from "../config.js";
 
 const packageRoot = serverRoot;
-const output = process.argv[2]
-  ? isAbsolute(process.argv[2])
-    ? process.argv[2]
-    : resolve(packageRoot, process.argv[2])
-  : resolve(packageRoot, "openapi.json");
+const argument = process.argv[2];
+let output = resolve(packageRoot, "openapi.json");
+if (argument) output = isAbsolute(argument) ? argument : resolve(packageRoot, argument);
 
 async function main(): Promise<void> {
   const config = loadConfig({

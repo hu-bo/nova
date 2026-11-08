@@ -54,12 +54,12 @@ export class RemoteConnectionService {
     if (!credential && input.authMethod !== current.authMethod)
       throw new DomainError("VALIDATION_ERROR", "New credentials required when changing authentication");
     const hostChanged = current.hostname !== input.hostname || current.port !== input.port;
+    let passphraseCiphertext: string | null | undefined;
+    if (passphrase !== undefined) passphraseCiphertext = passphrase ? this.cipher.encrypt(passphrase) : null;
     const row = await this.repository.update(id, owner, {
       ...fields,
       ...(credential ? { credentialCiphertext: this.cipher.encrypt(credential) } : {}),
-      ...(passphrase !== undefined
-        ? { passphraseCiphertext: passphrase ? this.cipher.encrypt(passphrase) : null }
-        : {}),
+      ...(passphraseCiphertext !== undefined ? { passphraseCiphertext } : {}),
       ...(hostChanged ? { hostFingerprint: null } : {}),
       lastCheckedAt: null,
       lastError: null,
@@ -233,6 +233,12 @@ export class RemoteConnectionService {
     });
   }
 }
+/** 连接状态按探测结果优先级取:有错误即 offline,检查过且无错误为 verified,否则 unverified。 */
+function connectionStatus(row: RemoteConnectionRow): "offline" | "verified" | "unverified" {
+  if (row.lastError) return "offline";
+  if (row.lastCheckedAt) return "verified";
+  return "unverified";
+}
 function toDto(row: RemoteConnectionRow) {
   return {
     id: row.id,
@@ -243,7 +249,7 @@ function toDto(row: RemoteConnectionRow) {
     rootPath: row.rootPath,
     authMethod: row.authMethod,
     hostFingerprint: row.hostFingerprint,
-    status: row.lastError ? ("offline" as const) : row.lastCheckedAt ? ("verified" as const) : ("unverified" as const),
+    status: connectionStatus(row),
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
     lastError: row.lastError,
     createdAt: row.createdAt.toISOString(),

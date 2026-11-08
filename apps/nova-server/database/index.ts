@@ -1,6 +1,7 @@
 export { createDatabase, createPool, type Database } from "./client.js";
 export {
   conversations,
+  jobs,
   modelConfigs,
   modelProviders,
   remoteConnections,

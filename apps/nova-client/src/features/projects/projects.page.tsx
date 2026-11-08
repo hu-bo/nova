@@ -48,6 +48,13 @@ function environmentBadge(info: ProjectEnvironmentInfo) {
   return { label: LABEL_BY_RUNNER_STATE[info.runnerState] ?? '环境状态待确认', dot };
 }
 
+/** 卡片没有会话时的提示文案：读取中优先，其次读取失败，最后才是空态。 */
+function conversationHint(isPending: boolean, error: unknown) {
+  if (isPending) return '正在读取最近会话…';
+  if (error) return '最近会话暂不可用';
+  return '还没有会话，开始第一项任务。';
+}
+
 export function ProjectsPage() {
   const projectsQuery = useProjectsQuery();
   const conversationsQuery = useConversationsQuery({ limit: 100 });
@@ -87,6 +94,175 @@ export function ProjectsPage() {
       ? conversationsQuery.error
       : filter === 'unbound' &&
         Object.values(environments).some((item) => item.bindingState === 'error');
+  /** 项目列表区域：读取失败 → 读取或筛选中 → 筛选数据不可用 → 空态引导 → 项目卡片。 */
+  function renderProjectList() {
+    if (projectsQuery.error)
+      return (
+        <ErrorNotice error={projectsQuery.error} onRetry={() => void projectsQuery.refetch()} />
+      );
+    if (projectsQuery.isPending || filterLoading)
+      return (
+        <div role="status" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((item) => (
+            <div key={item} className="h-52 animate-pulse rounded-2xl bg-slate-100" />
+          ))}
+          <span className="sr-only">正在读取项目</span>
+        </div>
+      );
+    if (filterError)
+      return (
+        <div role="alert" className="rounded-xl border p-6 text-sm text-slate-600">
+          筛选所需的数据暂时无法读取。
+          <Button
+            variant="ghost"
+            onPress={() => {
+              void conversationsQuery.refetch();
+              void projectsQuery.refetch();
+              setFilter('all');
+            }}
+          >
+            返回全部项目
+          </Button>
+        </div>
+      );
+    if (filtered.length === 0)
+      return (
+        <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-20 text-center">
+          <Folder size={28} className="mx-auto text-slate-400" />
+          <h2 className="mt-4 text-base font-medium text-slate-800">
+            {projects.length ? '没有符合条件的项目' : '从你的工作目录开始'}
+          </h2>
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+            {projects.length
+              ? '调整关键词或筛选条件，查看其他项目。'
+              : '创建项目并绑定 Runner 或 SSH 环境，让会话在对应目录里工作。'}
+          </p>
+          <Button
+            className="mt-5"
+            variant="secondary"
+            onPress={() => {
+              if (projects.length) {
+                setFilter('all');
+                setSearch('');
+              } else setCreatorOpen(true);
+            }}
+          >
+            {projects.length ? '清除筛选' : '创建项目'}
+          </Button>
+        </div>
+      );
+    return (
+      <div
+        className={cn(
+          'grid gap-4',
+          view === 'grid' ? 'md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1',
+        )}
+      >
+        {filtered.map((project) => {
+          const info = environments[project.id];
+          const chats = conversations.filter((item) => item.projectId === project.id);
+          const latest = chats[0];
+          const activeCount = chats.filter((item) => item.activeRunId).length;
+          const bound = info?.bindingState === 'bound';
+          const badge = environmentBadge(info);
+          return (
+            <article
+              key={project.id}
+              className={cn(
+                'flex min-w-0 flex-col rounded-2xl border border-slate-200 p-5',
+                view === 'list' && 'sm:flex-row sm:items-center sm:gap-6',
+              )}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2.5">
+                  <Folder size={18} className="shrink-0 text-slate-500" />
+                  <h2 className="min-w-0 flex-1 truncate font-semibold text-slate-800">
+                    <Link
+                      to="/projects/$id"
+                      params={{ id: project.id }}
+                      className="hover:text-accent"
+                    >
+                      {project.name}
+                    </Link>
+                  </h2>
+                  <Link
+                    to="/projects/$id"
+                    params={{ id: project.id }}
+                    aria-label={'管理项目 ' + project.name}
+                    className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-accent"
+                  >
+                    <Settings2 size={16} />
+                  </Link>
+                </div>
+                <p
+                  className="mt-3 truncate text-xs text-slate-500"
+                  title={info?.workspace ?? undefined}
+                >
+                  {info?.workspace
+                    ? displayWorkspacePath(info.workspace)
+                    : '绑定环境后，可在目录中执行任务'}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className={'size-1.5 rounded-full ' + badge.dot} />
+                    {badge.label}
+                  </span>
+                  {activeCount > 0 && (
+                    <span className="flex items-center gap-1 text-accent">
+                      <LoaderCircle size={12} className="animate-spin" />
+                      {activeCount} 项执行中
+                    </span>
+                  )}
+                </div>
+                {latest && (
+                  <p className="mt-4 flex min-w-0 items-center gap-1.5 text-xs text-slate-600">
+                    <MessageCircle size={13} className="shrink-0" />
+                    <span className="truncate">{latest.title || '未命名会话'}</span>
+                  </p>
+                )}
+                {!latest && (
+                  <p className="mt-4 text-xs text-slate-500">
+                    {conversationHint(conversationsQuery.isPending, conversationsQuery.error)}
+                  </p>
+                )}
+              </div>
+              <div
+                className={cn(
+                  'mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4',
+                  view === 'list' && 'sm:mt-0 sm:w-52 sm:shrink-0 sm:border-0 sm:pt-0',
+                )}
+              >
+                <time dateTime={project.updatedAt} className="text-xs text-slate-500">
+                  {formatDate(project.updatedAt)} 更新
+                </time>
+                {latest ? (
+                  <Link
+                    to="/conversations/$id"
+                    params={{ id: latest.id }}
+                    className="flex items-center gap-1.5 rounded-lg text-sm font-medium text-accent focus-visible:outline-2 focus-visible:outline-accent"
+                  >
+                    继续会话
+                    <ArrowRight size={14} />
+                  </Link>
+                ) : (
+                  <Link
+                    to={bound ? '/conversations' : '/projects/$id'}
+                    {...(bound
+                      ? { search: { projectId: project.id } }
+                      : { params: { id: project.id } })}
+                    className="flex items-center gap-1.5 rounded-lg text-sm font-medium text-accent focus-visible:outline-2 focus-visible:outline-accent"
+                  >
+                    {bound ? '开始任务' : '配置环境'}
+                    <ArrowRight size={14} />
+                  </Link>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className="mx-auto max-w-6xl space-y-7 px-5 py-8 sm:px-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -166,168 +342,7 @@ export function ProjectsPage() {
           </button>
         </p>
       )}
-      {projectsQuery.error ? (
-        <ErrorNotice error={projectsQuery.error} onRetry={() => void projectsQuery.refetch()} />
-      ) : projectsQuery.isPending || filterLoading ? (
-        <div role="status" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2].map((item) => (
-            <div key={item} className="h-52 animate-pulse rounded-2xl bg-slate-100" />
-          ))}
-          <span className="sr-only">正在读取项目</span>
-        </div>
-      ) : filterError ? (
-        <div role="alert" className="rounded-xl border p-6 text-sm text-slate-600">
-          筛选所需的数据暂时无法读取。
-          <Button
-            variant="ghost"
-            onPress={() => {
-              void conversationsQuery.refetch();
-              void projectsQuery.refetch();
-              setFilter('all');
-            }}
-          >
-            返回全部项目
-          </Button>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-20 text-center">
-          <Folder size={28} className="mx-auto text-slate-400" />
-          <h2 className="mt-4 text-base font-medium text-slate-800">
-            {projects.length ? '没有符合条件的项目' : '从你的工作目录开始'}
-          </h2>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
-            {projects.length
-              ? '调整关键词或筛选条件，查看其他项目。'
-              : '创建项目并绑定 Runner 或 SSH 环境，让会话在对应目录里工作。'}
-          </p>
-          <Button
-            className="mt-5"
-            variant="secondary"
-            onPress={() => {
-              if (projects.length) {
-                setFilter('all');
-                setSearch('');
-              } else setCreatorOpen(true);
-            }}
-          >
-            {projects.length ? '清除筛选' : '创建项目'}
-          </Button>
-        </div>
-      ) : (
-        <div
-          className={cn(
-            'grid gap-4',
-            view === 'grid' ? 'md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1',
-          )}
-        >
-          {filtered.map((project) => {
-            const info = environments[project.id];
-            const chats = conversations.filter((item) => item.projectId === project.id);
-            const latest = chats[0];
-            const activeCount = chats.filter((item) => item.activeRunId).length;
-            const bound = info?.bindingState === 'bound';
-            const badge = environmentBadge(info);
-            return (
-              <article
-                key={project.id}
-                className={cn(
-                  'flex min-w-0 flex-col rounded-2xl border border-slate-200 p-5',
-                  view === 'list' && 'sm:flex-row sm:items-center sm:gap-6',
-                )}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2.5">
-                    <Folder size={18} className="shrink-0 text-slate-500" />
-                    <h2 className="min-w-0 flex-1 truncate font-semibold text-slate-800">
-                      <Link
-                        to="/projects/$id"
-                        params={{ id: project.id }}
-                        className="hover:text-accent"
-                      >
-                        {project.name}
-                      </Link>
-                    </h2>
-                    <Link
-                      to="/projects/$id"
-                      params={{ id: project.id }}
-                      aria-label={'管理项目 ' + project.name}
-                      className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-accent"
-                    >
-                      <Settings2 size={16} />
-                    </Link>
-                  </div>
-                  <p
-                    className="mt-3 truncate text-xs text-slate-500"
-                    title={info?.workspace ?? undefined}
-                  >
-                    {info?.workspace
-                      ? displayWorkspacePath(info.workspace)
-                      : '绑定环境后，可在目录中执行任务'}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span className="flex items-center gap-1.5">
-                      <span className={'size-1.5 rounded-full ' + badge.dot} />
-                      {badge.label}
-                    </span>
-                    {activeCount > 0 && (
-                      <span className="flex items-center gap-1 text-accent">
-                        <LoaderCircle size={12} className="animate-spin" />
-                        {activeCount} 项执行中
-                      </span>
-                    )}
-                  </div>
-                  {latest && (
-                    <p className="mt-4 flex min-w-0 items-center gap-1.5 text-xs text-slate-600">
-                      <MessageCircle size={13} className="shrink-0" />
-                      <span className="truncate">{latest.title || '未命名会话'}</span>
-                    </p>
-                  )}
-                  {!latest && (
-                    <p className="mt-4 text-xs text-slate-500">
-                      {conversationsQuery.isPending
-                        ? '正在读取最近会话…'
-                        : conversationsQuery.error
-                          ? '最近会话暂不可用'
-                          : '还没有会话，开始第一项任务。'}
-                    </p>
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    'mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4',
-                    view === 'list' && 'sm:mt-0 sm:w-52 sm:shrink-0 sm:border-0 sm:pt-0',
-                  )}
-                >
-                  <time dateTime={project.updatedAt} className="text-xs text-slate-500">
-                    {formatDate(project.updatedAt)} 更新
-                  </time>
-                  {latest ? (
-                    <Link
-                      to="/conversations/$id"
-                      params={{ id: latest.id }}
-                      className="flex items-center gap-1.5 rounded-lg text-sm font-medium text-accent focus-visible:outline-2 focus-visible:outline-accent"
-                    >
-                      继续会话
-                      <ArrowRight size={14} />
-                    </Link>
-                  ) : (
-                    <Link
-                      to={bound ? '/conversations' : '/projects/$id'}
-                      {...(bound
-                        ? { search: { projectId: project.id } }
-                        : { params: { id: project.id } })}
-                      className="flex items-center gap-1.5 rounded-lg text-sm font-medium text-accent focus-visible:outline-2 focus-visible:outline-accent"
-                    >
-                      {bound ? '开始任务' : '配置环境'}
-                      <ArrowRight size={14} />
-                    </Link>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
+      {renderProjectList()}
       {projectsQuery.isSuccess && (
         <p className="text-xs text-slate-500">
           显示 {filtered.length} 个项目 · 项目和最近会话各读取最多 100 条

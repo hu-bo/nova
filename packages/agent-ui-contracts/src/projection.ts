@@ -15,13 +15,11 @@ const requireState = (valid: unknown, message: string): void => {
   if (!valid) throw new ProjectionError(message);
 };
 export const sortMessages = (messages: Message[]): Message[] =>
-  [...messages].sort((a, b) =>
-    BigInt(a.sequence) < BigInt(b.sequence)
-      ? -1
-      : BigInt(a.sequence) > BigInt(b.sequence)
-        ? 1
-        : a.id.localeCompare(b.id),
-  );
+  [...messages].sort((a, b) => {
+    if (BigInt(a.sequence) < BigInt(b.sequence)) return -1;
+    if (BigInt(a.sequence) > BigInt(b.sequence)) return 1;
+    return a.id.localeCompare(b.id);
+  });
 const upsert = <T extends { id: string }>(items: T[], item: T): T[] =>
   items.some((prior) => prior.id === item.id)
     ? items.map((prior) => (prior.id === item.id ? item : prior))

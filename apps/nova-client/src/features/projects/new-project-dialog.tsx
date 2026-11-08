@@ -18,6 +18,20 @@ import {
 import { useModelSettings } from '@/features/settings';
 import { Input } from '@/components/ui/input';
 
+/** 提交按钮文案：提交中优先；项目已建但绑定失败时改为重试绑定。 */
+function submitButtonLabel(isPending: boolean, createdId: string | null) {
+  if (isPending) return '正在创建…';
+  if (createdId) return '重试绑定';
+  return '创建项目';
+}
+
+/** 环境区提示文案：环境列表读取中优先，其次看是否已选定环境。 */
+function environmentHint(isReading: boolean, target: string) {
+  if (isReading) return '正在读取可用环境…';
+  if (target) return '环境配置将随项目一起保存。';
+  return '创建后也可以在项目设置中绑定。';
+}
+
 export function NewProjectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { identity } = useIdentity();
   const settings = useModelSettings();
@@ -91,7 +105,7 @@ export function NewProjectDialog({ open, onClose }: { open: boolean; onClose: ()
             取消
           </Button>
           <Button type="submit" disabled={create.isPending || !valid}>
-            {create.isPending ? '正在创建…' : createdId ? '重试绑定' : '创建项目'}
+            {submitButtonLabel(create.isPending, createdId)}
             {!create.isPending && <ArrowRight size={15} aria-hidden="true" />}
           </Button>
         </>
@@ -150,11 +164,7 @@ export function NewProjectDialog({ open, onClose }: { open: boolean; onClose: ()
               role={runners.isPending || remotes.isPending ? 'status' : undefined}
               className="min-w-0 flex-1 text-xs leading-5 text-muted-foreground"
             >
-              {runners.isPending || remotes.isPending
-                ? '正在读取可用环境…'
-                : environment.target
-                  ? '环境配置将随项目一起保存。'
-                  : '创建后也可以在项目设置中绑定。'}
+              {environmentHint(runners.isPending || remotes.isPending, environment.target)}
             </p>
             <Popover isOpen={setupOpen} onOpenChange={setSetupOpen}>
               <Button variant="ghost" disabled={create.isPending} aria-label="连接新环境">

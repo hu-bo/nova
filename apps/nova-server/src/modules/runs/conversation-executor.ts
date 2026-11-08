@@ -144,27 +144,27 @@ export class ConversationExecutor {
         };
       } while (!signal.aborted);
       const cancellation = signal.aborted ? await adapter.cancel(claim.id) : "confirmed";
-      await this.repository.finish(
-        claim,
-        signal.aborted ? (cancellation === "confirmed" ? "cancelled" : "cancelled_unconfirmed") : "succeeded",
-      );
+      await this.repository.finish(claim, completionState(signal.aborted, cancellation));
     } catch (error) {
       const reason = error instanceof Error && "code" in error ? String(error.code) : "EXECUTION_FAILED";
       const cancellation = signal.aborted && adapter ? await adapter.cancel(claim.id) : "confirmed";
-      await this.repository.finish(
-        claim,
-        signal.aborted
-          ? cancellation === "unknown"
-            ? "cancelled_unconfirmed"
-            : Date.now() >= deadline
-              ? "timed_out"
-              : "cancelled"
-          : "failed",
-        reason,
-      );
+      await this.repository.finish(claim, failureState(signal.aborted, cancellation, deadline), reason);
     } finally {
       clearInterval(timer);
       await adapter?.dispose();
     }
   }
+}
+/** Terminal state once the loop returns; an aborted signal beats success, then cancel confirmation. */
+function completionState(aborted: boolean, cancellation: "confirmed" | "unknown") {
+  if (!aborted) return "succeeded";
+  if (cancellation === "confirmed") return "cancelled";
+  return "cancelled_unconfirmed";
+}
+/** Terminal state after a thrown execution: unconfirmed cancels beat the deadline check, timeout beats cancel. */
+function failureState(aborted: boolean, cancellation: "confirmed" | "unknown", deadline: number) {
+  if (!aborted) return "failed";
+  if (cancellation === "unknown") return "cancelled_unconfirmed";
+  if (Date.now() >= deadline) return "timed_out";
+  return "cancelled";
 }

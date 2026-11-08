@@ -50,6 +50,62 @@ export function ProjectPage() {
     Boolean(binding.data?.runnerId) &&
     !runners.isPending &&
     (!boundRunner || runnerStatus(boundRunner) !== 'online');
+  /** 执行环境面板内容：读取失败 → 加载中 → 已绑定详情 → 空态引导。 */
+  function renderEnvironmentContent() {
+    if (binding.error)
+      return (
+        <div className="mt-4">
+          <ErrorNotice error={binding.error} onRetry={() => void binding.refetch()} />
+        </div>
+      );
+    if (binding.isPending)
+      return (
+        <p role="status" className="mt-4 text-sm text-muted-foreground">
+          正在加载环境…
+        </p>
+      );
+    if (binding.data)
+      return (
+        <div className="mt-5 space-y-4">
+          <dl className="grid gap-4 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-muted-foreground">设备</dt>
+              <dd className="mt-1 break-all font-mono text-xs">
+                {binding.data.remoteConnectionId
+                  ? (remotes.data?.items.find(
+                      (item) => item.id === binding.data?.remoteConnectionId,
+                    )?.name ?? 'SSH 远程')
+                  : (boundRunner?.runnerId ?? binding.data.runnerId)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">工作目录</dt>
+              <dd className="mt-1 break-all">{binding.data.canonicalCwd}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">环境版本</dt>
+              <dd className="mt-1">{binding.data.revision}</dd>
+            </div>
+          </dl>
+          <div className="border-t pt-4">
+            <p className="mb-2 text-xs text-muted-foreground">项目指令</p>
+            <p className="whitespace-pre-wrap break-words text-sm leading-6">
+              {describeInstructions(binding.data.instructions)}
+            </p>
+          </div>
+        </div>
+      );
+    return (
+      <div className="mt-5 rounded-xl border border-dashed p-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          选择 Runner 或 SSH 工作目录，再开启项目会话。
+        </p>
+        <Button className="mt-4" onPress={() => setEditing(true)}>
+          绑定环境
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-5 py-8 sm:px-8">
       <Link
@@ -107,53 +163,7 @@ export function ProjectPage() {
             配置环境
           </Button>
         </header>
-        {binding.error ? (
-          <div className="mt-4">
-            <ErrorNotice error={binding.error} onRetry={() => void binding.refetch()} />
-          </div>
-        ) : binding.isPending ? (
-          <p role="status" className="mt-4 text-sm text-muted-foreground">
-            正在加载环境…
-          </p>
-        ) : binding.data ? (
-          <div className="mt-5 space-y-4">
-            <dl className="grid gap-4 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-xs text-muted-foreground">设备</dt>
-                <dd className="mt-1 break-all font-mono text-xs">
-                  {binding.data.remoteConnectionId
-                    ? (remotes.data?.items.find(
-                        (item) => item.id === binding.data?.remoteConnectionId,
-                      )?.name ?? 'SSH 远程')
-                    : (boundRunner?.runnerId ?? binding.data.runnerId)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">工作目录</dt>
-                <dd className="mt-1 break-all">{binding.data.canonicalCwd}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">环境版本</dt>
-                <dd className="mt-1">{binding.data.revision}</dd>
-              </div>
-            </dl>
-            <div className="border-t pt-4">
-              <p className="mb-2 text-xs text-muted-foreground">项目指令</p>
-              <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                {describeInstructions(binding.data.instructions)}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-5 rounded-xl border border-dashed p-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              选择 Runner 或 SSH 工作目录，再开启项目会话。
-            </p>
-            <Button className="mt-4" onPress={() => setEditing(true)}>
-              绑定环境
-            </Button>
-          </div>
-        )}
+        {renderEnvironmentContent()}
         <p className="mt-5 text-xs leading-5 text-muted-foreground">
           环境更新后，新会话采用新配置；已有会话保留原来的设备、目录和指令。
         </p>

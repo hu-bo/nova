@@ -62,12 +62,10 @@ export function WorkspacePreview() {
   function moveTab(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const next =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? tabs.length - 1
-          : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    let next: number;
+    if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    else next = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
     setView(tabs[next]!.id);
     document.getElementById(`preview-tab-${tabs[next]!.id}`)?.focus();
   }

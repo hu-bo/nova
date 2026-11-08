@@ -887,15 +887,14 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         ...repository,
         async commitSession(claim: RunClaim, revision: number, next: SessionSnapshot, batch: SessionCommit) {
           const result = await repository.commitSession(claim, revision, next, batch);
-          if (
-            armed &&
-            batch.execution &&
-            (failAt === "intent"
-              ? batch.execution.dispatch === "dispatched" && !batch.execution.result
-              : failAt === "pre_dispatch"
-                ? !batch.execution.result
-                : Boolean(batch.execution.result))
-          ) {
+          const execution = batch.execution;
+          let shouldFault = false;
+          if (execution) {
+            if (failAt === "intent") shouldFault = execution.dispatch === "dispatched" && !execution.result;
+            else if (failAt === "pre_dispatch") shouldFault = !execution.result;
+            else shouldFault = Boolean(execution.result);
+          }
+          if (armed && shouldFault) {
             armed = false;
             throw new Error("SIMULATED_PROCESS_LOSS");
           }

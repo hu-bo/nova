@@ -568,17 +568,16 @@ function TaskPlanEditor({
                     value={check.method.kind}
                     onChange={(event) =>
                       replaceTask(taskIndex, {
-                        checks: task.checks.map((item, index) =>
-                          index === checkIndex
-                            ? {
-                                ...item,
-                                method:
-                                  event.target.value === 'command'
-                                    ? { kind: 'command', command: '', args: [] }
-                                    : { kind: 'manual' },
-                              }
-                            : item,
-                        ),
+                        checks: task.checks.map((item, index) => {
+                          if (index !== checkIndex) return item;
+                          return {
+                            ...item,
+                            method:
+                              event.target.value === 'command'
+                                ? { kind: 'command', command: '', args: [] }
+                                : { kind: 'manual' },
+                          };
+                        }),
                       })
                     }
                   >
@@ -636,21 +635,20 @@ function TaskPlanEditor({
                         value={check.method.cwd ?? ''}
                         onChange={(event) =>
                           replaceTask(taskIndex, {
-                            checks: task.checks.map((item) =>
-                              item === check
-                                ? {
-                                    ...item,
-                                    method: {
-                                      kind: 'command',
-                                      command:
-                                        check.method.kind === 'command' ? check.method.command : '',
-                                      args:
-                                        check.method.kind === 'command' ? check.method.args : [],
-                                      ...(event.target.value ? { cwd: event.target.value } : {}),
-                                    },
-                                  }
-                                : item,
-                            ),
+                            checks: task.checks.map((item) => {
+                              if (item !== check) return item;
+                              return {
+                                ...item,
+                                method: {
+                                  kind: 'command',
+                                  command:
+                                    check.method.kind === 'command' ? check.method.command : '',
+                                  args:
+                                    check.method.kind === 'command' ? check.method.args : [],
+                                  ...(event.target.value ? { cwd: event.target.value } : {}),
+                                },
+                              };
+                            }),
                           })
                         }
                       />

@@ -9,6 +9,13 @@ const modelErrors: Record<string, string> = {
   MODEL_REQUEST_FAILED: '模型请求失败，请检查模型配置或稍后重试。',
 };
 
+/** 决策过期倒计时文案：无过期时间为空串，剩余 0 秒视为授权已过期。 */
+function decisionCountdown(remaining: number | null): string {
+  if (remaining === null) return '';
+  if (remaining) return remaining + ' 秒后过期';
+  return '授权已过期';
+}
+
 function VerificationNotice({ onRetry }: { onRetry: () => Promise<boolean> }) {
   const [refresh, setRefresh] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   return (
@@ -80,9 +87,7 @@ export function RunPanel({
       {decision && (
         <p role="status" className="flex flex-wrap items-center gap-2 text-xs text-amber-700">
           <span>等待你的确认</span>
-          <span>
-            {remaining === null ? '' : remaining ? remaining + ' 秒后过期' : '授权已过期'}
-          </span>
+          <span>{decisionCountdown(remaining)}</span>
         </p>
       )}
     </div>

@@ -21,6 +21,13 @@ const runtimeHints = {
   binary: '设备需已安装当前版本的 nova-runner，并将其加入 PATH。',
 } satisfies Record<RunnerCommandRuntime, string>;
 
+/** 复制按钮文案：复制进行中优先，其次看本条命令是否已复制成功。 */
+function copyButtonLabel(isCopying: boolean, isCopied: boolean) {
+  if (isCopying) return '正在复制…';
+  if (isCopied) return '已复制启动命令';
+  return '复制 Runner 启动命令';
+}
+
 export function RunnerStartCommandDialog({
   token,
   onClose,
@@ -67,6 +74,19 @@ export function RunnerStartCommandDialog({
     }
   }
 
+  /** 命令区状态提示：连接地址读取失败优先，其次凭据失效或参数校验不通过。 */
+  function renderCommandNotice() {
+    if (connection.error)
+      return <ErrorNotice error={connection.error} onRetry={() => void connection.refetch()} />;
+    if (!usable || result.error)
+      return (
+        <p role="status" className="text-xs leading-5 text-muted-foreground">
+          {!usable ? '此 Token 已失效，请选择有效凭据。' : result.error}
+        </p>
+      );
+    return null;
+  }
+
   return (
     <SettingsDialog
       open
@@ -84,7 +104,7 @@ export function RunnerStartCommandDialog({
             icon={copied ? <Check /> : <Clipboard />}
             onPress={() => void copyCommand()}
           >
-            {copying ? '正在复制…' : copied ? '已复制启动命令' : '复制 Runner 启动命令'}
+            {copyButtonLabel(copying, copied)}
           </Button>
         </>
       }
@@ -177,13 +197,7 @@ export function RunnerStartCommandDialog({
           {runtimeHints[runtime]} 复制的命令包含完整 Token。
         </p>
       </section>
-      {connection.error ? (
-        <ErrorNotice error={connection.error} onRetry={() => void connection.refetch()} />
-      ) : !usable || result.error ? (
-        <p role="status" className="text-xs leading-5 text-muted-foreground">
-          {!usable ? '此 Token 已失效，请选择有效凭据。' : result.error}
-        </p>
-      ) : null}
+      {renderCommandNotice()}
       {copyError && (
         <div className="space-y-2">
           <p role="alert" className="text-sm text-danger">

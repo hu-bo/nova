@@ -43,7 +43,9 @@ vi.mock('@/api/generated/projects', () => ({
 import { NewProjectDialog } from '../src/features/projects/new-project-dialog';
 
 function directory(path: string, root = '/') {
-  const names = path === root ? ['var'] : path.endsWith('var') ? ['www'] : [];
+  const names: string[] = [];
+  if (path === root) names.push('var');
+  else if (path.endsWith('var')) names.push('www');
   return {
     root,
     path,

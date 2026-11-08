@@ -47,6 +47,127 @@ export function ModelsPage() {
       }
     : null;
 
+  /** 目录主体按优先级呈现：加载中 → 出错 → 空目录 → 模型表格。 */
+  function renderCatalog() {
+    if (modelsQuery.isLoading || providersQuery.isLoading) return <LoadingState label="正在加载模型目录" />;
+    if (error)
+      return (
+        <ErrorState
+          error={error}
+          onRetry={() => {
+            void modelsQuery.refetch();
+            void providersQuery.refetch();
+          }}
+        />
+      );
+    if (models.length === 0)
+      return (
+        <Card>
+          <EmptyState
+            icon={<Boxes className="size-5" />}
+            title="还没有注册模型"
+            description="注册后，Agent 才能按公开模型名选择经过验证的能力配置。"
+            action={
+              providers.length ? (
+                <Button variant="primary" onPress={() => setFormOpen(true)}>
+                  注册第一个模型
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
+      );
+    return (
+      <TableFrame>
+        <table className="w-full min-w-[1100px]">
+          <thead className={tableHeadClass}>
+            <tr>
+              <th className="px-5 py-3">公开名称</th>
+              <th className="px-5 py-3">上游映射</th>
+              <th className="px-5 py-3">容量</th>
+              <th className="px-5 py-3">Reasoning</th>
+              <th className="px-5 py-3">价格（入 / 出 / 缓存）</th>
+              <th className="px-5 py-3">状态</th>
+              <th className="px-5 py-3 text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {models.map((model) => (
+              <tr key={model.id} className="transition hover:bg-surface-secondary">
+                <td className={tableCellClass}>
+                  <p className="font-semibold text-foreground">{model.publicName}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {model.inputModalities.join(" + ")} · {model.parallelToolCalls ? "并行工具" : "串行工具"}
+                  </p>
+                </td>
+                <td className={tableCellClass}>
+                  <p className="font-medium text-foreground">{model.providerName}</p>
+                  <p className="mt-1 font-mono text-xs text-muted-foreground">{model.upstreamName}</p>
+                </td>
+                <td className={tableCellClass}>
+                  <p>{formatTokens(model.contextWindow)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">输出 {formatTokens(model.maxOutput)}</p>
+                </td>
+                <td className={tableCellClass}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <BrainCircuit className="size-4 text-accent" />
+                    {model.reasoningFormat}
+                  </span>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {model.thinkingLevels.length ? model.thinkingLevels.join(" / ") : "不支持 thinking"}
+                  </p>
+                </td>
+                <td className={`${tableCellClass} font-mono text-xs`}>
+                  {model.priceIn} / {model.priceOut} / {model.priceCacheRead}
+                </td>
+                <td className={tableCellClass}>
+                  <StatusBadge enabled={model.enabled} />
+                </td>
+                <td className={`${tableCellClass} text-right`}>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => {
+                        setEditing(model);
+                        setFormOpen(true);
+                      }}
+                    >
+                      <Pencil className="size-4" />
+                      编辑
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onPress={() =>
+                        model.enabled
+                          ? setConfirmation({ kind: "disable", model })
+                          : stateMutation.mutate({ model, enabled: true })
+                      }
+                    >
+                      <Power className="size-4" />
+                      {model.enabled ? "停用" : "启用"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-danger hover:bg-danger/10 hover:text-danger"
+                      aria-label={`删除 ${model.publicName}`}
+                      isIconOnly
+                      onPress={() => setConfirmation({ kind: "delete", model })}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableFrame>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -72,120 +193,7 @@ export function ModelsPage() {
           请先在 Provider 页面添加连接，再注册模型。
         </div>
       )}
-      {modelsQuery.isLoading || providersQuery.isLoading ? (
-        <LoadingState label="正在加载模型目录" />
-      ) : error ? (
-        <ErrorState
-          error={error}
-          onRetry={() => {
-            void modelsQuery.refetch();
-            void providersQuery.refetch();
-          }}
-        />
-      ) : models.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<Boxes className="size-5" />}
-            title="还没有注册模型"
-            description="注册后，Agent 才能按公开模型名选择经过验证的能力配置。"
-            action={
-              providers.length ? (
-                <Button variant="primary" onPress={() => setFormOpen(true)}>
-                  注册第一个模型
-                </Button>
-              ) : undefined
-            }
-          />
-        </Card>
-      ) : (
-        <TableFrame>
-          <table className="w-full min-w-[1100px]">
-            <thead className={tableHeadClass}>
-              <tr>
-                <th className="px-5 py-3">公开名称</th>
-                <th className="px-5 py-3">上游映射</th>
-                <th className="px-5 py-3">容量</th>
-                <th className="px-5 py-3">Reasoning</th>
-                <th className="px-5 py-3">价格（入 / 出 / 缓存）</th>
-                <th className="px-5 py-3">状态</th>
-                <th className="px-5 py-3 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {models.map((model) => (
-                <tr key={model.id} className="transition hover:bg-surface-secondary">
-                  <td className={tableCellClass}>
-                    <p className="font-semibold text-foreground">{model.publicName}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {model.inputModalities.join(" + ")} · {model.parallelToolCalls ? "并行工具" : "串行工具"}
-                    </p>
-                  </td>
-                  <td className={tableCellClass}>
-                    <p className="font-medium text-foreground">{model.providerName}</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">{model.upstreamName}</p>
-                  </td>
-                  <td className={tableCellClass}>
-                    <p>{formatTokens(model.contextWindow)}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">输出 {formatTokens(model.maxOutput)}</p>
-                  </td>
-                  <td className={tableCellClass}>
-                    <span className="inline-flex items-center gap-1.5">
-                      <BrainCircuit className="size-4 text-accent" />
-                      {model.reasoningFormat}
-                    </span>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {model.thinkingLevels.length ? model.thinkingLevels.join(" / ") : "不支持 thinking"}
-                    </p>
-                  </td>
-                  <td className={`${tableCellClass} font-mono text-xs`}>
-                    {model.priceIn} / {model.priceOut} / {model.priceCacheRead}
-                  </td>
-                  <td className={tableCellClass}>
-                    <StatusBadge enabled={model.enabled} />
-                  </td>
-                  <td className={`${tableCellClass} text-right`}>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onPress={() => {
-                          setEditing(model);
-                          setFormOpen(true);
-                        }}
-                      >
-                        <Pencil className="size-4" />
-                        编辑
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onPress={() =>
-                          model.enabled
-                            ? setConfirmation({ kind: "disable", model })
-                            : stateMutation.mutate({ model, enabled: true })
-                        }
-                      >
-                        <Power className="size-4" />
-                        {model.enabled ? "停用" : "启用"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-danger hover:bg-danger/10 hover:text-danger"
-                        aria-label={`删除 ${model.publicName}`}
-                        isIconOnly
-                        onPress={() => setConfirmation({ kind: "delete", model })}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableFrame>
-      )}
+      {renderCatalog()}
       <ModelForm
         open={formOpen}
         model={editing}

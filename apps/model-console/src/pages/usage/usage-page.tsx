@@ -26,6 +26,96 @@ export function UsagePage() {
   const modelsQuery = useQuery(modelQueryOptions());
   const report = usageQuery.data;
 
+  /** 用量主体按优先级呈现：加载中 → 出错 → 无报告数据 → 汇总与明细。 */
+  function renderReport() {
+    if (usageQuery.isLoading) return <LoadingState label="正在汇总用量" />;
+    if (usageQuery.error) return <ErrorState error={usageQuery.error} onRetry={() => void usageQuery.refetch()} />;
+    if (!report) return null;
+    return (
+      <>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric
+            icon={<BarChart3 className="size-5" />}
+            label="Harness Runs"
+            value={formatNumber(report.totals.requests)}
+          />
+          <Metric
+            icon={<Sigma className="size-5" />}
+            label="输入 / 输出 Token"
+            value={`${formatNumber(report.totals.input)} / ${formatNumber(report.totals.output)}`}
+          />
+          <Metric
+            icon={<Database className="size-5" />}
+            label="缓存读取 / 推理 Token"
+            value={`${formatNumber(report.totals.cacheRead)} / ${formatNumber(report.totals.reasoning)}`}
+          />
+          <Metric icon={<Coins className="size-5" />} label="估算费用" value={report.totals.cost} />
+        </div>
+        <p className="text-right text-xs text-muted-foreground">
+          汇总 {formatDate(report.from)} 至 {formatDate(report.to)} · 更新于 {formatDate(report.generatedAt)} · 每 30
+          秒自动刷新
+        </p>
+        {report.items.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<BarChart3 className="size-5" />}
+              title="筛选范围内没有用量"
+              description="Harness 会在每个 Run 进入终态后写入用量。"
+            />
+          </Card>
+        ) : (
+          <TableFrame>
+            <table className="w-full min-w-[1180px]">
+              <thead className={tableHeadClass}>
+                <tr>
+                  <th className="px-5 py-3">时间</th>
+                  <th className="px-5 py-3">对话</th>
+                  <th className="px-5 py-3">模型 / 版本</th>
+                  <th className="px-5 py-3">状态</th>
+                  <th className="px-5 py-3 text-right">输入</th>
+                  <th className="px-5 py-3 text-right">输出</th>
+                  <th className="px-5 py-3 text-right">缓存</th>
+                  <th className="px-5 py-3 text-right">推理</th>
+                  <th className="px-5 py-3 text-right">费用</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {report.items.map((item) => (
+                  <tr key={item.id} className="transition hover:bg-surface-secondary">
+                    <td className={tableCellClass}>{formatDate(item.createdAt)}</td>
+                    <td
+                      className={`${tableCellClass} max-w-48 truncate font-medium text-foreground`}
+                      title={item.conversationTitle}
+                    >
+                      {item.conversationTitle || "未命名会话"}
+                    </td>
+                    <td className={tableCellClass}>
+                      <span>{item.modelName}</span>
+                      <span className="ml-1.5 text-xs text-muted-foreground">v{item.modelConfigVersion}</span>
+                    </td>
+                    <td className={tableCellClass}>
+                      <UsageBadge status={item.status} estimated={item.estimated} />
+                    </td>
+                    <td className={`${tableCellClass} text-right tabular-nums`}>{formatNumber(item.input)}</td>
+                    <td className={`${tableCellClass} text-right tabular-nums`}>{formatNumber(item.output)}</td>
+                    <td className={`${tableCellClass} text-right tabular-nums`}>{formatNumber(item.cacheRead)}</td>
+                    <td className={`${tableCellClass} text-right tabular-nums`}>{formatNumber(item.reasoning)}</td>
+                    <td className={`${tableCellClass} text-right font-mono text-xs`}>{item.cost}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {report.totals.requests > report.items.length && (
+              <p className="px-5 py-3 text-xs text-muted-foreground">
+                显示最近 500 条 Run；上方汇总包含完整筛选范围。
+              </p>
+            )}
+          </TableFrame>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -47,93 +137,7 @@ export function UsagePage() {
           void navigate({ search: usageSearchSchema.parse(values), replace: true });
         }}
       />
-      {usageQuery.isLoading ? (
-        <LoadingState label="正在汇总用量" />
-      ) : usageQuery.error ? (
-        <ErrorState error={usageQuery.error} onRetry={() => void usageQuery.refetch()} />
-      ) : report ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric
-              icon={<BarChart3 className="size-5" />}
-              label="Harness Runs"
-              value={formatNumber(report.totals.requests)}
-            />
-            <Metric
-              icon={<Sigma className="size-5" />}
-              label="输入 / 输出 Token"
-              value={`${formatNumber(report.totals.input)} / ${formatNumber(report.totals.output)}`}
-            />
-            <Metric
-              icon={<Database className="size-5" />}
-              label="缓存读取 / 推理 Token"
-              value={`${formatNumber(report.totals.cacheRead)} / ${formatNumber(report.totals.reasoning)}`}
-            />
-            <Metric icon={<Coins className="size-5" />} label="估算费用" value={report.totals.cost} />
-          </div>
-          <p className="text-right text-xs text-muted-foreground">
-            汇总 {formatDate(report.from)} 至 {formatDate(report.to)} · 更新于 {formatDate(report.generatedAt)} · 每 30
-            秒自动刷新
-          </p>
-          {report.items.length === 0 ? (
-            <Card>
-              <EmptyState
-                icon={<BarChart3 className="size-5" />}
-                title="筛选范围内没有用量"
-                description="Harness 会在每个 Run 进入终态后写入用量。"
-              />
-            </Card>
-          ) : (
-            <TableFrame>
-              <table className="w-full min-w-[1180px]">
-                <thead className={tableHeadClass}>
-                  <tr>
-                    <th className="px-5 py-3">时间</th>
-                    <th className="px-5 py-3">对话</th>
-                    <th className="px-5 py-3">模型 / 版本</th>
-                    <th className="px-5 py-3">状态</th>
-                    <th className="px-5 py-3 text-right">输入</th>
-                    <th className="px-5 py-3 text-right">输出</th>
-                    <th className="px-5 py-3 text-right">缓存</th>
-                    <th className="px-5 py-3 text-right">推理</th>
-                    <th className="px-5 py-3 text-right">费用</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {report.items.map((item) => (
-                    <tr key={item.id} className="transition hover:bg-surface-secondary">
-                      <td className={tableCellClass}>{formatDate(item.createdAt)}</td>
-                      <td
-                        className={`${tableCellClass} max-w-48 truncate font-medium text-foreground`}
-                        title={item.conversationTitle}
-                      >
-                        {item.conversationTitle || "未命名会话"}
-                      </td>
-                      <td className={tableCellClass}>
-                        <span>{item.modelName}</span>
-                        <span className="ml-1.5 text-xs text-muted-foreground">v{item.modelConfigVersion}</span>
-                      </td>
-                      <td className={tableCellClass}>
-                        <UsageBadge status={item.status} estimated={item.estimated} />
-                      </td>
-                      <td className={`${tableCellClass} text-right tabular-nums`}>{formatNumber(item.input)}</td>
-                      <td className={`${tableCellClass} text-right tabular-nums`}>{formatNumber(item.output)}</td>
-                      <td className={`${tableCellClass} text-right tabular-nums`}>{formatNumber(item.cacheRead)}</td>
-                      <td className={`${tableCellClass} text-right tabular-nums`}>{formatNumber(item.reasoning)}</td>
-                      <td className={`${tableCellClass} text-right font-mono text-xs`}>{item.cost}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {report.totals.requests > report.items.length && (
-                <p className="px-5 py-3 text-xs text-muted-foreground">
-                  显示最近 500 条 Run；上方汇总包含完整筛选范围。
-                </p>
-              )}
-            </TableFrame>
-          )}
-        </>
-      ) : null}
+      {renderReport()}
     </div>
   );
 }

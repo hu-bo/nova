@@ -29,15 +29,11 @@ export function useConversationStream(
     session?.getSnapshot ?? (() => EMPTY),
   );
   // Protocol events advance immediately; presentation is derived only when a frame is published.
-  const projection = useMemo(
-    () =>
-      stream.projection
-        ? projectRunState(stream.projection)
-        : snapshot
-          ? initialProjection(snapshot)
-          : null,
-    [stream.projection, snapshot],
-  );
+  const projection = useMemo(() => {
+    if (stream.projection) return projectRunState(stream.projection);
+    if (snapshot) return initialProjection(snapshot);
+    return null;
+  }, [stream.projection, snapshot]);
   useEffect(() => {
     if (!id || !snapshot) return;
     return manager.acquire(id, snapshot);

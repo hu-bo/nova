@@ -3,7 +3,7 @@ import { getProject, getProjectBinding, listProjects } from '@/api/generated/pro
 import { queryKeys } from '@/api/query-keys';
 import { useIdentity } from '@/features/auth';
 import { useRunnersQuery, runnerStatus, type Runner } from '@/features/runners';
-import { useRemoteConnectionsQuery } from '@/features/remotes';
+import { useRemoteConnectionsQuery, type RemoteConnection } from '@/features/remotes';
 export function useProjectsQuery() {
   const { identity } = useIdentity();
   return useQuery({
@@ -28,6 +28,29 @@ export function useProjectBinding(id: string | null) {
     queryFn: ({ signal }) => getProjectBinding(id!, { signal }),
     staleTime: 10000,
   });
+}
+
+/** 未拿到绑定数据时，按查询状态区分 error / loading / unbound。 */
+function deriveBindingState(
+  query: { isError: boolean; isPending: boolean } | undefined,
+): 'error' | 'loading' | 'unbound' {
+  if (query?.isError) return 'error';
+  if (query?.isPending) return 'loading';
+  return 'unbound';
+}
+
+/** SSH 远程优先于本地 Runner；各自状态不认识时兜底 unknown。 */
+function deriveRunnerState(
+  remote: RemoteConnection | undefined,
+  runner: Runner | undefined,
+): string {
+  if (remote) {
+    if (remote.status === 'verified') return 'verified';
+    if (remote.status === 'offline') return 'offline';
+    return 'unknown';
+  }
+  if (runner) return runnerStatus(runner) === 'online' ? 'ready' : 'offline';
+  return 'unknown';
 }
 
 /** Derive sidebar environment information from owner-scoped bindings and connections. */
@@ -67,11 +90,7 @@ export function useProjectSidebarInfo(projectIds: string[]) {
         runnerState: 'unknown',
         workspace: null,
         runnerId: null,
-        bindingState: bindings[i]?.isError
-          ? 'error'
-          : bindings[i]?.isPending
-            ? 'loading'
-            : 'unbound',
+        bindingState: deriveBindingState(bindings[i]),
       };
       continue;
     }
@@ -81,17 +100,7 @@ export function useProjectSidebarInfo(projectIds: string[]) {
       : undefined;
     map[id] = {
       bindingState: 'bound',
-      runnerState: remote
-        ? remote.status === 'verified'
-          ? 'verified'
-          : remote.status === 'offline'
-            ? 'offline'
-            : 'unknown'
-        : runner
-          ? runnerStatus(runner) === 'online'
-            ? 'ready'
-            : 'offline'
-          : 'unknown',
+      runnerState: deriveRunnerState(remote, runner),
       workspace: binding.canonicalCwd,
       runnerId: remote ? remote.name + ' · SSH' : (runner?.runnerId ?? binding.runnerId),
     };

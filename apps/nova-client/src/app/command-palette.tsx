@@ -71,11 +71,12 @@ export function CommandPalette({
   const matchingProjects = projects
     .filter((item) => (item.name + (item.workspace ?? '')).toLocaleLowerCase().includes(term))
     .slice(0, term ? 30 : 8);
-  const firstId = chats[0]
-    ? 'chat:' + chats[0].id
-    : matchingProjects[0]
-      ? 'project:' + matchingProjects[0].id
-      : actions[0]?.id;
+  const firstChat = chats[0];
+  const firstProject = matchingProjects[0];
+  let firstId: string | undefined;
+  if (firstChat) firstId = 'chat:' + firstChat.id;
+  else if (firstProject) firstId = 'project:' + firstProject.id;
+  else firstId = actions[0]?.id;
   function select(id: string) {
     onClose();
     if (id.startsWith('chat:'))

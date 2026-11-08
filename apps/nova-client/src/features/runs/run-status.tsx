@@ -49,11 +49,21 @@ export function RunStatus({
   const projection = stream.projection;
   const { cancelling, now } = controls;
   const runState = projection?.run?.state;
+  const listedIndicator = runState ? runIndicators[runState] : undefined;
+  const fallbackIndicator = isActiveRun(runState) ? 'bg-accent' : 'bg-slate-400';
   const indicator =
-    stream.state !== 'live'
-      ? 'bg-amber-500'
-      : ((runState ? runIndicators[runState] : undefined) ??
-        (isActiveRun(runState) ? 'bg-accent' : 'bg-slate-400'));
+    stream.state !== 'live' ? 'bg-amber-500' : (listedIndicator ?? fallbackIndicator);
+  const run = projection?.run;
+  let statusLabel = '';
+  if (run) {
+    if (cancelling && isActiveRun(run.state)) {
+      statusLabel = '正在请求停止，等待设备确认';
+    } else if (run.reason === 'RUNNER_OFFLINE') {
+      statusLabel = '设备离线，运行已暂停';
+    } else {
+      statusLabel = states[run.state] ?? run.state;
+    }
+  }
   if (!projection?.run && stream.state === 'live') return null;
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
@@ -61,13 +71,9 @@ export function RunStatus({
         <span className={'size-1.5 rounded-full ' + indicator} />
         {stream.state === 'live' ? '' : connections[stream.state]}
       </span>
-      {projection?.run && (
+      {run && (
         <span role="status" className="font-medium">
-          {cancelling && isActiveRun(projection.run.state)
-            ? '正在请求停止，等待设备确认'
-            : projection.run.reason === 'RUNNER_OFFLINE'
-              ? '设备离线，运行已暂停'
-              : (states[projection.run.state] ?? projection.run.state)}
+          {statusLabel}
         </span>
       )}
       {stream.state === 'offline' && (

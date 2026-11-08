@@ -34,6 +34,21 @@ interface RunnerManagerProps {
   onSelect?: (runnerId: string) => void;
 }
 
+/** Token 预览文本：有密钥时脱敏展示；旧版活跃凭据按能否启动区分；其余视为已失效。 */
+function tokenPreviewText(token: RunnerToken): string {
+  if (token.token) return '••••••••' + token.token.slice(-6);
+  if (token.status === 'active')
+    return runnerTokenCanStart(token) ? '旧版凭据 · 轮换后可复制' : 'Token 已过期';
+  return 'Token 已失效';
+}
+
+/** 「复制 Runner 启动命令」按钮提示：先看凭据能否启动，再区分是否已有可复制的密钥。 */
+function copyCommandHint(token: RunnerToken): string {
+  if (!runnerTokenCanStart(token)) return '此 Token 已失效';
+  if (token.token) return '配置工作目录并复制 Runner 启动命令';
+  return '旧版凭据需先轮换一次，生成可复制的 Token';
+}
+
 /** Manage Runner credentials, connection commands and registered devices. */
 export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerManagerProps) {
   const { identity } = useIdentity();
@@ -100,6 +115,170 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
     }
   }
 
+  /** Token 区块状态：加载中 → 读取失败 → 空列表 → 凭据卡片。 */
+  function renderTokenList() {
+    if (tokens.isLoading) return <LoadingState label="正在加载 token" />;
+    if (tokens.error)
+      return <ErrorNotice error={tokens.error} onRetry={() => void tokens.refetch()} />;
+    if (!tokenItems.length)
+      return (
+        <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">
+          暂无 Runner Token
+        </div>
+      );
+    return (
+      <Card className="divide-y divide-slate-100 overflow-hidden">
+        {tokenItems.map((token, index) => (
+          <div
+            key={token.id}
+            className="grid gap-3 px-4 py-3 transition hover:bg-slate-50 sm:grid-cols-[minmax(130px,0.6fr)_minmax(180px,1.4fr)_auto] sm:items-center"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
+                <KeyRound className="size-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <strong className="block text-sm text-slate-900">Token {index + 1}</strong>
+                <span className="block truncate text-xs text-slate-500">
+                  {token.label ?? '未命名凭据'}
+                </span>
+              </div>
+            </div>
+            <code className="block min-w-0 truncate rounded-md bg-slate-100 px-2.5 py-1.5 text-xs text-slate-600">
+              {tokenPreviewText(token)}
+            </code>
+            <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                icon={<Clipboard />}
+                disabled={!runnerTokenCanStart(token) || !token.token}
+                title={copyCommandHint(token)}
+                onPress={() => {
+                  setCommandToken(token);
+                }}
+              >
+                复制 Runner 启动命令
+              </Button>
+              <CopyButton
+                value={runnerTokenCanStart(token) ? token.token : null}
+                label="复制 Token"
+                compact
+              />
+              {token.status === 'active' && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`轮换 Token ${index + 1}`}
+                  title="轮换凭据（旧凭据立即吊销）"
+                  disabled={rotateToken.isPending}
+                  onPress={() => setRotatingToken(token)}
+                >
+                  <RefreshCw />
+                </Button>
+              )}
+              {token.status === 'active' && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`撤销 Token ${index + 1}`}
+                  onPress={() => setDeletingToken(token)}
+                >
+                  <Trash2 />
+                </Button>
+              )}
+              {token.status !== 'active' && (
+                <Badge
+                  variant={token.status === 'revoked' ? 'danger' : 'default'}
+                  className="shrink-0 whitespace-nowrap px-2 py-0.5"
+                >
+                  {token.status === 'revoked' ? '已撤销' : '已轮换'}
+                </Badge>
+              )}
+            </div>
+          </div>
+        ))}
+      </Card>
+    );
+  }
+
+  /** Runner 区块状态：加载中 → 读取失败 → 空态引导 → 设备表格。 */
+  function renderRunnerList() {
+    if (catalog.isLoading) return <LoadingState label="正在加载 Runner" />;
+    if (catalog.error)
+      return <ErrorNotice error={catalog.error} onRetry={() => void catalog.refetch()} />;
+    if (!catalog.runners.length)
+      return (
+        <EmptyState
+          icon={<Server />}
+          title="还没有 Runner"
+          description="点击上方「新增 Token」生成凭据，配置到 Runner 后会自动出现在这里。"
+        />
+      );
+    return (
+      <Card className="overflow-hidden">
+        <Table className="min-w-[640px] [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-nowrap">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Runner</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead>Workspace</TableHead>
+              <TableHead className="text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {catalog.runners.map((runner) => (
+              <TableRow key={runner.id}>
+                <TableCell>
+                  <strong className="block max-w-40 truncate text-slate-900" title={runner.id}>
+                    {runner.runnerId}
+                  </strong>
+                  <span className="block max-w-40 truncate text-xs text-slate-500">
+                    {runner.capabilities.join(' · ') || '暂未声明能力'}
+                  </span>
+                </TableCell>
+                <TableCell className="w-px whitespace-nowrap">
+                  <RunnerStateBadge runner={runner} />
+                </TableCell>
+                <TableCell>
+                  <span
+                    className="block max-w-48 truncate text-xs"
+                    title={displayWorkspacePath(runner.workspaceId ?? '')}
+                  >
+                    {displayWorkspacePath(runner.workspaceId ?? '')}
+                  </span>
+                </TableCell>
+                <TableCell className="w-px whitespace-nowrap">
+                  <div className="flex items-center justify-end gap-1.5">
+                    {onSelect &&
+                      (selectedRunnerId === runner.id ? (
+                        <Badge
+                          variant="primary"
+                          className="shrink-0 gap-1 whitespace-nowrap px-2 py-0.5"
+                        >
+                          <Check className="size-3 shrink-0" />
+                          当前
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={selecting !== null}
+                          onPress={() => void select(runner.id)}
+                        >
+                          {selecting === runner.id ? '切换中…' : '选择'}
+                        </Button>
+                      ))}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+    );
+  }
+
   return (
     <div className="grid gap-8">
       <section aria-labelledby="runner-token-title">
@@ -132,100 +311,7 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
             <ErrorNotice error={connection.error} onRetry={() => void connection.refetch()} />
           </div>
         )}
-        {tokens.isLoading ? (
-          <LoadingState label="正在加载 token" />
-        ) : tokens.error ? (
-          <ErrorNotice error={tokens.error} onRetry={() => void tokens.refetch()} />
-        ) : !tokenItems.length ? (
-          <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">
-            暂无 Runner Token
-          </div>
-        ) : (
-          <Card className="divide-y divide-slate-100 overflow-hidden">
-            {tokenItems.map((token, index) => (
-              <div
-                key={token.id}
-                className="grid gap-3 px-4 py-3 transition hover:bg-slate-50 sm:grid-cols-[minmax(130px,0.6fr)_minmax(180px,1.4fr)_auto] sm:items-center"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
-                    <KeyRound className="size-4" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0">
-                    <strong className="block text-sm text-slate-900">Token {index + 1}</strong>
-                    <span className="block truncate text-xs text-slate-500">
-                      {token.label ?? '未命名凭据'}
-                    </span>
-                  </div>
-                </div>
-                <code className="block min-w-0 truncate rounded-md bg-slate-100 px-2.5 py-1.5 text-xs text-slate-600">
-                  {token.token
-                    ? '••••••••' + token.token.slice(-6)
-                    : token.status === 'active'
-                      ? runnerTokenCanStart(token)
-                        ? '旧版凭据 · 轮换后可复制'
-                        : 'Token 已过期'
-                      : 'Token 已失效'}
-                </code>
-                <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    icon={<Clipboard />}
-                    disabled={!runnerTokenCanStart(token) || !token.token}
-                    title={
-                      runnerTokenCanStart(token)
-                        ? token.token
-                          ? '配置工作目录并复制 Runner 启动命令'
-                          : '旧版凭据需先轮换一次，生成可复制的 Token'
-                        : '此 Token 已失效'
-                    }
-                    onPress={() => {
-                      setCommandToken(token);
-                    }}
-                  >
-                    复制 Runner 启动命令
-                  </Button>
-                  <CopyButton
-                    value={runnerTokenCanStart(token) ? token.token : null}
-                    label="复制 Token"
-                    compact
-                  />
-                  {token.status === 'active' && (
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={`轮换 Token ${index + 1}`}
-                      title="轮换凭据（旧凭据立即吊销）"
-                      disabled={rotateToken.isPending}
-                      onPress={() => setRotatingToken(token)}
-                    >
-                      <RefreshCw />
-                    </Button>
-                  )}
-                  {token.status === 'active' && (
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={`撤销 Token ${index + 1}`}
-                      onPress={() => setDeletingToken(token)}
-                    >
-                      <Trash2 />
-                    </Button>
-                  )}
-                  {token.status !== 'active' && (
-                    <Badge
-                      variant={token.status === 'revoked' ? 'danger' : 'default'}
-                      className="shrink-0 whitespace-nowrap px-2 py-0.5"
-                    >
-                      {token.status === 'revoked' ? '已撤销' : '已轮换'}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            ))}
-          </Card>
-        )}
+        {renderTokenList()}
       </section>
 
       <section aria-labelledby="runner-list-title">
@@ -235,78 +321,7 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
           </h3>
           <p className="mt-1 text-sm text-slate-500">已连接设备的状态和工作目录。</p>
         </div>
-        {catalog.isLoading ? (
-          <LoadingState label="正在加载 Runner" />
-        ) : catalog.error ? (
-          <ErrorNotice error={catalog.error} onRetry={() => void catalog.refetch()} />
-        ) : !catalog.runners.length ? (
-          <EmptyState
-            icon={<Server />}
-            title="还没有 Runner"
-            description="点击上方「新增 Token」生成凭据，配置到 Runner 后会自动出现在这里。"
-          />
-        ) : (
-          <Card className="overflow-hidden">
-            <Table className="min-w-[640px] [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-nowrap">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Runner</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>Workspace</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {catalog.runners.map((runner) => (
-                  <TableRow key={runner.id}>
-                    <TableCell>
-                      <strong className="block max-w-40 truncate text-slate-900" title={runner.id}>
-                        {runner.runnerId}
-                      </strong>
-                      <span className="block max-w-40 truncate text-xs text-slate-500">
-                        {runner.capabilities.join(' · ') || '暂未声明能力'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="w-px whitespace-nowrap">
-                      <RunnerStateBadge runner={runner} />
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className="block max-w-48 truncate text-xs"
-                        title={displayWorkspacePath(runner.workspaceId ?? '')}
-                      >
-                        {displayWorkspacePath(runner.workspaceId ?? '')}
-                      </span>
-                    </TableCell>
-                    <TableCell className="w-px whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {onSelect &&
-                          (selectedRunnerId === runner.id ? (
-                            <Badge
-                              variant="primary"
-                              className="shrink-0 gap-1 whitespace-nowrap px-2 py-0.5"
-                            >
-                              <Check className="size-3 shrink-0" />
-                              当前
-                            </Badge>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={selecting !== null}
-                              onPress={() => void select(runner.id)}
-                            >
-                              {selecting === runner.id ? '切换中…' : '选择'}
-                            </Button>
-                          ))}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        )}
+        {renderRunnerList()}
       </section>
 
       <SettingsDialog

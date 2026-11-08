@@ -78,6 +78,7 @@ export default tseslint.config(
       "no-console": "off",
       "no-control-regex": "off",
       "prefer-const": "off",
+      "no-nested-ternary": "error",
       "@typescript-eslint/no-this-alias": "off",
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "off",

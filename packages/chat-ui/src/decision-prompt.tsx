@@ -175,13 +175,11 @@ export function DecisionPrompt({
   const question = request;
 
   function toggle(option: string) {
-    setAnswers((current) =>
-      question.multiSelect
-        ? current.includes(option)
-          ? current.filter((value) => value !== option)
-          : [...current, option]
-        : [option],
-    );
+    setAnswers((current) => {
+      if (!question.multiSelect) return [option];
+      if (current.includes(option)) return current.filter((value) => value !== option);
+      return [...current, option];
+    });
   }
 
   return (

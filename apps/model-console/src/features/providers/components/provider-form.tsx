@@ -74,9 +74,12 @@ export function ProviderForm({
       baseUrl: values.baseUrl,
       isPublic: values.isPublic,
     };
-    const input: CreateProvider | UpdateProvider = editing
-      ? { ...shared, ...(credential ? { credential } : {}) }
-      : { ...shared, credential, enabled: values.enabled };
+    let input: CreateProvider | UpdateProvider;
+    if (editing) {
+      input = credential ? { ...shared, credential } : { ...shared };
+    } else {
+      input = { ...shared, credential, enabled: values.enabled };
+    }
     try {
       await onSubmit(input);
       reset();

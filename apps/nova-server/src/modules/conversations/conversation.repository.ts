@@ -383,18 +383,18 @@ export const conversationRepository = defineRepository(
           throw new DomainError("CONFLICT", "Goal cannot resume");
         if (action === "pause" && goal.status === "completed")
           throw new DomainError("CONFLICT", "Completed goal cannot pause");
+        const nextStatus = {
+          pause: "paused",
+          resume: "ready",
+          complete: "completed",
+        } satisfies Record<Exclude<typeof action, "remove">, NonNullable<ConversationMetadata["goal"]>["status"]>;
         const next =
           action === "remove"
             ? null
             : {
                 ...goal,
                 revision: goal.revision + 1,
-                status:
-                  action === "resume"
-                    ? ("ready" as const)
-                    : action === "complete"
-                      ? ("completed" as const)
-                      : ("paused" as const),
+                status: nextStatus[action],
               };
         conversation.metadata = { ...conversation.metadata, goal: next };
         await tx.update(conversations).set({ metadata: conversation.metadata }).where(eq(conversations.id, id));
