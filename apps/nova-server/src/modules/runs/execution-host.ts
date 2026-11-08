@@ -5,10 +5,12 @@ import { createJobHost } from "../../jobs/job-registry.js";
 import { createRemoteService } from "../remotes/index.js";
 import { createUserModelProfilesService } from "../model-config/index.js";
 import { ConversationExecutor } from "./conversation-executor.js";
+import type { UploadStorage } from "../attachments/index.js";
 export function startConversationExecution(
   app: FastifyInstance,
   config: AppConfig,
   eventRetention: Pick<EventRetentionService, "retain">,
+  uploads: UploadStorage,
 ) {
   const executor = new ConversationExecutor({
     db: app.db,
@@ -16,6 +18,7 @@ export function startConversationExecution(
     models: createUserModelProfilesService(app),
     remotes: createRemoteService(app),
     runners: app.runnerConnections,
+    uploads,
   });
   const host = createJobHost({
     db: app.db,

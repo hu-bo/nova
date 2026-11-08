@@ -21,9 +21,9 @@ export class AttachmentService {
     return block.attachment.ref;
   }
   async readImage(input: MessageReference) {
-    return this.storage.readImage(await this.objectRef(input));
+    return this.storage.readImage(input.ownerUserId, await this.objectRef(input));
   }
   async imageUrl(input: MessageReference) {
-    return this.storage.imageUrl(await this.objectRef(input));
+    return this.storage.imageUrl(input.ownerUserId, await this.objectRef(input));
   }
 }

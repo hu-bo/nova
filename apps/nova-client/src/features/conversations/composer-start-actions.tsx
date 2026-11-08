@@ -8,6 +8,7 @@ export function ComposerStartActions({
   controller: ConversationComposerController;
 }) {
   const hasGoal = Boolean(ctl.goal && ctl.goal.status !== 'completed');
+  if (ctl.specSession || ctl.specArmed) return null;
   return (
     <>
       <Button

@@ -336,11 +336,20 @@ export type UpdateConversationGoal200 = {
 } | null;
 
 export type ListConversationMessagesParams = {
+includeToolResults?: ListConversationMessagesIncludeToolResults;
 /**
  * @pattern ^(0|[1-9]\d{0,18})$
  */
 before?: string;
 };
+
+export type ListConversationMessagesIncludeToolResults = typeof ListConversationMessagesIncludeToolResults[keyof typeof ListConversationMessagesIncludeToolResults];
+
+
+export const ListConversationMessagesIncludeToolResults = {
+  true: 'true',
+  false: 'false',
+} as const;
 
 export type ListConversationMessages200ItemsItemRole = typeof ListConversationMessages200ItemsItemRole[keyof typeof ListConversationMessages200ItemsItemRole];
 
@@ -965,6 +974,11 @@ export type RenameConversation200 = {
      */
   projectId: string | null;
   /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  specId?: string;
+  /**
      * @maximum 9007199254740991
      * @exclusiveMinimum 0
      */
@@ -1071,6 +1085,11 @@ export type ListConversations200ItemsItem = {
      * @nullable
      */
   projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  specId?: string;
   /**
      * @maximum 9007199254740991
      * @exclusiveMinimum 0
@@ -1373,6 +1392,11 @@ export type CreateConversation200 = {
      */
   projectId: string | null;
   /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  specId?: string;
+  /**
      * @maximum 9007199254740991
      * @exclusiveMinimum 0
      */
@@ -1388,6 +1412,18 @@ export type CreateConversation200 = {
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   updatedAt: string;
 };
+
+export type GetConversationSnapshotParams = {
+includeToolResults?: GetConversationSnapshotIncludeToolResults;
+};
+
+export type GetConversationSnapshotIncludeToolResults = typeof GetConversationSnapshotIncludeToolResults[keyof typeof GetConversationSnapshotIncludeToolResults];
+
+
+export const GetConversationSnapshotIncludeToolResults = {
+  true: 'true',
+  false: 'false',
+} as const;
 
 export type GetConversationSnapshot200ConversationMode = typeof GetConversationSnapshot200ConversationMode[keyof typeof GetConversationSnapshot200ConversationMode];
 
@@ -1449,6 +1485,11 @@ export type GetConversationSnapshot200Conversation = {
      * @nullable
      */
   projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  specId?: string;
   /**
      * @maximum 9007199254740991
      * @exclusiveMinimum 0
@@ -2750,6 +2791,1331 @@ export type RemoveConversationInput200 = typeof RemoveConversationInput200[keyof
 export const RemoveConversationInput200 = {
 } as const;
 
+export type ListSpecsParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * @maxLength 256
+ */
+cursor?: string;
+};
+
+export type ListSpecs200ItemsItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  projectId: string;
+  title: string;
+  currentRevision: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  conversationId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  updatedAt: string;
+};
+
+export type ListSpecs200 = {
+  items: ListSpecs200ItemsItem[];
+  /** @nullable */
+  nextCursor: string | null;
+};
+
+export type CreateSpecBodyConfigurationReasoningEffort = typeof CreateSpecBodyConfigurationReasoningEffort[keyof typeof CreateSpecBodyConfigurationReasoningEffort];
+
+
+export const CreateSpecBodyConfigurationReasoningEffort = {
+  off: 'off',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  max: 'max',
+} as const;
+
+export type CreateSpecBodyConfiguration = {
+  /** @minLength 1 */
+  backendId: string;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  modelId: string | null;
+  reasoningEffort?: CreateSpecBodyConfigurationReasoningEffort;
+};
+
+export type CreateSpecBody = {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /** @maxLength 131072 */
+  brief: string;
+  startGeneration?: boolean;
+  configuration?: CreateSpecBodyConfiguration;
+};
+
+export type CreateSpec201 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  projectId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  conversationId: string;
+  title: string;
+  currentRevision: number;
+};
+
+export type GetSpecParams = {
+/**
+ * @maximum 9007199254740991
+ * @exclusiveMinimum 0
+ */
+revision?: number;
+};
+
+export type GetSpec200TaskPlanItemChecksItemMethod = {
+  kind: 'manual';
+} | {
+  kind: 'command';
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  command: string;
+  /**
+     * @maxItems 64
+     * @items.maxLength 1024
+     */
+  args: string[];
+  /** @maxLength 1024 */
+  cwd?: string;
+};
+
+export type GetSpec200TaskPlanItemChecksItem = {
+  /** @pattern ^[A-Z][A-Z0-9_-]{0,31}$ */
+  key: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^AC-\d{2,}$
+     */
+  criterionIds: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  method: GetSpec200TaskPlanItemChecksItemMethod;
+};
+
+export type GetSpec200TaskPlanItem = {
+  /** @pattern ^T-\d{2,}$ */
+  key: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  objective: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^T-\d{2,}$
+     */
+  dependsOn: string[];
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  checks: GetSpec200TaskPlanItemChecksItem[];
+};
+
+export type GetSpec200Reviews = {[key: string]: {
+  revision: number;
+  sourceRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  reviewedAt: string;
+}};
+
+export type GetSpec200EvidenceItemSource = typeof GetSpec200EvidenceItemSource[keyof typeof GetSpec200EvidenceItemSource];
+
+
+export const GetSpec200EvidenceItemSource = {
+  automatic: 'automatic',
+  manual: 'manual',
+  carried: 'carried',
+} as const;
+
+export type GetSpec200EvidenceItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  taskKey: string;
+  checkKey: string;
+  passed: boolean;
+  source: GetSpec200EvidenceItemSource;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  attemptId?: string;
+  toolOperationId?: string;
+  fromRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewedBy?: string;
+  note?: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+};
+
+/**
+ * @nullable
+ */
+export type GetSpec200Acceptance = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  acceptedAt: string;
+  revision: number;
+  /** @items.pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  evidenceIds: string[];
+} | null;
+
+export type GetSpec200TasksItemStatus = typeof GetSpec200TasksItemStatus[keyof typeof GetSpec200TasksItemStatus];
+
+
+export const GetSpec200TasksItemStatus = {
+  not_started: 'not_started',
+  queued: 'queued',
+  running: 'running',
+  waiting: 'waiting',
+  passed: 'passed',
+  needs_verification: 'needs_verification',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  timed_out: 'timed_out',
+  needs_reconciliation: 'needs_reconciliation',
+} as const;
+
+export type GetSpec200TasksItem = {
+  key: string;
+  status: GetSpec200TasksItemStatus;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  attemptId: string | null;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runId: string | null;
+};
+
+export type GetSpec200HistoryItem = {
+  revision: number;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+};
+
+export type GetSpec200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  projectId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  conversationId: string;
+  title: string;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  currentRevision: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+  requirementsMd: string;
+  /** @nullable */
+  designMd: string | null;
+  /** @maxItems 50 */
+  taskPlan: GetSpec200TaskPlanItem[];
+  reviews: GetSpec200Reviews;
+  evidence: GetSpec200EvidenceItem[];
+  /** @nullable */
+  acceptance: GetSpec200Acceptance;
+  tasks: GetSpec200TasksItem[];
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  updatedAt: string;
+  history: GetSpec200HistoryItem[];
+};
+
+export type DeleteSpecBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+};
+
+/**
+ * @nullable
+ */
+export type DeleteSpec200 = typeof DeleteSpec200[keyof typeof DeleteSpec200] | null;
+
+
+export const DeleteSpec200 = {
+} as const;
+
+export type SaveSpecDraftBodyStage = typeof SaveSpecDraftBodyStage[keyof typeof SaveSpecDraftBodyStage];
+
+
+export const SaveSpecDraftBodyStage = {
+  requirements: 'requirements',
+  design: 'design',
+  tasks: 'tasks',
+} as const;
+
+export type SaveSpecDraftBodyContent = string | ({
+  /** @pattern ^T-\d{2,}$ */
+  key: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  objective: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^T-\d{2,}$
+     */
+  dependsOn: string[];
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  checks: ({
+  /** @pattern ^[A-Z][A-Z0-9_-]{0,31}$ */
+  key: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^AC-\d{2,}$
+     */
+  criterionIds: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  method: {
+  kind: 'manual';
+} | {
+  kind: 'command';
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  command: string;
+  /**
+     * @maxItems 64
+     * @items.maxLength 1024
+     */
+  args: string[];
+  /** @maxLength 1024 */
+  cwd?: string;
+};
+})[];
+})[];
+
+export type SaveSpecDraftBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+  stage: SaveSpecDraftBodyStage;
+  content: SaveSpecDraftBodyContent;
+};
+
+export type SaveSpecDraft200TaskPlanItemChecksItemMethod = {
+  kind: 'manual';
+} | {
+  kind: 'command';
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  command: string;
+  /**
+     * @maxItems 64
+     * @items.maxLength 1024
+     */
+  args: string[];
+  /** @maxLength 1024 */
+  cwd?: string;
+};
+
+export type SaveSpecDraft200TaskPlanItemChecksItem = {
+  /** @pattern ^[A-Z][A-Z0-9_-]{0,31}$ */
+  key: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^AC-\d{2,}$
+     */
+  criterionIds: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  method: SaveSpecDraft200TaskPlanItemChecksItemMethod;
+};
+
+export type SaveSpecDraft200TaskPlanItem = {
+  /** @pattern ^T-\d{2,}$ */
+  key: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  objective: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^T-\d{2,}$
+     */
+  dependsOn: string[];
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  checks: SaveSpecDraft200TaskPlanItemChecksItem[];
+};
+
+export type SaveSpecDraft200Reviews = {[key: string]: {
+  revision: number;
+  sourceRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  reviewedAt: string;
+}};
+
+export type SaveSpecDraft200EvidenceItemSource = typeof SaveSpecDraft200EvidenceItemSource[keyof typeof SaveSpecDraft200EvidenceItemSource];
+
+
+export const SaveSpecDraft200EvidenceItemSource = {
+  automatic: 'automatic',
+  manual: 'manual',
+  carried: 'carried',
+} as const;
+
+export type SaveSpecDraft200EvidenceItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  taskKey: string;
+  checkKey: string;
+  passed: boolean;
+  source: SaveSpecDraft200EvidenceItemSource;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  attemptId?: string;
+  toolOperationId?: string;
+  fromRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewedBy?: string;
+  note?: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+};
+
+/**
+ * @nullable
+ */
+export type SaveSpecDraft200Acceptance = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  acceptedAt: string;
+  revision: number;
+  /** @items.pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  evidenceIds: string[];
+} | null;
+
+export type SaveSpecDraft200TasksItemStatus = typeof SaveSpecDraft200TasksItemStatus[keyof typeof SaveSpecDraft200TasksItemStatus];
+
+
+export const SaveSpecDraft200TasksItemStatus = {
+  not_started: 'not_started',
+  queued: 'queued',
+  running: 'running',
+  waiting: 'waiting',
+  passed: 'passed',
+  needs_verification: 'needs_verification',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  timed_out: 'timed_out',
+  needs_reconciliation: 'needs_reconciliation',
+} as const;
+
+export type SaveSpecDraft200TasksItem = {
+  key: string;
+  status: SaveSpecDraft200TasksItemStatus;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  attemptId: string | null;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runId: string | null;
+};
+
+export type SaveSpecDraft200HistoryItem = {
+  revision: number;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+};
+
+export type SaveSpecDraft200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  projectId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  conversationId: string;
+  title: string;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  currentRevision: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+  requirementsMd: string;
+  /** @nullable */
+  designMd: string | null;
+  /** @maxItems 50 */
+  taskPlan: SaveSpecDraft200TaskPlanItem[];
+  reviews: SaveSpecDraft200Reviews;
+  evidence: SaveSpecDraft200EvidenceItem[];
+  /** @nullable */
+  acceptance: SaveSpecDraft200Acceptance;
+  tasks: SaveSpecDraft200TasksItem[];
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  updatedAt: string;
+  history: SaveSpecDraft200HistoryItem[];
+};
+
+export type ReviewSpecStageBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+};
+
+export type ReviewSpecStage200TaskPlanItemChecksItemMethod = {
+  kind: 'manual';
+} | {
+  kind: 'command';
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  command: string;
+  /**
+     * @maxItems 64
+     * @items.maxLength 1024
+     */
+  args: string[];
+  /** @maxLength 1024 */
+  cwd?: string;
+};
+
+export type ReviewSpecStage200TaskPlanItemChecksItem = {
+  /** @pattern ^[A-Z][A-Z0-9_-]{0,31}$ */
+  key: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^AC-\d{2,}$
+     */
+  criterionIds: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  method: ReviewSpecStage200TaskPlanItemChecksItemMethod;
+};
+
+export type ReviewSpecStage200TaskPlanItem = {
+  /** @pattern ^T-\d{2,}$ */
+  key: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  objective: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^T-\d{2,}$
+     */
+  dependsOn: string[];
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  checks: ReviewSpecStage200TaskPlanItemChecksItem[];
+};
+
+export type ReviewSpecStage200Reviews = {[key: string]: {
+  revision: number;
+  sourceRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  reviewedAt: string;
+}};
+
+export type ReviewSpecStage200EvidenceItemSource = typeof ReviewSpecStage200EvidenceItemSource[keyof typeof ReviewSpecStage200EvidenceItemSource];
+
+
+export const ReviewSpecStage200EvidenceItemSource = {
+  automatic: 'automatic',
+  manual: 'manual',
+  carried: 'carried',
+} as const;
+
+export type ReviewSpecStage200EvidenceItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  taskKey: string;
+  checkKey: string;
+  passed: boolean;
+  source: ReviewSpecStage200EvidenceItemSource;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  attemptId?: string;
+  toolOperationId?: string;
+  fromRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewedBy?: string;
+  note?: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+};
+
+/**
+ * @nullable
+ */
+export type ReviewSpecStage200Acceptance = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  acceptedAt: string;
+  revision: number;
+  /** @items.pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  evidenceIds: string[];
+} | null;
+
+export type ReviewSpecStage200TasksItemStatus = typeof ReviewSpecStage200TasksItemStatus[keyof typeof ReviewSpecStage200TasksItemStatus];
+
+
+export const ReviewSpecStage200TasksItemStatus = {
+  not_started: 'not_started',
+  queued: 'queued',
+  running: 'running',
+  waiting: 'waiting',
+  passed: 'passed',
+  needs_verification: 'needs_verification',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  timed_out: 'timed_out',
+  needs_reconciliation: 'needs_reconciliation',
+} as const;
+
+export type ReviewSpecStage200TasksItem = {
+  key: string;
+  status: ReviewSpecStage200TasksItemStatus;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  attemptId: string | null;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runId: string | null;
+};
+
+export type ReviewSpecStage200HistoryItem = {
+  revision: number;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+};
+
+export type ReviewSpecStage200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  projectId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  conversationId: string;
+  title: string;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  currentRevision: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+  requirementsMd: string;
+  /** @nullable */
+  designMd: string | null;
+  /** @maxItems 50 */
+  taskPlan: ReviewSpecStage200TaskPlanItem[];
+  reviews: ReviewSpecStage200Reviews;
+  evidence: ReviewSpecStage200EvidenceItem[];
+  /** @nullable */
+  acceptance: ReviewSpecStage200Acceptance;
+  tasks: ReviewSpecStage200TasksItem[];
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  updatedAt: string;
+  history: ReviewSpecStage200HistoryItem[];
+};
+
+export type GenerateSpecDraftBodyStage = typeof GenerateSpecDraftBodyStage[keyof typeof GenerateSpecDraftBodyStage];
+
+
+export const GenerateSpecDraftBodyStage = {
+  requirements: 'requirements',
+  design: 'design',
+  tasks: 'tasks',
+} as const;
+
+export type GenerateSpecDraftBodyConfigurationReasoningEffort = typeof GenerateSpecDraftBodyConfigurationReasoningEffort[keyof typeof GenerateSpecDraftBodyConfigurationReasoningEffort];
+
+
+export const GenerateSpecDraftBodyConfigurationReasoningEffort = {
+  off: 'off',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  max: 'max',
+} as const;
+
+export type GenerateSpecDraftBodyConfiguration = {
+  /** @minLength 1 */
+  backendId: string;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  modelId: string | null;
+  reasoningEffort?: GenerateSpecDraftBodyConfigurationReasoningEffort;
+};
+
+export type GenerateSpecDraftBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+  stage: GenerateSpecDraftBodyStage;
+  /** @maxLength 4000 */
+  instruction?: string;
+  configuration?: GenerateSpecDraftBodyConfiguration;
+};
+
+export type GenerateSpecDraft202 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  pendingInputId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  attemptId?: string;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runId: string | null;
+};
+
+export type StartSpecTaskAttemptBodyConfigurationReasoningEffort = typeof StartSpecTaskAttemptBodyConfigurationReasoningEffort[keyof typeof StartSpecTaskAttemptBodyConfigurationReasoningEffort];
+
+
+export const StartSpecTaskAttemptBodyConfigurationReasoningEffort = {
+  off: 'off',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  max: 'max',
+} as const;
+
+export type StartSpecTaskAttemptBodyConfiguration = {
+  /** @minLength 1 */
+  backendId: string;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  modelId: string | null;
+  reasoningEffort?: StartSpecTaskAttemptBodyConfigurationReasoningEffort;
+};
+
+export type StartSpecTaskAttemptBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+  configuration?: StartSpecTaskAttemptBodyConfiguration;
+};
+
+export type StartSpecTaskAttempt202 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  pendingInputId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  attemptId?: string;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runId: string | null;
+};
+
+export type ListSpecAttemptsParams = {
+/**
+ * @maximum 9007199254740991
+ * @exclusiveMinimum 0
+ */
+revision: number;
+taskKey?: string;
+cursor?: string;
+};
+
+export type ListSpecAttempts200ItemsItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  revision: number;
+  taskKey: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  pendingInputId: string;
+  requestKey: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /**
+     * @nullable
+     * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+     */
+  releasedAt: string | null;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runId: string | null;
+  /** @nullable */
+  runState: string | null;
+  resolution: unknown | null;
+};
+
+export type ListSpecAttempts200 = {
+  items: ListSpecAttempts200ItemsItem[];
+  /** @nullable */
+  nextCursor: string | null;
+};
+
+export type ReconcileSpecTaskAttemptBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+  /** @maxLength 2000 */
+  note?: string;
+};
+
+export type ReconcileSpecTaskAttempt200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  releasedAt: string;
+  resolution: unknown | null;
+  [key: string]: unknown;
+};
+
+export type RecordSpecEvidenceBodySource = {
+  kind: 'manual';
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  attemptId: string;
+  passed: boolean;
+  /** @maxLength 2000 */
+  note: string;
+} | {
+  kind: 'carried';
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  evidenceId: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  note: string;
+};
+
+export type RecordSpecEvidenceBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  evidenceId: string;
+  /** @pattern ^T-\d{2,}$ */
+  taskKey: string;
+  /** @pattern ^[A-Z][A-Z0-9_-]{0,31}$ */
+  checkKey: string;
+  source: RecordSpecEvidenceBodySource;
+};
+
+export type RecordSpecEvidence200TaskPlanItemChecksItemMethod = {
+  kind: 'manual';
+} | {
+  kind: 'command';
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  command: string;
+  /**
+     * @maxItems 64
+     * @items.maxLength 1024
+     */
+  args: string[];
+  /** @maxLength 1024 */
+  cwd?: string;
+};
+
+export type RecordSpecEvidence200TaskPlanItemChecksItem = {
+  /** @pattern ^[A-Z][A-Z0-9_-]{0,31}$ */
+  key: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^AC-\d{2,}$
+     */
+  criterionIds: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  method: RecordSpecEvidence200TaskPlanItemChecksItemMethod;
+};
+
+export type RecordSpecEvidence200TaskPlanItem = {
+  /** @pattern ^T-\d{2,}$ */
+  key: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  objective: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^T-\d{2,}$
+     */
+  dependsOn: string[];
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  checks: RecordSpecEvidence200TaskPlanItemChecksItem[];
+};
+
+export type RecordSpecEvidence200Reviews = {[key: string]: {
+  revision: number;
+  sourceRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  reviewedAt: string;
+}};
+
+export type RecordSpecEvidence200EvidenceItemSource = typeof RecordSpecEvidence200EvidenceItemSource[keyof typeof RecordSpecEvidence200EvidenceItemSource];
+
+
+export const RecordSpecEvidence200EvidenceItemSource = {
+  automatic: 'automatic',
+  manual: 'manual',
+  carried: 'carried',
+} as const;
+
+export type RecordSpecEvidence200EvidenceItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  taskKey: string;
+  checkKey: string;
+  passed: boolean;
+  source: RecordSpecEvidence200EvidenceItemSource;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  attemptId?: string;
+  toolOperationId?: string;
+  fromRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewedBy?: string;
+  note?: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+};
+
+/**
+ * @nullable
+ */
+export type RecordSpecEvidence200Acceptance = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  acceptedAt: string;
+  revision: number;
+  /** @items.pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  evidenceIds: string[];
+} | null;
+
+export type RecordSpecEvidence200TasksItemStatus = typeof RecordSpecEvidence200TasksItemStatus[keyof typeof RecordSpecEvidence200TasksItemStatus];
+
+
+export const RecordSpecEvidence200TasksItemStatus = {
+  not_started: 'not_started',
+  queued: 'queued',
+  running: 'running',
+  waiting: 'waiting',
+  passed: 'passed',
+  needs_verification: 'needs_verification',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  timed_out: 'timed_out',
+  needs_reconciliation: 'needs_reconciliation',
+} as const;
+
+export type RecordSpecEvidence200TasksItem = {
+  key: string;
+  status: RecordSpecEvidence200TasksItemStatus;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  attemptId: string | null;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runId: string | null;
+};
+
+export type RecordSpecEvidence200HistoryItem = {
+  revision: number;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+};
+
+export type RecordSpecEvidence200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  projectId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  conversationId: string;
+  title: string;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  currentRevision: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+  requirementsMd: string;
+  /** @nullable */
+  designMd: string | null;
+  /** @maxItems 50 */
+  taskPlan: RecordSpecEvidence200TaskPlanItem[];
+  reviews: RecordSpecEvidence200Reviews;
+  evidence: RecordSpecEvidence200EvidenceItem[];
+  /** @nullable */
+  acceptance: RecordSpecEvidence200Acceptance;
+  tasks: RecordSpecEvidence200TasksItem[];
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  updatedAt: string;
+  history: RecordSpecEvidence200HistoryItem[];
+};
+
+export type AcceptSpecBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+};
+
+export type AcceptSpec200TaskPlanItemChecksItemMethod = {
+  kind: 'manual';
+} | {
+  kind: 'command';
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  command: string;
+  /**
+     * @maxItems 64
+     * @items.maxLength 1024
+     */
+  args: string[];
+  /** @maxLength 1024 */
+  cwd?: string;
+};
+
+export type AcceptSpec200TaskPlanItemChecksItem = {
+  /** @pattern ^[A-Z][A-Z0-9_-]{0,31}$ */
+  key: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^AC-\d{2,}$
+     */
+  criterionIds: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  method: AcceptSpec200TaskPlanItemChecksItemMethod;
+};
+
+export type AcceptSpec200TaskPlanItem = {
+  /** @pattern ^T-\d{2,}$ */
+  key: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  objective: string;
+  /**
+     * @maxItems 50
+     * @items.pattern ^T-\d{2,}$
+     */
+  dependsOn: string[];
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  checks: AcceptSpec200TaskPlanItemChecksItem[];
+};
+
+export type AcceptSpec200Reviews = {[key: string]: {
+  revision: number;
+  sourceRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  reviewedAt: string;
+}};
+
+export type AcceptSpec200EvidenceItemSource = typeof AcceptSpec200EvidenceItemSource[keyof typeof AcceptSpec200EvidenceItemSource];
+
+
+export const AcceptSpec200EvidenceItemSource = {
+  automatic: 'automatic',
+  manual: 'manual',
+  carried: 'carried',
+} as const;
+
+export type AcceptSpec200EvidenceItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  taskKey: string;
+  checkKey: string;
+  passed: boolean;
+  source: AcceptSpec200EvidenceItemSource;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  attemptId?: string;
+  toolOperationId?: string;
+  fromRevision?: number;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewedBy?: string;
+  note?: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+};
+
+/**
+ * @nullable
+ */
+export type AcceptSpec200Acceptance = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  reviewerId: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  acceptedAt: string;
+  revision: number;
+  /** @items.pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  evidenceIds: string[];
+} | null;
+
+export type AcceptSpec200TasksItemStatus = typeof AcceptSpec200TasksItemStatus[keyof typeof AcceptSpec200TasksItemStatus];
+
+
+export const AcceptSpec200TasksItemStatus = {
+  not_started: 'not_started',
+  queued: 'queued',
+  running: 'running',
+  waiting: 'waiting',
+  passed: 'passed',
+  needs_verification: 'needs_verification',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  timed_out: 'timed_out',
+  needs_reconciliation: 'needs_reconciliation',
+} as const;
+
+export type AcceptSpec200TasksItem = {
+  key: string;
+  status: AcceptSpec200TasksItemStatus;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  attemptId: string | null;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runId: string | null;
+};
+
+export type AcceptSpec200HistoryItem = {
+  revision: number;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  createdBy: string;
+};
+
+export type AcceptSpec200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  projectId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  conversationId: string;
+  title: string;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  currentRevision: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+  requirementsMd: string;
+  /** @nullable */
+  designMd: string | null;
+  /** @maxItems 50 */
+  taskPlan: AcceptSpec200TaskPlanItem[];
+  reviews: AcceptSpec200Reviews;
+  evidence: AcceptSpec200EvidenceItem[];
+  /** @nullable */
+  acceptance: AcceptSpec200Acceptance;
+  tasks: AcceptSpec200TasksItem[];
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  updatedAt: string;
+  history: AcceptSpec200HistoryItem[];
+};
+
+export type ExportSpecParams = {
+/**
+ * @maximum 9007199254740991
+ * @exclusiveMinimum 0
+ */
+revision?: number;
+};
+
+export type ExportSpec200FilesItem = {
+  name: string;
+  content: string;
+};
+
+export type ExportSpec200 = {
+  revision: number;
+  files: ExportSpec200FilesItem[];
+};
+
 export type CreateAttachmentUploadBody = {
   /**
      * @minLength 1
@@ -2762,7 +4128,7 @@ export type CreateAttachmentUploadBody = {
      */
   mime: string;
   /**
-     * @maximum 5242880
+     * @maximum 31457280
      * @exclusiveMinimum 0
      */
   size: number;
@@ -2806,7 +4172,7 @@ export type CompleteAttachmentUploadBody = {
      */
   mime: string;
   /**
-     * @maximum 5242880
+     * @maximum 31457280
      * @exclusiveMinimum 0
      */
   size: number;
@@ -3522,11 +4888,20 @@ export type SummariseRemoteFiles200 = {
 };
 
 export type SubscribeConversationEventsParams = {
+includeToolResults?: SubscribeConversationEventsIncludeToolResults;
 /**
  * @pattern ^(0|[1-9]\d{0,18})$
  */
 cursor?: string;
 };
+
+export type SubscribeConversationEventsIncludeToolResults = typeof SubscribeConversationEventsIncludeToolResults[keyof typeof SubscribeConversationEventsIncludeToolResults];
+
+
+export const SubscribeConversationEventsIncludeToolResults = {
+  true: 'true',
+  false: 'false',
+} as const;
 
 export type CancelRunBody = { [key: string]: unknown };
 

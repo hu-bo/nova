@@ -35,6 +35,7 @@ export const conversationView = (conversation: ConversationRow) => ({
   title: conversation.title,
   mode: conversation.mode,
   projectId: conversation.projectId,
+  ...(conversation.metadata.specId ? { specId: conversation.metadata.specId } : {}),
   epoch: conversation.contextEpoch,
   configuration: configurationSchema.parse(conversation.metadata.configuration ?? {}),
 });
@@ -123,7 +124,7 @@ export function nativeBlocks(
     if (part.type === "text") return { id: blockId, type: "text", text: part.text };
     if (part.type === "thinking") return { id: "thinking", type: "thinking", text: part.text };
     if (part.type === "tool-call")
-      return { id: blockId, type: "tool_call", callId: part.callId, name: part.name, args: part.input };
+      return { id: blockId, type: "tool_call", callId: part.callId, name: part.name, args: part.name === "spec_update" ? {} : part.input };
     if (part.type === "tool-result") {
       const execution =
         executions.find((entry) => entry.callId === part.callId && entry.executionId === messageId) ??

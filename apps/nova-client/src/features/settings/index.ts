@@ -4,6 +4,9 @@ export { PreferencesProvider } from './preferences';
 export { usePreferences } from './preferences.context';
 export { ModelSettingsProvider } from './model/model-provider';
 export { useModelSettings } from './model/provider';
+export const ChatTab = lazy(() =>
+  import('./chat-tab').then((module) => ({ default: module.ChatTab })),
+);
 export const ModelsTab = lazy(() =>
   import('./model/models-tab').then((module) => ({ default: module.ModelsTab })),
 );

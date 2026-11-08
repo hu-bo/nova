@@ -106,6 +106,42 @@ afterEach(() => {
   mocks.summary.mockReset();
 });
 describe('SSH filesystem selection', () => {
+  it('arms Spec locally and starts it only after the first text submission', async () => {
+    const onStartSpec = vi.fn().mockResolvedValue(undefined);
+    const { result } = mount({ mode: 'project', projectId: 'project', onStartSpec });
+    act(() => { result.current.setSpecArmed(true); result.current.composer.onTextChange?.('导出项目会话'); });
+    expect(onStartSpec).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    await act(async () => { await result.current.submit(submission('导出项目会话')); });
+    expect(onStartSpec).toHaveBeenCalledWith(expect.objectContaining({
+      message: '导出项目会话', configuration: expect.objectContaining({ mode: 'plan' }),
+    }));
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(result.current.composer.value).toBe('');
+  });
+  it('keeps the first Spec query when creation fails', async () => {
+    const { result } = mount({ mode: 'project', projectId: 'project', initialSpecMode: true,
+      onStartSpec: vi.fn().mockRejectedValue(new Error('offline')) });
+    act(() => result.current.composer.onTextChange?.('保留这份需求'));
+    await act(async () => { await result.current.submit(submission('保留这份需求')); });
+    expect(result.current.composer.value).toBe('保留这份需求');
+    expect(result.current.specArmed).toBe(true);
+  });
+  it('allows an unbound Spec session to discuss drafts in Plan and excludes Build/goal shortcuts', async () => {
+    mocks.append.mockResolvedValue({ inputId: 'spec-input' });
+    const { result } = mount({
+      conversationId: 'spec-conversation', mode: 'project', projectId: 'project',
+      specSession: true, binding: null,
+      runtime: { backendId: 'nova', modelId: null, mode: 'build' },
+    });
+    await act(async () => { await result.current.submit(submission('修订需求')); });
+    expect(result.current.unboundOpen).toBe(false);
+    expect(mocks.append.mock.calls[0]![0].configuration.mode).toBe('plan');
+    expect(result.current.composer.skills?.some((skill) => ['build', 'goal'].includes(skill.id))).toBe(false);
+    mocks.append.mockClear();
+    await act(async () => { await result.current.submit(submission('/build run')); });
+    expect(mocks.append).not.toHaveBeenCalled();
+  });
   it('ignores the removed SSH selection in old drafts for a new ordinary Chat', async () => {
     localStorage.setItem(
       'nova_composer_options:alice:new:chat:',

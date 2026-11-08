@@ -50,6 +50,7 @@ const REASONING_LABELS: Record<string, string> = {
 };
 type DraftOptions = {
   executionMode: 'build' | 'plan';
+  specArmed?: boolean;
   goalArmed: boolean;
   maxIterations: number;
   acceptanceCriteria: string;
@@ -130,6 +131,10 @@ export interface ConversationComposerOptions {
   conversationId: string | null;
   mode: 'chat' | 'project';
   projectId?: string | undefined;
+  specSession?: boolean;
+  initialSpecMode?: boolean;
+  startingSpec?: boolean;
+  onStartSpec?: (input: { message: string; configuration: Configuration }) => Promise<void>;
   binding: GetProjectBinding200 | null;
   runtime?: Configuration | undefined;
   goal?: GetConversationSnapshot200['goal'] | undefined;
@@ -182,6 +187,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const [executionMode, setExecutionMode] = useState<'build' | 'plan'>(
     storedOptions?.executionMode ?? runtime?.mode ?? 'build',
   );
+  const [specArmed, setSpecArmed] = useState(options.initialSpecMode ?? storedOptions?.specArmed ?? false);
   const [goalArmed, setGoalArmed] = useState(storedOptions?.goalArmed ?? false);
   const [maxIterations, setMaxIterations] = useState(storedOptions?.maxIterations ?? 10);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(
@@ -199,7 +205,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const steer = useSteerPendingInputMutation(conversationId);
   const uploads = useUploadQueue();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const sending = create.isPending || append.isPending || modelSettings.saving;
+  const sending = create.isPending || append.isPending || modelSettings.saving || Boolean(options.startingSpec);
   const remoteConnectionId =
     mode === 'project' ? (binding?.remoteConnectionId ?? '') : (runtime?.remoteConnectionId ?? '');
   const selectedRemote = remoteCatalog.data?.items.find((entry) => entry.id === remoteConnectionId);
@@ -255,11 +261,12 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   useEffect(() => {
     optionStore.set({
       executionMode,
+      specArmed,
       goalArmed,
       maxIterations,
       acceptanceCriteria,
     });
-  }, [optionStore, executionMode, goalArmed, maxIterations, acceptanceCriteria]);
+  }, [optionStore, executionMode, specArmed, goalArmed, maxIterations, acceptanceCriteria]);
   useEffect(() => {
     if (runtime?.modelId) setStoredProfileId('server:' + runtime.modelId);
   }, [runtime?.modelId]);
@@ -292,26 +299,37 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         description: '先分析和制定方案，不修改文件',
       },
       { id: 'build', command: 'build', label: '切换 Build 模式', description: '按任务推进实现' },
+      ...(!conversationId ? [{ id: 'spec', command: 'spec', label: '切换 Spec 模式', description: '发送首条需求后打开规格工作台' }] : []),
       ...(conversationId
         ? [{ id: 'clear', command: 'clear', label: '清除上下文', disabled: isRunning }]
         : []),
-    ],
-    [conversationId, isRunning],
+    ].filter((skill) => !options.specSession || !['goal', 'build'].includes(skill.id)),
+    [conversationId, isRunning, options.specSession],
   );
 
   async function submit(submission: ComposerSubmission<Attachment>): Promise<boolean> {
     setError(null);
     let message = submission.text.trim();
-    let nextMode = executionMode;
+    let nextMode: Configuration['mode'] = options.specSession ? 'plan' : executionMode;
     let startsGoal = goalArmed;
-    const command = /^\/(goal|plan|build)(?:\s+|$)/.exec(message);
+    let startsSpec = !conversationId && specArmed;
+    const command = /^\/(goal|plan|build|spec)(?:\s+|$)/.exec(message);
     if (command) {
       const name = command[1]!;
       message = message.slice(command[0].length).trim();
-      if (name === 'goal') {
+      if (name === 'spec' && conversationId) {
+        setError(new ApiError(409, 'SPEC_NEW_CONVERSATION_REQUIRED', '请在新会话中选择 Spec 模式开始一份规格。'));
+        return false;
+      }
+      if (name === 'spec' && !conversationId) {
+        startsSpec = true; startsGoal = false;
+        setSpecArmed(true); setGoalArmed(false);
+      } else if (name === 'goal') {
+        startsSpec = false; setSpecArmed(false);
         startsGoal = true;
         setGoalArmed(true);
       } else {
+        startsSpec = false; setSpecArmed(false);
         nextMode = name === 'plan' ? 'plan' : 'build';
         setExecutionMode(nextMode);
       }
@@ -324,7 +342,19 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       setError(new ApiError(400, 400, '请输入消息，正文最多 32000 字符。'));
       return false;
     }
-    if (mode === 'project' && !binding) {
+    if (options.specSession && (nextMode !== 'plan' || startsGoal)) {
+      setError(new ApiError(409, 'SPEC_SESSION_RESTRICTED', '规格会话使用 Plan 讨论；请从任务卡片发起 Build 执行。'));
+      return false;
+    }
+    if (startsSpec && !projectId) {
+      setError(new ApiError(400, 'SPEC_PROJECT_REQUIRED', '请选择本次 Spec 所属的项目。'));
+      return false;
+    }
+    if (startsSpec && (submission.attachments.length || submission.files.length)) {
+      setError(new ApiError(400, 'SPEC_TEXT_REQUIRED', '请先使用文字需求启动 Spec；附件可在专用会话中继续补充。'));
+      return false;
+    }
+    if (mode === 'project' && !binding && !options.specSession && !startsSpec) {
       setUnboundOpen(true);
       return false;
     }
@@ -355,7 +385,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         reasoningEffort: profile?.thinkingLevels.includes(requestedEffort as ModelThinkingLevel)
           ? (requestedEffort as ModelThinkingLevel)
           : undefined,
-        mode: nextMode,
+        mode: startsSpec ? 'plan' : nextMode,
         remoteConnectionId: remoteConnectionId || undefined,
       };
       if (config.data?.capabilities.execution && !runConfig.modelId)
@@ -372,7 +402,14 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       const goal = startsGoal
         ? { objective: message, maxIterations, acceptanceCriteria }
         : undefined;
-      if (conversationId) {
+      if (startsSpec) {
+        if (!options.onStartSpec) throw new ApiError(400, 'SPEC_UNAVAILABLE', '当前页面无法启动 Spec。');
+        await options.onStartSpec({ message, configuration: runConfig });
+        saveDraft(accountId, draftId, '');
+        setText('');
+        setSpecArmed(false);
+        optionStore.set(null);
+      } else if (conversationId) {
         await append.mutateAsync({
           blocks,
           mode: 'next_run',
@@ -404,10 +441,12 @@ export function useConversationComposer(options: ConversationComposerOptions) {
 
   function invokeSkill(skill: ComposerSkill) {
     if (skill.id === 'goal') {
+      setSpecArmed(false);
       if (options.goal && options.goal.status !== 'completed') setGoalDialogOpen(true);
       else setGoalArmed(true);
-    } else if (skill.id === 'plan') setExecutionMode('plan');
-    else if (skill.id === 'build') setExecutionMode('build');
+    } else if (skill.id === 'spec') { setSpecArmed(true); setGoalArmed(false); }
+    else if (skill.id === 'plan') { setSpecArmed(false); setExecutionMode('plan'); }
+    else if (skill.id === 'build') { setSpecArmed(false); setExecutionMode('build'); }
     else if (skill.id === 'clear') onClearContext?.();
   }
   const canSteer = isRunning && options.steeringEnabled === true;
@@ -522,6 +561,15 @@ export function useConversationComposer(options: ConversationComposerOptions) {
           )
         : undefined;
 
+  let placeholder = '想规划、实现或讨论什么？/ 使用命令…';
+  if (isRunning) {
+    placeholder = '继续补充任务，发送后进入队列…';
+  } else if (executionMode === 'plan') {
+    placeholder = '先分析和制定计划，/ 使用命令…';
+  } else if (goalArmed) {
+    placeholder = '描述一个明确、可验证的目标…';
+  }
+
   const composer: ChatComposerConfig<Attachment> = {
     value: text,
     onTextChange: changeText,
@@ -549,15 +597,13 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     skills,
     onSkillInvoke: invokeSkill,
     contextUsage,
-    placeholder: isRunning
-      ? '继续补充任务，发送后进入队列…'
-      : executionMode === 'plan'
-        ? '先分析和制定计划，/ 使用命令…'
-        : goalArmed
-          ? '描述一个明确、可验证的目标…'
-          : '想规划、实现或讨论什么？/ 使用命令…',
+    placeholder,
   };
   return {
+    specSession: Boolean(options.specSession),
+    canStartSpec: !conversationId,
+    specArmed,
+    setSpecArmed,
     composer,
     submit,
     uploads,

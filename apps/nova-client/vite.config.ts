@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
       dedupe: ['react', 'react-dom'],
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
-    server: { host: '127.0.0.1', port: 8003, strictPort: true, proxy },
+    server: { host: '0.0.0.0', port: 8003, strictPort: true, proxy },
     preview: { host: '127.0.0.1', port: 4173, strictPort: true, proxy },
   };
 });

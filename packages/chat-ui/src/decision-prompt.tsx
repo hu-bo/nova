@@ -7,6 +7,12 @@ import { unifiedPatchOf } from "./blocks/diff-utils.js";
 const DiffBlock = lazy(() => import("./blocks/diff.js").then((module) => ({ default: module.DiffBlock })));
 import type { DecisionRequest, DecisionResponse } from "./types.js";
 
+const approvalRiskLabels = {
+  exec: "命令",
+  write: "写入操作",
+  read: "读取操作",
+} satisfies Record<Extract<DecisionRequest, { kind: "approval" }>["risk"], string>;
+
 export interface DecisionPromptProps {
   request: DecisionRequest;
   onResolve: (response: DecisionResponse) => void | Promise<void>;
@@ -96,8 +102,7 @@ export function DecisionPrompt({
               需要授权
             </CardTitle>
             <p className="mt-1 text-xs leading-5 text-indigo-700/85 dark:text-indigo-200/80">
-              {request.toolName} 请求执行一项{" "}
-              {request.risk === "exec" ? "命令" : request.risk === "write" ? "写入操作" : "读取操作"}
+              {request.toolName} 请求执行一项 {approvalRiskLabels[request.risk]}
             </p>
           </div>
         </CardHeader>

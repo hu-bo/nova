@@ -1,7 +1,9 @@
 import { ErrorNotice } from '@/components/error-notice';
 import { Button } from '@/components/ui/button';
 import { useClientConfig } from '@/features/models';
-import { useProjectBinding, useProjectQuery } from '@/features/projects';
+import { useProjectBinding, useProjectQuery, useProjectsQuery } from '@/features/projects';
+import { useStartSpecMutation } from '@/features/specs';
+import { useState } from 'react';
 import { usePreferences } from '@/features/settings';
 import { type Attachment } from '@nova/agent-ui-contracts';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -28,13 +30,20 @@ import { UnboundDialog } from './unbound-dialog';
 import { useConversationComposer } from './use-conversation-composer';
 
 export function DraftWorkspace({
-  mode,
-  projectId,
+  mode: initialMode,
+  projectId: initialProjectId,
+  initialSpecMode = false,
 }: {
   mode: 'chat' | 'project';
   projectId?: string | undefined;
+  initialSpecMode?: boolean;
 }) {
   const navigate = useNavigate();
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const projectId = initialProjectId || selectedProjectId || undefined;
+  const mode = projectId ? 'project' : initialMode;
+  const projects = useProjectsQuery();
+  const startSpec = useStartSpecMutation();
   const binding = useProjectBinding(mode === 'project' && projectId ? projectId : null);
   const project = useProjectQuery(projectId ?? null);
   const config = useClientConfig();
@@ -44,14 +53,32 @@ export function DraftWorkspace({
     projectId,
     binding: mode === 'project' ? (binding.data ?? null) : null,
     isRunning: false,
+    initialSpecMode,
+    startingSpec: startSpec.isPending,
+    onStartSpec: async (input) => {
+      if (!projectId) throw new Error('请选择项目。');
+      const spec = await startSpec.mutateAsync({ projectId, ...input });
+      await navigate({
+        to: '/specs/$id',
+        params: { id: spec.id },
+        search: { projectId },
+        replace: true,
+      });
+    },
     pendingInputs: [],
     onCreated: (id) => void navigate({ to: '/conversations/$id', params: { id }, replace: true }),
   });
   const { preferences } = usePreferences();
   const unbound = mode === 'project' && !binding.isPending && !binding.data && !binding.error;
   function start(prompt?: string, plan = false, goal = false) {
-    if (plan) ctl.setExecutionMode('plan');
-    if (goal) ctl.setGoalArmed(true);
+    if (plan) {
+      ctl.setSpecArmed(false);
+      ctl.setExecutionMode('plan');
+    }
+    if (goal) {
+      ctl.setSpecArmed(false);
+      ctl.setGoalArmed(true);
+    }
     if (prompt)
       ctl.composer.onTextChange?.(
         ctl.composer.value?.trim() ? ctl.composer.value + '\n\n' + prompt : prompt,
@@ -62,6 +89,7 @@ export function DraftWorkspace({
   }
   return (
     <div
+      data-chat-width={preferences.chatFullWidth ? 'full' : undefined}
       className={
         'conversation-workspace nova-start-workspace grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-white ' +
         (preferences.contextPanelOpen ? 'xl:grid-cols-[minmax(0,1fr)_280px]' : '')
@@ -74,7 +102,9 @@ export function DraftWorkspace({
         <ConversationDetailsToggle />
       </header>
       <div className="nova-start-main min-h-0 overflow-y-auto px-5 pb-10 sm:px-8">
-        <div className="mx-auto w-full max-w-3xl pt-12 sm:pt-[clamp(3rem,15vh,8rem)]">
+        <div
+          className={`mx-auto w-full pt-12 sm:pt-[clamp(3rem,15vh,8rem)] ${preferences.chatFullWidth ? '' : 'max-w-3xl'}`}
+        >
           <header className="mb-7 text-center">
             <h1 className="text-2xl font-medium tracking-tight text-slate-800 sm:text-3xl">
               {mode === 'project' ? '一起推进这个项目' : '今天想推进什么？'}
@@ -114,7 +144,7 @@ export function DraftWorkspace({
               <ErrorNotice error={binding.error} onRetry={() => void binding.refetch()} />
             </div>
           )}
-          {unbound && projectId && (
+          {unbound && projectId && !ctl.specArmed && (
             <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
               <AlertTriangle size={14} />
               先为项目绑定 Runner 或 SSH 远程环境。
@@ -126,6 +156,24 @@ export function DraftWorkspace({
                 配置项目环境
               </Link>
             </div>
+          )}
+          {ctl.specArmed && !initialProjectId && (
+            <label className="mb-3 block text-xs text-muted-foreground">
+              Spec 所属项目
+              <select
+                aria-label="Spec 所属项目"
+                className="mt-2 w-full rounded-lg border bg-surface px-3 py-2.5 text-sm"
+                value={projectId ?? ''}
+                onChange={(event) => setSelectedProjectId(event.target.value)}
+              >
+                <option value="">选择项目</option>
+                {projects.data?.items.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
           <ComposerUploads controller={ctl} />
           <div className="nova-chat">
@@ -156,10 +204,19 @@ export function DraftWorkspace({
             </Button>
             <Button
               variant="secondary"
-              onPress={() => start('请先分析需求，制定实现计划，列出关键步骤和验证方式。', true)}
+              aria-pressed={ctl.specArmed}
+              onPress={() => {
+                ctl.setSpecArmed(true);
+                ctl.setGoalArmed(false);
+                document
+                  .querySelector<HTMLTextAreaElement>(
+                    '.conversation-workspace .nova-composer-textarea',
+                  )
+                  ?.focus();
+              }}
             >
               <ClipboardList size={14} />
-              制定计划
+              Spec 模式
             </Button>
             <Button variant="secondary" onPress={() => start('请帮我定位并分析这个问题：')}>
               <Bug size={14} />

@@ -116,6 +116,10 @@
   --nova-chat-content-max-width: 60rem;
 }
 
+.conversation-workspace[data-chat-width='full'] .nova-chat {
+  --nova-chat-content-max-width: none;
+}
+
 @layer base {
   body {
     @apply m-0 bg-background font-sans text-foreground antialiased;

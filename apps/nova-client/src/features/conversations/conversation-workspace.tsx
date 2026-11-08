@@ -106,8 +106,10 @@ export function ConversationWorkspace({
   id,
   data,
   stream,
+  embedded = false,
 }: {
   id: string;
+  embedded?: boolean;
   data: GetConversationSnapshot200;
   stream: ReturnType<typeof useConversationStream>;
 }) {
@@ -117,7 +119,11 @@ export function ConversationWorkspace({
   const config = useClientConfig();
   const controls = useRunControls(stream);
   const { preferences, update } = usePreferences();
-  const exportHistory = useConversationExport(id, identity!.identityId);
+  const exportHistory = useConversationExport(
+    id,
+    identity!.identityId,
+    preferences.includeToolResults,
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<'rename' | 'delete' | 'clear' | null>(null);
   const [title, setTitle] = useState('');
@@ -131,12 +137,23 @@ export function ConversationWorkspace({
   const maintenanceLocked = active || runState === 'cancelled_unconfirmed';
   // 首屏自动加载第一页历史；「加载更早的消息」继续向前翻页。
   const history = useInfiniteQuery({
-    queryKey: queryKeys.conversations.history(identity!.identityId, id),
+    queryKey: queryKeys.conversations.history(
+      identity!.identityId,
+      id,
+      preferences.includeToolResults,
+    ),
     enabled: Boolean(data.beforeSequence),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) => {
       const before = pageParam ?? data.beforeSequence;
-      return listConversationMessages(id, before ? { before } : {}, { signal });
+      return listConversationMessages(
+        id,
+        {
+          ...(before ? { before } : {}),
+          includeToolResults: preferences.includeToolResults ? 'true' : 'false',
+        },
+        { signal },
+      );
     },
     getNextPageParam: (page) => page.beforeSequence ?? undefined,
   });
@@ -166,6 +183,7 @@ export function ConversationWorkspace({
   });
   const ctl = useConversationComposer({
     conversationId: id,
+    specSession: Boolean(data.conversation.specId),
     mode: data.conversation.mode,
     projectId: data.conversation.projectId ?? undefined,
     binding: data.binding,
@@ -246,11 +264,14 @@ export function ConversationWorkspace({
     feedback.push({ id: 'clear-notice', message: clearNotice, tone: 'info', dismissible: true });
   const connection = CHAT_CONNECTION_BY_STREAM_STATE[stream.state];
   return (
-    <div className="conversation-workspace flex h-dvh min-h-0 flex-col">
+    <div
+      className={'conversation-workspace flex min-h-0 flex-col ' + (embedded ? 'h-full' : 'h-dvh')}
+      data-chat-width={preferences.chatFullWidth ? 'full' : undefined}
+    >
       <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 pr-4 pl-16 text-xs text-slate-500 lg:pl-6">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 py-1">
           <h1 className="min-w-0 max-w-full truncate text-sm font-semibold text-slate-800">
-            {data.conversation.title || '未命名会话'}
+            {embedded ? '专用项目会话 · Plan' : (data.conversation.title || '未命名会话')}
           </h1>
           {data.binding?.runnerId && (
             <span className="hidden sm:block">
@@ -291,8 +312,8 @@ export function ConversationWorkspace({
             onRetry={stream.retry}
             executionEnabled={executionEnabled}
           />
-          <ConversationDetailsToggle />
-          <Popover isOpen={menuOpen} onOpenChange={setMenuOpen}>
+          {!embedded && <ConversationDetailsToggle />}
+          {!embedded && <Popover isOpen={menuOpen} onOpenChange={setMenuOpen}>
             <Button variant="ghost" isIconOnly aria-label="会话操作">
               <Ellipsis size={17} />
             </Button>
@@ -341,7 +362,7 @@ export function ConversationWorkspace({
                 </ListBox>
               </Popover.Dialog>
             </Popover.Content>
-          </Popover>
+          </Popover>}
         </div>
       </header>
       <div className="max-h-[35vh] shrink-0 overflow-y-auto">
@@ -382,7 +403,8 @@ export function ConversationWorkspace({
       )}
       <ComposerUploads controller={ctl} />
       <Chat<Attachment>
-        sidebarOpen={preferences.contextPanelOpen}
+        showToolCalls={preferences.showToolCalls}
+        sidebarOpen={!embedded && preferences.contextPanelOpen}
         initialScrollState={scrollPositions.get(`${identity!.identityId}:${id}`)}
         state={{
           messages,

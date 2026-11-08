@@ -42,6 +42,7 @@ function renderBlock(raw: unknown): string {
     case 'image':
       return fence(JSON.stringify(block.attachment, null, 2), 'json');
     case 'tool_result':
+      if (Array.isArray(block.content) && block.content.length === 0) return '';
       return (
         '### 工具结果\n\n' +
         (Array.isArray(block.content)
@@ -62,10 +63,16 @@ function renderBlock(raw: unknown): string {
 
 async function downloadConversation(
   id: string,
+  includeToolResults: boolean,
   signal: AbortSignal,
   progress: (count: number) => void,
 ) {
-  const snapshot = await getConversationSnapshot(id, { signal });
+  const toolResults = includeToolResults ? 'true' : 'false';
+  const snapshot = await getConversationSnapshot(
+    id,
+    { includeToolResults: toolResults },
+    { signal },
+  );
   const messages = new Map<string, ListConversationMessages200ItemsItem>();
   for (const message of snapshot.messages) messages.set(message.id, message);
   let before = snapshot.beforeSequence;
@@ -75,7 +82,11 @@ async function downloadConversation(
     signal.throwIfAborted();
     if (seen.has(before)) throw new Error('历史分页游标重复，导出已停止，请重试。');
     seen.add(before);
-    const page = await listConversationMessages(id, { before }, { signal });
+    const page = await listConversationMessages(
+      id,
+      { before, includeToolResults: toolResults },
+      { signal },
+    );
     for (const message of page.items)
       if (!messages.has(message.id)) messages.set(message.id, message);
     before = page.beforeSequence;
@@ -122,7 +133,7 @@ async function downloadConversation(
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function useConversationExport(id: string, owner: string) {
+export function useConversationExport(id: string, owner: string, includeToolResults: boolean) {
   const controller = useRef<AbortController | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -141,7 +152,7 @@ export function useConversationExport(id: string, owner: string) {
     setError(null);
     const timeout = setTimeout(() => pending.abort(new Error('导出超时，请稍后重试。')), 60_000);
     try {
-      await downloadConversation(id, pending.signal, setCount);
+      await downloadConversation(id, includeToolResults, pending.signal, setCount);
     } catch (cause) {
       if (controller.current === pending) setError(cause);
     } finally {

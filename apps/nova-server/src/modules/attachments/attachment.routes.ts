@@ -27,7 +27,7 @@ export async function attachmentRoutes(app: FastifyInstance, service: Attachment
         body: createUploadBodySchema,
         response: {
           200: okEnvelope(createUploadResponseSchema),
-          ...errorResponses(400, 401, 500),
+          ...errorResponses(400, 401, 500, 503),
         },
       },
     },
@@ -52,7 +52,7 @@ export async function attachmentRoutes(app: FastifyInstance, service: Attachment
         body: uploadCompleteBodySchema,
         response: {
           200: okEnvelope(uploadCompleteResponseSchema),
-          ...errorResponses(400, 401, 403, 500),
+          ...errorResponses(400, 401, 403, 500, 503),
         },
       },
     },
@@ -78,7 +78,7 @@ export async function attachmentRoutes(app: FastifyInstance, service: Attachment
         body: readImageBodySchema,
         response: {
           200: okEnvelope(readImageResponseSchema),
-          ...errorResponses(400, 401, 403, 500),
+          ...errorResponses(400, 401, 403, 404, 500, 503),
         },
       },
     },
@@ -97,7 +97,7 @@ export async function attachmentRoutes(app: FastifyInstance, service: Attachment
         querystring: imageUrlQuerySchema,
         response: {
           200: okEnvelope(imageUrlResponseSchema),
-          ...errorResponses(400, 401, 403, 500),
+          ...errorResponses(400, 401, 403, 404, 500, 503),
         },
       },
     },

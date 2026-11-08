@@ -38,6 +38,16 @@ type TraceEntry = {
   detail?: string;
 };
 
+const traceIcons = {
+  runtime: CircleCheck,
+  task: TerminalSquare,
+  agent: Bot,
+  model: Cpu,
+  tool: Wrench,
+  flow: GitBranch,
+  error: CircleAlert,
+} satisfies Record<TraceEntry["kind"], typeof CircleCheck>;
+
 const providers: Record<ProviderId, { label: string; baseURL: string; model: string }> = {
   openai: { label: "OpenAI", baseURL: "https://api.openai.com/v1", model: "" },
   deepseek: { label: "DeepSeek", baseURL: "https://api.deepseek.com/v1", model: "deepseek-chat" },
@@ -734,20 +744,7 @@ function Demo() {
                   .slice()
                   .reverse()
                   .map((item) => {
-                    const Icon =
-                      item.kind === "tool"
-                        ? Wrench
-                        : item.kind === "task"
-                          ? TerminalSquare
-                          : item.kind === "flow"
-                            ? GitBranch
-                            : item.kind === "error"
-                              ? CircleAlert
-                              : item.kind === "model"
-                                ? Cpu
-                                : item.kind === "agent"
-                                  ? Bot
-                                  : CircleCheck;
+                    const Icon = traceIcons[item.kind];
                     return (
                       <div className={`trace-entry trace-${item.kind}`} key={item.id}>
                         <span className="trace-icon">

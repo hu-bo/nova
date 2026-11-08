@@ -4,12 +4,12 @@ import { ErrorNotice } from '@/components/error-notice';
 import { useIdentity } from '@/features/auth';
 import { useConversationStream } from '@/features/runs';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, Navigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { ConversationWorkspace } from './conversation-workspace';
 import { useConversationSnapshot } from './conversation.queries';
 
-export function ConversationView({ id }: { id: string }) {
+export function ConversationView({ id, embedded = false }: { id: string; embedded?: boolean }) {
   const { identity } = useIdentity();
   const client = useQueryClient();
   const snapshot = useConversationSnapshot(id);
@@ -42,5 +42,8 @@ export function ConversationView({ id }: { id: string }) {
         <ErrorNotice error={snapshot.error} onRetry={() => void snapshot.refetch()} />
       </div>
     );
-  return <ConversationWorkspace id={id} data={snapshot.data} stream={stream} />;
+  const conversation = snapshot.data.conversation;
+  if (!embedded && conversation.specId && conversation.projectId)
+    return <Navigate to="/specs/$id" params={{ id: conversation.specId }} search={{ projectId: conversation.projectId }} replace />;
+  return <ConversationWorkspace id={id} data={snapshot.data} stream={stream} embedded={embedded} />;
 }

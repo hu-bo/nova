@@ -15,7 +15,7 @@ import {
 import { useState } from 'react';
 import { DeleteProjectDialog } from './delete-project-dialog';
 import { EnvironmentDialog } from './environment-dialog';
-import { instructionSource } from './project.page.shared';
+import { describeInstructions } from './project.page.shared';
 import { useProjectBinding, useProjectQuery } from './project.queries';
 import { RenameProjectDialog } from './rename-project-dialog';
 
@@ -140,11 +140,7 @@ export function ProjectPage() {
             <div className="border-t pt-4">
               <p className="mb-2 text-xs text-muted-foreground">项目指令</p>
               <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                {instructionSource(binding.data.instructions) === 'custom'
-                  ? binding.data.instructions.customPrompt || '未填写自定义提示词'
-                  : instructionSource(binding.data.instructions) === 'none'
-                    ? '不使用项目指令'
-                    : `每次运行从工作目录读取 ${instructionSource(binding.data.instructions) === 'agents' ? 'AGENTS.md' : 'CLAUDE.md'}`}
+                {describeInstructions(binding.data.instructions)}
               </p>
             </div>
           </div>

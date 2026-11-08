@@ -13,6 +13,7 @@ export interface MessageListScrollState {
 
 export interface MessageListProps {
   messages: ChatMessage[];
+  showToolCalls?: boolean;
   renderers?: BlockRenderers | undefined;
   onRetry?: ((messageId: string) => void) | undefined;
   onOpenPath?: ((path: string, line?: number) => void) | undefined;
@@ -31,6 +32,7 @@ function renderBlocks(
   blocks.forEach((block, index) => {
     if (consumed.has(index)) return;
     if (block.type !== "tool_call") {
+      if (block.type === "tool_result" && block.blocks.length === 0) return;
       nodes.push(
         <BlockView
           block={block}
@@ -49,7 +51,16 @@ function renderBlocks(
     const result = resultIndex >= 0 ? (blocks[resultIndex] as ExtractBlock<"tool_result">) : undefined;
     if (resultIndex >= 0) consumed.add(resultIndex);
 
-    nodes.push(<ToolBlock call={block} {...(result ? { result } : {})} key={block.id ?? index} />);
+    nodes.push(
+      <ToolBlock
+        call={block}
+        result={result}
+        renderDiff={(diff, diffIndex) => (
+          <BlockView block={diff} renderers={renderers} onOpenPath={onOpenPath} key={diff.id ?? diffIndex} />
+        )}
+        key={block.id ?? index}
+      />,
+    );
   });
 
   return nodes;
@@ -115,12 +126,23 @@ const MessageRow = memo(function MessageRow({
   renderers,
   onRetry,
   onOpenPath,
+  showToolCalls,
 }: {
   message: ChatMessage;
   renderers?: BlockRenderers | undefined;
   onRetry?: MessageListProps["onRetry"];
   onOpenPath?: MessageListProps["onOpenPath"];
+  showToolCalls: boolean;
 }) {
+  const blocks = showToolCalls
+    ? message.blocks
+    : message.blocks.filter((block) => block.type !== "tool_call" && block.type !== "tool_result");
+  if (
+    (message.blocks.length > 0 || message.role === "tool") &&
+    blocks.every((block) => block.type === "tool_result" && block.blocks.length === 0)
+  )
+    return null;
+
   const isUser = message.role === "user";
   const hasFailed = message.status === "error" || message.status === "aborted";
   const userText = isUser
@@ -157,7 +179,7 @@ const MessageRow = memo(function MessageRow({
         </div>
         {userText && <CopyButton text={userText} label="复制消息" className="-my-1 text-slate-400" />}
       </div>
-      <div className="grid min-w-0 gap-2">{renderBlocks(message.blocks, renderers, onOpenPath)}</div>
+      <div className="grid min-w-0 gap-2">{renderBlocks(blocks, renderers, onOpenPath)}</div>
       {hasFailed && (
         <div className="mt-2 flex items-center gap-2 text-xs text-rose-600 dark:text-rose-400">
           <CircleAlert className="size-3.5" aria-hidden="true" />
@@ -176,6 +198,7 @@ const MessageRow = memo(function MessageRow({
 
 export function MessageList({
   messages,
+  showToolCalls = true,
   renderers,
   onRetry,
   onOpenPath,
@@ -240,7 +263,7 @@ export function MessageList({
     };
   }, []);
 
-  const pairedMessages = pairToolResults(messages);
+  const pairedMessages = showToolCalls ? pairToolResults(messages) : messages;
 
   return (
     <div
@@ -253,6 +276,7 @@ export function MessageList({
         {pairedMessages.map((message) => (
           <MessageRow
             message={message}
+            showToolCalls={showToolCalls}
             renderers={renderers}
             onRetry={onRetry ? retry : undefined}
             onOpenPath={onOpenPath ? openPath : undefined}

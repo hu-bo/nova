@@ -18,6 +18,14 @@ import { NavItem } from './nav-item';
 import { ProjectDetailsPopover } from './project-details-popover';
 import type { SidebarConversation, SidebarIdentity, SidebarProject } from './sidebar.types';
 
+type SidebarLoadState = 'loading' | 'error' | 'ready';
+
+const conversationEmptyMessages = {
+  loading: { recent: '正在读取最近会话…', active: '正在读取进行中的会话…' },
+  error: { recent: '最近会话暂时无法读取。', active: '进行中的会话暂时无法读取。' },
+  ready: { recent: '从一个问题开始新的对话。', active: '暂无进行中的会话。' },
+} satisfies Record<SidebarLoadState, { recent: string; active: string }>;
+
 /**
  * 与源参考 `pages/app-shell.tsx` 中 `SidebarContent` 的整体视觉/交互一致。
  *
@@ -56,8 +64,8 @@ export function SidebarContent({
   onDeleteConversation: (conversation: SidebarConversation) => void;
   onNavigate?: () => void;
   activeProjectId?: string | null | undefined;
-  projectsState?: 'loading' | 'error' | 'ready';
-  conversationsState?: 'loading' | 'error' | 'ready';
+  projectsState?: SidebarLoadState;
+  conversationsState?: SidebarLoadState;
   identity: SidebarIdentity;
   onLogout: () => void;
 }) {
@@ -151,11 +159,7 @@ export function SidebarContent({
           </div>
           {!chats.length && (
             <p className="px-2 py-2 text-xs leading-5 text-slate-500">
-              {conversationsState === 'loading'
-                ? '正在读取最近会话…'
-                : conversationsState === 'error'
-                  ? '最近会话暂时无法读取。'
-                  : '从一个问题开始新的对话。'}
+              {conversationEmptyMessages[conversationsState].recent}
             </p>
           )}
         </section>
@@ -184,11 +188,7 @@ export function SidebarContent({
           </div>
           {!activeConversations.length && (
             <p className="px-2 py-2 text-xs leading-5 text-slate-500">
-              {conversationsState === 'loading'
-                ? '正在读取进行中的会话…'
-                : conversationsState === 'error'
-                  ? '进行中的会话暂时无法读取。'
-                  : '暂无进行中的会话。'}
+              {conversationEmptyMessages[conversationsState].active}
             </p>
           )}
         </section>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice } from '@/components/error-notice';
 import type { RunControls } from './run-controls';
@@ -7,6 +8,37 @@ const modelErrors: Record<string, string> = {
   MODEL_AUTH_FAILED: '模型服务认证失败，请检查模型的 API 密钥和访问权限。',
   MODEL_REQUEST_FAILED: '模型请求失败，请检查模型配置或稍后重试。',
 };
+
+function VerificationNotice({ onRetry }: { onRetry: () => Promise<boolean> }) {
+  const [refresh, setRefresh] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  return (
+    <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
+      <strong>执行结果需要核实</strong>
+      <p className="mt-1 leading-6">
+        设备未确认执行结果。请展开消息中的工具记录查看输出和
+        Diff，并到原工作区核实文件和相关进程的状态。
+      </p>
+      <p className="mt-1 leading-6">
+        刷新会重新读取服务端已保存的记录。若消息中看不到工具记录，请检查「聊天设置」中的「显示工具调用」和「接收工具结果」。
+      </p>
+      <Button
+        variant="outline"
+        className="mt-2"
+        disabled={refresh === 'pending'}
+        onPress={async () => {
+          setRefresh('pending');
+          setRefresh((await onRetry()) ? 'success' : 'error');
+        }}
+      >
+        {refresh === 'pending' ? '正在刷新核实材料…' : '刷新核实材料'}
+      </Button>
+      <p role="status" className="mt-1 text-muted-foreground">
+        {refresh === 'success' && '已刷新会话记录，执行结果仍需人工核实。'}
+        {refresh === 'error' && '未能刷新核实材料，请稍后重试。'}
+      </p>
+    </div>
+  );
+}
 
 /**
  * 运行事件面板。运行状态行已移至会话标题栏的 `RunStatus` 指示（任务详情开关左侧）；
@@ -23,7 +55,7 @@ export function RunPanel({
 }: {
   stream: RunStreamSnapshot;
   controls: RunControls;
-  onRetry: () => void;
+  onRetry: () => Promise<boolean>;
 }) {
   const projection = stream.projection;
   const { cancel, decision, remaining } = controls;
@@ -43,17 +75,7 @@ export function RunPanel({
           {modelErrors[projection.run.reason]}
         </p>
       )}
-      {unknown && (
-        <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-          <strong>执行结果需要核实</strong>
-          <p className="mt-1 leading-6">
-            设备未确认执行结果。请查看消息中的工具记录与 Diff，核实本地状态后再继续操作。
-          </p>
-          <Button variant="outline" className="mt-2" onPress={onRetry}>
-            刷新核实材料
-          </Button>
-        </div>
-      )}
+      {unknown && <VerificationNotice key={projection?.run?.id} onRetry={onRetry} />}
       {cancel.error && <ErrorNotice error={cancel.error} />}
       {decision && (
         <p role="status" className="flex flex-wrap items-center gap-2 text-xs text-amber-700">

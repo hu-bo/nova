@@ -1,6 +1,6 @@
 import { createScope, defineRepository, type RepositoryDatabase, type TransactionOptions } from "../../shared/scope.js";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, getTableColumns, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, isNull, or, sql } from "drizzle-orm";
 import {
   applyEvent,
   configurationSchema,
@@ -21,6 +21,9 @@ import {
   messages,
   pendingInputs,
   runs,
+  specs,
+  specRevisions,
+  specTaskAttempts,
   sessionCommits,
   type Database,
   type RunState,
@@ -34,6 +37,9 @@ import { advanceStream, streamStateOf, type StreamState } from "./stream-state.j
 import { runProjectionReader, type RunProjectionReader } from "./run-projection.repository.js";
 import { readCheckpoint } from "./session-checkpoint.repository.js";
 import { checkpointAfter } from "./session-checkpoint.js";
+import { taskPlanSchema } from "../specs/spec.schema.js";
+import { specDraftCandidateSchema } from "@nova/tools/harness";
+import { acceptanceCriteriaIn, validateTaskPlan } from "../specs/spec.validation.js";
 import {
   conversationView,
   effectiveCapabilities,
@@ -189,9 +195,16 @@ export class RunRepository {
       run.checkpoint.outcome?.state === "succeeded" &&
       conversation.metadata.goal?.status === "active" &&
       conversation.metadata.goal.iterations < conversation.metadata.goal.maxIterations;
+    const execution = run.checkpoint.specExecution;
+    const [specRevision] = execution
+      ? await tx.select().from(specRevisions).where(and(
+          eq(specRevisions.specId, execution.specId), eq(specRevisions.revision, execution.revision),
+        )).limit(1)
+      : [];
     return {
       run,
       conversation,
+      specRevision: specRevision ?? null,
       configuration: run.checkpoint.configuration,
       binding: conversation.metadata.binding ? bindingSchema.parse(conversation.metadata.binding) : null,
       command:
@@ -324,6 +337,14 @@ export class RunRepository {
     const messageId = randomUUID();
     const environment = environmentKey(conversation, configuration);
     if (await environmentUnsettled(tx, conversation, configuration)) return null;
+    let specExecution: Checkpoint["specExecution"] = input?.payload.spec;
+    if (!specExecution && conversation.metadata.specId) {
+      const [spec] = await tx.select().from(specs).where(and(
+        eq(specs.id, conversation.metadata.specId), eq(specs.conversationId, conversation.id),
+      )).for("update");
+      if (!spec) return null;
+      specExecution = { kind: "discussion", specId: spec.id, revision: spec.currentRevision };
+    }
     const checkpoint: Checkpoint = {
       backendId: configuration.backendId,
       epoch: conversation.contextEpoch,
@@ -336,6 +357,7 @@ export class RunRepository {
           ? conversation.metadata.toolApprovals.names
           : [],
       reservedInputs: input ? [{ id: input.id, messageId }] : [],
+      ...(specExecution ? { specExecution } : {}),
     };
     const [created] = await tx
       .insert(runs)
@@ -1102,6 +1124,111 @@ export class RunRepository {
       (entry) => entry.result?.outcome === "unknown" || (!entry.result && entry.dispatch === "dispatched"),
     );
     if (unknown) state = "cancelled_unconfirmed";
+    const specExecution = run.checkpoint?.specExecution;
+    if (specExecution?.kind === "task") {
+      const [attempt] = await tx.select().from(specTaskAttempts).where(and(
+        eq(specTaskAttempts.id, specExecution.attemptId),
+        eq(specTaskAttempts.specId, specExecution.specId),
+        eq(specTaskAttempts.revision, specExecution.revision),
+        eq(specTaskAttempts.taskKey, specExecution.taskKey),
+      )).for("update");
+      if (attempt && !attempt.releasedAt && state !== "cancelled_unconfirmed") {
+        if (state === "succeeded") {
+          const [version] = await tx.select().from(specRevisions).where(and(
+            eq(specRevisions.specId, specExecution.specId), eq(specRevisions.revision, specExecution.revision),
+          )).for("update");
+          const task = version?.taskPlan.find((item) => item.key === specExecution.taskKey);
+          if (version && task && !version.acceptance) {
+            const checks = task.checks.filter((check) => check.method.kind === "command");
+            const matches = (execution: NonNullable<typeof run.checkpoint>["executions"][number], check: (typeof checks)[number]) => {
+              if (check.method.kind !== "command" || execution.name !== "bash") return false;
+              const input = execution.input as { command?: unknown; args?: unknown; cwd?: unknown };
+              if (input.command !== check.method.command || JSON.stringify(input.args) !== JSON.stringify(check.method.args)) return false;
+              return check.method.cwd === undefined
+                ? input.cwd === undefined || input.cwd === conversation.metadata.binding?.canonicalCwd
+                : input.cwd === check.method.cwd || input.cwd === `${conversation.metadata.binding?.canonicalCwd.replace(/\\/g, "/").replace(/\/$/, "")}/${check.method.cwd.replace(/^\//, "")}`;
+            };
+            const isCheckCall = (execution: NonNullable<typeof run.checkpoint>["executions"][number]) => checks.some((check) => matches(execution, check));
+            const lastImplementationWrite = run.checkpoint!.executions.reduce((last, execution, index) =>
+              execution.effects !== "read" && !isCheckCall(execution) ? index : last, -1);
+            const evidence = [...version.evidence];
+            for (const check of checks) {
+              const matching = run.checkpoint!.executions.map((execution, index) => ({ execution, index }))
+                .filter(({ execution }) => matches(execution, check)).at(-1);
+              if (!matching || matching.index <= lastImplementationWrite || !matching.execution.result ||
+                matching.execution.result.status !== "succeeded" || matching.execution.result.outcome === "unknown") continue;
+              const value = matching.execution.result.value;
+              if (!value || typeof value !== "object" || Array.isArray(value) || value.exitCode !== 0) continue;
+              if (evidence.some((item) => item.attemptId === attempt.id && item.checkKey === check.key && item.toolOperationId === matching.execution.executionId)) continue;
+              evidence.push({ id: randomUUID(), taskKey: task.key, checkKey: check.key, passed: true, source: "automatic", attemptId: attempt.id, toolOperationId: matching.execution.executionId, createdBy: conversation.ownerUserId, createdAt: new Date().toISOString() });
+            }
+            if (evidence.length !== version.evidence.length)
+              await tx.update(specRevisions).set({ evidence }).where(and(eq(specRevisions.specId, specExecution.specId), eq(specRevisions.revision, specExecution.revision)));
+          }
+        }
+        await tx.update(specTaskAttempts).set({ releasedAt: new Date() }).where(and(eq(specTaskAttempts.id, attempt.id), isNull(specTaskAttempts.releasedAt)));
+      }
+    }
+    if (specExecution && specExecution.kind !== "task" && state === "succeeded") {
+      const [spec] = await tx.select().from(specs).where(eq(specs.id, specExecution.specId)).for("update");
+      if (spec && spec.conversationId === conversation.id && conversation.metadata.specId === spec.id) {
+        const [base] = await tx.select().from(specRevisions).where(and(
+          eq(specRevisions.specId, specExecution.specId), eq(specRevisions.revision, specExecution.revision),
+        )).limit(1);
+        const submitted = run.checkpoint?.executions.filter((execution) =>
+          execution.name === "spec_update" && execution.result?.status === "succeeded" &&
+          execution.result.outcome !== "unknown").at(-1);
+        const output = specDraftCandidateSchema.safeParse(submitted?.result?.value);
+        const stage = specExecution.kind === "generation" ? specExecution.stage : output.data?.stage;
+        let assistantText: string | undefined;
+        if (output.success && output.data.baseRevision === specExecution.revision && output.data.stage === stage)
+          assistantText = output.data.content;
+        // Older queued generation Runs can still settle their final Markdown response.
+        if (!submitted && specExecution.kind === "generation") assistantText = run.projection?.messages
+          .filter((message) => message.role === "assistant")
+          .map((message) => message.blocks.filter((block) => block.type === "text").map((block) => block.text).join(""))
+          .filter(Boolean).at(-1)?.trim();
+        if (stage === "design" && base?.reviews.requirements?.revision !== specExecution.revision) assistantText = undefined;
+        if (stage === "tasks" && (base?.reviews.requirements?.revision !== specExecution.revision || base.reviews.design?.revision !== specExecution.revision)) assistantText = undefined;
+        let candidate: string | import("../../../database/schema/spec-revision.table.js").SpecTask[] | null = null;
+        if (base && spec.currentRevision === specExecution.revision && assistantText && Buffer.byteLength(assistantText) <= 131072) {
+          try {
+            if (stage === "requirements") {
+              const criteria = acceptanceCriteriaIn(assistantText);
+              if (criteria.length && new Set(criteria).size === criteria.length) candidate = assistantText;
+            } else if (stage === "design") {
+              if (assistantText.trim()) candidate = assistantText;
+            } else {
+              const jsonText = assistantText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+              const parsed = taskPlanSchema.safeParse(JSON.parse(jsonText));
+              if (parsed.success) {
+                validateTaskPlan(parsed.data, acceptanceCriteriaIn(base.requirementsMd));
+                candidate = parsed.data;
+              }
+            }
+          } catch {
+            // Keep malformed model output in the Run transcript; never replace the saved draft.
+          }
+        }
+        if (base && stage && candidate !== null && spec.currentRevision === specExecution.revision) {
+          const next = specExecution.revision + 1;
+          const carryReview = (review: NonNullable<typeof base.reviews.requirements>) => ({ ...review, revision: next, sourceRevision: review.sourceRevision ?? base.revision });
+          const reviews: typeof base.reviews = {};
+          if (stage !== "requirements" && base.reviews.requirements) reviews.requirements = carryReview(base.reviews.requirements);
+          if (stage === "tasks" && base.reviews.design) reviews.design = carryReview(base.reviews.design);
+          const nextRequirements = stage === "requirements" && typeof candidate === "string" ? candidate : base.requirementsMd;
+          const nextDesign = stage === "design" && typeof candidate === "string" ? candidate : base.designMd;
+          const nextTaskPlan = stage === "tasks" && Array.isArray(candidate) ? candidate : base.taskPlan;
+          const same = nextRequirements === base.requirementsMd && nextDesign === base.designMd && JSON.stringify(nextTaskPlan) === JSON.stringify(base.taskPlan);
+          if (!same) {
+            await tx.insert(specRevisions).values({ specId: spec.id, revision: next, requirementsMd: nextRequirements, designMd: nextDesign, taskPlan: nextTaskPlan, reviews, evidence: [], acceptance: null, createdBy: conversation.ownerUserId });
+            await tx.update(specs).set({ currentRevision: next, updatedAt: new Date() }).where(eq(specs.id, spec.id));
+            spec.currentRevision = next;
+          }
+        }
+        await this.journal.append(conversation, { runId: run.id, type: "spec.changed", payload: { specId: spec.id, revision: spec.currentRevision, change: "draft" } });
+      }
+    }
     for (const draft of run.projection?.messages.filter((message) => message.state === "streaming") ?? []) {
       const message = {
         ...draft,
@@ -1186,6 +1313,12 @@ export class RunRepository {
       type: "run.changed",
       payload: { run: { id: run.id, state, ...(reason ? { reason } : {}) } },
     });
+    if (specExecution?.kind === "task")
+      await this.journal.append(conversation, {
+        runId: run.id,
+        type: "spec.changed",
+        payload: { specId: specExecution.specId, revision: specExecution.revision, change: "evidence" },
+      });
     if (!unknown) await this.journal.wake(conversation.id, "finished:" + run.id);
   }
   async goalIteration(claim: RunClaim, complete = false) {

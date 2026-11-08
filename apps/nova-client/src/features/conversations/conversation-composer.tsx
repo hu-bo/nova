@@ -11,7 +11,7 @@ import type { ConversationComposerController } from './use-conversation-composer
  * 组件文件不混出 hook）。
  */
 export function ComposerUploads({ controller }: { controller: ConversationComposerController }) {
-  const { uploads, fileInputRef, blocked, sending } = controller;
+  const { uploads, fileInputRef, sending } = controller;
   return (
     <div className="shrink-0 space-y-2">
       <input
@@ -63,11 +63,6 @@ export function ComposerUploads({ controller }: { controller: ConversationCompos
             </li>
           ))}
         </ul>
-      )}
-      {blocked && (
-        <p role="status" className="text-xs text-muted-foreground">
-          请等待附件就绪，或重试、移除失败的附件后发送。
-        </p>
       )}
     </div>
   );

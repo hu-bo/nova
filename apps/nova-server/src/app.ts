@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import type { AppConfig } from "./config.js";
 import { attachmentsModule } from "./modules/attachments/index.js";
+import { createMinioUploadStorage, disabledUploadStorage } from "./modules/attachments/upload-storage.js";
 import { clientConfigModule } from "./modules/client-config/index.js";
 import {
   conversationsModule,
@@ -16,6 +17,7 @@ import { registerRunnerConnections, runnersModule } from "./modules/runners/inde
 import { startConversationExecution, runsModule } from "./modules/runs/index.js";
 import { modelConfigAdminModule, userModelProfilesModule } from "./modules/model-config/index.js";
 import { remotesModule } from "./modules/remotes/index.js";
+import { specsModule } from "./modules/specs/index.js";
 import { databasePlugin } from "./plugins/database.js";
 import { registerErrorHandlers } from "./plugins/errors.js";
 import { registerOpenApi } from "./plugins/openapi.js";
@@ -70,22 +72,39 @@ export async function buildApp(config: AppConfig, options: { exportMode?: boolea
       AUTH_SERVICE_TIMEOUT_MS: config.AUTH_SERVICE_TIMEOUT_MS,
     });
     await registerRunnerConnections(app, Boolean(options.exportMode));
+    const uploadsEnabled = Boolean(config.MINIO_ENDPOINT && config.MINIO_ACCESS_KEY && config.MINIO_SECRET_KEY);
+    const uploadStorage = uploadsEnabled
+      ? createMinioUploadStorage(
+          {
+            endPoint: config.MINIO_ENDPOINT!,
+            port: config.MINIO_PORT,
+            useSSL: config.MINIO_USE_SSL,
+            accessKey: config.MINIO_ACCESS_KEY!,
+            secretKey: config.MINIO_SECRET_KEY!,
+            bucket: config.MINIO_BUCKET,
+          },
+          (error, operation) =>
+            app.log.error({ err: error, component: "attachment-storage", operation }, "MinIO operation failed"),
+        )
+      : disabledUploadStorage();
     if (!options.exportMode && (config.ROLE === "all" || config.ROLE === "worker"))
       startConversationExecution(
         app,
         config,
         createEventRetentionService(app.db, createConversationEventHeads(app.db)),
+        uploadStorage,
       );
     if (config.ROLE !== "worker") {
       await app.register(healthModule);
       await app.register(projectsModule, { prefix: "/api" });
       await app.register(conversationsModule, { prefix: "/api" });
-      await app.register(attachmentsModule, { prefix: "/api" });
+      await app.register(specsModule, { prefix: "/api" });
+      await app.register(async (scope) => attachmentsModule(scope, uploadStorage), { prefix: "/api" });
       await app.register(runnersModule, { prefix: "/api" });
       await app.register(remotesModule, { prefix: "/api" });
       await app.register(eventsModule, { prefix: "/api", conversations: createConversationReader(app.db) });
       await app.register(runsModule, { prefix: "/api" });
-      await app.register(clientConfigModule, { prefix: "/api" });
+      await app.register(async (scope) => clientConfigModule(scope, uploadsEnabled), { prefix: "/api" });
       await app.register(userModelProfilesModule, { prefix: "/api" });
       await app.register(modelConfigAdminModule, {
         prefix: "/admin",

@@ -7,12 +7,13 @@ import { DraftWorkspace } from './draft-workspace';
  * 会话类型由左侧入口决定：普通会话进入无 search 参数的路径，项目会话带 projectId。
  */
 export function NewConversation() {
-  const search = useSearch({ strict: false }) as { projectId?: string };
+  const search = useSearch({ strict: false }) as { projectId?: string; mode?: 'spec' };
   return (
     <DraftWorkspace
-      key={search.projectId ?? 'chat'}
+      key={(search.projectId ?? 'chat') + ':' + (search.mode ?? 'chat')}
       mode={search.projectId ? 'project' : 'chat'}
       projectId={search.projectId}
+      initialSpecMode={search.mode === 'spec'}
     />
   );
 }

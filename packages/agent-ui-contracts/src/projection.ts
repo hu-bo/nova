@@ -168,6 +168,8 @@ export function applyEvent(state: Snapshot, event: ProductEvent): Snapshot {
     case "goal.changed":
       next.goal = event.payload.goal;
       break;
+    case "spec.changed":
+      break;
     case "usage.changed":
       next.usage = event.payload.usage;
       break;

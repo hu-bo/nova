@@ -102,7 +102,7 @@ export async function sshToolContext(
           for (const edit of edits) {
             if (!edit.oldText || content.split(edit.oldText).length !== 2)
               throw new DomainError("CONFLICT", "Edit must match exactly once");
-            content = content.replace(edit.oldText, edit.newText);
+            content = content.replace(edit.oldText, () => edit.newText);
           }
           const written = await service.writeText(
             remoteId,

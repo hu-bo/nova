@@ -3,6 +3,12 @@ import type { RunnerToken } from './runner.queries';
 export type RunnerCommandShell = 'powershell' | 'bash';
 export type RunnerCommandRuntime = 'cargo' | 'binary' | 'npx';
 
+const runnerExecutables = {
+  cargo: 'cargo run -p nova-runner --',
+  binary: 'nova-runner',
+  npx: 'npx --yes --package @nnova/runner nova-runner',
+} satisfies Record<RunnerCommandRuntime, string>;
+
 export function runnerTokenCanStart(token: RunnerToken) {
   return (
     token.status === 'active' && (!token.expiresAt || Date.parse(token.expiresAt) > Date.now())
@@ -48,12 +54,7 @@ export function runnerStartCommand(
 
   const quote = (value: string) =>
     "'" + value.replaceAll("'", options.shell === 'powershell' ? "''" : "'\\''") + "'";
-  const executable =
-    options.runtime === 'cargo'
-      ? 'cargo run -p nova-runner --'
-      : options.runtime === 'npx'
-        ? 'npx --yes --package @nnova/runner nova-runner'
-        : 'nova-runner';
+  const executable = runnerExecutables[options.runtime];
   return {
     command:
       executable +

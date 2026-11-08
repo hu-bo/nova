@@ -14,6 +14,7 @@ export interface ConversationMetadata {
   creationKey?: string | null;
   creationPayload?: string;
   toolApprovals?: { environment: string; names: string[] } | null;
+  specId?: string;
 }
 export type ConversationMode = "chat" | "project";
 export const conversations = pgTable("conversations", {

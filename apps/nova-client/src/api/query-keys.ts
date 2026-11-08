@@ -17,16 +17,39 @@ export const queryKeys = {
     binding: (identityId: string, id: string) =>
       ['nova', identityId, 'projects', 'binding', id] as const,
   },
+  specs: {
+    root: (identityId: string) => ['nova', identityId, 'specs'] as const,
+    list: (identityId: string, projectId: string) => ['nova', identityId, 'specs', 'list', projectId] as const,
+    detailRoot: (identityId: string, specId: string) => ['nova', identityId, 'specs', 'detail', specId] as const,
+    detail: (identityId: string, specId: string, revision?: number) =>
+      ['nova', identityId, 'specs', 'detail', specId, revision ?? 'current'] as const,
+    attempts: (identityId: string, specId: string, revision: number, taskKey?: string) =>
+      ['nova', identityId, 'specs', 'attempts', specId, revision, taskKey ?? 'all'] as const,
+  },
   conversations: {
-    history: (identityId: string, id: string) =>
-      ['nova', identityId, 'conversations', 'history', id] as const,
+    history: (identityId: string, id: string, includeToolResults = true) =>
+      [
+        'nova',
+        identityId,
+        'conversations',
+        'history',
+        id,
+        ...(includeToolResults ? [] : ['without-tool-results']),
+      ] as const,
     root: (identityId: string) => ['nova', identityId, 'conversations'] as const,
     list: (identityId: string, filters: { limit?: number; mode?: 'chat' | 'project' } = {}) =>
       ['nova', identityId, 'conversations', 'list', filters] as const,
     detail: (identityId: string, id: string) =>
       ['nova', identityId, 'conversations', 'detail', id] as const,
-    snapshot: (identityId: string, id: string) =>
-      ['nova', identityId, 'conversations', 'snapshot', id] as const,
+    snapshot: (identityId: string, id: string, includeToolResults = true) =>
+      [
+        'nova',
+        identityId,
+        'conversations',
+        'snapshot',
+        id,
+        ...(includeToolResults ? [] : ['without-tool-results']),
+      ] as const,
   },
   runs: {
     root: (identityId: string) => ['nova', identityId, 'runs'] as const,

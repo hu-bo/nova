@@ -19,6 +19,7 @@ import type {
 import { CommandIntent } from '@/api/command-intent';
 import { queryKeys } from '@/api/query-keys';
 import { useIdentity } from '@/features/auth';
+import { usePreferences } from '@/features/settings';
 export type ConversationDTO = ListConversations200ItemsItem;
 export type ConversationSnapshot = GetConversationSnapshot200;
 export type ConversationMode = ConversationDTO['mode'];
@@ -43,13 +44,22 @@ export function useConversationsQuery(input: { limit?: number; mode?: Conversati
 }
 export function useConversationSnapshot(conversationId: string | null) {
   const { identity } = useIdentity();
+  const {
+    preferences: { includeToolResults },
+  } = usePreferences();
   return useQuery({
     queryKey: queryKeys.conversations.snapshot(
       identity?.identityId ?? 'anonymous',
       conversationId ?? '',
+      includeToolResults,
     ),
     enabled: Boolean(identity && conversationId),
-    queryFn: ({ signal }) => getConversationSnapshot(conversationId!, { signal }),
+    queryFn: ({ signal }) =>
+      getConversationSnapshot(
+        conversationId!,
+        { includeToolResults: includeToolResults ? 'true' : 'false' },
+        { signal },
+      ),
     staleTime: 10000,
   });
 }

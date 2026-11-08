@@ -1,6 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIdentity } from '@/features/auth';
+import { usePreferences } from '@/features/settings';
 import { RunStreamManager } from './run-stream-manager';
 import { RunStreamContext } from './run-context';
 
@@ -11,9 +12,13 @@ import { RunStreamContext } from './run-context';
 export function RunRuntimeHost({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { identity } = useIdentity();
+  const {
+    preferences: { includeToolResults },
+  } = usePreferences();
   const manager = useMemo(
-    () => new RunStreamManager(identity?.identityId ?? 'anonymous', queryClient),
-    [identity?.identityId, queryClient],
+    () =>
+      new RunStreamManager(identity?.identityId ?? 'anonymous', queryClient, includeToolResults),
+    [identity?.identityId, queryClient, includeToolResults],
   );
   useEffect(() => manager.retainHost(), [manager]);
   return <RunStreamContext.Provider value={manager}>{children}</RunStreamContext.Provider>;

@@ -10,6 +10,14 @@ export interface CopyButtonProps {
   className?: string | undefined;
 }
 
+type CopyStatus = "idle" | "copied" | "error";
+
+const copyStatusPresentation = {
+  idle: { feedback: null, Icon: Copy, color: undefined },
+  copied: { feedback: "已复制", Icon: Check, color: "text-emerald-500" },
+  error: { feedback: "复制失败", Icon: X, color: "text-rose-500" },
+} satisfies Record<CopyStatus, { feedback: string | null; Icon: typeof Copy; color: string | undefined }>;
+
 /**
  * 复制文本，兼容非安全上下文（HTTP）与旧 WebView。
  * Async Clipboard API 只在 HTTPS / localhost 暴露，移动端局域网访问通常拿不到；
@@ -47,7 +55,7 @@ async function copyToClipboard(value: string): Promise<boolean> {
 }
 
 export function CopyButton({ text, label, className }: CopyButtonProps) {
-  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+  const [status, setStatus] = useState<CopyStatus>("idle");
   const resetTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(
@@ -64,7 +72,8 @@ export function CopyButton({ text, label, className }: CopyButtonProps) {
     resetTimer.current = setTimeout(() => setStatus("idle"), 1_500);
   }
 
-  const feedback = status === "copied" ? "已复制" : status === "error" ? "复制失败" : label;
+  const { feedback: statusFeedback, Icon, color } = copyStatusPresentation[status];
+  const feedback = statusFeedback ?? label;
 
   return (
     <TooltipProvider>
@@ -81,13 +90,7 @@ export function CopyButton({ text, label, className }: CopyButtonProps) {
             />
           }
         >
-          {status === "copied" ? (
-            <Check className="text-emerald-500" aria-hidden="true" />
-          ) : status === "error" ? (
-            <X className="text-rose-500" aria-hidden="true" />
-          ) : (
-            <Copy aria-hidden="true" />
-          )}
+          <Icon className={color} aria-hidden="true" />
         </TooltipTrigger>
         <TooltipContent>{feedback}</TooltipContent>
       </Tooltip>

@@ -9,7 +9,7 @@ const config = {
   authApiBase:
     window.location.protocol === 'http:' ? authApiBase.replace(/^https:/i, 'http:') : authApiBase,
   redirectUri: `${window.location.origin}/callback`,
-  storage: { type: 'sessionStorage' as const, prefix: 'nova_' },
+  storage: { type: 'localStorage' as const, prefix: 'nova_' },
   silentRefresh: true,
 };
 

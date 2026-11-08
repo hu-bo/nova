@@ -50,9 +50,7 @@ export function useConversationStream(
   return {
     ...stream,
     projection,
-    retry: () => {
-      if (id) manager.retry(id);
-    },
+    retry: () => (id ? manager.retry(id) : Promise.resolve(false)),
     forget: () => {
       if (id) manager.forget(id);
     },

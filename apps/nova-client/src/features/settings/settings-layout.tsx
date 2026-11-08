@@ -1,7 +1,8 @@
 import { Link, Outlet, useMatchRoute } from '@tanstack/react-router';
-import { Cpu, Server, Terminal } from 'lucide-react';
+import { Cpu, MessageSquare, Server, Terminal } from 'lucide-react';
 
 const sections = [
+  { to: '/settings/chat', label: '聊天', icon: MessageSquare },
   { to: '/settings/models', label: '模型与 Provider', icon: Cpu },
   { to: '/settings/runners', label: 'Runner 管理', icon: Server },
   { to: '/settings/remotes', label: 'SSH 远程', icon: Terminal },

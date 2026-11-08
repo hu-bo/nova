@@ -41,10 +41,12 @@ function blockView(block: Block, operations: ToolOperation[]): ViewBlock {
       return block;
     case 'diff': {
       const lines = block.diff.split('\n');
+      const hunkStart = lines.findIndex((line) => line.startsWith('@@ '));
+      const hunkLines = hunkStart < 0 ? [] : lines.slice(hunkStart + 1);
       return {
         ...block,
-        added: lines.filter((line) => line.startsWith('+') && !line.startsWith('+++')).length,
-        removed: lines.filter((line) => line.startsWith('-') && !line.startsWith('---')).length,
+        added: hunkLines.filter((line) => line.startsWith('+')).length,
+        removed: hunkLines.filter((line) => line.startsWith('-')).length,
       };
     }
     case 'image':

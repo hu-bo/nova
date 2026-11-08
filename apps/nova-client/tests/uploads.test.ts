@@ -33,7 +33,7 @@ describe('direct upload lifecycle', () => {
     const queue = new UploadQueue();
     queue.add([
       new File(['x'], 'file.txt', { type: 'text/plain' }),
-      new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' }),
+      new File([new Uint8Array(30 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' }),
     ]);
     expect(queue.getSnapshot().map((item) => item.status)).toEqual(['failed', 'failed']);
     expect(mocks.ticket).not.toHaveBeenCalled();
@@ -47,36 +47,46 @@ describe('direct upload lifecycle', () => {
     expect(queue.getSnapshot().filter((item) => item.status === 'ready')).toHaveLength(0);
     queue.dispose();
   });
-  it('puts binary bytes directly to storage and exposes only verified metadata', async () => {
-    vi.stubGlobal('crypto', webcrypto);
-    mocks.ticket.mockResolvedValue(ticket());
-    mocks.complete.mockResolvedValue({
-      key: 'owned/key',
-      size: 11,
-      mime: 'image/png',
-      sha256: 'a'.repeat(64),
-    });
-    const fetcher = vi.fn(async () => new Response('', { status: 200 }));
-    vi.stubGlobal('fetch', fetcher);
-    const queue = new UploadQueue();
-    const file = image();
-    queue.add([file]);
-    await waitFor(() => expect(queue.getSnapshot()[0]?.status).toBe('ready'));
-    expect(fetcher.mock.calls[0]?.[0]).toBe('https://storage.example/put');
-    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
-      body: file,
-      credentials: 'omit',
-      method: 'PUT',
-    });
-    expect(queue.getSnapshot()[0]?.attachment).toEqual({
-      ref: { kind: 'object', key: 'owned/key' },
-      name: 'image.png',
-      sha256: 'a'.repeat(64),
-      mimeType: 'image/png',
-      size: 11,
-    });
-    queue.dispose();
-  });
+  it.each([
+    { name: 'image.png', mime: 'image/png', size: 11 },
+    { name: '8and1.cn.jpg', mime: 'image/jpeg', size: 11_519_687 },
+  ])(
+    'uploads $name ($size bytes) and exposes only verified metadata',
+    async ({ name, mime, size }) => {
+      vi.stubGlobal('crypto', webcrypto);
+      mocks.ticket.mockResolvedValue(ticket());
+      mocks.complete.mockResolvedValue({
+        key: 'owned/key',
+        size,
+        mime,
+        sha256: 'a'.repeat(64),
+      });
+      const fetcher = vi.fn(async () => new Response('', { status: 200 }));
+      vi.stubGlobal('fetch', fetcher);
+      const queue = new UploadQueue();
+      const bytes = new Uint8Array(size);
+      const file = new File([bytes], name, { type: mime });
+      Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+      queue.add([file]);
+      await waitFor(() => expect(queue.getSnapshot()[0]?.status).toBe('ready'));
+      expect(mocks.ticket.mock.calls[0]?.[0]).toEqual({ filename: name, mime, size });
+      expect(mocks.complete.mock.calls[0]?.[1]).toMatchObject({ mime, size });
+      expect(fetcher.mock.calls[0]?.[0]).toBe('https://storage.example/put');
+      expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
+        body: file,
+        credentials: 'omit',
+        method: 'PUT',
+      });
+      expect(queue.getSnapshot()[0]?.attachment).toEqual({
+        ref: { kind: 'object', key: 'owned/key' },
+        name,
+        sha256: 'a'.repeat(64),
+        mimeType: mime,
+        size,
+      });
+      queue.dispose();
+    },
+  );
   it('keeps failures visible and obtains a fresh ticket on manual retry', async () => {
     vi.stubGlobal('crypto', webcrypto);
     mocks.ticket.mockResolvedValue(ticket());

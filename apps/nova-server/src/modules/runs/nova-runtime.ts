@@ -9,7 +9,8 @@ import {
 } from "@nnova/harness";
 import { createCodingHarness, type CodingHarness } from "@nova/coding-harness";
 import { sessionCheckpointPolicyPlugin } from "@nnova/harness/plugins/session-checkpoint-policy";
-import { createRemoteTools } from "@nova/tools/harness";
+import { createRemoteTools, createSpecTools, specSkill } from "@nova/tools/harness";
+import { skillsPlugin } from "@nnova/harness/plugins/skills";
 import { z } from "zod";
 import { DomainError } from "../../shared/domain-error.js";
 import type { UserModelProfilesService } from "../model-config/index.js";
@@ -23,6 +24,7 @@ import type { ConversationRow, RunClaim } from "./run.repository.js";
 import type { RunService } from "./run.service.js";
 import type { RuntimeAdapter, RuntimeCommand, RuntimeContext, RuntimeOutcome } from "./runtime-adapter.js";
 import { runtimeAdapters } from "./runtime-adapter.js";
+import type { UploadStorage } from "../attachments/index.js";
 type Prepared = NonNullable<Awaited<ReturnType<RunService["prepare"]>>>;
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -36,6 +38,7 @@ export class NovaRuntime implements RuntimeAdapter {
       models: UserModelProfilesService;
       remotes: RemoteConnectionService;
       runners: RunnerConnections;
+      uploads: UploadStorage;
     },
   ) {}
   async execute(command: RuntimeCommand, context: RuntimeContext): Promise<RuntimeOutcome> {
@@ -77,6 +80,23 @@ export class NovaRuntime implements RuntimeAdapter {
           })
         : []),
     ].map((original) => (original.name === "git_diff" ? { ...original, effects: "write" as const } : original));
+    const specExecution = context.checkpoint.specExecution;
+    if (prepared.specRevision && specExecution) {
+      tools.push(...createSpecTools({
+        revision: specExecution.revision,
+        snapshot: z.json().parse({
+          specId: specExecution.specId,
+          revision: specExecution.revision,
+          requirementsMd: prepared.specRevision.requirementsMd,
+          designMd: prepared.specRevision.designMd,
+          taskPlan: prepared.specRevision.taskPlan,
+          reviews: prepared.specRevision.reviews,
+          acceptance: prepared.specRevision.acceptance,
+        }),
+        canUpdate: specExecution.kind !== "task",
+        ...(specExecution.kind === "generation" ? { stage: specExecution.stage } : {}),
+      }));
+    }
     if (conversation.metadata.goal?.status === "active")
       tools.push(
         defineTool({
@@ -185,6 +205,9 @@ export class NovaRuntime implements RuntimeAdapter {
         ? "PLAN MODE: analyze and plan using read-only tools. Do not modify files or execute shell commands."
         : "BUILD MODE: implement the task. Writes and commands require approval. Stop when an operation has an unknown outcome.",
       projectInstructions,
+      specExecution?.kind === "generation"
+        ? "Generate the " + specExecution.stage + " draft requested by the user. Read the bound revision with spec_read, then submit the complete candidate with spec_update. Do not write specification files to the workspace."
+        : "",
       goal && goal.status === "active"
         ? "Goal: " +
           goal.objective +
@@ -197,7 +220,10 @@ export class NovaRuntime implements RuntimeAdapter {
       .filter(Boolean)
       .join("\n\n");
     this.harness = await createCodingHarness({
-      model: { plugin: configuredModelPlugin(route), modelId: route.model.id },
+      model: {
+        plugin: configuredModelPlugin(route, this.deps.uploads, conversation.ownerUserId),
+        modelId: route.model.id,
+      },
       sessionId: conversation.id,
       profile: { systemPrompt: instructions },
       tools,
@@ -208,6 +234,7 @@ export class NovaRuntime implements RuntimeAdapter {
       components: { sessionStore: postgresSessionPlugin(repository, claim) },
       plugins: [
         sessionCheckpointPolicyPlugin(),
+        ...(specExecution ? [skillsPlugin({ skills: [specSkill], selected: [specSkill.id] })] : []),
         {
           manifest: {
             id: "nova.steering",
@@ -282,6 +309,16 @@ export class NovaRuntime implements RuntimeAdapter {
             if (!file.ok || file.value.sha256 !== sha256 || file.value.truncated)
               throw new DomainError("CONFLICT", "Attached file changed or exceeds the text limit");
             parts.push({ type: "text", text: "[Attached file " + name + "]\n" + file.value.text });
+          } else if (ref.kind === "object" && block.type === "image") {
+            parts.push({
+              type: "image",
+              reference: {
+                id: ref.key,
+                mediaType: block.attachment.mimeType,
+                sizeBytes: block.attachment.size ?? 0,
+                uri: `nova-object:${ref.key}`,
+              },
+            });
           } else throw new DomainError("CONFLICT", "This attachment type is not enabled");
         }
       }
@@ -312,7 +349,7 @@ runtimeAdapters.set("nova", {
     steering: true,
     resume: true,
     compact: false,
-    images: false,
+    images: true,
     files: true,
   },
 });

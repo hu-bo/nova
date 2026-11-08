@@ -41,6 +41,7 @@ export const conversationSchema = z
     title: z.string().nullable(),
     mode: z.enum(["chat", "project"]),
     projectId: idSchema.nullable(),
+    specId: idSchema.optional(),
     epoch: z.number().int().positive(),
     configuration: configurationSchema,
   })

@@ -2,12 +2,14 @@ import { setTimeout as wait } from "node:timers/promises";
 import type { SseSubscriber } from "../../transport/sse.js";
 import { EVENT_BATCH_SIZE } from "./event.repository.js";
 import type { EventService } from "./event.service.js";
+import { chatEventOutput } from "../chat-tool-output.js";
 
 export type EventStreamInput = {
   service: EventService;
   subscriber: SseSubscriber;
   conversationId: string;
   cursor: string;
+  includeToolResults?: boolean;
 };
 
 /** 回放游标之后的一批事件; 返回本次从存储层读到的行数。 */
@@ -19,7 +21,7 @@ export async function replayEvents(input: EventStreamInput): Promise<number> {
         eventId: input.conversationId + ":" + event.sequence,
         sequence: event.sequence,
         type: event.type,
-        data: event,
+        data: chatEventOutput(event, input.includeToolResults ?? true),
       })
     )
       return batch.rows;

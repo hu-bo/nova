@@ -8,5 +8,5 @@ export default defineConfig({
   schema: "./database/schema/*.table.ts",
   out: "./database/migrations",
   dialect: "postgresql",
-  dbCredentials: { url: process.env.DATABASE_URL ?? "" },
+  dbCredentials: { url: process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? "" },
 });

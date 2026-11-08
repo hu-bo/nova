@@ -130,7 +130,16 @@ export class ConversationService {
         if (block.type === "image" ? !capability?.images : !capability?.files)
           throw new DomainError("CONFLICT", "This content type is not enabled");
         const { ref } = block.attachment;
-        if (ref.kind === "object") throw new DomainError("CONFLICT", "Object uploads are not enabled");
+        if (ref.kind === "object") {
+          if (
+            block.type !== "image" ||
+            !ref.key.startsWith(`uploads/${encodeURIComponent(owner)}/`) ||
+            !block.attachment.sha256 ||
+            !block.attachment.mimeType.startsWith("image/")
+          )
+            throw new DomainError("FORBIDDEN", "Attachment does not belong to this user");
+          continue;
+        }
         if (ref.kind === "runner" && (ref.runnerId !== binding?.runnerId || ref.workspaceId !== binding?.workspaceId))
           throw new DomainError("FORBIDDEN", "Attachment belongs to another Runner");
         if (ref.kind === "ssh") {

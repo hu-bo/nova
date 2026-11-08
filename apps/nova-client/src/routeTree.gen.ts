@@ -16,9 +16,12 @@ import { Route as ConversationsIndexRouteImport } from './routes/conversations/i
 import { Route as ConversationsIdRouteImport } from './routes/conversations/$id';
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index';
 import { Route as ProjectsIdRouteImport } from './routes/projects/$id';
+import { Route as SettingsChatRouteImport } from './routes/settings/chat';
 import { Route as SettingsModelsRouteImport } from './routes/settings/models';
 import { Route as SettingsRemotesRouteImport } from './routes/settings/remotes';
 import { Route as SettingsRunnersRouteImport } from './routes/settings/runners';
+import { Route as SpecsIndexRouteImport } from './routes/specs/index';
+import { Route as SpecsIdRouteImport } from './routes/specs/$id';
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -55,6 +58,11 @@ const ProjectsIdRoute = ProjectsIdRouteImport.update({
   path: '/projects/$id',
   getParentRoute: () => rootRouteImport,
 } as any);
+const SettingsChatRoute = SettingsChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => SettingsRoute,
+} as any);
 const SettingsModelsRoute = SettingsModelsRouteImport.update({
   id: '/models',
   path: '/models',
@@ -70,6 +78,16 @@ const SettingsRunnersRoute = SettingsRunnersRouteImport.update({
   path: '/runners',
   getParentRoute: () => SettingsRoute,
 } as any);
+const SpecsIndexRoute = SpecsIndexRouteImport.update({
+  id: '/specs/',
+  path: '/specs/',
+  getParentRoute: () => rootRouteImport,
+} as any);
+const SpecsIdRoute = SpecsIdRouteImport.update({
+  id: '/specs/$id',
+  path: '/specs/$id',
+  getParentRoute: () => rootRouteImport,
+} as any);
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute;
@@ -77,11 +95,14 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRouteWithChildren;
   '/conversations/$id': typeof ConversationsIdRoute;
   '/projects/$id': typeof ProjectsIdRoute;
+  '/settings/chat': typeof SettingsChatRoute;
   '/settings/models': typeof SettingsModelsRoute;
   '/settings/remotes': typeof SettingsRemotesRoute;
   '/settings/runners': typeof SettingsRunnersRoute;
+  '/specs/$id': typeof SpecsIdRoute;
   '/conversations/': typeof ConversationsIndexRoute;
   '/projects/': typeof ProjectsIndexRoute;
+  '/specs/': typeof SpecsIndexRoute;
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute;
@@ -89,11 +110,14 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRouteWithChildren;
   '/conversations/$id': typeof ConversationsIdRoute;
   '/projects/$id': typeof ProjectsIdRoute;
+  '/settings/chat': typeof SettingsChatRoute;
   '/settings/models': typeof SettingsModelsRoute;
   '/settings/remotes': typeof SettingsRemotesRoute;
   '/settings/runners': typeof SettingsRunnersRoute;
+  '/specs/$id': typeof SpecsIdRoute;
   '/conversations': typeof ConversationsIndexRoute;
   '/projects': typeof ProjectsIndexRoute;
+  '/specs': typeof SpecsIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -102,11 +126,14 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRouteWithChildren;
   '/conversations/$id': typeof ConversationsIdRoute;
   '/projects/$id': typeof ProjectsIdRoute;
+  '/settings/chat': typeof SettingsChatRoute;
   '/settings/models': typeof SettingsModelsRoute;
   '/settings/remotes': typeof SettingsRemotesRoute;
   '/settings/runners': typeof SettingsRunnersRoute;
+  '/specs/$id': typeof SpecsIdRoute;
   '/conversations/': typeof ConversationsIndexRoute;
   '/projects/': typeof ProjectsIndexRoute;
+  '/specs/': typeof SpecsIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -116,11 +143,14 @@ export interface FileRouteTypes {
     | '/settings'
     | '/conversations/$id'
     | '/projects/$id'
+    | '/settings/chat'
     | '/settings/models'
     | '/settings/remotes'
     | '/settings/runners'
+    | '/specs/$id'
     | '/conversations/'
-    | '/projects/';
+    | '/projects/'
+    | '/specs/';
   fileRoutesByTo: FileRoutesByTo;
   to:
     | '/'
@@ -128,11 +158,14 @@ export interface FileRouteTypes {
     | '/settings'
     | '/conversations/$id'
     | '/projects/$id'
+    | '/settings/chat'
     | '/settings/models'
     | '/settings/remotes'
     | '/settings/runners'
+    | '/specs/$id'
     | '/conversations'
-    | '/projects';
+    | '/projects'
+    | '/specs';
   id:
     | '__root__'
     | '/'
@@ -140,11 +173,14 @@ export interface FileRouteTypes {
     | '/settings'
     | '/conversations/$id'
     | '/projects/$id'
+    | '/settings/chat'
     | '/settings/models'
     | '/settings/remotes'
     | '/settings/runners'
+    | '/specs/$id'
     | '/conversations/'
-    | '/projects/';
+    | '/projects/'
+    | '/specs/';
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -153,8 +189,10 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRouteWithChildren;
   ConversationsIdRoute: typeof ConversationsIdRoute;
   ProjectsIdRoute: typeof ProjectsIdRoute;
+  SpecsIdRoute: typeof SpecsIdRoute;
   ConversationsIndexRoute: typeof ConversationsIndexRoute;
   ProjectsIndexRoute: typeof ProjectsIndexRoute;
+  SpecsIndexRoute: typeof SpecsIndexRoute;
 }
 
 declare module '@tanstack/react-router' {
@@ -208,6 +246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsIdRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    '/settings/chat': {
+      id: '/settings/chat';
+      path: '/chat';
+      fullPath: '/settings/chat';
+      preLoaderRoute: typeof SettingsChatRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
     '/settings/models': {
       id: '/settings/models';
       path: '/models';
@@ -229,16 +274,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRunnersRouteImport;
       parentRoute: typeof SettingsRoute;
     };
+    '/specs/': {
+      id: '/specs/';
+      path: '/specs';
+      fullPath: '/specs/';
+      preLoaderRoute: typeof SpecsIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    '/specs/$id': {
+      id: '/specs/$id';
+      path: '/specs/$id';
+      fullPath: '/specs/$id';
+      preLoaderRoute: typeof SpecsIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
   }
 }
 
 interface SettingsRouteChildren {
+  SettingsChatRoute: typeof SettingsChatRoute;
   SettingsModelsRoute: typeof SettingsModelsRoute;
   SettingsRemotesRoute: typeof SettingsRemotesRoute;
   SettingsRunnersRoute: typeof SettingsRunnersRoute;
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsChatRoute: SettingsChatRoute,
   SettingsModelsRoute: SettingsModelsRoute,
   SettingsRemotesRoute: SettingsRemotesRoute,
   SettingsRunnersRoute: SettingsRunnersRoute,
@@ -254,8 +315,10 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRouteWithChildren,
   ConversationsIdRoute: ConversationsIdRoute,
   ProjectsIdRoute: ProjectsIdRoute,
+  SpecsIdRoute: SpecsIdRoute,
   ConversationsIndexRoute: ConversationsIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
+  SpecsIndexRoute: SpecsIndexRoute,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

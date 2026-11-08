@@ -5,6 +5,7 @@ import type { JobRecord } from "../../jobs/postgres-job-store.js";
 import type { UserModelProfilesService } from "../model-config/index.js";
 import type { RemoteConnectionService } from "../remotes/index.js";
 import type { RunnerConnections } from "../runners/index.js";
+import type { UploadStorage } from "../attachments/index.js";
 import type { RunClaim } from "./run.repository.js";
 import { createRunService, type RunService } from "./run.service.js";
 import "./nova-runtime.js";
@@ -22,6 +23,7 @@ export class ConversationExecutor {
       models: UserModelProfilesService;
       remotes: RemoteConnectionService;
       runners: RunnerConnections;
+      uploads: UploadStorage;
     },
   ) {
     this.repository = createRunService(deps.db);

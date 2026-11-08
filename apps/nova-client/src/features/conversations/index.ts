@@ -13,3 +13,5 @@ export {
   type ConversationDTO,
   type ConversationSnapshot,
 } from './conversation.queries';
+
+export const ConversationView = lazy(() => import('./conversation-view').then((module) => ({ default: module.ConversationView })));

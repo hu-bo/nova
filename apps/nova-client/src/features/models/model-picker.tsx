@@ -39,6 +39,15 @@ export function ModelPicker({
         .includes(query.toLocaleLowerCase()),
   );
   const groups = [...new Set(filtered.map((profile) => profile.providerName))];
+  let emptyMessage = '尚未配置可用模型';
+  if (query) {
+    emptyMessage = '没有匹配的模型';
+  } else if (onlyFavorites) {
+    emptyMessage = '还没有收藏的模型';
+  } else if (loading) {
+    emptyMessage = '正在加载模型目录…';
+  }
+
   function choose(id: string) {
     onChange(id);
     setOpen(false);
@@ -141,15 +150,7 @@ export function ModelPicker({
               ))}
             </ListBox>
           ) : (
-            <div className="py-8 text-center text-sm text-slate-500">
-              {query
-                ? '没有匹配的模型'
-                : onlyFavorites
-                  ? '还没有收藏的模型'
-                  : loading
-                    ? '正在加载模型目录…'
-                    : '尚未配置可用模型'}
-            </div>
+            <div className="py-8 text-center text-sm text-slate-500">{emptyMessage}</div>
           )}
           <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
             <Button variant="ghost" onPress={configure}>

@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { basename, posix } from "node:path";
 import { defineTool, ToolFailureError, type JsonValue, type ToolDefinition } from "@nnova/harness";
 import type { ToolContext as RunnerToolContext } from "@nova/runner-sdk";
+import { formatPatch, structuredPatch } from "diff";
 import { z } from "zod";
 
 export interface RemoteToolContext {
@@ -70,6 +71,14 @@ function baseName(path: string): string {
   return basename(path.replaceAll("\\", "/")) || path;
 }
 
+function filePatch(path: string, before: string | undefined, after: string): string | null | undefined {
+  if (before === after) return undefined;
+  // A null patch records that the diff could not be generated within the preview budget.
+  if (before === undefined || before.length + after.length > 512_000) return null;
+  const patch = structuredPatch(path, path, before, after, "", "", { context: 3, maxEditLength: 2_000 });
+  return patch ? formatPatch(patch) : null;
+}
+
 export const listDir = tool({
   name: "list_dir",
   description: "List files and directories in the Runner workspace.",
@@ -135,12 +144,18 @@ export const writeFile = tool({
       signal: ctx.signal,
     });
     if (!result.ok) remoteFailure(result.error, { path: input.path });
+    const previous = before.ok
+      ? before.value.truncated || before.value.lineTruncated
+        ? undefined
+        : before.value.text
+      : "";
     return success(`Wrote ${input.content.split("\n").length} lines to ${input.path}`, {
       path: input.path,
       bytes: new TextEncoder().encode(input.content).byteLength,
       created: result.value.created,
       sha256: result.value.sha256,
       sizeBytes: result.value.sizeBytes,
+      patch: filePatch(input.path, previous, input.content),
     });
   },
 });
@@ -178,8 +193,12 @@ export const editFile = tool({
         "known",
         { path: input.path, occurrences, reason: "ambiguous" },
       );
+    const before = read.value.text;
+    const after = input.replaceAll
+      ? before.split(input.oldText).join(input.newText)
+      : before.replace(input.oldText, () => input.newText);
     const edits = input.replaceAll
-      ? [{ oldText: read.value.text, newText: read.value.text.split(input.oldText).join(input.newText) }]
+      ? [{ oldText: before, newText: after }]
       : [{ oldText: input.oldText, newText: input.newText }];
     const result = await ctx.fs.patch(input.path, edits, { expectedSha256: read.value.sha256, signal: ctx.signal });
     if (!result.ok) remoteFailure(result.error, { path: input.path, occurrences });
@@ -188,7 +207,7 @@ export const editFile = tool({
       path: input.path,
       replacements,
       sha256: result.value.sha256,
-      diff: `${input.oldText}\n→\n${input.newText}`,
+      patch: filePatch(input.path, before, after),
     });
   },
 });

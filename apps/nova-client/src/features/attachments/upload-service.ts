@@ -12,13 +12,13 @@ export type UploadEntry = {
   attachment?: Attachment | undefined;
   error?: unknown;
 };
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 30 * 1024 * 1024;
 const ALLOWED = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/gif,image/webp';
 /** 图片上传的格式与大小门槛；add 与 retry 共用同一规则。 */
 const isAccepted = (file: File) =>
   ALLOWED.has(file.type) && file.size > 0 && file.size <= MAX_BYTES;
-const REJECTED_MESSAGE = '请选择不超过 5 MiB 的 PNG、JPEG、GIF 或 WebP 图片。';
+const REJECTED_MESSAGE = '请选择不超过 30 MiB 的 PNG、JPEG、GIF 或 WebP 图片。';
 export const statusLabel = (status: UploadStatus) =>
   ({
     selected: '等待上传',

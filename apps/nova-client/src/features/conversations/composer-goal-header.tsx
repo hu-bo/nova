@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover } from '@heroui/react';
-import { ClipboardList, Settings2, Target, X } from 'lucide-react';
+import { ClipboardList, Layers3, Settings2, Target, X } from 'lucide-react';
 import type { ConversationComposerController } from './use-conversation-composer';
 
 export function ComposerGoalHeader({
@@ -10,6 +10,13 @@ export function ComposerGoalHeader({
 }: {
   controller: ConversationComposerController;
 }) {
+  if (ctl.specArmed)
+    return (
+      <p className="flex items-center gap-2 px-2 pb-2 pt-1 text-xs text-accent">
+        <Layers3 size={13} />
+        Spec 模式 · 发送需求后开启规格工作台
+      </p>
+    );
   if (!ctl.goalArmed)
     return ctl.executionMode === 'plan' ? (
       <p className="flex items-center gap-2 px-2 pb-2 pt-1 text-xs text-slate-500">

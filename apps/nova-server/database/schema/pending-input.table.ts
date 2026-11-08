@@ -1,6 +1,9 @@
 import { bigint, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { Goal, SubmitInput } from "@nova/agent-ui-contracts";
 export type PendingInputStatus = "queued" | "consumed" | "removed" | "rejected";
+export type SpecInputMetadata =
+  | { kind: "generation"; specId: string; revision: number; stage: "requirements" | "design" | "tasks" }
+  | { kind: "task"; specId: string; revision: number; taskKey: string; attemptId: string };
 export const pendingInputs = pgTable(
   "pending_inputs",
   {
@@ -10,7 +13,7 @@ export const pendingInputs = pgTable(
     mode: text("mode").$type<SubmitInput["mode"]>().notNull(),
     status: text("status").$type<PendingInputStatus>().default("queued").notNull(),
     payload: jsonb("payload")
-      .$type<SubmitInput & { goal?: Pick<Goal, "objective" | "acceptanceCriteria" | "maxIterations"> }>()
+      .$type<SubmitInput & { goal?: Pick<Goal, "objective" | "acceptanceCriteria" | "maxIterations">; spec?: SpecInputMetadata }>()
       .notNull(),
     idempotencyKey: text("idempotency_key"),
     fingerprint: text("fingerprint").notNull(),

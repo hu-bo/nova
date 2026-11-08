@@ -12,3 +12,6 @@ export { modelConfigs } from "./model-config.table.js";
 export { remoteConnections } from "./remote-connection.table.js";
 export { jobs } from "./job.table.js";
 export { sessionCommits } from "./session-commit.table.js";
+export { specs } from "./spec.table.js";
+export { specRevisions } from "./spec-revision.table.js";
+export { specTaskAttempts } from "./spec-task-attempt.table.js";

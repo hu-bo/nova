@@ -15,6 +15,7 @@ import {
 } from "@nova/agent-ui-contracts";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 import { bindingSchema } from "../projects/index.js";
+import { toolOutputQuery } from "../chat-tool-output.js";
 export const runtimeConfigurationSchema = configurationSchema;
 export const conversationGoalSchema = goalSchema;
 export { goalInputSchema, attachmentSchema, messageSchema, messagePageSchema };
@@ -39,7 +40,7 @@ export const pendingInputBodySchema = submitInputSchema.extend({ goal: goalInput
 export const pendingInputReceiptSchema = inputReceiptSchema;
 export const conversationParamsSchema = z.object({ id: z.uuid() }).strict();
 export const pendingInputParamsSchema = conversationParamsSchema.extend({ inputId: z.uuid() }).strict();
-export const messageQuerySchema = z.object({ before: decimalSequenceSchema.optional() }).strict();
+export const messageQuerySchema = toolOutputQuery.extend({ before: decimalSequenceSchema.optional() });
 export const updateConversationBodySchema = z.object({ title: z.string().trim().min(1).max(200) }).strict();
 export const updateConversationGoalSchema = z
   .object({ action: z.enum(["pause", "resume", "complete", "remove"]), expectedRevision: z.number().int().positive() })

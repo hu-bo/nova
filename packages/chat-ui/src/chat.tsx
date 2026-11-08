@@ -35,6 +35,13 @@ export interface ChatState {
   feedback?: ChatFeedback[] | undefined;
 }
 
+const connectionMessages = {
+  connecting: "正在连接实时消息流",
+  open: null,
+  reconnecting: "实时消息流已断开，正在重连",
+  closed: null,
+} satisfies Record<ChatState["connection"], string | null>;
+
 export type ChatComposerConfig<TMetadata = unknown> = Omit<
   ComposerProps<TMetadata>,
   "isRunning" | "isAborting" | "onAbort" | "onSubmit"
@@ -53,6 +60,7 @@ export interface ChatActions<TMetadata = unknown> {
 
 export interface ChatProps<TMetadata = unknown> {
   initialScrollState?: MessageListProps["initialScrollState"];
+  showToolCalls?: boolean;
   state: ChatState;
   composer: ChatComposerConfig<TMetadata>;
   actions: ChatActions<TMetadata>;
@@ -81,15 +89,11 @@ export function Chat<TMetadata = unknown>({
   renderers,
   sidebar,
   sidebarOpen = true,
+  showToolCalls = true,
 }: ChatProps<TMetadata>) {
   const incompleteTodos = state.todos.filter((todo) => todo.status !== "completed").length;
   const hasSidebar = sidebarOpen && (Boolean(sidebar) || incompleteTodos > 0);
-  const connectionMessage =
-    state.connection === "connecting"
-      ? "正在连接实时消息流"
-      : state.connection === "reconnecting"
-        ? "实时消息流已断开，正在重连"
-        : null;
+  const connectionMessage = connectionMessages[state.connection];
 
   const onAbort = actions.onAbort;
 
@@ -121,6 +125,7 @@ export function Chat<TMetadata = unknown>({
           {state.messages.length ? (
             <MessageList
               messages={state.messages}
+              showToolCalls={showToolCalls}
               renderers={renderers}
               initialScrollState={initialScrollState}
               onScrollStateChange={actions.onScrollStateChange}

@@ -71,7 +71,7 @@ export const runnerOperations = pgTable(
     boot: pgTableText("boot"),
     status: pgTableText("status").$type<RunnerOperationStatus>().default("queued").notNull(),
     payloadHash: pgTableText("payload_hash"),
-    deadlineAt: timestamp("timestamp", { withTimezone: true }),
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }),
     resultPayload: jsonb("result_payload").$type<Record<string, unknown>>(),
     knownOutcome: boolean("known_outcome").default(false).notNull(),
     revision: bigint("revision", { mode: "number" }).default(1).notNull(),

@@ -5,12 +5,18 @@ const schema = z.object({
   version: z.literal(1),
   sidebarCollapsed: z.boolean(),
   contextPanelOpen: z.boolean().default(false),
+  chatFullWidth: z.boolean().default(false),
+  showToolCalls: z.boolean().default(true),
+  includeToolResults: z.boolean().default(true),
 });
 export type Preferences = z.infer<typeof schema>;
 export const defaults: Preferences = {
   version: 1,
   sidebarCollapsed: false,
   contextPanelOpen: false,
+  chatFullWidth: false,
+  showToolCalls: true,
+  includeToolResults: true,
 };
 const key = 'nova:preferences:v1';
 export function readPreferences() {

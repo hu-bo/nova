@@ -265,6 +265,13 @@ export function RemoteExplorer({
     if (!openState) onClose();
   }
 
+  let selectionHint = multiple ? "可按 Shift 或 ⌘/Ctrl 多选" : "双击目录进入";
+  if (matchingSelection.length) {
+    selectionHint = `已选择 ${matchingSelection.length} 项`;
+  } else if (mode === "directory" && listing) {
+    selectionHint = `将选择当前目录：${basename(listing.path)}`;
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={close}>
       {/* Keep React Aria parents from making this portaled dialog inert or treating its clicks as outside. */}
@@ -442,15 +449,7 @@ export function RemoteExplorer({
             </div>
 
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 dark:border-slate-800">
-              <p className="min-w-0 flex-1 text-xs text-slate-500 dark:text-slate-400">
-                {matchingSelection.length
-                  ? `已选择 ${matchingSelection.length} 项`
-                  : mode === "directory" && listing
-                    ? `将选择当前目录：${basename(listing.path)}`
-                    : multiple
-                      ? "可按 Shift 或 ⌘/Ctrl 多选"
-                      : "双击目录进入"}
-              </p>
+              <p className="min-w-0 flex-1 text-xs text-slate-500 dark:text-slate-400">{selectionHint}</p>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" onClick={onClose}>
                   取消

@@ -49,6 +49,7 @@ export const productEventSchema = z.discriminatedUnion("type", [
   ),
   event("plan.changed", z.object({ plan: z.array(todoSchema) }).strict()),
   event("goal.changed", z.object({ goal: goalSchema.nullable() }).strict()),
+  event("spec.changed", z.object({ specId: idSchema, revision: z.number().int().positive(), change: z.enum(["created", "draft", "review", "evidence", "acceptance", "deleted"]) }).strict()),
   event("usage.changed", z.object({ usage: usageSchema }).strict()),
 ]);
 export type ProductEvent = z.infer<typeof productEventSchema>;

@@ -19,6 +19,12 @@ import {
   conversationGoalSchema,
 } from "./conversation.schema.js";
 import type { ConversationService } from "./conversation.service.js";
+import {
+  chatMessageOutput,
+  chatSnapshotOutput,
+  chatToolOperationOutput,
+  toolOutputQuery,
+} from "../chat-tool-output.js";
 
 /**
  * /api/conversations 路由: 创建 / 列表 / 详情 / 一致 snapshot / 后续输入 / 撤回。
@@ -82,8 +88,19 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         response: { 200: okEnvelope(messagePageSchema), ...errorResponses(404) },
       },
     },
-    async (request) =>
-      success(await service.messages(request.params.id, requirePrincipal(request).localUserId, request.query.before)),
+    async (request) => {
+      const page = await service.messages(
+        request.params.id,
+        requirePrincipal(request).localUserId,
+        request.query.before,
+      );
+      const include = request.query.includeToolResults !== "false";
+      return success({
+        ...page,
+        items: page.items.map((message) => chatMessageOutput(message, include)),
+        operations: page.operations.map((operation) => chatToolOperationOutput(operation, include)),
+      });
+    },
   );
   typed.patch(
     "/:id",
@@ -178,6 +195,7 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         operationId: "getConversationSnapshot",
         tags: ["conversations"],
         params: conversationParamsSchema,
+        querystring: toolOutputQuery,
         response: {
           200: okEnvelope(conversationSnapshotSchema),
           ...errorResponses(401, 404, 500),
@@ -186,7 +204,8 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
     },
     async (request) => {
       const principal = requirePrincipal(request);
-      return success(await service.snapshot(request.params.id, principal.localUserId));
+      const snapshot = await service.snapshot(request.params.id, principal.localUserId);
+      return success(chatSnapshotOutput(snapshot, request.query.includeToolResults !== "false"));
     },
   );
 

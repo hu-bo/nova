@@ -49,7 +49,7 @@ function safeStringify(value: JsonValue): string {
 
 /**
  * 把工具输出投影为可渲染的内容块，不再直接展示 `{"status","content","details"}` 信封 JSON。
- * - packages/tools 的成功信封只展示 content（read_file/bash/git_diff 进一步结构化为代码、错误、diff 块）。
+ * - packages/tools 的成功信封优先投影为结构化内容块，其余结果展示 content。
  * - 运行时失败结果 `{error:{code,message}}` 投影为错误块。
  * - 其它自定义输出回退为截断后的 JSON 文本。
  */
@@ -58,12 +58,25 @@ export function projectToolContent(name: string, value: JsonValue): Content[] {
   const failure = record(envelope?.error);
   if (failure && typeof failure.code === "string" && typeof failure.message === "string")
     return [{ id: "content", type: "error", error: { code: failure.code, message: truncate(failure.message) } }];
+  // Spec candidates remain complete in checkpoints; chat shows only their product status.
+  if (name === "spec_read") return [{ id: "content", type: "text", text: "已读取当前规格，继续讨论需求与方案。" }];
+  if (name === "spec_update") return [{ id: "content", type: "text", text: "已提交规格草稿，运行完成后校验并保存。" }];
   const content =
     envelope && (envelope.status === "ok" || envelope.status === "error") ? text(envelope.content) : undefined;
   if (content === undefined)
     return [{ id: "content", type: "text", text: truncate(typeof value === "string" ? value : safeStringify(value)) }];
   const details = record(envelope?.details);
   switch (name) {
+    case "edit_file":
+    case "write_file": {
+      if (envelope?.status !== "ok") break;
+      const path = text(details?.path);
+      const diff = text(details?.patch);
+      if (path && diff && diff.length <= MAX_TOOL_TEXT) return [{ id: "content", type: "diff", path, diff }];
+      if (details?.patch === null || (diff && diff.length > MAX_TOOL_TEXT))
+        return [{ id: "content", type: "text", text: truncate(`${content}\n\n… 文件改动过大，无法预览`) }];
+      break;
+    }
     case "read_file": {
       const path = text(details?.path);
       const body = text(details?.text);

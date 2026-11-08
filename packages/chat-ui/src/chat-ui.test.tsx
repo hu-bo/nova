@@ -262,6 +262,51 @@ describe("chat-ui", () => {
     expect(html).not.toContain('data-line-new-num="10"');
   });
 
+  it("renders persisted file edits as diff components inside the paired tool call", async () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "call",
+        conversationId: "conversation-1",
+        role: "assistant",
+        status: "done",
+        createdAt: 1,
+        blocks: [{ type: "tool_call", callId: "edit", name: "edit_file", args: { path: "src/a.ts" }, status: "ok" }],
+      },
+      {
+        id: "result",
+        conversationId: "conversation-1",
+        role: "tool",
+        status: "done",
+        createdAt: 2,
+        blocks: [
+          {
+            type: "tool_result",
+            callId: "edit",
+            status: "ok",
+            blocks: [
+              {
+                type: "diff",
+                path: "src/a.ts",
+                diff: "Index: src/a.ts\n===================================================================\n--- src/a.ts\n+++ src/a.ts\n@@ -18,1 +18,1 @@\n-before\n+after\n",
+                added: 1,
+                removed: 1,
+              },
+              { type: "text", text: "Tool output alongside the diff" },
+            ],
+          },
+        ],
+      },
+    ];
+    const html = await renderLoaded(<MessageList messages={messages} />);
+    expect(html).toMatch(/nova-tool-block.*data-component="git-diff-view"/s);
+    expect(html).toContain('data-line-new-num="18"');
+    expect(html).toContain("Tool output alongside the diff");
+    expect(html).not.toContain("@@ -18");
+    expect(await renderLoaded(<MessageList messages={messages} showToolCalls={false} />)).not.toContain(
+      'data-component="git-diff-view"',
+    );
+  });
+
   it("pairs tool calls and results independent of tool names", () => {
     const messages: ChatMessage[] = [
       {
@@ -298,7 +343,10 @@ describe("chat-ui", () => {
         role: "assistant",
         status: "done",
         createdAt: 1,
-        blocks: [{ type: "tool_call", callId: "call-1", name: "list_dir", args: { path: "." }, status: "ok" }],
+        blocks: [
+          { type: "text", text: "搜索完成" },
+          { type: "tool_call", callId: "call-1", name: "grep", args: { pattern: "^name", path: "." }, status: "ok" },
+        ],
       },
       {
         id: "tool-1",
@@ -312,11 +360,16 @@ describe("chat-ui", () => {
       },
     ];
     const html = renderToStaticMarkup(<MessageList messages={messages} />);
-    expect(html).toContain("list_dir");
+    expect(html).toContain('title="^name"');
     expect(html).toContain("Cargo.toml");
     // The result renders inside the tool block's output section, not as a standalone tool message.
     expect(html).not.toContain("data-tool-result");
     expect(html).not.toContain("工具");
+    const hidden = renderToStaticMarkup(<MessageList messages={messages} showToolCalls={false} />);
+    expect(hidden).toContain("搜索完成");
+    expect(hidden).not.toContain("Cargo.toml");
+    expect(hidden).not.toContain("nova-tool-block");
+    expect(hidden).not.toContain('data-message-id="tool-1"');
   });
 
   it("shows the command and arguments in a bash tool summary", () => {

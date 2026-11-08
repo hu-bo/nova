@@ -15,6 +15,12 @@ import {
   useRunnerConnection,
 } from '@/features/runners';
 
+const runtimeHints = {
+  cargo: '在 nova 源码仓库根目录执行，需要安装 Rust / Cargo。',
+  npx: '在项目目录中执行，需要安装 Node.js 18+，npx 会下载并运行 Runner。',
+  binary: '设备需已安装当前版本的 nova-runner，并将其加入 PATH。',
+} satisfies Record<RunnerCommandRuntime, string>;
+
 export function RunnerStartCommandDialog({
   token,
   onClose,
@@ -168,12 +174,7 @@ export function RunnerStartCommandDialog({
           {preview ?? '加载 Token 并设置工作目录后生成启动命令。'}
         </code>
         <p className="mt-3 text-xs leading-5 text-muted-foreground">
-          {runtime === 'cargo'
-            ? '在 nova 源码仓库根目录执行，需要安装 Rust / Cargo。'
-            : runtime === 'npx'
-              ? '在项目目录中执行，需要安装 Node.js 18+，npx 会下载并运行 Runner。'
-              : '设备需已安装当前版本的 nova-runner，并将其加入 PATH。'}{' '}
-          复制的命令包含完整 Token。
+          {runtimeHints[runtime]} 复制的命令包含完整 Token。
         </p>
       </section>
       {connection.error ? (

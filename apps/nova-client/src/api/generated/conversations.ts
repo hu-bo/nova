@@ -33,6 +33,7 @@ import type {
   CreateConversationBody,
   DeleteConversation200,
   GetConversationSnapshot200,
+  GetConversationSnapshotParams,
   ListConversationMessages200,
   ListConversationMessagesParams,
   ListConversations200,
@@ -927,17 +928,26 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateConversationMutationOptions(options), queryClient);
     }
-    export const getGetConversationSnapshotUrl = (id: string,) => {
+    export const getGetConversationSnapshotUrl = (id: string,
+    params?: GetConversationSnapshotParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/conversations/${id}/snapshot`
+  return stringifiedParams.length > 0 ? `/api/conversations/${id}/snapshot?${stringifiedParams}` : `/api/conversations/${id}/snapshot`
 }
 
-export const getConversationSnapshot = async (id: string, options?: Parameters<typeof apiFetch>[1]): Promise<GetConversationSnapshot200> => {
+export const getConversationSnapshot = async (id: string,
+    params?: GetConversationSnapshotParams, options?: Parameters<typeof apiFetch>[1]): Promise<GetConversationSnapshot200> => {
 
-  return apiFetch<GetConversationSnapshot200>(getGetConversationSnapshotUrl(id),
+  return apiFetch<GetConversationSnapshot200>(getGetConversationSnapshotUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -950,23 +960,25 @@ export const getConversationSnapshot = async (id: string, options?: Parameters<t
 
 
 
-export const getGetConversationSnapshotQueryKey = (id: string,) => {
+export const getGetConversationSnapshotQueryKey = (id: string,
+    params?: GetConversationSnapshotParams,) => {
     return [
-    `/api/conversations/${id}/snapshot`
+    `/api/conversations/${id}/snapshot`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetConversationSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getConversationSnapshot>>, TError = ErrorType<void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getGetConversationSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getConversationSnapshot>>, TError = ErrorType<void>>(id: string,
+    params?: GetConversationSnapshotParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetConversationSnapshotQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetConversationSnapshotQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getConversationSnapshot>>> = ({ signal }) => getConversationSnapshot(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getConversationSnapshot>>> = ({ signal }) => getConversationSnapshot(id,params, { signal, ...requestOptions });
 
 
 
@@ -980,7 +992,8 @@ export type GetConversationSnapshotQueryError = ErrorType<void>
 
 
 export function useGetConversationSnapshot<TData = Awaited<ReturnType<typeof getConversationSnapshot>>, TError = ErrorType<void>>(
- id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>> & Pick<
+ id: string,
+    params: undefined |  GetConversationSnapshotParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getConversationSnapshot>>,
           TError,
@@ -990,7 +1003,8 @@ export function useGetConversationSnapshot<TData = Awaited<ReturnType<typeof get
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetConversationSnapshot<TData = Awaited<ReturnType<typeof getConversationSnapshot>>, TError = ErrorType<void>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>> & Pick<
+ id: string,
+    params?: GetConversationSnapshotParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getConversationSnapshot>>,
           TError,
@@ -1000,16 +1014,18 @@ export function useGetConversationSnapshot<TData = Awaited<ReturnType<typeof get
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetConversationSnapshot<TData = Awaited<ReturnType<typeof getConversationSnapshot>>, TError = ErrorType<void>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ id: string,
+    params?: GetConversationSnapshotParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
 export function useGetConversationSnapshot<TData = Awaited<ReturnType<typeof getConversationSnapshot>>, TError = ErrorType<void>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ id: string,
+    params?: GetConversationSnapshotParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getConversationSnapshot>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetConversationSnapshotQueryOptions(id,options)
+  const queryOptions = getGetConversationSnapshotQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

@@ -78,6 +78,7 @@ export class RunStreamManager {
   constructor(
     private readonly identityId: string,
     private readonly queryClient: QueryClient,
+    private readonly includeToolResults = true,
   ) {}
   retainHost() {
     this.hosts += 1;
@@ -117,13 +118,18 @@ export class RunStreamManager {
     session.projected = initialProjection(snapshot, session.projected ?? undefined);
     session.publish({ error: null });
   }
-  retry(id: string) {
+  async retry(id: string): Promise<boolean> {
     const session = this.session(id);
     session.dispose();
     session.resyncFailures = 0;
-    void this.resync(session)
-      .then(() => this.open(session))
-      .catch(() => session.publish({ state: 'offline', error: '暂时无法获取会话，请稍后重试。' }));
+    try {
+      await this.resync(session);
+      this.open(session);
+      return true;
+    } catch {
+      session.publish({ state: 'offline', error: '暂时无法获取会话，请稍后重试。' });
+      return false;
+    }
   }
   forget(id: string) {
     this.sessions.get(id)?.dispose();
@@ -169,7 +175,7 @@ export class RunStreamManager {
       ''
     ).replace(/\/$/, '');
     session.connection = new SseConnection({
-      url: `${base}/api/conversations/${session.id}/events`,
+      url: `${base}/api/conversations/${session.id}/events?includeToolResults=${this.includeToolResults}`,
       cursor: session.projected.cursor,
       checkReady: serverReady,
       onStateChange: (state) => {
@@ -231,6 +237,11 @@ export class RunStreamManager {
             queryKey: queryKeys.conversations.list(this.identityId, { limit: 100 }),
             refetchType: 'active',
           });
+        if (parsed.data.type === 'spec.changed')
+          void this.queryClient.invalidateQueries({
+            queryKey: queryKeys.specs.detailRoot(this.identityId, parsed.data.payload.specId),
+            refetchType: 'active',
+          });
         if (!session.refs && !isActiveRun(session.projected.run?.state)) {
           session.dispose();
           this.sessions.delete(session.id);
@@ -261,14 +272,22 @@ export class RunStreamManager {
   }
   private resync(session: Session): Promise<string> {
     if (!session.resync) {
-      session.resync = getConversationSnapshot(session.id, { signal: this.controller.signal })
+      session.resync = getConversationSnapshot(
+        session.id,
+        { includeToolResults: this.includeToolResults ? 'true' : 'false' },
+        { signal: this.controller.signal },
+      )
         .then((snapshot) => {
           if (this.controller.signal.aborted || this.sessions.get(session.id) !== session)
             throw new DOMException('Disposed', 'AbortError');
           // Cursor and projection are replaced together; drafts belong to the composer and survive this operation.
           if (!session.projected || BigInt(snapshot.cursor) >= BigInt(session.projected.cursor)) {
             this.queryClient.setQueryData(
-              queryKeys.conversations.snapshot(this.identityId, session.id),
+              queryKeys.conversations.snapshot(
+                this.identityId,
+                session.id,
+                this.includeToolResults,
+              ),
               snapshot,
             );
             session.projected = initialProjection(snapshot, session.projected ?? undefined);

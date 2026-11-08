@@ -1,8 +1,17 @@
 import { CheckCircle2, ChevronRight, CircleOff, LoaderCircle, TerminalSquare, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Block, ExtractBlock } from "../types.js";
+import type { Block, ExtractBlock, ToolStatus } from "../types.js";
 
 const MAX_OUTPUT_CHARS = 12_000;
+
+const toolStatusPresentation = {
+  queued: { label: "等待执行", color: "text-amber-500", Icon: XCircle },
+  unknown: { label: "待核实", color: "text-amber-500", Icon: XCircle },
+  running: { label: "运行中", color: "text-indigo-500", Icon: LoaderCircle },
+  ok: { label: "已完成", color: "text-emerald-500", Icon: CheckCircle2 },
+  cancelled: { label: "已取消", color: "text-slate-400", Icon: CircleOff },
+  error: { label: "失败", color: "text-rose-500", Icon: XCircle },
+} satisfies Record<ToolStatus, { label: string; color: string; Icon: typeof XCircle }>;
 
 function formatArgs(args: unknown): string {
   if (typeof args === "string") return args;
@@ -61,6 +70,10 @@ function getCallSummary(call: ExtractBlock<"tool_call">): string | undefined {
     return [call.args.command, ...args.map(String)].join(" ");
   }
 
+  if (call.name === "grep" && "pattern" in call.args && typeof call.args.pattern === "string") {
+    return call.args.pattern;
+  }
+
   return "path" in call.args && typeof call.args.path === "string" ? call.args.path : undefined;
 }
 
@@ -100,38 +113,19 @@ function Section({
 export function ToolBlock({
   call,
   result,
+  renderDiff,
 }: {
   call: ExtractBlock<"tool_call">;
   result?: ExtractBlock<"tool_result"> | undefined;
+  renderDiff?: (block: ExtractBlock<"diff">, index: number) => ReactNode;
 }) {
   const status = result?.status ?? call.status;
-  const StatusIcon =
-    status === "running" ? LoaderCircle : status === "ok" ? CheckCircle2 : status === "cancelled" ? CircleOff : XCircle;
-  const statusLabel =
-    status === "queued"
-      ? "等待执行"
-      : status === "unknown"
-        ? "待核实"
-        : status === "running"
-          ? "运行中"
-          : status === "ok"
-            ? "已完成"
-            : status === "cancelled"
-              ? "已取消"
-              : "失败";
-  const statusColor =
-    status === "queued" || status === "unknown"
-      ? "text-amber-500"
-      : status === "running"
-        ? "text-indigo-500"
-        : status === "ok"
-          ? "text-emerald-500"
-          : status === "cancelled"
-            ? "text-slate-400"
-            : "text-rose-500";
+  const { label, color, Icon: StatusIcon } = toolStatusPresentation[status];
 
   const argsText = formatArgs(call.args);
-  const output = result ? truncateOutput(formatOutput(result.blocks)) : "";
+  const blocks = result?.blocks ?? [];
+  const diffs = renderDiff ? blocks.filter((block): block is ExtractBlock<"diff"> => block.type === "diff") : [];
+  const output = truncateOutput(formatOutput(diffs.length ? blocks.filter((block) => block.type !== "diff") : blocks));
   const summary = getCallSummary(call);
 
   return (
@@ -156,13 +150,13 @@ export function ToolBlock({
         </div>
         <span
           aria-label={`状态：${call.status}`}
-          className={`inline-flex shrink-0 items-center gap-1.5 text-[11px] ${statusColor}`}
+          className={`inline-flex shrink-0 items-center gap-1.5 text-[11px] ${color}`}
         >
           <StatusIcon
             className={`size-3.5 ${status === "running" ? "animate-spin motion-reduce:animate-none" : ""}`}
             aria-hidden="true"
           />
-          {statusLabel}
+          {label}
         </span>
       </summary>
 
@@ -171,6 +165,12 @@ export function ToolBlock({
           {argsText}
         </pre>
       </Section>
+
+      {renderDiff && diffs.length > 0 && (
+        <div className="nova-scrollbar grid max-h-96 min-w-0 gap-2 overflow-auto border-t border-slate-200/70 p-2.5 dark:border-slate-800/80">
+          {diffs.map(renderDiff)}
+        </div>
+      )}
 
       {output && (
         <Section label={result?.status === "error" ? "错误输出" : "输出"} badge={formatSize(output.length)} defaultOpen>

@@ -11,6 +11,16 @@ const environmentSchema = z
     DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
     DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
     DATABASE_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+    // Uploads stay disabled unless endpoint and both credentials are supplied.
+    MINIO_ENDPOINT: z.string().trim().min(1).optional(),
+    MINIO_PORT: z.coerce.number().int().min(1).max(65535).default(9000),
+    MINIO_USE_SSL: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    MINIO_ACCESS_KEY: z.string().min(1).optional(),
+    MINIO_SECRET_KEY: z.string().min(1).optional(),
+    MINIO_BUCKET: z.string().trim().min(1).default("nova-attachments"),
     // 32-byte hex key for AES-256-GCM encryption of stored model, SSH and Runner credentials.
     MODEL_CONFIG_ENCRYPTION_KEY: z
       .string()
@@ -40,6 +50,14 @@ const environmentSchema = z
       .transform((value) => value === "true"),
   })
   .superRefine((value, ctx) => {
+    const minioConfigured = Boolean(value.MINIO_ENDPOINT || value.MINIO_ACCESS_KEY || value.MINIO_SECRET_KEY);
+    if (minioConfigured && !(value.MINIO_ENDPOINT && value.MINIO_ACCESS_KEY && value.MINIO_SECRET_KEY)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MINIO_ENDPOINT"],
+        message: "MINIO_ENDPOINT, MINIO_ACCESS_KEY, and MINIO_SECRET_KEY must be configured together",
+      });
+    }
     if (value.NODE_ENV === "production" && value.AUTH_MODE !== "casdoor") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

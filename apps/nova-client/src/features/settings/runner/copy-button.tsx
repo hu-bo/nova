@@ -16,6 +16,15 @@ export function CopyButton({
   const [failed, setFailed] = useState(false);
   const [copying, setCopying] = useState(false);
   const copied = Boolean(value && copiedValue === value);
+  let buttonLabel = label;
+  if (failed) {
+    buttonLabel = '复制失败，重试';
+  } else if (copied) {
+    buttonLabel = '已复制';
+  } else if (copying) {
+    buttonLabel = '正在复制…';
+  }
+
   return (
     <Button
       size={compact ? 'sm' : 'default'}
@@ -37,7 +46,7 @@ export function CopyButton({
         }
       }}
     >
-      {failed ? '复制失败，重试' : copied ? '已复制' : copying ? '正在复制…' : label}
+      {buttonLabel}
     </Button>
   );
 }

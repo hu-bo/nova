@@ -15,6 +15,9 @@ export {
   sessionCommits,
   uiEvents,
   users,
+  specs,
+  specRevisions,
+  specTaskAttempts,
 } from "./schema/index.js";
 export { sql } from "drizzle-orm";
 export type { RunState } from "./schema/run.table.js";

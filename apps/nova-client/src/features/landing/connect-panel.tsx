@@ -22,11 +22,19 @@ const runnerEnvironments = [
   },
 ] as const;
 
+type CopyState = 'idle' | 'copied' | 'error';
+
+const copyMessages = {
+  idle: '',
+  copied: '启动命令已复制。',
+  error: '复制失败，请手动复制上方命令。',
+} satisfies Record<CopyState, string>;
+
 export function ConnectPanel() {
   const { identity, login } = useIdentity();
   const tokens = useRunnerTokensQuery({ silent: true });
   const [envIndex, setEnvIndex] = useState(import.meta.env.DEV ? 0 : 1);
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [copyState, setCopyState] = useState<CopyState>('idle');
   const [loginError, setLoginError] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const env = runnerEnvironments[envIndex]!;
@@ -108,13 +116,7 @@ export function ConnectPanel() {
         {env.id === 'production' ? '需要已安装 Node.js。' : ''}
       </p>
       <div className="landing-connect-status" role="status">
-        {loginError
-          ? '暂时无法登录，请稍后重试。'
-          : copyState === 'copied'
-            ? '启动命令已复制。'
-            : copyState === 'error'
-              ? '复制失败，请手动复制上方命令。'
-              : ''}
+        {loginError ? '暂时无法登录，请稍后重试。' : copyMessages[copyState]}
       </div>
       {identity ? (
         <Link to="/settings/runners" className="landing-connect-action">

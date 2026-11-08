@@ -9,7 +9,7 @@ const config = {
   authApiBase: import.meta.env.VITE_AUTH_BASE_URL || "//auth.8and1.cn/api",
   redirectUri: `${window.location.origin}/callback`,
   storage: {
-    type: "sessionStorage" as const,
+    type: "localStorage" as const,
     prefix: "nova_console_",
   },
   silentRefresh: true,

@@ -9,6 +9,7 @@ import {
   type PluginDefinition,
 } from "@nnova/harness";
 import type { ModelRow, ProviderRow } from "../model-config/index.js";
+import type { UploadStorage } from "../attachments/index.js";
 
 type Route = { model: ModelRow; provider: ProviderRow; credential: string };
 const record = (value: unknown): Record<string, unknown> =>
@@ -62,8 +63,7 @@ function consumeAnthropicEvent(event: Record<string, unknown>, state: ProviderSt
       deltaThinking = string(delta.thinking);
       block.thinking = string(block.thinking) + deltaThinking;
     }
-    if (delta.type === "signature_delta" && block)
-      block.signature = string(block.signature) + string(delta.signature);
+    if (delta.type === "signature_delta" && block) block.signature = string(block.signature) + string(delta.signature);
     if (delta.type === "input_json_delta") {
       const call = state.calls.get(index);
       if (call) call.args += string(delta.partial_json);
@@ -101,50 +101,68 @@ function consumeOpenAIEvent(event: Record<string, unknown>, state: ProviderStrea
   return { text: deltaText, thinking: deltaThinking };
 }
 
-export function modelRequest(route: Route, request: ModelStepRequest) {
+export async function modelRequest(
+  route: Route,
+  request: ModelStepRequest,
+  getImageUrl: (uri: string) => Promise<string>,
+) {
   const { model, provider } = route;
   const anthropic = provider.protocol === "anthropic";
-  const messages = request.messages.flatMap((message): Record<string, unknown>[] => {
+  const messages: Record<string, unknown>[] = [];
+  for (const message of request.messages) {
     if (anthropic) {
-      if (message.role === "system") return [];
+      if (message.role === "system") continue;
       const native = message.metadata?.anthropicContent;
       const content = Array.isArray(native)
         ? native
-        : message.parts.map((part) => {
-            if (part.type === "text") return { type: "text", text: part.text };
-            if (part.type === "tool-call")
-              return { type: "tool_use", id: part.callId, name: part.name, input: part.input };
-            if (part.type === "tool-result")
-              return {
-                type: "tool_result",
-                tool_use_id: part.callId,
-                content: JSON.stringify(part.value),
-                is_error: part.status !== "succeeded",
-              };
-            throw new FrameworkError("MODEL_INCOMPATIBLE", "Unsupported model input.");
-          });
-      return [{ role: message.role === "tool" ? "user" : message.role, content }];
+        : await Promise.all(
+            message.parts.map(async (part) => {
+              if (part.type === "text") return { type: "text", text: part.text };
+              if (part.type === "tool-call")
+                return { type: "tool_use", id: part.callId, name: part.name, input: part.input };
+              if (part.type === "image")
+                return { type: "image", source: { type: "url", url: await getImageUrl(part.reference.uri) } };
+              if (part.type === "tool-result")
+                return {
+                  type: "tool_result",
+                  tool_use_id: part.callId,
+                  content: JSON.stringify(part.value),
+                  is_error: part.status !== "succeeded",
+                };
+              throw new FrameworkError("MODEL_INCOMPATIBLE", "Unsupported model input.");
+            }),
+          );
+      messages.push({ role: message.role === "tool" ? "user" : message.role, content });
+      continue;
     }
-    if (message.role === "tool")
-      return message.parts.flatMap((part) =>
-        part.type === "tool-result"
-          ? [{ role: "tool", tool_call_id: part.callId, content: JSON.stringify(part.value) }]
-          : [],
+    if (message.role === "tool") {
+      messages.push(
+        ...message.parts.flatMap((part) =>
+          part.type === "tool-result"
+            ? [{ role: "tool", tool_call_id: part.callId, content: JSON.stringify(part.value) }]
+            : [],
+        ),
       );
+      continue;
+    }
     const calls = message.parts.flatMap((part) =>
       part.type === "tool-call"
         ? [{ id: part.callId, type: "function", function: { name: part.name, arguments: JSON.stringify(part.input) } }]
         : [],
     );
-    return [
-      {
-        role: message.role,
-        content: text(message),
-        ...(calls.length ? { tool_calls: calls } : {}),
-        ...(message.metadata?.reasoningContent ? { reasoning_content: message.metadata.reasoningContent } : {}),
-      },
-    ];
-  });
+    const content: ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[] = [];
+    for (const part of message.parts) {
+      if (part.type === "text") content.push({ type: "text", text: part.text });
+      else if (part.type === "image")
+        content.push({ type: "image_url", image_url: { url: await getImageUrl(part.reference.uri) } });
+    }
+    messages.push({
+      role: message.role,
+      content: content.length === 1 && content[0]?.type === "text" ? content[0].text : content,
+      ...(calls.length ? { tool_calls: calls } : {}),
+      ...(message.metadata?.reasoningContent ? { reasoning_content: message.metadata.reasoningContent } : {}),
+    });
+  }
   const body: Record<string, unknown> = {
     model: model.upstreamName,
     messages,
@@ -199,7 +217,7 @@ export function modelRequest(route: Route, request: ModelStepRequest) {
 }
 
 /** The provider's native continuation blocks stay inside Harness, never in the UI event journal. */
-export function configuredModelPlugin(route: Route): PluginDefinition {
+export function configuredModelPlugin(route: Route, uploads: UploadStorage, ownerUserId: string): PluginDefinition {
   return {
     manifest: {
       id: "nova.model.configured",
@@ -217,10 +235,14 @@ export function configuredModelPlugin(route: Route): PluginDefinition {
           configVersion: 1,
           contextWindow: Number(route.model.contextWindow),
           maxOutputTokens: Number(route.model.maxOutput),
-          capabilities: { tools: true, images: false, files: false },
+          capabilities: { tools: true, images: true, files: false },
         }),
         async *stream(request): AsyncIterable<ModelChunk> {
-          const { url, body } = modelRequest(route, request);
+          const { url, body } = await modelRequest(route, request, async (uri) => {
+            const prefix = "nova-object:";
+            if (!uri.startsWith(prefix)) throw new FrameworkError("MODEL_INCOMPATIBLE", "Invalid image reference.");
+            return (await uploads.imageUrl(ownerUserId, { kind: "object", key: uri.slice(prefix.length) })).url;
+          });
           const response = await fetch(url, {
             method: "POST",
             redirect: "error",

@@ -2,7 +2,7 @@ import { createScope, defineRepository } from "../../shared/scope.js";
 import { eventWriter } from "../events/index.js";
 import type { Transaction } from "../../shared/unit-of-work.js";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import {
   configurationSchema,
   operationsFromMessages,
@@ -14,6 +14,7 @@ import {
   messages,
   pendingInputs,
   runs,
+  specTaskAttempts,
   type Database,
   type ConversationMetadata,
 } from "../../../database/index.js";
@@ -61,10 +62,13 @@ async function enqueue(
   journal: RunJournal,
   key?: string,
 ) {
+  if (conversation.metadata.specId && (input.mode !== "next_run" || input.goal))
+    throw new DomainError("CONFLICT", "Specification sessions accept Plan messages only", { reason: "SPEC_SESSION_RESTRICTED" });
   const normalized = {
     ...input,
     configuration: input.configuration ?? configurationSchema.parse(conversation.metadata.configuration ?? {}),
   };
+  if (conversation.metadata.specId) normalized.configuration = { ...normalized.configuration, mode: "plan" };
   const signature = fingerprint(input);
   if (key) {
     const [previous] = await tx
@@ -300,6 +304,7 @@ export const conversationRepository = defineRepository(
         if (row?.status === "removed") return;
         if (!row || row.status !== "queued" || row.runId)
           throw new DomainError("CONFLICT", "Input already reserved or consumed");
+        await tx.update(specTaskAttempts).set({ releasedAt: new Date() }).where(and(eq(specTaskAttempts.pendingInputId, row.id), isNull(specTaskAttempts.releasedAt)));
         const [removed] = await tx
           .update(pendingInputs)
           .set({ status: "removed", removedAt: new Date() })
@@ -323,6 +328,7 @@ export const conversationRepository = defineRepository(
           !row ||
           row.status !== "queued" ||
           row.runId ||
+          conversation.metadata.specId ||
           !conversation.activeRunId ||
           !effectiveCapabilities(conversation).steering ||
           row.payload.blocks.some((block) => block.type !== "text")
@@ -366,6 +372,7 @@ export const conversationRepository = defineRepository(
         const tx = requireTransaction();
 
         const conversation = await lockOwned(tx, id, owner);
+        if (conversation.metadata.specId) throw new DomainError("CONFLICT", "Goals are disabled in specification sessions", { reason: "SPEC_SESSION_RESTRICTED" });
         const goal = conversation.metadata.goal;
         if (!goal) throw new DomainError("NOT_FOUND", "Goal not found");
         if (goal.revision !== revision)
@@ -406,6 +413,8 @@ export const conversationRepository = defineRepository(
           .limit(1);
         if (conversation.activeRunId || unknown)
           throw new DomainError("CONFLICT", "Settle the active or unknown run first");
+        if (conversation.metadata.specId)
+          throw new DomainError("CONFLICT", "Specification sessions are maintained from the project specification", { reason: "SPEC_SESSION_RESTRICTED" });
         if (action === "delete") {
           await tx.delete(pendingInputs).where(eq(pendingInputs.conversationId, id));
           await tx.delete(messages).where(eq(messages.conversationId, id));

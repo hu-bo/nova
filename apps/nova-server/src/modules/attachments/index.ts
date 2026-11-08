@@ -3,12 +3,18 @@ import { createConversationReader } from "../conversations/index.js";
 import type { FastifyInstance } from "fastify";
 import { attachmentRoutes } from "./attachment.routes.js";
 import { AttachmentService } from "./attachment.service.js";
+import { disabledUploadStorage, type UploadStorage } from "./upload-storage.js";
 
-export async function attachmentsModule(app: FastifyInstance): Promise<void> {
+export type { UploadStorage } from "./upload-storage.js";
+
+export async function attachmentsModule(
+  app: FastifyInstance,
+  storage: UploadStorage = disabledUploadStorage(),
+): Promise<void> {
   const service = createScope(app.db).get(
     defineService(
       { conversations: createConversationReader(app.db) },
-      ({ conversations }) => new AttachmentService(conversations),
+      ({ conversations }) => new AttachmentService(conversations, storage),
     ),
   );
   // 实际路径 /api/attachments/...; 由 app.ts 在 /api 前缀下挂载.

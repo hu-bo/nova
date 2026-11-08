@@ -1,4 +1,5 @@
 import type { ExecutionRecord, SessionSnapshot } from "@nnova/harness";
+import type { UploadStorage } from "../attachments/index.js";
 import type {
   Capabilities,
   Configuration,
@@ -21,6 +22,10 @@ export interface Checkpoint {
   approvals: string[];
   reservedInputs: { id: string; messageId: string }[];
   outcome?: Extract<RuntimeOutcome, { kind: "completed" }>;
+  specExecution?:
+    | { kind: "discussion"; specId: string; revision: number }
+    | { kind: "generation"; specId: string; revision: number; stage: "requirements" | "design" | "tasks" }
+    | { kind: "task"; specId: string; revision: number; taskKey: string; attemptId: string };
 }
 export interface RuntimeCommit {
   checkpoint?: Checkpoint;
@@ -49,6 +54,7 @@ export interface RuntimeDependencies {
   models: import("../model-config/index.js").UserModelProfilesService;
   remotes: import("../remotes/index.js").RemoteConnectionService;
   runners: import("../runners/index.js").RunnerConnections;
+  uploads: UploadStorage;
 }
 export const runtimeAdapters = new Map<
   string,

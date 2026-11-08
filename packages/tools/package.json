@@ -24,14 +24,17 @@
   "dependencies": {
     "@nnova/harness": "workspace:*",
     "@nova/runner-sdk": "workspace:*",
+    "diff": "^7.0.0",
     "zod": "4.6.4"
   },
   "devDependencies": {
+    "@types/diff": "^5.2.3",
     "@types/node": "24.13.4",
     "typescript": "~5.9.3"
   },
   "files": [
     "dist",
+    "skills",
     "README.md"
   ]
 }

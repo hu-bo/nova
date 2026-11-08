@@ -45,20 +45,26 @@ function makeClient() {
 // 状态行与面板不再自带 mutation 状态：页面把共享的 useRunControls 实例同时喂给
 // Chat（停止/决策浮层）、标题栏 RunStatus（状态行/停止/重连）与 RunPanel（倒计时摘要），
 // 测试沿用同样的组合方式。
-function Panel({ stream }: { stream: RunStreamSnapshot }) {
+function Panel({
+  stream,
+  onRetry,
+}: {
+  stream: RunStreamSnapshot;
+  onRetry: () => Promise<boolean>;
+}) {
   const controls = useRunControls(stream);
   return (
     <>
       <RunStatus stream={stream} controls={controls} onRetry={() => {}} executionEnabled />
-      <RunPanel stream={stream} controls={controls} onRetry={() => {}} />
+      <RunPanel stream={stream} controls={controls} onRetry={onRetry} />
     </>
   );
 }
-function mount(value: RunStreamSnapshot) {
+function mount(value: RunStreamSnapshot, onRetry = async () => true) {
   const client = makeClient();
   const ui = (next: RunStreamSnapshot) => (
     <QueryClientProvider client={client}>
-      <Panel stream={next} />
+      <Panel stream={next} onRetry={onRetry} />
     </QueryClientProvider>
   );
   return { ...render(ui(value)), ui };
@@ -165,12 +171,26 @@ describe('approval, cancellation and unknown outcomes', () => {
     expect(screen.getByRole('alert').textContent).toBe(message);
     expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
   });
-  it('requires manual inspection for unknown results and never replays execution', () => {
+  it('reports evidence refresh progress without treating it as execution confirmation', async () => {
     const value = stream();
     value.projection!.run!.state = 'cancelled_unconfirmed';
-    mount(value);
+    let finishRefresh!: (success: boolean) => void;
+    const onRetry = vi
+      .fn<() => Promise<boolean>>()
+      .mockImplementationOnce(() => new Promise((resolve) => (finishRefresh = resolve)))
+      .mockResolvedValueOnce(true);
+    mount(value, onRetry);
     expect(screen.getByText('执行结果需要核实')).toBeDefined();
-    expect(screen.getByRole('button', { name: '刷新核实材料' })).toBeDefined();
+    await userEvent.click(screen.getByRole('button', { name: '刷新核实材料' }));
+    expect(
+      (screen.getByRole('button', { name: '正在刷新核实材料…' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await act(async () => finishRefresh(false));
+    expect(screen.getByText('未能刷新核实材料，请稍后重试。')).toBeDefined();
+    await userEvent.click(screen.getByRole('button', { name: '刷新核实材料' }));
+    expect(screen.getByText('已刷新会话记录，执行结果仍需人工核实。')).toBeDefined();
+    expect(screen.getByText('执行结果需要核实')).toBeDefined();
+    expect(onRetry).toHaveBeenCalledTimes(2);
     expect(mocks.cancel).not.toHaveBeenCalled();
     expect(mocks.resolve).not.toHaveBeenCalled();
   });

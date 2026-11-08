@@ -1,18 +1,27 @@
 import { ModelPicker } from '@/features/models';
-import { BrainCircuit, ClipboardList, Code2 } from 'lucide-react';
+import { BrainCircuit, ClipboardList, Code2, Layers3 } from 'lucide-react';
 import { ComposerOptionMenu } from './composer-option-menu';
 import type { ConversationComposerController } from './use-conversation-composer';
 
-const executionModeOptions = [
-  { value: 'build', label: 'Build', description: '推进实现与执行' },
-  { value: 'plan', label: 'Plan', description: '只读分析与规划' },
-] as const;
+type AgentMode = 'build' | 'plan' | 'spec';
+const agentModes = {
+  build: { label: 'Build', description: '推进实现与执行', icon: Code2 },
+  plan: { label: 'Plan', description: '只读分析与规划', icon: ClipboardList },
+  spec: { label: 'Spec', description: '从首条需求开启规格开发', icon: Layers3 },
+} satisfies Record<AgentMode, { label: string; description: string; icon: typeof Code2 }>;
 
 export function ComposerModelActions({
   controller: ctl,
 }: {
   controller: ConversationComposerController;
 }) {
+  let activeMode: AgentMode = ctl.executionMode;
+  if (ctl.specSession) activeMode = 'plan';
+  else if (ctl.specArmed) activeMode = 'spec';
+  const Icon = agentModes[activeMode].icon;
+  const executionModeOptions = Object.entries(agentModes)
+    .filter(([value]) => value !== 'spec' || ctl.canStartSpec)
+    .map(([value, item]) => ({ value, label: item.label, description: item.description }));
   return (
     <div className="nova-model-controls flex min-w-0 flex-wrap items-center gap-1">
       <ModelPicker
@@ -34,19 +43,20 @@ export function ComposerModelActions({
       )}
       <ComposerOptionMenu
         label="Agent 模式"
-        value={ctl.executionMode}
+        value={activeMode}
         options={executionModeOptions}
-        disabled={ctl.sending}
+        disabled={ctl.sending || ctl.specSession}
         onChange={(value) => {
-          if (value === 'plan' || value === 'build') ctl.setExecutionMode(value);
+          if (value === 'spec') {
+            ctl.setSpecArmed(true);
+            ctl.setGoalArmed(false);
+          }
+          if (value === 'plan' || value === 'build') {
+            ctl.setSpecArmed(false);
+            ctl.setExecutionMode(value);
+          }
         }}
-        icon={
-          ctl.executionMode === 'plan' ? (
-            <ClipboardList aria-hidden="true" />
-          ) : (
-            <Code2 aria-hidden="true" />
-          )
-        }
+        icon={<Icon aria-hidden="true" />}
       />
     </div>
   );

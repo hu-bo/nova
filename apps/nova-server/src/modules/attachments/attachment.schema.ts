@@ -1,15 +1,12 @@
 import { z } from "zod";
 import { okEnvelope, success } from "../../shared/response.schema.js";
+import { MAX_ATTACHMENT_BYTES } from "./attachment-policy.js";
 
 export const createUploadBodySchema = z
   .object({
     filename: z.string().trim().min(1).max(256),
     mime: z.string().trim().min(1).max(128),
-    size: z.coerce
-      .number()
-      .int()
-      .positive()
-      .max(5 * 1024 * 1024),
+    size: z.coerce.number().int().positive().max(MAX_ATTACHMENT_BYTES),
   })
   .strict();
 
@@ -33,11 +30,7 @@ export const uploadCompleteBodySchema = z
   .object({
     sha256: z.string().regex(/^[a-f0-9]{64}$/i),
     mime: z.string().trim().min(1).max(128),
-    size: z.coerce
-      .number()
-      .int()
-      .positive()
-      .max(5 * 1024 * 1024),
+    size: z.coerce.number().int().positive().max(MAX_ATTACHMENT_BYTES),
   })
   .strict();
 
