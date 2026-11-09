@@ -29,7 +29,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createUserModelProfilesService } from "../src/modules/model-config/index.js";
 import { createRemoteService } from "../src/modules/remotes/index.js";
 import { createCredentialCipher } from "../src/shared/credential-cipher.js";
-import { DEV_MOCK_ACCESS_TOKEN } from "@nova/agent-ui-contracts/dev-auth";
+import { DEV_LOCAL_USER_ID, DEV_MOCK_ACCESS_TOKEN } from "@nova/agent-ui-contracts/dev-auth";
+import type { RunnerSession } from "@nova/runner-sdk";
 import { Pool } from "pg";
 import { and, asc, eq, sql, getTableName } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -1074,8 +1075,8 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     }
   });
   await t.test(
-    "Nova HTTP/SSE keeps intermediate messages, thinking, real usage and native history across turns",
-    async () => {
+    "Nova HTTP/SSE keeps Runner platform, intermediate messages, thinking, real usage and native history across turns",
+    async (httpTest) => {
       const requests: Record<string, unknown>[] = [];
       let upstreamStatus = 200;
       const upstream = createServer(async (request, response) => {
@@ -1181,12 +1182,71 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       const headers = { authorization: "Bearer " + DEV_MOCK_ACCESS_TOKEN };
       let host: ReturnType<typeof createJobHost> | undefined;
       try {
+        const tokens = createRunnerTokenRepository(db);
+        const directory = createRunnerRepository(db);
+        const tokenService = new RunnerTokenService(
+          tokens,
+          createScope(db).serviceTransaction({ repository: tokens }),
+          key,
+        );
+        const token = await tokenService.create({ ownerUserId: DEV_LOCAL_USER_ID, capabilities: ["exec"] });
+        const registration = new RunnerRegistrationService(
+          tokens,
+          createScope(db).serviceTransaction({ runners: directory, tokens }),
+        );
+        const deviceId = randomUUID();
+        const registerRunner = async (platform: string) => {
+          const identity: RunnerSession["identity"] = {
+            runnerId: deviceId,
+            bootId: randomUUID(),
+            protocolVersion: 2,
+            version: "test",
+            platform,
+            capabilities: ["exec"],
+            workspaces: [{ workspaceId: "workspace", displayName: "Test", permission: "READ_WRITE" }],
+            maxConcurrency: 1,
+          };
+          const registered = await registration.register(token.secret, identity);
+          assert.ok(registered);
+          app.runnerConnections.add(registered.runner.id, DEV_LOCAL_USER_ID, token.row.id, {
+            identity,
+            bootId: identity.bootId,
+            connectionEpoch: randomUUID(),
+            connected: true,
+            workspaces: identity.workspaces,
+            createToolContext() {
+              throw new Error("Unexpected Runner tool call");
+            },
+            onStatus: () => () => undefined,
+            cancel: async () => ({ ok: true, value: undefined }),
+            query: async () => ({
+              ok: false,
+              error: { code: "NOT_FOUND", message: "Not found", outcome: "known" },
+            }),
+            close: async () => undefined,
+          });
+          return registered.runner.id;
+        };
+        const runnerId = await registerRunner("windows");
+        const [project] = await db
+          .insert(projects)
+          .values({ ownerUserId: DEV_LOCAL_USER_ID, name: "Runner prompt" })
+          .returning();
+        assert.ok(project);
+        const bound = await app.inject({
+          method: "PUT",
+          url: "/api/projects/" + project.id + "/binding",
+          headers,
+          payload: { runnerId, workspaceId: "workspace", canonicalCwd: ".", expectedRevision: 0 },
+        });
+        assert.equal(bound.statusCode, 200, bound.body);
         const created = await app.inject({
           method: "POST",
           url: "/api/conversations/",
           headers,
           payload: {
-            mode: "chat",
+            mode: "project",
+            projectId: project.id,
             configuration: { backendId: "nova", modelId: null, mode: "build" },
             initialInput: { blocks: [{ id: "text", type: "text", text: "第一轮" }] },
           },
@@ -1247,6 +1307,23 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         assert.deepEqual(final.usage, { inputTokens: 40, outputTokens: 10 });
         assert.equal(final.plan[0]?.text, "检查结果");
         assert.equal(requests.length, 2);
+        const providerMessagesSchema = z
+          .object({
+            role: z.string(),
+            content: z.string().nullable().optional(),
+            tool_call_id: z.string().optional(),
+            reasoning_content: z.string().optional(),
+          })
+          .array();
+        await httpTest.test("the first model request includes the registered Runner operating system", () => {
+          const firstMessages = providerMessagesSchema.parse(requests[0]!.messages);
+          assert.equal(firstMessages[0]?.role, "system");
+          assert.ok(firstMessages[0]?.content);
+          assert.match(firstMessages[0].content, /Runner operating system: "windows"/);
+          assert.match(firstMessages[0].content, /bash tool runs a program directly without a shell/);
+        });
+        // A new registration must replace the previous platform before the next model request.
+        assert.equal(await registerRunner("linux"), runnerId);
         const followup = await app.inject({
           method: "POST",
           url: "/api/conversations/" + id + "/inputs",
@@ -1266,13 +1343,14 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         };
         await waitForRun("succeeded");
         assert.equal(requests.length, 3);
-        const continued = requests[2]!.messages as {
-          role: string;
-          tool_call_id?: string;
-          reasoning_content?: string;
-        }[];
+        const continued = providerMessagesSchema.parse(requests[2]!.messages);
         assert.ok(continued.some((message) => message.role === "tool" && message.tool_call_id === "upstream-call"));
         assert.ok(continued.some((message) => message.reasoning_content === "先确认约束"));
+        await httpTest.test("a new Runner registration refreshes the operating system in follow-up requests", () => {
+          assert.ok(continued[0]?.content);
+          assert.match(continued[0].content, /Runner operating system: "linux"/);
+          assert.doesNotMatch(continued[0].content, /Runner operating system: "windows"/);
+        });
         upstreamStatus = 429;
         const limited = await app.inject({
           method: "POST",

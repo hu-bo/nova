@@ -55,6 +55,16 @@ export class NovaRuntime implements RuntimeAdapter {
     }
     const remoteId = binding?.remoteConnectionId ?? configuration.remoteConnectionId;
     const workspace = binding?.canonicalCwd ?? ".";
+    let runnerInstructions = "";
+    if (!remoteId && binding?.runnerId) {
+      const { session } = await this.deps.runners.require(binding.runnerId, conversation.ownerUserId);
+      runnerInstructions = [
+        "Runner operating system: " + JSON.stringify(session.identity.platform || "unknown"),
+        "Choose commands for this Runner's operating system. Do not assume a POSIX shell or Unix utilities are installed.",
+        "The bash tool runs a program directly without a shell. Put only the executable name or path in command and pass arguments separately in args.",
+        "For shell syntax, explicitly invoke powershell.exe -NoProfile -Command on Windows or sh -lc on POSIX systems.",
+      ].join("\n");
+    }
     const tools = [
       ...(remoteId || binding?.runnerId
         ? createRemoteTools({
@@ -204,6 +214,7 @@ export class NovaRuntime implements RuntimeAdapter {
       configuration.mode === "plan"
         ? "PLAN MODE: analyze and plan using read-only tools. Do not modify files or execute shell commands."
         : "BUILD MODE: implement the task. Writes and commands require approval. Stop when an operation has an unknown outcome.",
+      runnerInstructions,
       projectInstructions,
       specExecution?.kind === "generation"
         ? "Generate the " + specExecution.stage + " draft requested by the user. Read the bound revision with spec_read, then submit the complete candidate with spec_update. Do not write specification files to the workspace."
