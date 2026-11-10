@@ -93,6 +93,28 @@ nova-server 任务：
 
 需要恢复文件时，先停止新容器，将当前目录移到独立故障目录，再从日志里的备份位置恢复对应应用；在恢复后的 `/data/app/agent-server` 按该版本的 Compose 服务配置启动容器并检查健康状态。使用新配置时执行 `docker compose -p nova-server up -d`；恢复改名前的版本时使用该版本原有的项目名和容器名。不要把应用文件恢复当作旧 nova 数据库迁移方案。
 
+## 模型协议错误排查日志
+
+nova-server 已接入 `@hquant/logger-js`。开发环境输出可读日志，生产环境保留 stdout JSON，另写入滚动文件。Compose 将 `/var/log/nova-server` 挂载到独立的 `nova-server-logs` 数据卷，避免只读应用目录导致写入失败，并在容器重建后保留日志。文件按天或 20 MiB 滚动，保留 30 天。直接运行生产 Node 入口时用 `LOG_DIR` 指定可写目录。
+
+`LOG_LEVEL=info` 已包含请求开始、HTTP 响应、流完成和失败摘要。临时改为 `debug` 并重启，可额外观察每个 SSE 事件的类型和结束原因。提示词、模型输出、工具参数、凭据和原始响应体不写入这些模型诊断日志。
+
+复现后按新产生的 `runId` 查询容器 JSON 日志，将下面的 `<runId>` 替换为本次复现值。已有失败记录无法补录这些诊断：
+
+```bash
+docker compose -p nova-server logs --no-log-prefix --no-color --since=30m nova-server | grep '<runId>'
+docker compose -p nova-server exec nova-server sh -c 'ls -lh /var/log/nova-server'
+```
+
+对比本地与线上同一次问题的日志：
+
+- `modelId`、`upstreamModel`、`providerOrigin`、`providerPath`、`protocol`、`reasoningFormat`、`reasoningEffort`、`maxOutputTokens`：确认实际模型配置和入口；`requestHash`、`requestBytes` 用于比较序列化请求是否一致，不输出请求原文。
+- `httpStatus`、`contentType`、`contentEncoding`、`upstreamRequestId`、`elapsedMs`：核对上游响应、网关关联 ID 与超时。
+- `errorCode`、`errorMessage`：记录具体协议失败分支；`finishReason`、`stopped` 显示结束标记是否齐全，`reachedEof` 显示是否读到流尾，`frames`、`pendingCharacters` 显示是否有未解析帧，`toolCalls` 只记录 ID/名称是否存在及参数长度。
+- `Harness run failed`：模型适配器成功后，Harness 仍可能因结束原因与工具调用不匹配而拒绝该步，日志保留具体错误文案。
+
+已用回归测试复现并修复一种网络分包敏感的错误：SSE 的 CRLF 换行在两次读取间被拆开，旧解析器无法识别帧边界并抛出 `MODEL_PROTOCOL`。这只是待核对的原因；已有失败记录仅有错误码，不能据此断定历史线上故障命中了这个分支。
+
 ## 本地验证
 
 ```bash

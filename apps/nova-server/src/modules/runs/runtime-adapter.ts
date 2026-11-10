@@ -1,4 +1,5 @@
 import type { ExecutionRecord, SessionSnapshot } from "@nnova/harness";
+import type { FastifyBaseLogger } from "fastify";
 import type { UploadStorage } from "../attachments/index.js";
 import type {
   Capabilities,
@@ -55,6 +56,7 @@ export interface RuntimeDependencies {
   remotes: import("../remotes/index.js").RemoteConnectionService;
   runners: import("../runners/index.js").RunnerConnections;
   uploads: UploadStorage;
+  logger: FastifyBaseLogger;
 }
 export const runtimeAdapters = new Map<
   string,

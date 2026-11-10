@@ -2,7 +2,15 @@ import { createConversationReader } from "../src/modules/conversations/index.js"
 import assert from "node:assert/strict";
 import test from "node:test";
 import { setImmediate } from "node:timers/promises";
-import { Context, eventObservers, type AgentEvent } from "@nnova/harness";
+import {
+  Context,
+  eventObservers,
+  modelRouter,
+  type AgentEvent,
+  type ModelChunk,
+  type ModelStepRequest,
+} from "@nnova/harness";
+import { createLogger } from "@hquant/logger-js";
 import type { FastifyReply } from "fastify";
 import type { Database } from "../database/index.js";
 import { postgresSessionPlugin } from "../src/modules/runs/postgres-session-store.js";
@@ -11,6 +19,8 @@ import { followEvents } from "../src/modules/events/event-stream.js";
 import { createEventService } from "../src/modules/events/index.js";
 import { EventService } from "../src/modules/events/event.service.js";
 import { SseSubscriber } from "../src/transport/sse.js";
+import { configuredModelPlugin } from "../src/modules/runs/configured-model.js";
+import { disabledUploadStorage } from "../src/modules/attachments/upload-storage.js";
 
 test("SSE follows active output promptly, backs off while idle and stops on disconnect", async (t) => {
   const reads: number[] = [];
@@ -123,4 +133,211 @@ test("stream persistence flushes within 50ms and retains delta order", async (t)
     batches[0]!.filter((event) => event.type === "assistant.delta").map((event) => event.text),
     ["第一段", "第二段"],
   );
+});
+
+test("configured model logs protocol failures with correlation and stream state, excluding payloads", async (t) => {
+  const secret = "DO-NOT-LOG-MODEL-PAYLOAD";
+  const frame = (value: unknown) => `data: ${typeof value === "string" ? value : JSON.stringify(value)}\n\n`;
+  const content = frame({ choices: [{ delta: { content: secret }, finish_reason: null }] });
+  const finish = frame({ choices: [{ delta: {}, finish_reason: "stop" }] });
+  const done = frame("[DONE]");
+  const scenarios = [
+    { name: "valid OpenAI", data: content + finish + done, protocol: "openai", status: 200 },
+    {
+      name: "valid Anthropic",
+      data:
+        frame({ type: "content_block_start", index: 0, content_block: { type: "text", text: secret } }) +
+        frame({ type: "message_delta", delta: { stop_reason: "end_turn" } }) +
+        frame({ type: "message_stop" }),
+      protocol: "anthropic",
+      status: 200,
+    },
+    {
+      name: "missing DONE",
+      data: content + finish,
+      protocol: "openai",
+      status: 200,
+      failure: "Model stream ended before completion.",
+      stopped: false,
+      finishReason: "stop",
+    },
+    {
+      name: "missing finish reason",
+      data: content + done,
+      protocol: "openai",
+      status: 200,
+      failure: "Model stream ended before completion.",
+      stopped: true,
+      finishReason: "",
+    },
+    {
+      name: "incomplete frame",
+      data: content + `data: ${secret}`,
+      protocol: "openai",
+      status: 200,
+      failure: "Model stream ended before completion.",
+      stopped: false,
+      finishReason: "",
+    },
+    {
+      name: "malformed JSON",
+      data: frame(secret),
+      protocol: "openai",
+      status: 200,
+      failure: "Invalid model stream frame.",
+    },
+    {
+      name: "invalid tool JSON",
+      data:
+        frame({
+          choices: [
+            {
+              delta: { tool_calls: [{ index: 0, id: "call", function: { name: "bash", arguments: secret } }] },
+              finish_reason: "tool_calls",
+            },
+          ],
+        }) + done,
+      protocol: "openai",
+      status: 200,
+      failure: "Invalid model tool arguments.",
+    },
+    {
+      name: "upstream error",
+      data: frame({ error: { message: secret } }),
+      protocol: "openai",
+      status: 200,
+      failure: "Model stream failed.",
+      code: "MODEL_REQUEST_FAILED",
+    },
+    {
+      name: "HTTP error",
+      data: secret,
+      protocol: "openai",
+      status: 429,
+      failure: "Model request failed (HTTP 429).",
+      code: "MODEL_RATE_LIMITED",
+    },
+    { name: "network error", data: "", protocol: "openai", status: 200, transportError: true },
+    {
+      name: "CRLF split across reads",
+      data: (content + finish + done).replace(/\n/g, "\r\n"),
+      protocol: "openai",
+      status: 200,
+      split: true,
+    },
+  ] as const;
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async (t) => {
+      const logs: Record<string, unknown>[] = [];
+      const logger = createLogger(
+        "nova-server",
+        { environment: "test", level: "debug" },
+        {
+          write: (line: string) => logs.push(JSON.parse(line) as Record<string, unknown>),
+        },
+      );
+      const transportError = new TypeError(secret, { cause: Object.assign(new Error(secret), { code: "ECONNRESET" }) });
+      t.mock.method(globalThis, "fetch", async () => {
+        if ("transportError" in scenario) throw transportError;
+        const data = new TextEncoder().encode(scenario.data);
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            if ("split" in scenario) {
+              for (const byte of data) controller.enqueue(Uint8Array.of(byte));
+            } else controller.enqueue(data);
+            controller.close();
+          },
+        });
+        return new Response(body, {
+          status: scenario.status,
+          headers: { "content-type": "text/event-stream", "x-request-id": "upstream-123" },
+        });
+      });
+      const now = new Date();
+      const route: Parameters<typeof configuredModelPlugin>[0] = {
+        credential: secret,
+        provider: {
+          id: "provider",
+          protocol: scenario.protocol,
+          name: "provider",
+          baseUrl: "https://provider.invalid/v1",
+          credentialCiphertext: secret,
+          credentialMasked: "masked",
+          enabled: true,
+          isPublic: true,
+          ownerId: null,
+          deletedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+        model: {
+          id: "model",
+          providerId: "provider",
+          publicName: "model",
+          upstreamName: "upstream",
+          contextWindow: "100000",
+          maxOutput: "4096",
+          thinkingLevels: ["medium"],
+          parallelToolCalls: true,
+          reasoningFormat: "none",
+          inputModalities: ["text"],
+          enabled: true,
+          priceIn: "0",
+          priceOut: "0",
+          priceCacheRead: "0",
+          deletedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      };
+      const context = new Context("kernel");
+      t.after(() => context.dispose());
+      await context.plugin(configuredModelPlugin(route, disabledUploadStorage(), "owner", logger));
+      await context.ready();
+      const request: ModelStepRequest = {
+        sessionId: "conversation",
+        runId: "run",
+        stepId: "step",
+        signal: new AbortController().signal,
+        messages: [{ role: "user", parts: [{ type: "text", text: secret }] }],
+        tools: [],
+        reasoningEffort: "medium",
+      };
+      const chunks: ModelChunk[] = [];
+      const consume = async () => {
+        for await (const chunk of context.resolve(modelRouter).stream(request)) chunks.push(chunk);
+      };
+      if ("failure" in scenario) {
+        await assert.rejects(consume, { message: scenario.failure });
+        const failure = logs.find((entry) => entry.msg === "Model stream failed")!;
+        assert.equal(failure.errorCode, "code" in scenario ? scenario.code : "MODEL_PROTOCOL");
+        assert.equal(failure.errorMessage, scenario.failure);
+        assert.equal(failure.reachedEof, scenario.name === "missing DONE" || scenario.name === "incomplete frame");
+        if ("stopped" in scenario) {
+          assert.equal(failure.stopped, scenario.stopped);
+          assert.equal(failure.finishReason, scenario.finishReason);
+        }
+        if (scenario.name === "incomplete frame") assert.equal(failure.pendingCharacters, `data: ${secret}`.length);
+        if (scenario.name === "invalid tool JSON")
+          assert.deepEqual(failure.toolCalls, [
+            { index: 0, hasId: true, hasName: true, argumentCharacters: secret.length },
+          ]);
+      } else if ("transportError" in scenario) {
+        await assert.rejects(consume, transportError);
+        assert.equal(logs.find((entry) => entry.msg === "Model stream failed")!.transportCode, "ECONNRESET");
+      } else {
+        await consume();
+        assert.equal(chunks.at(-1)?.type, "finished");
+        assert.ok(logs.some((entry) => entry.msg === "Model stream completed"));
+      }
+      for (const entry of logs) {
+        assert.equal(entry.conversationId, "conversation");
+        assert.equal(entry.runId, "run");
+        assert.equal(entry.stepId, "step");
+        assert.equal(entry.modelId, "model");
+        assert.equal(entry.protocol, scenario.protocol);
+      }
+      assert.ok(!JSON.stringify(logs).includes(secret));
+    });
+  }
 });

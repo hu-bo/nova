@@ -1,5 +1,6 @@
 import type { EventRetentionService } from "../events/index.js";
 import { randomUUID } from "node:crypto";
+import type { FastifyBaseLogger } from "fastify";
 import type { Database } from "../../../database/index.js";
 import type { JobRecord } from "../../jobs/postgres-job-store.js";
 import type { UserModelProfilesService } from "../model-config/index.js";
@@ -24,6 +25,7 @@ export class ConversationExecutor {
       remotes: RemoteConnectionService;
       runners: RunnerConnections;
       uploads: UploadStorage;
+      logger: FastifyBaseLogger;
     },
   ) {
     this.repository = createRunService(deps.db);
@@ -47,6 +49,7 @@ export class ConversationExecutor {
     const prepared = await this.repository.prepare(conversationId, this.workerId);
     if (!prepared) return;
     const claim: RunClaim = { id: prepared.run.id, conversationId, workerId: this.workerId, fence: prepared.run.fence };
+    const logger = this.deps.logger.child({ conversationId, runId: claim.id, workerId: this.workerId });
     const controller = new AbortController();
     const deadline = prepared.run.deadlineAt?.getTime() ?? Date.now() + 30 * 60000;
     const signal = AbortSignal.any([
@@ -91,7 +94,7 @@ export class ConversationExecutor {
       }
       const factory = runtimeAdapters.get(prepared.configuration.backendId)?.create;
       if (!factory) throw new Error("BACKEND_UNAVAILABLE");
-      adapter = factory({ ...this.deps, prepared, claim, repository: this.repository });
+      adapter = factory({ ...this.deps, logger, prepared, claim, repository: this.repository });
       let command: RuntimeCommand = prepared.command;
       const goal = prepared.conversation.metadata.goal;
       let iterations = goal?.iterations ?? 0;
@@ -126,6 +129,7 @@ export class ConversationExecutor {
           return;
         }
         if (outcome.state !== "succeeded") {
+          logger.warn({ state: outcome.state, reason: outcome.reason }, "Conversation run ended without success");
           await this.repository.finish(claim, outcome.state, outcome.reason);
           return;
         }
@@ -133,7 +137,7 @@ export class ConversationExecutor {
         const goalStatus = checkpoint.projection?.goal;
         if (!goal || goalStatus?.status !== "active" || iterations >= goal.maxIterations) break;
         await adapter.dispose();
-        adapter = factory({ ...this.deps, prepared, claim, repository: this.repository });
+        adapter = factory({ ...this.deps, logger, prepared, claim, repository: this.repository });
         command = {
           kind: "start",
           messageId: randomUUID(),
@@ -147,6 +151,10 @@ export class ConversationExecutor {
       await this.repository.finish(claim, completionState(signal.aborted, cancellation));
     } catch (error) {
       const reason = error instanceof Error && "code" in error ? String(error.code) : "EXECUTION_FAILED";
+      logger.error(
+        { reason, errorName: error instanceof Error ? error.name : "UNKNOWN", aborted: signal.aborted },
+        "Conversation execution failed",
+      );
       const cancellation = signal.aborted && adapter ? await adapter.cancel(claim.id) : "confirmed";
       await this.repository.finish(claim, failureState(signal.aborted, cancellation, deadline), reason);
     } finally {

@@ -73,6 +73,7 @@ import "../src/modules/runs/nova-runtime.js";
 import { ConversationExecutor } from "../src/modules/runs/conversation-executor.js";
 import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
+import { createAppLogger } from "../src/shared/logger.js";
 import { createJobHost } from "../src/jobs/job-registry.js";
 import { claim as claimJobs, enqueue as enqueueJob } from "../src/jobs/postgres-job-store.js";
 
@@ -1060,6 +1061,8 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         models: {} as never,
         remotes: {} as never,
         runners: {} as never,
+        uploads: disabledUploadStorage(),
+        logger: createAppLogger({ NODE_ENV: "test", LOG_LEVEL: "silent", LOG_DIR: "logs", ROLE: "worker" }),
       });
       await executor.handle({ aggregateId: conversation.id } as never);
       await executor.close();
@@ -1178,6 +1181,8 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         models: createUserModelProfilesService(app),
         remotes: createRemoteService(app),
         runners: app.runnerConnections,
+        uploads: disabledUploadStorage(),
+        logger: app.log,
       });
       const headers = { authorization: "Bearer " + DEV_MOCK_ACCESS_TOKEN };
       let host: ReturnType<typeof createJobHost> | undefined;

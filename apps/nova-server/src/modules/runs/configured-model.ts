@@ -10,6 +10,8 @@ import {
 } from "@nnova/harness";
 import type { ModelRow, ProviderRow } from "../model-config/index.js";
 import type { UploadStorage } from "../attachments/index.js";
+import type { FastifyBaseLogger } from "fastify";
+import { createHash } from "node:crypto";
 
 type Route = { model: ModelRow; provider: ProviderRow; credential: string };
 const record = (value: unknown): Record<string, unknown> =>
@@ -37,6 +39,13 @@ type ProviderStreamState = {
   reasoning: string;
 };
 type ProviderEventResult = { text: string; thinking: string };
+type StreamDiagnostics = {
+  readChunks: number;
+  responseBytes: number;
+  frames: number;
+  pendingCharacters: number;
+  reachedEof: boolean;
+};
 // Native continuation blocks and signed thinking stay in `native`/`reasoning` for the Harness replay.
 function consumeAnthropicEvent(event: Record<string, unknown>, state: ProviderStreamState): ProviderEventResult {
   const observed = record(event.usage ?? record(event.message).usage);
@@ -232,7 +241,12 @@ export async function modelRequest(
 }
 
 /** The provider's native continuation blocks stay inside Harness, never in the UI event journal. */
-export function configuredModelPlugin(route: Route, uploads: UploadStorage, ownerUserId: string): PluginDefinition {
+export function configuredModelPlugin(
+  route: Route,
+  uploads: UploadStorage,
+  ownerUserId: string,
+  logger: FastifyBaseLogger,
+): PluginDefinition {
   return {
     manifest: {
       id: "nova.model.configured",
@@ -253,109 +267,213 @@ export function configuredModelPlugin(route: Route, uploads: UploadStorage, owne
           capabilities: { tools: true, images: true, files: false },
         }),
         async *stream(request): AsyncIterable<ModelChunk> {
-          const { url, body } = await modelRequest(route, request, async (uri) => {
-            const prefix = "nova-object:";
-            if (!uri.startsWith(prefix)) throw new FrameworkError("MODEL_INCOMPATIBLE", "Invalid image reference.");
-            return (await uploads.imageUrl(ownerUserId, { kind: "object", key: uri.slice(prefix.length) })).url;
+          const startedAt = Date.now();
+          let log = logger.child({
+            component: "configured-model",
+            conversationId: request.sessionId,
+            runId: request.runId,
+            stepId: request.stepId,
+            providerId: route.provider.id,
+            protocol: route.provider.protocol,
+            modelId: route.model.id,
+            upstreamModel: route.model.upstreamName,
+            reasoningFormat: route.model.reasoningFormat,
+            reasoningEffort: request.reasoningEffort ?? null,
+            maxOutputTokens: Number(route.model.maxOutput),
+            contextWindow: Number(route.model.contextWindow),
+            parallelToolCalls: route.model.parallelToolCalls,
+            messageCount: request.messages.length,
+            toolCount: request.tools.length,
           });
-          const response = await fetch(url, {
-            method: "POST",
-            redirect: "error",
-            signal: AbortSignal.any([request.signal, context.signal, AbortSignal.timeout(180_000)]),
-            headers: {
-              "content-type": "application/json",
-              authorization: "Bearer " + route.credential,
-              ...(route.provider.protocol === "anthropic"
-                ? { "x-api-key": route.credential, "anthropic-version": "2023-06-01" }
-                : {}),
-            },
-            body: JSON.stringify(body),
-          });
-          if (!response.ok || !response.body) {
-            await response.body?.cancel();
-            const code = requestFailureCode(response.status);
-            throw new FrameworkError(code, "Model request failed (HTTP " + response.status + ").");
-          }
-          const parts: MessagePart[] = [];
           const state: ProviderStreamState = {
-            calls: new Map<number, { id: string; name: string; args: string }>(),
-            native: new Map<number, Record<string, unknown>>(),
+            calls: new Map(),
+            native: new Map(),
             usage: { inputTokens: null, outputTokens: null, cachedInputTokens: null, reasoningTokens: null },
             finish: "",
             stopped: false,
             reasoning: "",
           };
-          const consume = route.provider.protocol === "anthropic" ? consumeAnthropicEvent : consumeOpenAIEvent;
+          const diagnostics: StreamDiagnostics = {
+            readChunks: 0,
+            responseBytes: 0,
+            frames: 0,
+            pendingCharacters: 0,
+            reachedEof: false,
+          };
           let answer = "",
-            bytes = 0;
-          for await (const value of providerEvents(response.body)) {
-            request.signal.throwIfAborted();
-            if (value === "[DONE]") {
-              state.stopped = true;
-              break;
+            bytes = 0,
+            eventCount = 0,
+            reasoningCharacters = 0;
+          const summary = () => ({
+            ...diagnostics,
+            elapsedMs: Date.now() - startedAt,
+            eventCount,
+            finishReason: state.finish,
+            stopped: state.stopped,
+            outputCharacters: answer.length,
+            reasoningCharacters,
+            toolCalls: [...state.calls].slice(0, 32).map(([index, call]) => ({
+              index,
+              hasId: Boolean(call.id),
+              hasName: Boolean(call.name),
+              argumentCharacters: call.args.length,
+            })),
+            toolCallCount: state.calls.size,
+          });
+          const signal = AbortSignal.any([request.signal, context.signal, AbortSignal.timeout(180_000)]);
+          try {
+            const { url, body } = await modelRequest(route, request, async (uri) => {
+              const prefix = "nova-object:";
+              if (!uri.startsWith(prefix)) throw new FrameworkError("MODEL_INCOMPATIBLE", "Invalid image reference.");
+              return (await uploads.imageUrl(ownerUserId, { kind: "object", key: uri.slice(prefix.length) })).url;
+            });
+            const endpoint = new URL(url);
+            const requestBody = JSON.stringify(body);
+            // Never record the serialized request, credentials, URL query or provider payloads.
+            log = log.child({
+              providerOrigin: endpoint.origin,
+              providerPath: endpoint.pathname,
+              requestBytes: Buffer.byteLength(requestBody),
+              requestHash: createHash("sha256").update(requestBody).digest("hex"),
+            });
+            log.info("Model request started");
+            const response = await fetch(url, {
+              method: "POST",
+              redirect: "error",
+              signal,
+              headers: {
+                "content-type": "application/json",
+                authorization: "Bearer " + route.credential,
+                ...(route.provider.protocol === "anthropic"
+                  ? { "x-api-key": route.credential, "anthropic-version": "2023-06-01" }
+                  : {}),
+              },
+              body: requestBody,
+            });
+            log = log.child({
+              httpStatus: response.status,
+              contentType: response.headers.get("content-type"),
+              contentEncoding: response.headers.get("content-encoding"),
+              upstreamRequestId: (response.headers.get("x-request-id") ?? response.headers.get("request-id"))?.slice(
+                0,
+                200,
+              ),
+            });
+            log.info({ elapsedMs: Date.now() - startedAt }, "Model response received");
+            if (!response.ok || !response.body) {
+              await response.body?.cancel();
+              const code = requestFailureCode(response.status);
+              throw new FrameworkError(code, "Model request failed (HTTP " + response.status + ").");
             }
-            const event = record(value);
-            if (event.error || event.type === "error")
-              throw new FrameworkError("MODEL_REQUEST_FAILED", "Model stream failed.");
-            const delta = consume(event, state);
-            bytes += Buffer.byteLength(JSON.stringify(event));
-            if (bytes > 8 * 1024 * 1024)
-              throw new FrameworkError("MODEL_OUTPUT_LIMIT", "Model output exceeded its limit.");
-            if (delta.thinking) yield { type: "thinking.delta", partId: "thinking", text: delta.thinking };
-            if (delta.text) {
-              answer += delta.text;
-              yield { type: "text.delta", partId: "text", text: delta.text };
+            const parts: MessagePart[] = [];
+            const consume = route.provider.protocol === "anthropic" ? consumeAnthropicEvent : consumeOpenAIEvent;
+            for await (const value of providerEvents(response.body, diagnostics)) {
+              request.signal.throwIfAborted();
+              eventCount++;
+              if (value === "[DONE]") {
+                state.stopped = true;
+                break;
+              }
+              const event = record(value);
+              const choice = record(Array.isArray(event.choices) ? event.choices[0] : undefined);
+              log.debug(
+                {
+                  eventNumber: eventCount,
+                  eventType: string(event.type).slice(0, 80) || "chat.completion.chunk",
+                  finishReason: string(choice.finish_reason || record(event.delta).stop_reason).slice(0, 80),
+                  hasError: Boolean(event.error || event.type === "error"),
+                },
+                "Model stream event",
+              );
+              if (event.error || event.type === "error")
+                throw new FrameworkError("MODEL_REQUEST_FAILED", "Model stream failed.");
+              const delta = consume(event, state);
+              reasoningCharacters += delta.thinking.length;
+              bytes += Buffer.byteLength(JSON.stringify(event));
+              if (bytes > 8 * 1024 * 1024)
+                throw new FrameworkError("MODEL_OUTPUT_LIMIT", "Model output exceeded its limit.");
+              if (delta.thinking) yield { type: "thinking.delta", partId: "thinking", text: delta.thinking };
+              if (delta.text) {
+                answer += delta.text;
+                yield { type: "text.delta", partId: "text", text: delta.text };
+              }
             }
+            const { calls, native, usage, finish, stopped, reasoning } = state;
+            if (!stopped || !finish)
+              throw new FrameworkError("MODEL_PROTOCOL", "Model stream ended before completion.");
+            if (answer) parts.push({ id: "text", type: "text", text: answer });
+            for (const [index, call] of calls) {
+              if (!call.id || !call.name) throw new FrameworkError("MODEL_PROTOCOL", "Invalid model tool call.");
+              let input: JsonValue;
+              try {
+                input = json(JSON.parse(call.args || "{}"));
+              } catch {
+                throw new FrameworkError("MODEL_PROTOCOL", "Invalid model tool arguments.");
+              }
+              if (native.get(index)) native.get(index)!.input = input;
+              parts.push({ type: "tool-call", callId: call.id, name: call.name, input });
+              yield { type: "tool.call", callId: call.id, name: call.name, input };
+            }
+            const metadata = {
+              ...(native.size ? { anthropicContent: json([...native.values()]) } : {}),
+              ...(reasoning ? { reasoningContent: reasoning } : {}),
+            };
+            log.info({ ...summary(), usage }, "Model stream completed");
+            yield {
+              type: "message.completed",
+              message: {
+                role: "assistant",
+                parts,
+                ...(native.size || reasoning ? { metadata } : {}),
+              },
+            };
+            yield { type: "usage", usage };
+            yield { type: "finished", reason: finishedReason(finish) };
+          } catch (error) {
+            log.error(
+              {
+                ...summary(),
+                errorCode: error instanceof FrameworkError ? error.code : "MODEL_TRANSPORT",
+                errorMessage: error instanceof FrameworkError ? error.message : undefined,
+                errorName: error instanceof Error ? error.name : "UNKNOWN",
+                transportCode: string(record(error instanceof Error ? error.cause : undefined).code),
+                aborted: signal.aborted,
+                abortReason: signal.aborted && signal.reason instanceof Error ? signal.reason.name : undefined,
+              },
+              "Model stream failed",
+            );
+            throw error;
           }
-          const { calls, native, usage, finish, stopped, reasoning } = state;
-          if (!stopped || !finish) throw new FrameworkError("MODEL_PROTOCOL", "Model stream ended before completion.");
-          if (answer) parts.push({ id: "text", type: "text", text: answer });
-          for (const [index, call] of calls) {
-            if (!call.id || !call.name) throw new FrameworkError("MODEL_PROTOCOL", "Invalid model tool call.");
-            let input: JsonValue;
-            try {
-              input = json(JSON.parse(call.args || "{}"));
-            } catch {
-              throw new FrameworkError("MODEL_PROTOCOL", "Invalid model tool arguments.");
-            }
-            if (native.get(index)) native.get(index)!.input = input;
-            parts.push({ type: "tool-call", callId: call.id, name: call.name, input });
-            yield { type: "tool.call", callId: call.id, name: call.name, input };
-          }
-          const metadata = {
-            ...(native.size ? { anthropicContent: json([...native.values()]) } : {}),
-            ...(reasoning ? { reasoningContent: reasoning } : {}),
-          };
-          yield {
-            type: "message.completed",
-            message: {
-              role: "assistant",
-              parts,
-              ...(native.size || reasoning ? { metadata } : {}),
-            },
-          };
-          yield { type: "usage", usage };
-          yield { type: "finished", reason: finishedReason(finish) };
         },
       });
     },
   };
 }
 
-async function* providerEvents(body: ReadableStream<Uint8Array>): AsyncIterable<unknown> {
+async function* providerEvents(
+  body: ReadableStream<Uint8Array>,
+  diagnostics: StreamDiagnostics,
+): AsyncIterable<unknown> {
   const reader = body.getReader(),
     decoder = new TextDecoder();
   let buffer = "";
   try {
     while (true) {
       const chunk = await reader.read();
-      buffer += decoder.decode(chunk.value, { stream: !chunk.done }).replace(/\r\n/g, "\n");
+      diagnostics.readChunks++;
+      diagnostics.responseBytes += chunk.value?.byteLength ?? 0;
+      diagnostics.reachedEof = chunk.done;
+      // Normalize after joining reads: a CRLF pair can straddle network chunks.
+      buffer = (buffer + decoder.decode(chunk.value, { stream: !chunk.done })).replace(/\r\n/g, "\n");
+      diagnostics.pendingCharacters = buffer.length;
       if (buffer.length > 2 * 1024 * 1024)
         throw new FrameworkError("MODEL_PROTOCOL", "Model stream frame is too large.");
       let boundary: number;
       while ((boundary = buffer.indexOf("\n\n")) >= 0) {
         const frame = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
+        diagnostics.frames++;
+        diagnostics.pendingCharacters = buffer.length;
         const data = frame
           .split("\n")
           .filter((line) => line.startsWith("data:"))

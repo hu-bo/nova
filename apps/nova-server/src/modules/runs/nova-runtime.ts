@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { FastifyBaseLogger } from "fastify";
 import {
   contextContributions,
   commitSessionUpdate,
@@ -39,6 +40,7 @@ export class NovaRuntime implements RuntimeAdapter {
       remotes: RemoteConnectionService;
       runners: RunnerConnections;
       uploads: UploadStorage;
+      logger: FastifyBaseLogger;
     },
   ) {}
   async execute(command: RuntimeCommand, context: RuntimeContext): Promise<RuntimeOutcome> {
@@ -232,7 +234,7 @@ export class NovaRuntime implements RuntimeAdapter {
       .join("\n\n");
     this.harness = await createCodingHarness({
       model: {
-        plugin: configuredModelPlugin(route, this.deps.uploads, conversation.ownerUserId),
+        plugin: configuredModelPlugin(route, this.deps.uploads, conversation.ownerUserId, this.deps.logger),
         modelId: route.model.id,
       },
       sessionId: conversation.id,
@@ -275,7 +277,7 @@ export class NovaRuntime implements RuntimeAdapter {
       maxRunMs: 30 * 60000,
       maxParallelReads: 4,
       maxParallelWrites: 1,
-      onDiagnostic: () => undefined,
+      onDiagnostic: (diagnostic) => this.deps.logger.warn({ diagnostic }, "Harness diagnostic"),
     });
     const options = {
       runId: claim.id,
@@ -336,6 +338,7 @@ export class NovaRuntime implements RuntimeAdapter {
       result = await this.harness.run({ id: command.messageId, role: "user", parts }, options);
     }
     if (result.kind === "suspended") return { kind: "waiting" };
+    if (result.error) this.deps.logger.error({ error: result.error, modelId: route.model.id }, "Harness run failed");
     return { kind: "completed", state: result.status, ...(result.error ? { reason: result.error.code } : {}) };
   }
   async dispose() {

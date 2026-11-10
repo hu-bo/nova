@@ -19,6 +19,7 @@ export function startConversationExecution(
     remotes: createRemoteService(app),
     runners: app.runnerConnections,
     uploads,
+    logger: app.log,
   });
   const host = createJobHost({
     db: app.db,

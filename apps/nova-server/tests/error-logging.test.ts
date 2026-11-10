@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import test from "node:test";
@@ -69,9 +69,9 @@ test("server logs preserve UTF-8 Chinese text and use local timestamps with the 
           "-e",
           `
             import Fastify from "fastify";
-            import { createLoggerOptions } from "./src/shared/logger.ts";
+            import { createAppLogger } from "./src/shared/logger.ts";
             Date.now = () => ${Date.parse(scenario.now)};
-            const app = Fastify({ logger: createLoggerOptions("info") });
+            const app = Fastify({ loggerInstance: createAppLogger({ NODE_ENV: "test", LOG_LEVEL: "info", LOG_DIR: "logs", ROLE: "all" }) });
             app.log.error({
               err: new Error("中文异常：权限不足"),
               req: {
@@ -95,10 +95,62 @@ test("server logs preserve UTF-8 Chinese text and use local timestamps with the 
       assert.equal(entry.time, scenario.expected);
       assert.equal(entry.msg, "中文日志：SSH 连接失败 🚫");
       assert.equal(entry.err.message, "中文异常：权限不足");
+      assert.equal(entry.service, "nova-server");
+      assert.equal(entry.env, "test");
+      assert.equal(entry.role, "all");
       assert.ok(result.stdout.includes("中文日志"));
       assert.ok(!result.stdout.includes("HIDDEN-SECRET"));
     });
   }
+});
+
+test("production logger supports Fastify child bindings and retains debug logs in stdout and rotating files", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "nova-production-logs-"));
+  t.after(() => {
+    for (const name of readdirSync(directory)) unlinkSync(join(directory, name));
+    rmdirSync(directory);
+  });
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      `
+    import Fastify from "fastify";
+    import { createAppLogger } from "./src/shared/logger.ts";
+    const app = Fastify({ loggerInstance: createAppLogger({ NODE_ENV: "production", LOG_LEVEL: "debug", LOG_DIR: process.env.TEST_LOG_DIR, ROLE: "worker" }) });
+    app.get("/test", (req) => { req.log.debug({ stage: "test" }, "中文诊断"); return { ok: true }; });
+    await app.inject("/test");
+    await app.close();
+  `,
+    ],
+    {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+      env: { ...process.env, TEST_LOG_DIR: directory },
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 15_000,
+    },
+  );
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  const entries = result.stdout
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const diagnostic = entries.find((entry) => entry.msg === "中文诊断");
+  assert.equal(diagnostic.level, 20);
+  assert.equal(diagnostic.env, "production");
+  assert.equal(diagnostic.role, "worker");
+  assert.ok(diagnostic.reqId);
+  const fileContents = readdirSync(directory)
+    .filter((name) => name.endsWith(".log"))
+    .map((name) => readFileSync(join(directory, name), "utf8"))
+    .join("\n");
+  assert.ok(fileContents.includes("中文诊断"));
+  assert.ok(fileContents.includes(diagnostic.reqId));
+  assert.match(fileContents, /stage:\s+"test"/);
 });
 
 test("SSH test failures log the original diagnostic without exposing credentials or changing responses", async (t) => {

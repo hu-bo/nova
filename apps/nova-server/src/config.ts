@@ -7,6 +7,7 @@ const environmentSchema = z
     HOST: z.string().min(1).default("0.0.0.0"),
     ROLE: z.enum(["api", "worker", "gateway", "all"]).default("all"),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+    LOG_DIR: z.string().trim().min(1).default("logs"),
     DATABASE_URL: z.string().url(),
     DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
     DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),

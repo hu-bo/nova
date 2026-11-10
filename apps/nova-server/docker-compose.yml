@@ -12,6 +12,7 @@ services:
       # Runner connections and execution currently share process-local state.
       ROLE: all
       AUTH_MODE: casdoor
+      LOG_DIR: /var/log/nova-server
       SWAGGER_UI_ENABLED: "false"
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       MODEL_CONFIG_ENCRYPTION_KEY: ${MODEL_CONFIG_ENCRYPTION_KEY:?Set MODEL_CONFIG_ENCRYPTION_KEY in .env}
@@ -19,6 +20,7 @@ services:
       - "9203:9203"
     volumes:
       - .:/data/app/agent-server:ro
+      - nova-server-logs:/var/log/nova-server
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -42,6 +44,9 @@ services:
       options:
         max-size: "20m"
         max-file: "5"
+
+volumes:
+  nova-server-logs:
 
 networks:
   shared_network:

@@ -1,3 +1,5 @@
+import { createLogger } from "@hquant/logger-js";
+import type { FastifyBaseLogger } from "fastify";
 import type { AppConfig } from "../config.js";
 
 function localTimestamp(): string {
@@ -22,4 +24,15 @@ export function createLoggerOptions(level: AppConfig["LOG_LEVEL"]) {
       "req.body.passphrase",
     ],
   };
+}
+
+export function createAppLogger(
+  config: Pick<AppConfig, "LOG_LEVEL" | "NODE_ENV" | "LOG_DIR" | "ROLE">,
+): FastifyBaseLogger {
+  return createLogger("nova-server", {
+    ...createLoggerOptions(config.LOG_LEVEL),
+    environment: config.NODE_ENV,
+    directory: config.LOG_DIR,
+    base: { role: config.ROLE, nodeVersion: process.version, platform: process.platform },
+  });
 }

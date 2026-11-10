@@ -10,9 +10,9 @@
     "scripts/check-deployment.mjs"
   ],
   "scripts": {
-    "dev": "pnpm --filter @nova/casdoor build && pnpm --filter @nova/agent-ui-contracts build && tsx watch src/server.ts",
-    "dev:worker": "pnpm --filter @nova/casdoor build && pnpm --filter @nova/agent-ui-contracts build && tsx watch src/worker.ts",
-    "build": "pnpm --filter @nova/casdoor build && pnpm --filter @nova/agent-ui-contracts build && tsc -p tsconfig.json",
+    "dev": "pnpm --filter @hquant/logger-js build && pnpm --filter @nova/casdoor build && pnpm --filter @nova/agent-ui-contracts build && tsx watch src/server.ts",
+    "dev:worker": "pnpm --filter @hquant/logger-js build && pnpm --filter @nova/casdoor build && pnpm --filter @nova/agent-ui-contracts build && tsx watch src/worker.ts",
+    "build": "pnpm --filter @hquant/logger-js build && pnpm --filter @nova/casdoor build && pnpm --filter @nova/agent-ui-contracts build && tsc -p tsconfig.json",
     "start": "node dist/src/server.js",
     "start:worker": "node dist/src/worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -25,6 +25,7 @@
   "dependencies": {
     "@fastify/swagger": "^9.4.0",
     "@fastify/swagger-ui": "^5.2.0",
+    "@hquant/logger-js": "workspace:*",
     "@nnova/harness": "workspace:^",
     "@nova/agent-ui-contracts": "workspace:^",
     "@nova/casdoor": "workspace:*",

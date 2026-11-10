@@ -22,7 +22,7 @@ import { databasePlugin } from "./plugins/database.js";
 import { registerErrorHandlers } from "./plugins/errors.js";
 import { registerOpenApi } from "./plugins/openapi.js";
 import { errorResponseSchema } from "./shared/error.schema.js";
-import { createLoggerOptions } from "./shared/logger.js";
+import { createAppLogger } from "./shared/logger.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -33,7 +33,7 @@ declare module "fastify" {
 
 export async function buildApp(config: AppConfig, options: { exportMode?: boolean } = {}) {
   const app = Fastify({
-    logger: createLoggerOptions(config.LOG_LEVEL),
+    loggerInstance: createAppLogger(config),
   });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
