@@ -75,6 +75,7 @@ function compatibleModel(route: ProviderRoute, fetch: typeof globalThis.fetch, p
     transformRequestBody: (body: Record<string, unknown>) => ({
       ...body,
       ...(route.parallelToolCalls === undefined ? {} : { parallel_tool_calls: route.parallelToolCalls }),
+      ...(provider === "minimax" ? { reasoning_split: true } : {}),
     }),
   }).chatModel(route.model);
 }

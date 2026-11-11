@@ -282,7 +282,7 @@ test("registered providers map standard reasoning settings and support custom en
     { provider: "anthropic", effort: "off", expected: { thinking: { type: "disabled" } } },
     { provider: "deepseek", effort: "medium", expected: { thinking: { type: "enabled" }, reasoning_effort: "high" } },
     { provider: "deepseek", effort: "off", expected: { thinking: { type: "disabled" } } },
-    { provider: "minimax", effort: "max", expected: { reasoning_effort: "max" } },
+    { provider: "minimax", effort: "max", expected: { reasoning_effort: "max", reasoning_split: true } },
     { provider: "minimax-anthropic", effort: "medium", expected: { output_config: { effort: "medium" } } },
   ];
   for (const scenario of scenarios)
@@ -399,8 +399,16 @@ test("compatible reasoning is replayed and object image references are resolved 
   const first = await consume(model, { messages: [input] });
   const completed = first.find((chunk) => chunk.type === "message.completed");
   assert.ok(completed?.type === "message.completed");
+  assert.deepEqual(
+    completed.message.parts.map((part) => ({ type: part.type, text: "text" in part ? part.text : undefined })),
+    [
+      { type: "thinking", text: "consider" },
+      { type: "text", text: "ok" },
+    ],
+  );
   await consume(model, { messages: [input, completed.message] });
   assert.deepEqual(resolved, ["nova-object:private", "nova-object:private"]);
+  for (const body of bodies) assert.equal(z.record(z.string(), z.unknown()).parse(body).reasoning_split, true);
   assert.ok(JSON.stringify(bodies[0]).includes("https://images.invalid/signed"));
   assert.ok(JSON.stringify(bodies[1]).includes('"reasoning_content":"consider"'));
 });

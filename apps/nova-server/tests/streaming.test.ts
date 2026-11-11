@@ -195,6 +195,24 @@ test("configured model delegates protocol handling and logs safe correlated fail
     },
     { name: "missing DONE", data: content + finish, protocol: "openai", status: 200 },
     {
+      name: "legacy MiniMax OpenAI route completes without DONE",
+      data: content + finish,
+      protocol: "openai",
+      reasoningFormat: "openai",
+      status: 200,
+    },
+    {
+      name: "MiniMax adapter separates reasoning and completes without DONE",
+      data:
+        frame({ choices: [{ index: 0, delta: { reasoning_content: secret }, finish_reason: null }] }) +
+        content +
+        finish,
+      protocol: "openai",
+      adapterId: "minimax",
+      reasoningFormat: "minimax",
+      status: 200,
+    },
+    {
       name: "missing finish reason",
       data: content + done,
       protocol: "openai",
@@ -265,7 +283,13 @@ test("configured model delegates protocol handling and logs safe correlated fail
         },
       );
       const transportError = new TypeError(secret, { cause: Object.assign(new Error(secret), { code: "ECONNRESET" }) });
-      t.mock.method(globalThis, "fetch", async () => {
+      t.mock.method(globalThis, "fetch", async (_url: unknown, init?: RequestInit) => {
+        if ("adapterId" in scenario) {
+          assert.ok(typeof init?.body === "string");
+          const body: unknown = JSON.parse(init.body);
+          assert.ok(body && typeof body === "object" && "reasoning_split" in body);
+          assert.equal(body.reasoning_split, true);
+        }
         if ("transportError" in scenario) throw transportError;
         const data = new TextEncoder().encode(scenario.data);
         const body = new ReadableStream<Uint8Array>({
@@ -286,7 +310,7 @@ test("configured model delegates protocol handling and logs safe correlated fail
         credential: secret,
         provider: {
           id: "provider",
-          adapterId: null,
+          adapterId: "adapterId" in scenario ? scenario.adapterId : null,
           protocol: scenario.protocol,
           name: "provider",
           baseUrl: "https://provider.invalid/v1",
@@ -308,7 +332,7 @@ test("configured model delegates protocol handling and logs safe correlated fail
           maxOutput: "4096",
           thinkingLevels: ["medium"],
           parallelToolCalls: true,
-          reasoningFormat: "none",
+          reasoningFormat: "reasoningFormat" in scenario ? scenario.reasoningFormat : "none",
           inputModalities: ["text"],
           enabled: true,
           priceIn: "0",
@@ -353,7 +377,18 @@ test("configured model delegates protocol handling and logs safe correlated fail
         assert.equal(logs.find((entry) => entry.msg === "Model stream failed")!.errorCode, "MODEL_TRANSPORT");
       } else {
         await consume();
-        assert.equal(chunks.at(-1)?.type, "finished");
+        assert.deepEqual(chunks.at(-1), { type: "finished", reason: "stop" });
+        const completed = chunks.find((chunk) => chunk.type === "message.completed");
+        assert.ok(completed?.type === "message.completed");
+        assert.equal(
+          completed.message.parts
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join(""),
+          secret,
+        );
+        if ("adapterId" in scenario)
+          assert.equal(completed.message.parts.find((part) => part.type === "thinking")?.text, secret);
         assert.ok(logs.some((entry) => entry.msg === "Model stream completed"));
       }
       for (const entry of logs) {
