@@ -354,9 +354,12 @@ export class RunnerSessionImpl implements RunnerSession {
           ok: true,
           value: (Array.isArray(value.entries) ? value.entries : []).map((entry): DirectoryEntry => {
             if (!record(entry)) throw new TypeError("Runner returned an invalid directory entry");
+            let kind: DirectoryEntry["kind"] = "file";
+            if (entry.kind === "DIRECTORY") kind = "dir";
+            else if (entry.kind === "SYMLINK") kind = "symlink";
             return {
               path: string(entry.path) ? entry.path : "",
-              kind: entry.kind === "DIRECTORY" ? "dir" : entry.kind === "SYMLINK" ? "symlink" : "file",
+              kind,
               sizeBytes: asUnsigned(entry.sizeBytes, "size_bytes"),
             };
           }),
@@ -941,7 +944,10 @@ function runnerResult(result: Record<string, unknown>, localOutputGap: boolean):
   }
   if (status === "SUCCEEDED")
     return { ok: true, value: { ...result, outputGap: localOutputGap || result.outputGap === true } };
-  return failure(status === "CANCELLED" ? "CANCELLED" : status === "TIMED_OUT" ? "TIMEOUT" : "IO", errorMessage(result), "known", string(result.operationId) ? result.operationId : undefined);
+  let code = "IO";
+  if (status === "CANCELLED") code = "CANCELLED";
+  else if (status === "TIMED_OUT") code = "TIMEOUT";
+  return failure(code, errorMessage(result), "known", string(result.operationId) ? result.operationId : undefined);
 }
 
 function getBytes(value: unknown): Uint8Array {

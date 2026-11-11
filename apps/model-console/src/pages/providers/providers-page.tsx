@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Table, tableCellClass, tableHeadClass } from "@/components/ui/table";
-import { ProviderForm, providerQueryOptions, useProviderMutations } from "@/features/providers";
+import {
+  ProviderForm,
+  providerQueryOptions,
+  providerAdapterQueryOptions,
+  useProviderMutations,
+} from "@/features/providers";
 
 type Confirmation = { kind: "disable" | "delete"; provider: Provider } | null;
 
@@ -30,6 +35,7 @@ const CONFIRMATION_COPY = {
 
 export function ProvidersPage() {
   const query = useQuery(providerQueryOptions());
+  const adaptersQuery = useQuery(providerAdapterQueryOptions());
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
@@ -75,8 +81,10 @@ export function ProvidersPage() {
         <Table.ScrollContainer>
           <Table.Content aria-label="Provider 列表" className="w-full min-w-[840px]">
             <Table.Header>
-              <Table.Column isRowHeader className={`${tableHeadClass} rounded-none px-5 py-3`}>名称</Table.Column>
-              <Table.Column className={`${tableHeadClass} px-5 py-3`}>协议</Table.Column>
+              <Table.Column isRowHeader className={`${tableHeadClass} rounded-none px-5 py-3`}>
+                名称
+              </Table.Column>
+              <Table.Column className={`${tableHeadClass} px-5 py-3`}>供应商</Table.Column>
               <Table.Column className={`${tableHeadClass} px-5 py-3`}>连接地址</Table.Column>
               <Table.Column className={`${tableHeadClass} px-5 py-3`}>凭据</Table.Column>
               <Table.Column className={`${tableHeadClass} px-5 py-3`}>可见范围</Table.Column>
@@ -89,7 +97,9 @@ export function ProvidersPage() {
                   <Table.Cell className={`${tableCellClass} font-semibold text-foreground`}>{provider.name}</Table.Cell>
                   <Table.Cell className={tableCellClass}>
                     <span className="rounded-lg bg-surface-tertiary px-2 py-1 font-mono text-xs text-foreground">
-                      {provider.protocol}
+                      {adaptersQuery.data?.find((adapter) => adapter.id === provider.adapterId)?.label ??
+                        provider.adapterId ??
+                        "旧配置"}
                     </span>
                   </Table.Cell>
                   <Table.Cell className={`${tableCellClass} max-w-xs font-mono text-xs`}>

@@ -61,7 +61,7 @@ Casdoor 验证器已接入 Auth Service `/api/me`，使用稳定身份 ID 唯一
 
 nova-client 的现有生产构建门禁也会中止自身发布：本地使用流水线同样的 Auth 环境变量构建，初始 JS 为 **332.9 KiB gzip**，超过仓库的 **300 KiB** 限额。需要完成前端体积优化后再发布，不影响另外两个任务的执行。
 
-model-console 继续从已提交的管理端 `openapi.json` 快照生成代码；原生成脚本中的 `@nova/agent-server` 包在本仓库已不存在。新服务端目前只提供 Provider / Model 管理接口，尚未实现快照里的用量统计接口，因此用量页不能作为已迁移功能验收。
+model-console 从已提交的管理端 `openapi.json` 快照生成代码。管理接口变更后，在开发环境运行 `pnpm --filter @nova/model-console api:sync`，仅从 nova-server 路由 schema 同步已实现的 `/admin/model-config/*` 接口，并按客户端请求层的解包行为导出成功响应的 `data` 类型。同步保留快照中的旧用量契约；新服务端尚未实现用量统计接口，因此用量页不能作为已迁移功能验收。不能将完整业务 OpenAPI 直接覆盖管理端快照。
 
 ## 服务器与反向代理
 

@@ -1,4 +1,5 @@
 import { createScope, defineRepository, type RepositoryDatabase, type TransactionOptions } from "../../shared/scope.js";
+import { normalizeModelMessage } from "@nnova/harness/plugins/model-ai-sdk";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, getTableColumns, gt, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import {
@@ -46,7 +47,6 @@ import {
   emptyProjection,
   fingerprint,
   nativeBlocks,
-  nativeThinkingBlocks,
   publicInteraction,
   publicOutcome,
   queuedInput,
@@ -724,7 +724,7 @@ export class RunRepository {
       if (!id) throw new Error("Native message requires stable identity");
       const draft = positions?.messages.find((message) => message.id === id);
       const sequence = draft?.sequence ?? (++conversation.lastMessageSequence).toString();
-      const blocks = nativeBlocks(native.parts, next.executions, id);
+      const blocks = nativeBlocks(normalizeModelMessage(native).parts, next.executions, id);
       if (native.role === "user") {
         const reserved = run.checkpoint.reservedInputs.find((input) => input.messageId === id);
         if (reserved) {
@@ -743,7 +743,6 @@ export class RunRepository {
           }
         }
       }
-      blocks.unshift(...nativeThinkingBlocks(native.metadata));
       const message = messageSchema.parse({
         id,
         runId: run.id,

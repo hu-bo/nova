@@ -197,6 +197,7 @@ export class SseConnection {
     try {
       while (!signal.aborted) {
         const { value, done } = await reader.read();
+        if (signal.aborted) return 'fatal';
         if (done) return 'retry';
         arm();
         if (Date.now() - connectedAt >= 30000) this.healthy = true;

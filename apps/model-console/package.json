@@ -8,6 +8,7 @@
     "prebuild": "pnpm --filter @nova/agent-ui-contracts build && pnpm --filter @nova/casdoor build && pnpm api:generate",
     "build": "pnpm typecheck && vite build",
     "api:generate": "orval --config orval.config.ts",
+    "api:sync": "pnpm --filter @nova/nova-server openapi:export ../model-console/openapi.json --model-console && pnpm api:generate",
     "api:check": "pnpm api:generate && git diff --exit-code -- openapi.json src/api/generated",
     "lint": "eslint .",
     "format": "prettier --write .",

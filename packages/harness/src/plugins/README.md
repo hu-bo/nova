@@ -17,13 +17,23 @@ Plugins 是框架能力的实现与组合层。每个插件通过 Manifest 声�
 | `telemetryPlugin`               | session | `eventJournal`         | 有界事件保留、重放和隔离 observer                    |
 | `skillsPlugin`                  | session | `contextContributions` | 显式选择的有界 Markdown 上下文资源                   |
 | `mcpPlugin`                     | session | `toolDefinitions`      | 将宿主提供的 MCP-like client 桥接为动态工具          |
-| `aiSdkModelPlugin`              | kernel  | `modelRouter`          | AI SDK/OpenAI Chat 单步模型适配和配置快照            |
+| `aiSdkModelPlugin`              | kernel  | `modelRouter`          | 多供应商 AI SDK 单步模型适配、能力映射和配置快照     |
 | `memoryTaskStorePlugin`         | kernel  | `taskStore`            | Task/Flow 快照、TTL 回收和结果保留                   |
 | `memoryTaskQueuePlugin`         | kernel  | `taskQueue`            | 有界 FIFO、优先级、aging 和延迟索引                  |
 | `taskEnginePlugin`              | kernel  | `taskEngine`           | Task 验证、资源调度、重试、等待、子任务和 Flow       |
 | `agentTaskPlugin`               | kernel  | `taskHandlers`         | 将 Task 调度接入已有 Agent Session                   |
 
 插件工厂返回 `PluginDefinition`，不会自动安装。模型、工具、Task Handler 和业务 client 都必须由宿主显式注入。
+
+## 模型供应商边界
+
+`aiSdkModelPlugin` 统一处理模型请求、流事件、usage、工具调用与续写。宿主选择 `provider`（`openai`、`openai-compatible`、`anthropic`、`deepseek`、`minimax` 或 `minimax-anthropic`），传入凭证和模型能力，并可覆盖 `baseURL`。默认地址、协议和可映射的推理等级由 `providerCatalog` 导出；控制台应消费该目录，不再维护第二份供应商规则。
+
+每个供应商的 SDK 和参数适配位于 `providers.ts` 注册表。共享流水线只接收标准 `reasoningEffort`，供应商差异不进入业务模块。DeepSeek 不接受 `medium`，插件按其 SDK 约定映射到 `high`；MiniMax 目录不提供 `off`，避免把关闭推理伪装成较低等级。模型实际支持的等级仍由宿主配置进一步限制。
+
+插件第二参数可注入 `fetch`、`resolveImageUrl`、结构化 `logger` 和 `requestTimeoutMs`。宿主负责鉴权、凭证解析、私有图片 URL 与持久化；插件负责超时、取消、8 MiB 响应上限和安全错误转换。生产与测试使用同一 SDK 通路，工具仍由 Harness 执行，SDK 不执行远程工具或自行推进多步。
+
+块级 provider continuation 数据保存在 `MessagePart.metadata`，仅在后续 SDK 请求时恢复为 `providerOptions`。UI 投影应只读取标准内容字段。旧 `anthropicContent`、`reasoningContent` 与 `openai-chat` 配置由适配器边界兼容；历史读取可通过 `normalizeModelMessage` 转成标准消息。
 
 ## 常见组合
 

@@ -18,7 +18,6 @@ export const modelSchema = z
     maxOutput: z.number().int().positive("必须大于 0"),
     thinkingLevels: z.array(z.enum(["off", "low", "medium", "high", "max"])),
     parallelToolCalls: z.boolean(),
-    reasoningFormat: z.enum(["none", "openai", "anthropic", "deepseek", "minimax"]),
     inputModalities: z.array(z.enum(["text", "image"])),
     enabled: z.boolean(),
     priceIn: price,
@@ -32,10 +31,6 @@ export const modelSchema = z
       issues.push(customIssue(values.inputModalities, ["inputModalities"], "必须支持文本输入"));
     if (new Set(values.thinkingLevels).size !== values.thinkingLevels.length)
       issues.push(customIssue(values.thinkingLevels, ["thinkingLevels"], "Thinking 等级不能重复"));
-    if (values.reasoningFormat === "none" && values.thinkingLevels.length > 0)
-      issues.push(customIssue(values.thinkingLevels, ["thinkingLevels"], "无 reasoning 格式时等级必须为空"));
-    if (values.reasoningFormat !== "none" && values.thinkingLevels.length === 0)
-      issues.push(customIssue(values.thinkingLevels, ["thinkingLevels"], "请选择至少一个 Thinking 等级"));
   });
 
 export type ModelFormValues = z.infer<typeof modelSchema>;

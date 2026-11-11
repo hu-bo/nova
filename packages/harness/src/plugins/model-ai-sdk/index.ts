@@ -1,24 +1,50 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, isStepCount, type ToolSet, type FinishReason } from "ai";
+import {
+  streamText,
+  isStepCount,
+  APICallError,
+  TypeValidationError,
+  InvalidResponseDataError,
+  JSONParseError,
+  type ToolSet,
+  type FinishReason,
+} from "ai";
 import { z } from "zod";
 import type { PluginDefinition } from "../../contracts/plugin.js";
 import type { ModelAdapter, ModelChunk, ModelRouteSnapshot, ModelStepRequest } from "../../contracts/model.js";
 import type { MessagePart, JsonValue } from "../../contracts/message.js";
 import { modelRouter, admission } from "../../contracts/capabilities.js";
 import { FrameworkError } from "../../contracts/errors.js";
-import { jsonValue } from "../../shared/json.js";
+import { jsonValue, positive } from "../../shared/json.js";
 import { modelMessages } from "./messages.js";
+export { normalizeModelMessage } from "./messages.js";
+import { bindProvider } from "./providers.js";
+import { modelProviders, providerIds, resolveProviderId, type ProviderId, type ReasoningFormat } from "./catalog.js";
+import { modelTransport, type AiSdkModelOptions } from "./transport.js";
+export {
+  providerIds,
+  providerCatalog,
+  modelProviders,
+  resolveProviderId,
+  type ProviderId,
+  type ProviderProtocol,
+  type ReasoningFormat,
+  type ModelProviderDefinition,
+} from "./catalog.js";
+export type { AiSdkModelLogger, AiSdkModelOptions } from "./transport.js";
 const routeSchema = z
   .object({
     id: z.string().min(1),
-    protocol: z.literal("openai-chat"),
-    baseURL: z.url(),
+    provider: z.enum(providerIds).optional(),
+    protocol: z.literal("openai-chat").optional(),
+    baseURL: z.url().optional(),
     apiKey: z.string().min(1),
     model: z.string().min(1),
     contextWindow: z.number().int().positive(),
     maxOutputTokens: z.number().int().positive(),
     images: z.boolean().default(false),
     files: z.boolean().default(false),
+    parallelToolCalls: z.boolean().optional(),
+    reasoningFormat: z.enum(["none", "openai", "anthropic", "deepseek", "minimax"]).optional(),
   })
   .strict();
 const configSchema = z
@@ -31,22 +57,25 @@ const configSchema = z
 export interface AiSdkModelConfig {
   models: readonly {
     id: string;
-    protocol: "openai-chat";
-    baseURL: string;
+    provider?: ProviderId;
+    protocol?: "openai-chat";
+    baseURL?: string;
     apiKey: string;
     model: string;
     contextWindow: number;
     maxOutputTokens: number;
     images?: boolean;
     files?: boolean;
+    parallelToolCalls?: boolean;
+    reasoningFormat?: ReasoningFormat;
   }[];
   defaultModel: string;
   maxConcurrentRequests?: number;
 }
-export function aiSdkModelPlugin(
-  config: AiSdkModelConfig,
-  transport?: { fetch: typeof globalThis.fetch },
-): PluginDefinition {
+export function aiSdkModelPlugin(config: AiSdkModelConfig, options: AiSdkModelOptions = {}): PluginDefinition {
+  const requestTimeoutMs = positive(options.requestTimeoutMs ?? 180_000, "requestTimeoutMs");
+  if (requestTimeoutMs > 2_147_483_647)
+    throw new FrameworkError("INVALID_CONFIG", "requestTimeoutMs exceeds the supported timer range.");
   const parseConfiguration = (value: unknown): z.infer<typeof configSchema> => {
     try {
       return configSchema.parse(value);
@@ -78,13 +107,13 @@ export function aiSdkModelPlugin(
         const next = parseConfiguration(value);
         const ids = new Set<string>();
         for (const route of next.models) {
-          const url = new URL(route.baseURL);
+          const url = new URL(route.baseURL ?? modelProviders[resolveProviderId(route)].defaultBaseURL);
           if (
             !["https:", "http:"].includes(url.protocol) ||
             url.username ||
             url.password ||
             ids.has(route.id) ||
-            route.maxOutputTokens >= route.contextWindow
+            route.maxOutputTokens > route.contextWindow
           )
             throw new FrameworkError("INVALID_CONFIG", "Invalid model route configuration.");
           ids.add(route.id);
@@ -128,24 +157,45 @@ export function aiSdkModelPlugin(
               if ((part.type === "image" && !route.images) || (part.type === "file" && !route.files))
                 throw new FrameworkError("MODEL_INCOMPATIBLE", "Model does not support the requested modality.");
             }
-          const lease = await resources.acquire(
-            [
-              {
-                key: "model.requests",
-                units: 1,
-                limit: configuration.maxConcurrentRequests,
-              },
-            ],
-            request.signal,
-          );
           const controller = new AbortController();
-          const signal = AbortSignal.any([context.signal, request.signal, controller.signal]);
-          try {
-            const provider = createOpenAI({
-              baseURL: route.baseURL,
-              apiKey: route.apiKey,
-              ...(transport ? { fetch: transport.fetch } : {}),
+          const signal = AbortSignal.any([
+            context.signal,
+            request.signal,
+            controller.signal,
+            AbortSignal.timeout(requestTimeoutMs),
+          ]);
+          const lease = await resources
+            .acquire(
+              [
+                {
+                  key: "model.requests",
+                  units: 1,
+                  limit: configuration.maxConcurrentRequests,
+                },
+              ],
+              signal,
+            )
+            .catch((error: unknown) => {
+              throw modelFailure(error, signal);
             });
+          const startedAt = Date.now();
+          const log = options.logger?.child({
+            component: "model-ai-sdk",
+            conversationId: request.sessionId,
+            runId: request.runId,
+            stepId: request.stepId,
+            modelId: route.id,
+            provider: resolveProviderId(route),
+            protocol: modelProviders[resolveProviderId(route)].protocol,
+            upstreamModel: route.model,
+          });
+          const diagnostics = { readChunks: 0, responseBytes: 0, reachedEof: false };
+          try {
+            const binding = bindProvider(
+              route,
+              modelTransport(options, log, startedAt, diagnostics),
+              request.reasoningEffort,
+            );
             const tools: ToolSet = {};
             for (const tool of request.tools)
               tools[tool.name] = {
@@ -154,8 +204,9 @@ export function aiSdkModelPlugin(
               };
             let providerError: unknown;
             const response = streamText({
-              model: provider.chat(route.model),
-              messages: modelMessages(request.messages),
+              model: binding.model,
+              providerOptions: binding.providerOptions,
+              messages: await modelMessages(request.messages, options.resolveImageUrl),
               tools,
               abortSignal: signal,
               maxOutputTokens: route.maxOutputTokens,
@@ -169,34 +220,49 @@ export function aiSdkModelPlugin(
               },
             });
             const parts: MessagePart[] = [];
-            const thinkingParts = new Map<string, { id: string; type: "thinking"; text: string }>();
-            const textParts = new Map<string, { id: string; type: "text"; text: string }>();
+            const contentParts = new Map<string, Extract<MessagePart, { type: "text" | "thinking" }>>();
             let metadata: Readonly<Record<string, JsonValue>> | undefined;
             let finished: FinishReason | undefined;
+            let rawFinishReason: string | undefined;
             for await (const chunk of response.stream) {
               signal.throwIfAborted();
-              if (chunk.type === "reasoning-delta") {
-                let part = thinkingParts.get(chunk.id);
-                if (!part) {
-                  part = { id: chunk.id, type: "thinking", text: "" };
-                  thinkingParts.set(chunk.id, part);
-                  parts.push(part);
-                }
-                part.text += chunk.text;
-                yield { type: "thinking.delta", partId: chunk.id, text: chunk.text };
-              } else if (chunk.type === "text-delta") {
-                let part = textParts.get(chunk.id);
-                if (!part) {
-                  part = { id: chunk.id, type: "text", text: "" };
-                  textParts.set(chunk.id, part);
-                  parts.push(part);
-                }
-                part.text += chunk.text;
-                yield {
-                  type: "text.delta",
-                  partId: chunk.id,
-                  text: chunk.text,
+              if (
+                chunk.type === "reasoning-start" ||
+                chunk.type === "reasoning-delta" ||
+                chunk.type === "reasoning-end" ||
+                chunk.type === "text-start" ||
+                chunk.type === "text-delta" ||
+                chunk.type === "text-end"
+              ) {
+                const partType = chunk.type.startsWith("reasoning") ? "thinking" : "text";
+                const key = partType + ":" + chunk.id;
+                const existing = contentParts.get(key);
+                let part: Extract<MessagePart, { type: "text" | "thinking" }> = existing ?? {
+                  id: chunk.id,
+                  type: partType,
+                  text: "",
                 };
+                if (!existing) {
+                  contentParts.set(key, part);
+                  parts.push(part);
+                }
+                if (chunk.providerMetadata) {
+                  const updated = {
+                    ...part,
+                    metadata: mergeContinuationMetadata(part.metadata, chunk.providerMetadata),
+                  };
+                  parts[parts.indexOf(part)] = updated;
+                  contentParts.set(key, updated);
+                  part = updated;
+                }
+                if ("text" in chunk) {
+                  part.text += chunk.text;
+                  yield {
+                    type: partType === "thinking" ? "thinking.delta" : "text.delta",
+                    partId: chunk.id,
+                    text: chunk.text,
+                  };
+                }
               } else if (chunk.type === "tool-call") {
                 if (chunk.providerExecuted)
                   throw new FrameworkError("REMOTE_TOOL_DENIED", "Provider-executed tools are not permitted.");
@@ -205,6 +271,7 @@ export function aiSdkModelPlugin(
                   callId: chunk.toolCallId,
                   name: chunk.toolName,
                   input: jsonValue(chunk.input),
+                  ...(chunk.providerMetadata ? { metadata: continuationMetadata(chunk.providerMetadata) } : {}),
                 };
                 parts.push(call);
                 yield {
@@ -213,29 +280,36 @@ export function aiSdkModelPlugin(
                   name: call.name,
                   input: call.input,
                 };
-              } else if (chunk.type === "finish-step" && chunk.providerMetadata) {
-                const value = jsonValue(JSON.parse(JSON.stringify(chunk.providerMetadata)));
-                if (value && typeof value === "object" && !Array.isArray(value)) metadata = value;
+              } else if (chunk.type === "finish-step") {
+                rawFinishReason = chunk.rawFinishReason;
+                if (chunk.providerMetadata) metadata = continuationMetadata(chunk.providerMetadata);
               } else if (chunk.type === "finish") {
                 finished = chunk.finishReason;
                 const totalUsage = chunk.totalUsage;
                 yield {
                   type: "usage",
                   usage: {
-                    inputTokens: totalUsage?.inputTokens ?? null,
-                    outputTokens: totalUsage?.outputTokens ?? null,
-                    cachedInputTokens: totalUsage?.inputTokenDetails?.cacheReadTokens ?? null,
-                    reasoningTokens: totalUsage?.outputTokenDetails?.reasoningTokens ?? null,
+                    inputTokens: tokenCount(totalUsage?.inputTokens),
+                    outputTokens: tokenCount(totalUsage?.outputTokens),
+                    cachedInputTokens: tokenCount(totalUsage?.inputTokenDetails?.cacheReadTokens),
+                    reasoningTokens: tokenCount(totalUsage?.outputTokenDetails?.reasoningTokens),
                   },
                 };
-              } else if (chunk.type === "error" || chunk.type === "tool-error")
-                throw new FrameworkError("MODEL_REQUEST_FAILED", "Model stream failed.");
+              } else if (chunk.type === "error") throw modelFailure(chunk.error, signal, "MODEL_REQUEST_FAILED");
+              else if (chunk.type === "tool-error")
+                throw new FrameworkError("MODEL_PROTOCOL", "Invalid model tool call.");
               else if (chunk.type === "abort") throw new FrameworkError("CANCELLED", "Model stream aborted.");
               else if (chunk.type === "file" || chunk.type === "reasoning-file" || chunk.type === "custom")
                 throw new FrameworkError("MODEL_INCOMPATIBLE", "Unsupported provider content.");
             }
-            if (providerError !== undefined) throw new FrameworkError("MODEL_REQUEST_FAILED", "Model stream failed.");
-            if (!finished) throw new FrameworkError("MODEL_PROTOCOL", "Model stream ended without finish.");
+            if (providerError !== undefined) throw modelFailure(providerError, signal, "MODEL_REQUEST_FAILED");
+            if (!finished || !rawFinishReason)
+              throw new FrameworkError("MODEL_PROTOCOL", "Model stream ended without finish.");
+            if (finished === "error") throw new FrameworkError("MODEL_REQUEST_FAILED", "Model stream failed.");
+            log?.info(
+              { ...diagnostics, elapsedMs: Date.now() - startedAt, finishReason: finished },
+              "Model stream completed",
+            );
             yield {
               type: "message.completed",
               message: {
@@ -245,6 +319,19 @@ export function aiSdkModelPlugin(
               },
             };
             yield { type: "finished", reason: finished };
+          } catch (error) {
+            const failure = modelFailure(error, signal);
+            log?.error(
+              {
+                ...diagnostics,
+                elapsedMs: Date.now() - startedAt,
+                errorCode: failure.code,
+                errorMessage: failure.message,
+                aborted: signal.aborted,
+              },
+              "Model stream failed",
+            );
+            throw failure;
           } finally {
             controller.abort();
             lease.release();
@@ -255,4 +342,67 @@ export function aiSdkModelPlugin(
       context.onDispose(() => snapshots.clear());
     },
   };
+}
+
+function continuationMetadata(value: unknown): Readonly<Record<string, JsonValue>> {
+  const parsed = jsonValue(JSON.parse(JSON.stringify(value)));
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    throw new FrameworkError("MODEL_METADATA", "Invalid provider continuation metadata.");
+  return parsed;
+}
+
+function mergeContinuationMetadata(
+  previous: MessagePart["metadata"],
+  value: unknown,
+): Readonly<Record<string, JsonValue>> {
+  const merged = { ...previous };
+  for (const [provider, options] of Object.entries(continuationMetadata(value))) {
+    const existing = merged[provider];
+    if (
+      existing &&
+      typeof existing === "object" &&
+      !Array.isArray(existing) &&
+      options &&
+      typeof options === "object" &&
+      !Array.isArray(options)
+    )
+      merged[provider] = { ...existing, ...options };
+    else merged[provider] = options;
+  }
+  return merged;
+}
+
+function tokenCount(value: number | undefined): number | null {
+  if (value === undefined) return null;
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new FrameworkError("MODEL_USAGE", "Invalid provider token usage.");
+  return value;
+}
+
+function modelFailure(
+  error: unknown,
+  signal: AbortSignal,
+  fallback: "MODEL_REQUEST_FAILED" | "MODEL_TRANSPORT" = "MODEL_TRANSPORT",
+): FrameworkError {
+  if (signal.aborted) {
+    if (signal.reason instanceof Error && signal.reason.name === "TimeoutError")
+      return new FrameworkError("MODEL_TIMEOUT", "Model request timed out.");
+    return new FrameworkError("CANCELLED", "Model stream aborted.");
+  }
+  if (error instanceof FrameworkError) return error;
+  if (error instanceof Error && error.cause instanceof FrameworkError) return error.cause;
+  if (APICallError.isInstance(error)) {
+    const status = error.statusCode;
+    if (status === 429) return new FrameworkError("MODEL_RATE_LIMITED", "Model rate limit exceeded.");
+    if (status === 401 || status === 403)
+      return new FrameworkError("MODEL_AUTH_FAILED", "Model authentication failed.");
+    return new FrameworkError("MODEL_REQUEST_FAILED", "Model request failed.");
+  }
+  if (
+    TypeValidationError.isInstance(error) ||
+    InvalidResponseDataError.isInstance(error) ||
+    JSONParseError.isInstance(error)
+  )
+    return new FrameworkError("MODEL_PROTOCOL", "Invalid model stream.");
+  return new FrameworkError(fallback, "Model request failed.");
 }

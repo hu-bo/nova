@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { requirePrincipal } from "../../shared/authorization.js";
 import { z } from "zod";
+import { providerCatalog } from "@nnova/harness/plugins/model-ai-sdk";
 import {
   createModelBodySchema,
   createProviderBodySchema,
@@ -11,6 +12,7 @@ import {
   modelSchema,
   providerIdParamsSchema,
   providerSchema,
+  providerAdapterDescriptorSchema,
   updateModelBodySchema,
   updateProviderBodySchema,
 } from "./model-config.schema.js";
@@ -20,6 +22,17 @@ const adminErrorResponses = errorResponses(400, 401, 403, 404, 409, 500, 503);
 
 export async function modelConfigRoutes(app: FastifyInstance, service: ModelConfigService): Promise<void> {
   const typed = app.withTypeProvider<ZodTypeProvider>();
+  typed.get(
+    "/provider-adapters",
+    {
+      schema: {
+        operationId: "listProviderAdapters",
+        tags: ["model-config"],
+        response: { 200: okEnvelope(providerAdapterDescriptorSchema.array()), ...adminErrorResponses },
+      },
+    },
+    async () => success(providerAdapterDescriptorSchema.array().parse(providerCatalog)),
+  );
   typed.get(
     "/providers",
     {

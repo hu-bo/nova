@@ -1,5 +1,20 @@
 import { DomainError } from "../../shared/domain-error.js";
-import type { SpecTask } from "../../../database/schema/spec-revision.table.js";
+import type { SpecEvidence, SpecTask } from "../../../database/schema/spec-revision.table.js";
+
+/** A retry supersedes earlier evidence; carried evidence applies only before the first attempt. */
+export function passingEvidenceForCheck<
+  Evidence extends Pick<SpecEvidence, "taskKey" | "checkKey" | "passed" | "source"> & { attemptId?: string | undefined },
+>(
+  evidence: readonly Evidence[],
+  taskKey: string,
+  checkKey: string,
+  latestAttemptId: string | undefined,
+): Evidence | undefined {
+  return evidence.find((entry) =>
+    entry.taskKey === taskKey && entry.checkKey === checkKey && entry.passed &&
+    (latestAttemptId ? entry.attemptId === latestAttemptId : entry.source === "carried"),
+  );
+}
 
 export function acceptanceCriteriaIn(markdown: string) {
   const found: string[] = [];

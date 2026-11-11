@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { basename, posix } from "node:path";
 import { defineTool, ToolFailureError, type JsonValue, type ToolDefinition } from "@nnova/harness";
-import type { ToolContext as RunnerToolContext } from "@nova/runner-sdk";
+import type { DirectoryEntry, ToolContext as RunnerToolContext } from "@nova/runner-sdk";
 import { formatPatch, structuredPatch } from "diff";
 import { z } from "zod";
 
@@ -13,6 +13,12 @@ export interface RemoteToolContext {
 }
 
 export type RemoteToolContextFactory = (context: import("@nnova/harness").ToolContext) => Promise<RemoteToolContext>;
+
+const directoryMarkers = {
+  dir: "[dir]",
+  symlink: "[link]",
+  file: "     ",
+} satisfies Record<DirectoryEntry["kind"], string>;
 
 const outputSchema = z.record(z.string(), z.unknown()) as unknown as z.ZodType<JsonValue>;
 function tool<Schema extends z.ZodType>(definition: {
@@ -43,8 +49,11 @@ function remoteFailure(
 ): never {
   const combined = {
     ...(error.details ?? {}),
-    ...(details === undefined ? {} : isRecord(details) ? details : { details }),
   };
+  if (details !== undefined) {
+    if (isRecord(details)) Object.assign(combined, details);
+    else combined.details = details;
+  }
   throw new ToolFailureError(
     error.code,
     `${error.code}: ${error.message}`,
@@ -89,10 +98,7 @@ export const listDir = tool({
     const path = input.path ?? ".";
     const result = await ctx.fs.list(path, { depth: input.depth ?? 1, maxEntries: 10_000 });
     if (!result.ok) remoteFailure(result.error, { path });
-    const lines = result.value.map(
-      (entry) =>
-        `${entry.kind === "dir" ? "[dir]" : entry.kind === "symlink" ? "[link]" : "     "} ${baseName(entry.path)}`,
-    );
+    const lines = result.value.map((entry) => `${directoryMarkers[entry.kind]} ${baseName(entry.path)}`);
     return success(lines.join("\n") || "(empty)", { path, entries: result.value, depth: input.depth ?? 1 });
   },
 });
@@ -144,11 +150,9 @@ export const writeFile = tool({
       signal: ctx.signal,
     });
     if (!result.ok) remoteFailure(result.error, { path: input.path });
-    const previous = before.ok
-      ? before.value.truncated || before.value.lineTruncated
-        ? undefined
-        : before.value.text
-      : "";
+    let previous: string | undefined;
+    if (!before.ok) previous = "";
+    else if (!before.value.truncated && !before.value.lineTruncated) previous = before.value.text;
     return success(`Wrote ${input.content.split("\n").length} lines to ${input.path}`, {
       path: input.path,
       bytes: new TextEncoder().encode(input.content).byteLength,

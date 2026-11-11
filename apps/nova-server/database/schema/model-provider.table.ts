@@ -1,6 +1,7 @@
 import { boolean, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import type { ProviderId, ProviderProtocol } from "@nnova/harness/plugins/model-ai-sdk";
 
-export type ProviderProtocol = "openai" | "anthropic";
+export type { ProviderProtocol };
 
 /**
  * Provider credentials are encrypted by the model-config service before persistence.
@@ -11,6 +12,8 @@ export const modelProviders = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     protocol: text("protocol").$type<ProviderProtocol>().notNull(),
+    // Null preserves per-model adapter selection for providers created before the plugin catalog.
+    adapterId: text("adapter_id").$type<ProviderId>(),
     name: text("name").notNull(),
     baseUrl: text("base_url").notNull(),
     credentialCiphertext: text("credential_ciphertext"),

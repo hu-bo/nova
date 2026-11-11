@@ -1,6 +1,10 @@
 import type { ArtifactRef } from "./artifact.js";
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-export type MessagePart = { readonly id?: string } & (
+export type MessagePart = {
+  readonly id?: string;
+  /** Opaque provider continuation data belongs to the content block that produced it. */
+  readonly metadata?: Readonly<Record<string, JsonValue>>;
+} & (
   | { type: "text"; text: string }
   | { type: "thinking"; text: string }
   | { type: "image" | "file"; reference: ArtifactRef }

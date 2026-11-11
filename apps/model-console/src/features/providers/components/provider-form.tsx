@@ -2,12 +2,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ListBox, Select } from "@heroui/react";
 import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import { providerSchema, type ProviderFormValues } from "../provider-form.schema";
 import { formFeedbackFrom, type CreateProvider, type Provider, type UpdateProvider } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FieldLabel, Input } from "@/components/ui/form";
+import { providerAdapterQueryOptions } from "../provider-queries";
+import { ErrorState } from "@/components/ui/feedback";
 
 const fieldClass = "h-9 rounded-xl border border-field-border bg-field-background px-3";
 
@@ -25,6 +28,9 @@ export function ProviderForm({
   onSubmit: (input: CreateProvider | UpdateProvider) => Promise<unknown>;
 }) {
   const editing = provider !== null;
+  const adaptersQuery = useQuery(providerAdapterQueryOptions());
+  const adapters = adaptersQuery.data ?? [];
+  const defaultAdapter = adapters[0];
   const dialogDescription = editing ? "留空凭据字段即可保留当前密钥。" : "配置官方或中转商的连接地址与凭据。";
   const [formError, setFormError] = useState<string | null>(null);
   const {
@@ -32,13 +38,16 @@ export function ProviderForm({
     handleSubmit,
     control,
     reset,
+    setValue,
+    getValues,
     setError,
     formState: { errors },
   } = useForm<ProviderFormValues>({
     resolver: zodResolver(providerSchema),
+    resetOptions: { keepDirtyValues: true },
     values: provider
       ? {
-          protocol: provider.protocol,
+          adapterId: provider.adapterId ?? "",
           name: provider.name,
           baseUrl: provider.baseUrl,
           credential: "",
@@ -46,9 +55,9 @@ export function ProviderForm({
           isPublic: provider.isPublic,
         }
       : {
-          protocol: "openai",
+          adapterId: defaultAdapter?.id ?? "",
           name: "",
-          baseUrl: "",
+          baseUrl: defaultAdapter?.defaultBaseURL ?? "",
           credential: "",
           enabled: true,
           isPublic: false,
@@ -62,6 +71,11 @@ export function ProviderForm({
     onClose();
   };
   const submit = handleSubmit(async (values) => {
+    const adapter = adapters.find((item) => item.id === values.adapterId);
+    if (!adapter && !editing) {
+      setError("adapterId", { message: "请选择供应商" });
+      return;
+    }
     if (!editing && !values.credential.trim()) {
       setError("credential", { message: "请输入访问凭据" });
       return;
@@ -69,7 +83,7 @@ export function ProviderForm({
     setFormError(null);
     const credential = values.credential.trim();
     const shared = {
-      protocol: values.protocol,
+      ...(adapter ? { adapterId: adapter.id } : {}),
       name: values.name.trim(),
       baseUrl: values.baseUrl,
       isPublic: values.isPublic,
@@ -106,16 +120,29 @@ export function ProviderForm({
             {formError}
           </div>
         )}
-        <FieldLabel label="认证协议" error={errors.protocol?.message}>
+        {adaptersQuery.error && <ErrorState error={adaptersQuery.error} onRetry={() => void adaptersQuery.refetch()} />}
+        <FieldLabel
+          label="供应商"
+          hint="自动处理连接协议和推理参数，可自定义 Base URL"
+          error={errors.adapterId?.message}
+        >
           <Controller
             control={control}
-            name="protocol"
+            name="adapterId"
             render={({ field }) => (
               <Select
-                aria-label="认证协议"
-                selectedKey={field.value}
+                aria-label="供应商"
+                selectedKey={field.value || null}
+                placeholder={editing ? "旧配置（按模型适配）" : "请选择供应商"}
+                isDisabled={adaptersQuery.isPending}
                 onSelectionChange={(key) => {
-                  if (typeof key === "string") field.onChange(key);
+                  const next = adapters.find((item) => item.id === key);
+                  if (!next) return;
+                  const previous = adapters.find((item) => item.id === field.value);
+                  const baseURL = getValues("baseUrl");
+                  if (!baseURL || baseURL === previous?.defaultBaseURL)
+                    setValue("baseUrl", next.defaultBaseURL, { shouldValidate: true });
+                  field.onChange(next.id);
                 }}
               >
                 <Select.Trigger className="h-9 w-full min-w-0 rounded-xl border border-field-border bg-field-background px-3 data-[open]:border-accent">
@@ -124,14 +151,12 @@ export function ProviderForm({
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    <ListBox.Item id="openai" textValue="OpenAI 兼容">
-                      OpenAI 兼容
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="anthropic" textValue="Anthropic 原生">
-                      Anthropic 原生
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
+                    {adapters.map((adapter) => (
+                      <ListBox.Item key={adapter.id} id={adapter.id} textValue={adapter.label}>
+                        {adapter.label}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
                   </ListBox>
                 </Select.Popover>
               </Select>
@@ -204,7 +229,11 @@ export function ProviderForm({
           <Button type="button" onPress={close} isDisabled={pending}>
             取消
           </Button>
-          <Button type="submit" variant="primary" isDisabled={pending}>
+          <Button
+            type="submit"
+            variant="primary"
+            isDisabled={pending || adaptersQuery.isPending || adaptersQuery.isError}
+          >
             {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
             {pending ? "正在保存" : "保存 Provider"}
           </Button>

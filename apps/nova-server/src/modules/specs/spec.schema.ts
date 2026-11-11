@@ -42,6 +42,7 @@ export const evidenceSchema = z.object({
   ]),
 }).strict();
 export const reconcileSchema = z.object({ expectedRevision: z.number().int().positive(), note: z.string().max(2000).optional() }).strict();
+export type RecordEvidenceInput = z.infer<typeof evidenceSchema>;
 export const attemptQuerySchema = z.object({ revision: z.coerce.number().int().positive(), taskKey: z.string().optional(), cursor: z.string().optional() }).strict();
 export const specIdempotencyHeader = z.object({ "idempotency-key": z.string().trim().min(1).max(128) }).passthrough();
 

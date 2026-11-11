@@ -21,7 +21,7 @@ import {
   modelRouter,
   sessionStore,
 } from "../contracts/capabilities.js";
-import { FrameworkError, safeError } from "../contracts/errors.js";
+import { FrameworkError, safeError, runFailureStatus } from "../contracts/errors.js";
 import { jsonValue, positive } from "../shared/json.js";
 import { ResourceAdmission } from "./admission.js";
 import { Context } from "./context.js";
@@ -301,11 +301,7 @@ export class SessionHandle implements AgentSession {
           return result;
         } catch (error) {
           if (kind === "compact") return { status: "failed", reason: safeError(error).code };
-          const status = signal.aborted
-            ? signal.reason instanceof FrameworkError && signal.reason.code === "TIMED_OUT"
-              ? "timed_out"
-              : "cancelled"
-            : "failed";
+          const status = runFailureStatus(signal);
           const result: RunResult = {
             kind: "completed",
             sessionId: this.sessionId,

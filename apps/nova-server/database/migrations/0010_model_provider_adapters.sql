@@ -1,0 +1,1 @@
+ALTER TABLE "model_providers" ADD COLUMN "adapter_id" text;

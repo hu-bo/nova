@@ -58,19 +58,15 @@ export function applySessionCommit(state: SessionSnapshot, batch: SessionCommit)
     if (index < 0) runs.push(batch.run);
     else runs[index] = batch.run;
   }
+  const summary = batch.summary ?? state.summary;
+  const continuation = batch.continuation === undefined ? state.continuation : batch.continuation;
   const next: SessionSnapshot = {
     revision: state.revision + 1,
     messages: [...state.messages, ...(batch.messages ?? [])],
     runs,
     executions,
-    ...(batch.summary === undefined ? (state.summary ? { summary: state.summary } : {}) : { summary: batch.summary }),
-    ...(batch.continuation === null
-      ? {}
-      : batch.continuation !== undefined
-        ? { continuation: batch.continuation }
-        : state.continuation !== undefined
-          ? { continuation: state.continuation }
-          : {}),
+    ...(summary === undefined ? {} : { summary }),
+    ...(continuation == null ? {} : { continuation }),
   };
   if (!Number.isSafeInteger(next.revision)) throw new FrameworkError("SESSION_LIMIT", "Session revision is exhausted.");
   return next;

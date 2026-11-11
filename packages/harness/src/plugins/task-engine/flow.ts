@@ -284,13 +284,10 @@ export class FlowCoordinator {
         );
         const unsuccessfulDependency = dependencies.some((dependency) => dependency?.status !== "succeeded");
         const selectedDependencies = dependencies.filter((dependency) => dependency?.status !== "skipped");
-        if (
-          node.join === "all-settled"
-            ? false
-            : node.join === "selected-success"
-              ? failedDependency || selectedDependencies.length === 0
-              : unsuccessfulDependency
-        ) {
+        let blocked = unsuccessfulDependency;
+        if (node.join === "all-settled") blocked = false;
+        else if (node.join === "selected-success") blocked = failedDependency || selectedDependencies.length === 0;
+        if (blocked) {
           this.tasks.skip(task.taskId);
           continue;
         }
@@ -310,13 +307,11 @@ export class FlowCoordinator {
     for (const [node, task] of current) if (task?.result) results[node] = task.result;
     const output = results[flow.spec.outputNode];
     const values = Object.entries(results).filter(([node]) => !this.isRaceCandidate(flow, node));
-    const status: FlowResult["status"] = flow.cancelling
-      ? "cancelled"
-      : values.some(([, result]) => result.status === "timed_out")
-        ? "timed_out"
-        : values.some(([, result]) => result.status === "failed") || output?.status !== "succeeded"
-          ? "failed"
-          : "succeeded";
+    let status: FlowResult["status"] = "succeeded";
+    if (flow.cancelling) status = "cancelled";
+    else if (values.some(([, result]) => result.status === "timed_out")) status = "timed_out";
+    else if (values.some(([, result]) => result.status === "failed") || output?.status !== "succeeded")
+      status = "failed";
     flow.complete({
       status,
       nodes: results,

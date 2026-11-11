@@ -9,6 +9,7 @@ Nova 模型配置模块的独立管理后台。它是 React 前端，不是模�
 ```bash
 pnpm --filter @nova/model-console dev
 pnpm --filter @nova/model-console api:generate
+pnpm --filter @nova/model-console api:sync
 pnpm --filter @nova/model-console typecheck
 pnpm --filter @nova/model-console test
 pnpm --filter @nova/model-console build
@@ -43,6 +44,8 @@ tests/                # API 与路由集成测试
 
 用量页面通过 `validateSearch` 校验日期与状态；表单草稿随 URL 导航重新初始化。未知路径展示 404，页面加载错误提供重试。
 
-`src/api/generated/` 由 Orval 从已提交的 `openapi.json` 契约快照生成，禁止手工修改。构建不调用已不存在的 `@nova/agent-server` 包。nova-server 尚未实现快照里的用量统计接口，需先补齐管理端契约，再接入服务端实时导出；不能直接用完整业务 OpenAPI 覆盖当前快照。
+`src/api/generated/` 由 Orval 从已提交的 `openapi.json` 契约快照生成，禁止手工修改。管理接口变更后运行 `api:sync`：从 nova-server 的路由 schema 更新已实现的 `/admin/model-config/*` 接口，再生成客户端。导出会将成功响应投影为 `data` 类型，与 `apiMutator` 的信封解包保持一致；构建仍只从已提交的快照生成代码。
+
+nova-server 尚未实现快照中的用量统计接口。同步保留这些旧契约以维持用量页的类型与构建，不代表后端功能已实现；不能直接用完整业务 OpenAPI 覆盖管理端快照。
 
 生产发布使用本应用的 `.drone.yml`，与 nova-client、nova-server 独立构建和部署。配置与接替旧 nova 的步骤见 [`docs/deployment.md`](../../docs/deployment.md)。

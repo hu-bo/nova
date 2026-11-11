@@ -1,4 +1,8 @@
-import { listModels as fetchModels, listProviders as fetchProviders } from "@/api/generated/model-config";
+import {
+  listModels as fetchModels,
+  listProviders as fetchProviders,
+  listProviderAdapters as fetchProviderAdapters,
+} from "@/api/generated/model-config";
 import { ApiClientError } from "@/api/errors";
 
 export {
@@ -27,6 +31,10 @@ export async function listModels(options?: Parameters<typeof fetchModels>[0]) {
   return requireList(await fetchModels(options), "模型");
 }
 
+export async function listProviderAdapters(options?: Parameters<typeof fetchProviderAdapters>[0]) {
+  return requireList(await fetchProviderAdapters(options), "供应商");
+}
+
 export type {
   CreateModelBody as CreateModel,
   CreateModelBodyInputModalitiesItem as InputModality,
@@ -40,6 +48,7 @@ export type {
   GetUsageStatus as UsageStatus,
   ListModels200Item as Model,
   ListProviders200Item as Provider,
+  ListProviderAdapters200Item as ProviderAdapter,
   UpdateModelBody as UpdateModel,
   UpdateProviderBody as UpdateProvider,
 } from "@/api/generated/model-config";

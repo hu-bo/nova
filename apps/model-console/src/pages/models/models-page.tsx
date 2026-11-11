@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { ModelForm, modelQueryOptions, useModelMutations } from "@/features/models";
-import { providerQueryOptions } from "@/features/providers";
+import { providerQueryOptions, providerAdapterQueryOptions } from "@/features/providers";
 
 type Confirmation = { kind: "disable" | "delete"; model: Model } | null;
 
@@ -31,13 +31,14 @@ const CONFIRMATION_COPY = {
 export function ModelsPage() {
   const modelsQuery = useQuery(modelQueryOptions());
   const providersQuery = useQuery(providerQueryOptions());
+  const adaptersQuery = useQuery(providerAdapterQueryOptions());
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Model | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const { saveMutation, stateMutation, deleteMutation } = useModelMutations(editing);
   const models = modelsQuery.data ?? [];
   const providers = providersQuery.data ?? [];
-  const error = modelsQuery.error ?? providersQuery.error;
+  const error = modelsQuery.error ?? providersQuery.error ?? adaptersQuery.error;
   const confirm = confirmation
     ? {
         ...CONFIRMATION_COPY[confirmation.kind],
@@ -49,7 +50,8 @@ export function ModelsPage() {
 
   /** 目录主体按优先级呈现：加载中 → 出错 → 空目录 → 模型表格。 */
   function renderCatalog() {
-    if (modelsQuery.isLoading || providersQuery.isLoading) return <LoadingState label="正在加载模型目录" />;
+    if (modelsQuery.isLoading || providersQuery.isLoading || adaptersQuery.isLoading)
+      return <LoadingState label="正在加载模型目录" />;
     if (error)
       return (
         <ErrorState
@@ -57,6 +59,7 @@ export function ModelsPage() {
           onRetry={() => {
             void modelsQuery.refetch();
             void providersQuery.refetch();
+            void adaptersQuery.refetch();
           }}
         />
       );
@@ -198,6 +201,7 @@ export function ModelsPage() {
         open={formOpen}
         model={editing}
         providers={providers}
+        adapters={adaptersQuery.data ?? []}
         pending={saveMutation.isPending}
         onClose={() => {
           setFormOpen(false);

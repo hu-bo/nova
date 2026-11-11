@@ -1,4 +1,5 @@
 import type { ServiceTransaction } from "../../shared/scope.js";
+import { modelProviders, type ModelProviderDefinition } from "@nnova/harness/plugins/model-ai-sdk";
 import type { ModelConfigRepository } from "./model-config.repository.js";
 import { DomainError } from "../../shared/domain-error.js";
 import type { Principal } from "../identity/index.js";
@@ -28,8 +29,12 @@ export class ModelConfigService {
   }
 
   async createProvider(input: CreateProviderInput, principal: Principal) {
+    const adapter = input.adapterId ? modelProviders[input.adapterId] : undefined;
+    const protocol = adapter?.protocol ?? input.protocol;
+    if (!protocol) throw new DomainError("VALIDATION_ERROR", "Choose a provider adapter");
     const provider = await this.repository.createProvider({
-      protocol: input.protocol,
+      protocol,
+      adapterId: input.adapterId ?? null,
       name: input.name,
       baseUrl: input.baseUrl,
       credentialCiphertext: this.credentialCipher.encrypt(input.credential),
@@ -46,7 +51,19 @@ export class ModelConfigService {
       const current = await repository.lockProvider(id);
       if (!current) throw new DomainError("NOT_FOUND", "Provider not found");
       const patch: Parameters<ModelConfigRepository["updateProvider"]>[1] = {};
-      if (input.protocol !== undefined) patch.protocol = input.protocol;
+      const adapterId = input.adapterId ?? current.adapterId;
+      const adapter = adapterId ? modelProviders[adapterId] : undefined;
+      if (adapter && input.protocol && input.protocol !== adapter.protocol)
+        throw new DomainError("VALIDATION_ERROR", "Protocol does not match the provider adapter");
+      const nextProtocol = adapter?.protocol ?? input.protocol ?? current.protocol;
+      const changingAdapter = input.adapterId !== undefined && current.adapterId !== input.adapterId;
+      // A connection dialect cannot change underneath registered model configurations.
+      if ((changingAdapter || nextProtocol !== current.protocol) && (await repository.hasProviderModels(id)))
+        throw new DomainError("CONFLICT", "Create a new provider to change the adapter of registered models");
+      if (input.adapterId !== undefined) {
+        patch.adapterId = input.adapterId;
+        patch.protocol = modelProviders[input.adapterId].protocol;
+      } else if (input.protocol !== undefined) patch.protocol = input.protocol;
       if (input.name !== undefined) patch.name = input.name;
       if (input.baseUrl !== undefined) patch.baseUrl = input.baseUrl;
       if (input.enabled !== undefined) patch.enabled = input.enabled;
@@ -85,7 +102,7 @@ export class ModelConfigService {
       if (await repository.isModelNameTaken(input.publicName)) {
         throw new DomainError("CONFLICT", "This public model name is already reserved");
       }
-      const model = await repository.createModel(toModelWrite(input));
+      const model = await repository.createModel(toModelWrite(input, provider));
       return this.getModelDto(model.id, repository);
     });
   }
@@ -94,7 +111,7 @@ export class ModelConfigService {
     return this.transaction(async ({ repository }) => {
       const current = await repository.findModel(id);
       if (!current) throw new DomainError("NOT_FOUND", "Model not found");
-      const model = modelConfigurationSchema.parse({
+      const model = {
         publicName: input.publicName ?? current.publicName,
         providerId: input.providerId ?? current.providerId,
         upstreamName: input.upstreamName ?? current.upstreamName,
@@ -108,7 +125,7 @@ export class ModelConfigService {
         priceIn: input.priceIn ?? current.priceIn,
         priceOut: input.priceOut ?? current.priceOut,
         priceCacheRead: input.priceCacheRead ?? current.priceCacheRead,
-      });
+      };
       const provider = await repository.lockProvider(model.providerId);
       if (!provider) throw new DomainError("NOT_FOUND", "Provider not found");
       if (model.enabled && !provider.enabled) {
@@ -117,7 +134,7 @@ export class ModelConfigService {
       if (await repository.isModelNameTaken(model.publicName, id)) {
         throw new DomainError("CONFLICT", "This public model name is already reserved");
       }
-      await repository.updateModel(id, toModelWrite(model));
+      await repository.updateModel(id, toModelWrite(model, provider));
       return this.getModelDto(id, repository);
     });
   }
@@ -136,6 +153,7 @@ export class ModelConfigService {
 function toProviderDto(provider: ProviderRow) {
   return {
     id: provider.id,
+    adapterId: provider.adapterId,
     protocol: provider.protocol,
     name: provider.name,
     baseUrl: provider.baseUrl,
@@ -170,10 +188,19 @@ function toModelDto(model: ModelRow & { providerName: string }) {
   };
 }
 
-function toModelWrite(input: CreateModelInput) {
+function toModelWrite(input: CreateModelInput, provider: ProviderRow) {
+  const adapter: ModelProviderDefinition | undefined = provider.adapterId
+    ? modelProviders[provider.adapterId]
+    : undefined;
+  if (adapter && input.thinkingLevels.some((level) => !adapter.thinkingLevels.includes(level)))
+    throw new DomainError("VALIDATION_ERROR", "Selected thinking levels are not supported by the provider adapter");
+  let reasoningFormat = input.reasoningFormat ?? "none";
+  if (adapter) reasoningFormat = input.thinkingLevels.length ? adapter.reasoningFormat : "none";
+  const validated = modelConfigurationSchema.parse({ ...input, reasoningFormat });
   return {
-    ...input,
-    contextWindow: String(input.contextWindow),
-    maxOutput: String(input.maxOutput),
+    ...validated,
+    reasoningFormat,
+    contextWindow: String(validated.contextWindow),
+    maxOutput: String(validated.maxOutput),
   };
 }

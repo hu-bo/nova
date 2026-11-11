@@ -4,11 +4,13 @@ import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 import {
   Context,
+  createAgentKernel,
   eventObservers,
   modelRouter,
   type AgentEvent,
   type ModelChunk,
   type ModelStepRequest,
+  type ModelAdapter,
 } from "@nnova/harness";
 import { createLogger } from "@hquant/logger-js";
 import type { FastifyReply } from "fastify";
@@ -21,6 +23,26 @@ import { EventService } from "../src/modules/events/event.service.js";
 import { SseSubscriber } from "../src/transport/sse.js";
 import { configuredModelPlugin } from "../src/modules/runs/configured-model.js";
 import { disabledUploadStorage } from "../src/modules/attachments/upload-storage.js";
+import { nativeBlocks } from "../src/modules/runs/run-dto.js";
+
+test("message projection preserves block identity and excludes opaque provider metadata", () => {
+  const signature = "PRIVATE-PROVIDER-SIGNATURE";
+  const metadata = { anthropic: { signature } };
+  const blocks = nativeBlocks(
+    [
+      { id: "reasoning-1", type: "thinking", text: "First thought", metadata },
+      { id: "reasoning-2", type: "thinking", text: "Second thought", metadata },
+      { id: "source-1", type: "source", uri: "https://example.com", metadata },
+    ],
+    [],
+    "message",
+  );
+  assert.deepEqual(
+    blocks.map((block) => block.id),
+    ["reasoning-1", "reasoning-2", "source-1"],
+  );
+  assert.ok(!JSON.stringify(blocks).includes(signature));
+});
 
 test("SSE follows active output promptly, backs off while idle and stops on disconnect", async (t) => {
   const reads: number[] = [];
@@ -135,56 +157,63 @@ test("stream persistence flushes within 50ms and retains delta order", async (t)
   );
 });
 
-test("configured model logs protocol failures with correlation and stream state, excluding payloads", async (t) => {
+test("configured model delegates protocol handling and logs safe correlated failures", async (t) => {
   const secret = "DO-NOT-LOG-MODEL-PAYLOAD";
   const frame = (value: unknown) => `data: ${typeof value === "string" ? value : JSON.stringify(value)}\n\n`;
-  const content = frame({ choices: [{ delta: { content: secret }, finish_reason: null }] });
-  const finish = frame({ choices: [{ delta: {}, finish_reason: "stop" }] });
+  const content = frame({ choices: [{ index: 0, delta: { content: secret }, finish_reason: null }] });
+  const finish = frame({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] });
   const done = frame("[DONE]");
   const scenarios = [
     { name: "valid OpenAI", data: content + finish + done, protocol: "openai", status: 200 },
     {
       name: "valid Anthropic",
       data:
-        frame({ type: "content_block_start", index: 0, content_block: { type: "text", text: secret } }) +
-        frame({ type: "message_delta", delta: { stop_reason: "end_turn" } }) +
+        frame({
+          type: "message_start",
+          message: {
+            id: "msg",
+            type: "message",
+            role: "assistant",
+            model: "fixture",
+            content: [],
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 1, output_tokens: 0 },
+          },
+        }) +
+        frame({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }) +
+        frame({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: secret } }) +
+        frame({ type: "content_block_stop", index: 0 }) +
+        frame({
+          type: "message_delta",
+          delta: { stop_reason: "end_turn", stop_sequence: null },
+          usage: { output_tokens: 1 },
+        }) +
         frame({ type: "message_stop" }),
       protocol: "anthropic",
       status: 200,
     },
-    {
-      name: "missing DONE",
-      data: content + finish,
-      protocol: "openai",
-      status: 200,
-      failure: "Model stream ended before completion.",
-      stopped: false,
-      finishReason: "stop",
-    },
+    { name: "missing DONE", data: content + finish, protocol: "openai", status: 200 },
     {
       name: "missing finish reason",
       data: content + done,
       protocol: "openai",
       status: 200,
-      failure: "Model stream ended before completion.",
-      stopped: true,
-      finishReason: "",
+      failure: "MODEL_PROTOCOL",
     },
     {
       name: "incomplete frame",
       data: content + `data: ${secret}`,
       protocol: "openai",
       status: 200,
-      failure: "Model stream ended before completion.",
-      stopped: false,
-      finishReason: "",
+      failure: "MODEL_PROTOCOL",
     },
     {
       name: "malformed JSON",
       data: frame(secret),
       protocol: "openai",
       status: 200,
-      failure: "Invalid model stream frame.",
+      failure: "MODEL_PROTOCOL",
     },
     {
       name: "invalid tool JSON",
@@ -192,6 +221,7 @@ test("configured model logs protocol failures with correlation and stream state,
         frame({
           choices: [
             {
+              index: 0,
               delta: { tool_calls: [{ index: 0, id: "call", function: { name: "bash", arguments: secret } }] },
               finish_reason: "tool_calls",
             },
@@ -199,23 +229,21 @@ test("configured model logs protocol failures with correlation and stream state,
         }) + done,
       protocol: "openai",
       status: 200,
-      failure: "Invalid model tool arguments.",
+      failure: "MODEL_PROTOCOL",
     },
     {
       name: "upstream error",
-      data: frame({ error: { message: secret } }),
+      data: frame({ error: { message: secret, type: "provider_error", code: "provider_error" } }),
       protocol: "openai",
       status: 200,
-      failure: "Model stream failed.",
-      code: "MODEL_REQUEST_FAILED",
+      failure: "MODEL_REQUEST_FAILED",
     },
     {
       name: "HTTP error",
       data: secret,
       protocol: "openai",
       status: 429,
-      failure: "Model request failed (HTTP 429).",
-      code: "MODEL_RATE_LIMITED",
+      failure: "MODEL_RATE_LIMITED",
     },
     { name: "network error", data: "", protocol: "openai", status: 200, transportError: true },
     {
@@ -258,6 +286,7 @@ test("configured model logs protocol failures with correlation and stream state,
         credential: secret,
         provider: {
           id: "provider",
+          adapterId: null,
           protocol: scenario.protocol,
           name: "provider",
           baseUrl: "https://provider.invalid/v1",
@@ -290,10 +319,18 @@ test("configured model logs protocol failures with correlation and stream state,
           updatedAt: now,
         },
       };
-      const context = new Context("kernel");
-      t.after(() => context.dispose());
-      await context.plugin(configuredModelPlugin(route, disabledUploadStorage(), "owner", logger));
-      await context.ready();
+      let adapter: ModelAdapter | undefined;
+      const kernel = await createAgentKernel({
+        maxConcurrentRuns: 1,
+        configure: async (context) => {
+          await context.plugin(configuredModelPlugin(route, disabledUploadStorage(), "owner", logger));
+          context.onReady(() => {
+            adapter = context.resolve(modelRouter);
+          });
+        },
+      });
+      t.after(() => kernel.dispose());
+      assert.ok(adapter);
       const request: ModelStepRequest = {
         sessionId: "conversation",
         runId: "run",
@@ -305,26 +342,15 @@ test("configured model logs protocol failures with correlation and stream state,
       };
       const chunks: ModelChunk[] = [];
       const consume = async () => {
-        for await (const chunk of context.resolve(modelRouter).stream(request)) chunks.push(chunk);
+        for await (const chunk of adapter.stream(request)) chunks.push(chunk);
       };
       if ("failure" in scenario) {
-        await assert.rejects(consume, { message: scenario.failure });
+        await assert.rejects(consume, { code: scenario.failure });
         const failure = logs.find((entry) => entry.msg === "Model stream failed")!;
-        assert.equal(failure.errorCode, "code" in scenario ? scenario.code : "MODEL_PROTOCOL");
-        assert.equal(failure.errorMessage, scenario.failure);
-        assert.equal(failure.reachedEof, scenario.name === "missing DONE" || scenario.name === "incomplete frame");
-        if ("stopped" in scenario) {
-          assert.equal(failure.stopped, scenario.stopped);
-          assert.equal(failure.finishReason, scenario.finishReason);
-        }
-        if (scenario.name === "incomplete frame") assert.equal(failure.pendingCharacters, `data: ${secret}`.length);
-        if (scenario.name === "invalid tool JSON")
-          assert.deepEqual(failure.toolCalls, [
-            { index: 0, hasId: true, hasName: true, argumentCharacters: secret.length },
-          ]);
+        assert.equal(failure.errorCode, scenario.failure);
       } else if ("transportError" in scenario) {
-        await assert.rejects(consume, transportError);
-        assert.equal(logs.find((entry) => entry.msg === "Model stream failed")!.transportCode, "ECONNRESET");
+        await assert.rejects(consume, { code: "MODEL_TRANSPORT" });
+        assert.equal(logs.find((entry) => entry.msg === "Model stream failed")!.errorCode, "MODEL_TRANSPORT");
       } else {
         await consume();
         assert.equal(chunks.at(-1)?.type, "finished");

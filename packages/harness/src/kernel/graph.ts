@@ -5,8 +5,9 @@ export function reference(value: CapabilityReference): {
   id: string;
   version: number;
 } {
-  const result =
-    typeof value === "string" ? { id: value, version: 1 } : value && typeof value === "object" ? value : undefined;
+  let result: { id: string; version: number } | undefined;
+  if (typeof value === "string") result = { id: value, version: 1 };
+  else if (value && typeof value === "object") result = value;
   if (
     !result ||
     !/^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(result.id) ||

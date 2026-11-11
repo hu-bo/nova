@@ -71,6 +71,13 @@
       "when": 1793990952170,
       "tag": "0009_demonic_excalibur",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794415000032,
+      "tag": "0010_model_provider_adapters",
+      "breakpoints": true
     }
   ]
 }

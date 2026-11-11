@@ -73,6 +73,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   return environmentSchema.parse({
     ...environment,
     // Compatibility with the previous deployment configuration; this is an Auth Service origin.
-    AUTH_SERVICE_URL: environment.AUTH_SERVICE_URL,
+    AUTH_SERVICE_URL: environment.AUTH_SERVICE_URL ?? environment.CASDOOR_ENDPOINT,
   });
 }

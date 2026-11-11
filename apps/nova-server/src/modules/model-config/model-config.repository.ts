@@ -7,12 +7,28 @@ export type ModelRow = typeof modelConfigs.$inferSelect;
 
 export type ProviderInsert = Pick<
   typeof modelProviders.$inferInsert,
-  "protocol" | "name" | "baseUrl" | "credentialCiphertext" | "credentialMasked" | "enabled" | "isPublic" | "ownerId"
+  | "protocol"
+  | "adapterId"
+  | "name"
+  | "baseUrl"
+  | "credentialCiphertext"
+  | "credentialMasked"
+  | "enabled"
+  | "isPublic"
+  | "ownerId"
 >;
 export type ProviderPatch = Partial<
   Pick<
     ProviderInsert,
-    "protocol" | "name" | "baseUrl" | "credentialCiphertext" | "credentialMasked" | "enabled" | "isPublic" | "ownerId"
+    | "protocol"
+    | "adapterId"
+    | "name"
+    | "baseUrl"
+    | "credentialCiphertext"
+    | "credentialMasked"
+    | "enabled"
+    | "isPublic"
+    | "ownerId"
   >
 >;
 
@@ -154,6 +170,14 @@ export const modelConfigRepository = defineRepository(({ db, requireTransaction 
         .where(and(eq(modelProviders.id, id), isNull(modelProviders.deletedAt)))
         .for("update");
       return row;
+    },
+    async hasProviderModels(providerId: string): Promise<boolean> {
+      const [model] = await db
+        .select({ id: modelConfigs.id })
+        .from(modelConfigs)
+        .where(and(eq(modelConfigs.providerId, providerId), isNull(modelConfigs.deletedAt)))
+        .limit(1);
+      return model !== undefined;
     },
     async createProvider(input: ProviderInsert): Promise<ProviderRow> {
       const [provider] = await db.insert(modelProviders).values(input).returning();

@@ -229,6 +229,21 @@ export type StartConversationRun202 = {
   runId: string;
 };
 
+/**
+ * @nullable
+ */
+export type ListProviders200ItemAdapterId = typeof ListProviders200ItemAdapterId[keyof typeof ListProviders200ItemAdapterId] | null;
+
+
+export const ListProviders200ItemAdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
 export type ListProviders200ItemProtocol = typeof ListProviders200ItemProtocol[keyof typeof ListProviders200ItemProtocol];
 
 
@@ -238,8 +253,10 @@ export const ListProviders200ItemProtocol = {
 } as const;
 
 export type ListProviders200Item = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
+  /** @nullable */
+  adapterId: ListProviders200ItemAdapterId;
   protocol: ListProviders200ItemProtocol;
   name: string;
   baseUrl: string;
@@ -248,11 +265,167 @@ export type ListProviders200Item = {
   isPublic: boolean;
   /** @nullable */
   ownerId: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   updatedAt: string;
 };
+
+export type ListProviders400Details = {[key: string]: unknown};
+
+export type ListProviders400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviders400Details;
+};
+
+export type ListProviders401Details = {[key: string]: unknown};
+
+export type ListProviders401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviders401Details;
+};
+
+export type ListProviders403Details = {[key: string]: unknown};
+
+export type ListProviders403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviders403Details;
+};
+
+export type ListProviders404Details = {[key: string]: unknown};
+
+export type ListProviders404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviders404Details;
+};
+
+export type ListProviders409Details = {[key: string]: unknown};
+
+export type ListProviders409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviders409Details;
+};
+
+export type ListProviders500Details = {[key: string]: unknown};
+
+export type ListProviders500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviders500Details;
+};
+
+export type ListProviders503Details = {[key: string]: unknown};
+
+export type ListProviders503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviders503Details;
+};
+
+export type ListProvidersDefaultDetails = {[key: string]: unknown};
+
+export type ListProvidersDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProvidersDefaultDetails;
+};
+
+export type CreateProviderBodyAdapterId = typeof CreateProviderBodyAdapterId[keyof typeof CreateProviderBodyAdapterId];
+
+
+export const CreateProviderBodyAdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
 
 export type CreateProviderBodyProtocol = typeof CreateProviderBodyProtocol[keyof typeof CreateProviderBodyProtocol];
 
@@ -263,13 +436,17 @@ export const CreateProviderBodyProtocol = {
 } as const;
 
 export type CreateProviderBody = {
-  protocol: CreateProviderBodyProtocol;
+  adapterId?: CreateProviderBodyAdapterId;
+  protocol?: CreateProviderBodyProtocol;
   /**
      * @minLength 1
      * @maxLength 80
      */
   name: string;
-  /** @maxLength 2048 */
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     */
   baseUrl: string;
   /**
      * @minLength 1
@@ -280,18 +457,35 @@ export type CreateProviderBody = {
   isPublic?: boolean;
 };
 
-export type CreateProvider201Protocol = typeof CreateProvider201Protocol[keyof typeof CreateProvider201Protocol];
+/**
+ * @nullable
+ */
+export type CreateProvider200AdapterId = typeof CreateProvider200AdapterId[keyof typeof CreateProvider200AdapterId] | null;
 
 
-export const CreateProvider201Protocol = {
+export const CreateProvider200AdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
+export type CreateProvider200Protocol = typeof CreateProvider200Protocol[keyof typeof CreateProvider200Protocol];
+
+
+export const CreateProvider200Protocol = {
   openai: 'openai',
   anthropic: 'anthropic',
 } as const;
 
-export type CreateProvider201 = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+export type CreateProvider200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
-  protocol: CreateProvider201Protocol;
+  /** @nullable */
+  adapterId: CreateProvider200AdapterId;
+  protocol: CreateProvider200Protocol;
   name: string;
   baseUrl: string;
   credentialMasked: string;
@@ -299,11 +493,167 @@ export type CreateProvider201 = {
   isPublic: boolean;
   /** @nullable */
   ownerId: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   updatedAt: string;
 };
+
+export type CreateProvider400Details = {[key: string]: unknown};
+
+export type CreateProvider400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateProvider400Details;
+};
+
+export type CreateProvider401Details = {[key: string]: unknown};
+
+export type CreateProvider401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateProvider401Details;
+};
+
+export type CreateProvider403Details = {[key: string]: unknown};
+
+export type CreateProvider403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateProvider403Details;
+};
+
+export type CreateProvider404Details = {[key: string]: unknown};
+
+export type CreateProvider404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateProvider404Details;
+};
+
+export type CreateProvider409Details = {[key: string]: unknown};
+
+export type CreateProvider409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateProvider409Details;
+};
+
+export type CreateProvider500Details = {[key: string]: unknown};
+
+export type CreateProvider500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateProvider500Details;
+};
+
+export type CreateProvider503Details = {[key: string]: unknown};
+
+export type CreateProvider503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateProvider503Details;
+};
+
+export type CreateProviderDefaultDetails = {[key: string]: unknown};
+
+export type CreateProviderDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateProviderDefaultDetails;
+};
+
+export type UpdateProviderBodyAdapterId = typeof UpdateProviderBodyAdapterId[keyof typeof UpdateProviderBodyAdapterId];
+
+
+export const UpdateProviderBodyAdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
 
 export type UpdateProviderBodyProtocol = typeof UpdateProviderBodyProtocol[keyof typeof UpdateProviderBodyProtocol];
 
@@ -314,19 +664,38 @@ export const UpdateProviderBodyProtocol = {
 } as const;
 
 export type UpdateProviderBody = {
+  adapterId?: UpdateProviderBodyAdapterId;
   protocol?: UpdateProviderBodyProtocol;
   /**
      * @minLength 1
      * @maxLength 80
      */
   name?: string;
-  /** @maxLength 2048 */
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     */
   baseUrl?: string;
-  isPublic?: boolean;
   /** @maxLength 4096 */
   credential?: string;
   enabled?: boolean;
+  isPublic?: boolean;
 };
+
+/**
+ * @nullable
+ */
+export type UpdateProvider200AdapterId = typeof UpdateProvider200AdapterId[keyof typeof UpdateProvider200AdapterId] | null;
+
+
+export const UpdateProvider200AdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
 
 export type UpdateProvider200Protocol = typeof UpdateProvider200Protocol[keyof typeof UpdateProvider200Protocol];
 
@@ -337,8 +706,10 @@ export const UpdateProvider200Protocol = {
 } as const;
 
 export type UpdateProvider200 = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
+  /** @nullable */
+  adapterId: UpdateProvider200AdapterId;
   protocol: UpdateProvider200Protocol;
   name: string;
   baseUrl: string;
@@ -347,10 +718,307 @@ export type UpdateProvider200 = {
   isPublic: boolean;
   /** @nullable */
   ownerId: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   updatedAt: string;
+};
+
+export type UpdateProvider400Details = {[key: string]: unknown};
+
+export type UpdateProvider400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateProvider400Details;
+};
+
+export type UpdateProvider401Details = {[key: string]: unknown};
+
+export type UpdateProvider401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateProvider401Details;
+};
+
+export type UpdateProvider403Details = {[key: string]: unknown};
+
+export type UpdateProvider403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateProvider403Details;
+};
+
+export type UpdateProvider404Details = {[key: string]: unknown};
+
+export type UpdateProvider404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateProvider404Details;
+};
+
+export type UpdateProvider409Details = {[key: string]: unknown};
+
+export type UpdateProvider409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateProvider409Details;
+};
+
+export type UpdateProvider500Details = {[key: string]: unknown};
+
+export type UpdateProvider500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateProvider500Details;
+};
+
+export type UpdateProvider503Details = {[key: string]: unknown};
+
+export type UpdateProvider503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateProvider503Details;
+};
+
+export type UpdateProviderDefaultDetails = {[key: string]: unknown};
+
+export type UpdateProviderDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateProviderDefaultDetails;
+};
+
+/**
+ * @nullable
+ */
+export type DeleteProvider200 = typeof DeleteProvider200[keyof typeof DeleteProvider200] | null;
+
+
+export const DeleteProvider200 = {
+} as const;
+
+export type DeleteProvider400Details = {[key: string]: unknown};
+
+export type DeleteProvider400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteProvider400Details;
+};
+
+export type DeleteProvider401Details = {[key: string]: unknown};
+
+export type DeleteProvider401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteProvider401Details;
+};
+
+export type DeleteProvider403Details = {[key: string]: unknown};
+
+export type DeleteProvider403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteProvider403Details;
+};
+
+export type DeleteProvider404Details = {[key: string]: unknown};
+
+export type DeleteProvider404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteProvider404Details;
+};
+
+export type DeleteProvider409Details = {[key: string]: unknown};
+
+export type DeleteProvider409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteProvider409Details;
+};
+
+export type DeleteProvider500Details = {[key: string]: unknown};
+
+export type DeleteProvider500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteProvider500Details;
+};
+
+export type DeleteProvider503Details = {[key: string]: unknown};
+
+export type DeleteProvider503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteProvider503Details;
+};
+
+export type DeleteProviderDefaultDetails = {[key: string]: unknown};
+
+export type DeleteProviderDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteProviderDefaultDetails;
 };
 
 export type ListModels200ItemThinkingLevelsItem = typeof ListModels200ItemThinkingLevelsItem[keyof typeof ListModels200ItemThinkingLevelsItem];
@@ -384,10 +1052,10 @@ export const ListModels200ItemInputModalitiesItem = {
 } as const;
 
 export type ListModels200Item = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
   publicName: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   providerId: string;
   providerName: string;
   upstreamName: string;
@@ -401,26 +1069,162 @@ export type ListModels200Item = {
      * @maximum 9007199254740991
      */
   maxOutput: number;
-  /** @maxItems 5 */
   thinkingLevels: ListModels200ItemThinkingLevelsItem[];
   parallelToolCalls: boolean;
   reasoningFormat: ListModels200ItemReasoningFormat;
-  /**
-     * @minItems 1
-     * @maxItems 2
-     */
   inputModalities: ListModels200ItemInputModalitiesItem[];
   enabled: boolean;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceIn: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceOut: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceCacheRead: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   updatedAt: string;
+};
+
+export type ListModels400Details = {[key: string]: unknown};
+
+export type ListModels400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListModels400Details;
+};
+
+export type ListModels401Details = {[key: string]: unknown};
+
+export type ListModels401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListModels401Details;
+};
+
+export type ListModels403Details = {[key: string]: unknown};
+
+export type ListModels403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListModels403Details;
+};
+
+export type ListModels404Details = {[key: string]: unknown};
+
+export type ListModels404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListModels404Details;
+};
+
+export type ListModels409Details = {[key: string]: unknown};
+
+export type ListModels409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListModels409Details;
+};
+
+export type ListModels500Details = {[key: string]: unknown};
+
+export type ListModels500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListModels500Details;
+};
+
+export type ListModels503Details = {[key: string]: unknown};
+
+export type ListModels503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListModels503Details;
+};
+
+export type ListModelsDefaultDetails = {[key: string]: unknown};
+
+export type ListModelsDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListModelsDefaultDetails;
 };
 
 export type CreateModelBodyThinkingLevelsItem = typeof CreateModelBodyThinkingLevelsItem[keyof typeof CreateModelBodyThinkingLevelsItem];
@@ -459,7 +1263,7 @@ export type CreateModelBody = {
      * @maxLength 100
      */
   publicName: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   providerId: string;
   /**
      * @minLength 1
@@ -486,18 +1290,18 @@ export type CreateModelBody = {
      */
   inputModalities?: CreateModelBodyInputModalitiesItem[];
   enabled?: boolean;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
+  /** @pattern ^\d{1,12}(\.\d{1,8})?$ */
   priceIn?: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
+  /** @pattern ^\d{1,12}(\.\d{1,8})?$ */
   priceOut?: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
+  /** @pattern ^\d{1,12}(\.\d{1,8})?$ */
   priceCacheRead?: string;
 };
 
-export type CreateModel201ThinkingLevelsItem = typeof CreateModel201ThinkingLevelsItem[keyof typeof CreateModel201ThinkingLevelsItem];
+export type CreateModel200ThinkingLevelsItem = typeof CreateModel200ThinkingLevelsItem[keyof typeof CreateModel200ThinkingLevelsItem];
 
 
-export const CreateModel201ThinkingLevelsItem = {
+export const CreateModel200ThinkingLevelsItem = {
   off: 'off',
   low: 'low',
   medium: 'medium',
@@ -505,10 +1309,10 @@ export const CreateModel201ThinkingLevelsItem = {
   max: 'max',
 } as const;
 
-export type CreateModel201ReasoningFormat = typeof CreateModel201ReasoningFormat[keyof typeof CreateModel201ReasoningFormat];
+export type CreateModel200ReasoningFormat = typeof CreateModel200ReasoningFormat[keyof typeof CreateModel200ReasoningFormat];
 
 
-export const CreateModel201ReasoningFormat = {
+export const CreateModel200ReasoningFormat = {
   none: 'none',
   openai: 'openai',
   anthropic: 'anthropic',
@@ -516,19 +1320,19 @@ export const CreateModel201ReasoningFormat = {
   minimax: 'minimax',
 } as const;
 
-export type CreateModel201InputModalitiesItem = typeof CreateModel201InputModalitiesItem[keyof typeof CreateModel201InputModalitiesItem];
+export type CreateModel200InputModalitiesItem = typeof CreateModel200InputModalitiesItem[keyof typeof CreateModel200InputModalitiesItem];
 
 
-export const CreateModel201InputModalitiesItem = {
+export const CreateModel200InputModalitiesItem = {
   text: 'text',
   image: 'image',
 } as const;
 
-export type CreateModel201 = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+export type CreateModel200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
   publicName: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   providerId: string;
   providerName: string;
   upstreamName: string;
@@ -542,26 +1346,162 @@ export type CreateModel201 = {
      * @maximum 9007199254740991
      */
   maxOutput: number;
-  /** @maxItems 5 */
-  thinkingLevels: CreateModel201ThinkingLevelsItem[];
+  thinkingLevels: CreateModel200ThinkingLevelsItem[];
   parallelToolCalls: boolean;
-  reasoningFormat: CreateModel201ReasoningFormat;
-  /**
-     * @minItems 1
-     * @maxItems 2
-     */
-  inputModalities: CreateModel201InputModalitiesItem[];
+  reasoningFormat: CreateModel200ReasoningFormat;
+  inputModalities: CreateModel200InputModalitiesItem[];
   enabled: boolean;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceIn: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceOut: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceCacheRead: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   updatedAt: string;
+};
+
+export type CreateModel400Details = {[key: string]: unknown};
+
+export type CreateModel400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateModel400Details;
+};
+
+export type CreateModel401Details = {[key: string]: unknown};
+
+export type CreateModel401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateModel401Details;
+};
+
+export type CreateModel403Details = {[key: string]: unknown};
+
+export type CreateModel403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateModel403Details;
+};
+
+export type CreateModel404Details = {[key: string]: unknown};
+
+export type CreateModel404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateModel404Details;
+};
+
+export type CreateModel409Details = {[key: string]: unknown};
+
+export type CreateModel409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateModel409Details;
+};
+
+export type CreateModel500Details = {[key: string]: unknown};
+
+export type CreateModel500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateModel500Details;
+};
+
+export type CreateModel503Details = {[key: string]: unknown};
+
+export type CreateModel503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateModel503Details;
+};
+
+export type CreateModelDefaultDetails = {[key: string]: unknown};
+
+export type CreateModelDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: CreateModelDefaultDetails;
 };
 
 export type UpdateModelBodyThinkingLevelsItem = typeof UpdateModelBodyThinkingLevelsItem[keyof typeof UpdateModelBodyThinkingLevelsItem];
@@ -600,7 +1540,7 @@ export type UpdateModelBody = {
      * @maxLength 100
      */
   publicName?: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   providerId?: string;
   /**
      * @minLength 1
@@ -627,11 +1567,11 @@ export type UpdateModelBody = {
      */
   inputModalities?: UpdateModelBodyInputModalitiesItem[];
   enabled?: boolean;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
+  /** @pattern ^\d{1,12}(\.\d{1,8})?$ */
   priceIn?: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
+  /** @pattern ^\d{1,12}(\.\d{1,8})?$ */
   priceOut?: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
+  /** @pattern ^\d{1,12}(\.\d{1,8})?$ */
   priceCacheRead?: string;
 };
 
@@ -666,10 +1606,10 @@ export const UpdateModel200InputModalitiesItem = {
 } as const;
 
 export type UpdateModel200 = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
   publicName: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   providerId: string;
   providerName: string;
   upstreamName: string;
@@ -683,26 +1623,315 @@ export type UpdateModel200 = {
      * @maximum 9007199254740991
      */
   maxOutput: number;
-  /** @maxItems 5 */
   thinkingLevels: UpdateModel200ThinkingLevelsItem[];
   parallelToolCalls: boolean;
   reasoningFormat: UpdateModel200ReasoningFormat;
-  /**
-     * @minItems 1
-     * @maxItems 2
-     */
   inputModalities: UpdateModel200InputModalitiesItem[];
   enabled: boolean;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceIn: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceOut: string;
-  /** @pattern ^\d+(\.\d{1,8})?$ */
   priceCacheRead: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   updatedAt: string;
+};
+
+export type UpdateModel400Details = {[key: string]: unknown};
+
+export type UpdateModel400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateModel400Details;
+};
+
+export type UpdateModel401Details = {[key: string]: unknown};
+
+export type UpdateModel401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateModel401Details;
+};
+
+export type UpdateModel403Details = {[key: string]: unknown};
+
+export type UpdateModel403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateModel403Details;
+};
+
+export type UpdateModel404Details = {[key: string]: unknown};
+
+export type UpdateModel404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateModel404Details;
+};
+
+export type UpdateModel409Details = {[key: string]: unknown};
+
+export type UpdateModel409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateModel409Details;
+};
+
+export type UpdateModel500Details = {[key: string]: unknown};
+
+export type UpdateModel500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateModel500Details;
+};
+
+export type UpdateModel503Details = {[key: string]: unknown};
+
+export type UpdateModel503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateModel503Details;
+};
+
+export type UpdateModelDefaultDetails = {[key: string]: unknown};
+
+export type UpdateModelDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: UpdateModelDefaultDetails;
+};
+
+/**
+ * @nullable
+ */
+export type DeleteModel200 = typeof DeleteModel200[keyof typeof DeleteModel200] | null;
+
+
+export const DeleteModel200 = {
+} as const;
+
+export type DeleteModel400Details = {[key: string]: unknown};
+
+export type DeleteModel400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteModel400Details;
+};
+
+export type DeleteModel401Details = {[key: string]: unknown};
+
+export type DeleteModel401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteModel401Details;
+};
+
+export type DeleteModel403Details = {[key: string]: unknown};
+
+export type DeleteModel403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteModel403Details;
+};
+
+export type DeleteModel404Details = {[key: string]: unknown};
+
+export type DeleteModel404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteModel404Details;
+};
+
+export type DeleteModel409Details = {[key: string]: unknown};
+
+export type DeleteModel409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteModel409Details;
+};
+
+export type DeleteModel500Details = {[key: string]: unknown};
+
+export type DeleteModel500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteModel500Details;
+};
+
+export type DeleteModel503Details = {[key: string]: unknown};
+
+export type DeleteModel503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteModel503Details;
+};
+
+export type DeleteModelDefaultDetails = {[key: string]: unknown};
+
+export type DeleteModelDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: DeleteModelDefaultDetails;
 };
 
 export type GetUsageParams = {
@@ -820,6 +2049,201 @@ export type GetUsage200 = {
   to: string;
   totals: GetUsage200Totals;
   items: GetUsage200ItemsItem[];
+};
+
+export type ListProviderAdapters200ItemId = typeof ListProviderAdapters200ItemId[keyof typeof ListProviderAdapters200ItemId];
+
+
+export const ListProviderAdapters200ItemId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
+export type ListProviderAdapters200ItemProtocol = typeof ListProviderAdapters200ItemProtocol[keyof typeof ListProviderAdapters200ItemProtocol];
+
+
+export const ListProviderAdapters200ItemProtocol = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+} as const;
+
+export type ListProviderAdapters200ItemReasoningFormat = typeof ListProviderAdapters200ItemReasoningFormat[keyof typeof ListProviderAdapters200ItemReasoningFormat];
+
+
+export const ListProviderAdapters200ItemReasoningFormat = {
+  none: 'none',
+  openai: 'openai',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+} as const;
+
+export type ListProviderAdapters200ItemThinkingLevelsItem = typeof ListProviderAdapters200ItemThinkingLevelsItem[keyof typeof ListProviderAdapters200ItemThinkingLevelsItem];
+
+
+export const ListProviderAdapters200ItemThinkingLevelsItem = {
+  off: 'off',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  max: 'max',
+} as const;
+
+export type ListProviderAdapters200Item = {
+  id: ListProviderAdapters200ItemId;
+  label: string;
+  defaultBaseURL: string;
+  protocol: ListProviderAdapters200ItemProtocol;
+  reasoningFormat: ListProviderAdapters200ItemReasoningFormat;
+  thinkingLevels: ListProviderAdapters200ItemThinkingLevelsItem[];
+};
+
+export type ListProviderAdapters400Details = {[key: string]: unknown};
+
+export type ListProviderAdapters400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviderAdapters400Details;
+};
+
+export type ListProviderAdapters401Details = {[key: string]: unknown};
+
+export type ListProviderAdapters401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviderAdapters401Details;
+};
+
+export type ListProviderAdapters403Details = {[key: string]: unknown};
+
+export type ListProviderAdapters403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviderAdapters403Details;
+};
+
+export type ListProviderAdapters404Details = {[key: string]: unknown};
+
+export type ListProviderAdapters404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviderAdapters404Details;
+};
+
+export type ListProviderAdapters409Details = {[key: string]: unknown};
+
+export type ListProviderAdapters409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviderAdapters409Details;
+};
+
+export type ListProviderAdapters500Details = {[key: string]: unknown};
+
+export type ListProviderAdapters500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviderAdapters500Details;
+};
+
+export type ListProviderAdapters503Details = {[key: string]: unknown};
+
+export type ListProviderAdapters503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviderAdapters503Details;
+};
+
+export type ListProviderAdaptersDefaultDetails = {[key: string]: unknown};
+
+export type ListProviderAdaptersDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: ListProviderAdaptersDefaultDetails;
 };
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -1730,7 +3154,7 @@ export const getListProvidersQueryKey = () => {
     }
 
 
-export const getListProvidersQueryOptions = <TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviders>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+export const getListProvidersQueryOptions = <TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<ListProviders400 | ListProviders401 | ListProviders403 | ListProviders404 | ListProviders409 | ListProviders500 | ListProviders503 | ListProvidersDefault>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviders>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1749,10 +3173,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListProvidersQueryResult = NonNullable<Awaited<ReturnType<typeof listProviders>>>
-export type ListProvidersQueryError = ErrorType<unknown>
+export type ListProvidersQueryError = ErrorType<ListProviders400 | ListProviders401 | ListProviders403 | ListProviders404 | ListProviders409 | ListProviders500 | ListProviders503 | ListProvidersDefault>
 
 
-export function useListProviders<TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<unknown>>(
+export function useListProviders<TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<ListProviders400 | ListProviders401 | ListProviders403 | ListProviders404 | ListProviders409 | ListProviders500 | ListProviders503 | ListProvidersDefault>>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviders>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listProviders>>,
@@ -1762,7 +3186,7 @@ export function useListProviders<TData = Awaited<ReturnType<typeof listProviders
       >, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListProviders<TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<unknown>>(
+export function useListProviders<TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<ListProviders400 | ListProviders401 | ListProviders403 | ListProviders404 | ListProviders409 | ListProviders500 | ListProviders503 | ListProvidersDefault>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviders>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listProviders>>,
@@ -1772,12 +3196,12 @@ export function useListProviders<TData = Awaited<ReturnType<typeof listProviders
       >, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListProviders<TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<unknown>>(
+export function useListProviders<TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<ListProviders400 | ListProviders401 | ListProviders403 | ListProviders404 | ListProviders409 | ListProviders500 | ListProviders503 | ListProvidersDefault>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviders>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
-export function useListProviders<TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<unknown>>(
+export function useListProviders<TData = Awaited<ReturnType<typeof listProviders>>, TError = ErrorType<ListProviders400 | ListProviders401 | ListProviders403 | ListProviders404 | ListProviders409 | ListProviders500 | ListProviders503 | ListProvidersDefault>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviders>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -1803,7 +3227,7 @@ export const getCreateProviderUrl = () => {
   return `/admin/model-config/providers`
 }
 
-export const createProvider = async (createProviderBody: CreateProviderBody, options?: Parameters<typeof apiMutator>[1]): Promise<CreateProvider201> => {
+export const createProvider = async (createProviderBody: CreateProviderBody, options?: Parameters<typeof apiMutator>[1]): Promise<CreateProvider200> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -1819,7 +3243,7 @@ export const createProvider = async (createProviderBody: CreateProviderBody, opt
     }
     return headers;
   };
-return apiMutator<CreateProvider201>(getCreateProviderUrl(),
+return apiMutator<CreateProvider200>(getCreateProviderUrl(),
   {
     ...options,
     method: 'POST',
@@ -1834,7 +3258,7 @@ return apiMutator<CreateProvider201>(getCreateProviderUrl(),
 
 export const getCreateProviderMutationKey = () => ['createProvider'] as const;
 
-export const getCreateProviderMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateProviderMutationOptions = <TError = ErrorType<CreateProvider400 | CreateProvider401 | CreateProvider403 | CreateProvider404 | CreateProvider409 | CreateProvider500 | CreateProvider503 | CreateProviderDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProvider>>, TError,CreateProviderMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createProvider>>, TError,CreateProviderMutationVariables, TContext> => {
 
@@ -1863,10 +3287,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateProviderMutationResult = NonNullable<Awaited<ReturnType<typeof createProvider>>>
     export type CreateProviderMutationBody = BodyType<CreateProviderBody>
-    export type CreateProviderMutationError = ErrorType<unknown>
+    export type CreateProviderMutationError = ErrorType<CreateProvider400 | CreateProvider401 | CreateProvider403 | CreateProvider404 | CreateProvider409 | CreateProvider500 | CreateProvider503 | CreateProviderDefault>
     export type CreateProviderMutationVariables = {data: BodyType<CreateProviderBody>}
 
-    export const useCreateProvider = <TError = ErrorType<unknown>,
+    export const useCreateProvider = <TError = ErrorType<CreateProvider400 | CreateProvider401 | CreateProvider403 | CreateProvider404 | CreateProvider409 | CreateProvider500 | CreateProvider503 | CreateProviderDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProvider>>, TError,CreateProviderMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createProvider>>,
@@ -1917,7 +3341,7 @@ return apiMutator<UpdateProvider200>(getUpdateProviderUrl(providerId),
 
 export const getUpdateProviderMutationKey = () => ['updateProvider'] as const;
 
-export const getUpdateProviderMutationOptions = <TError = ErrorType<unknown>,
+export const getUpdateProviderMutationOptions = <TError = ErrorType<UpdateProvider400 | UpdateProvider401 | UpdateProvider403 | UpdateProvider404 | UpdateProvider409 | UpdateProvider500 | UpdateProvider503 | UpdateProviderDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProvider>>, TError,UpdateProviderMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateProvider>>, TError,UpdateProviderMutationVariables, TContext> => {
 
@@ -1946,10 +3370,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateProviderMutationResult = NonNullable<Awaited<ReturnType<typeof updateProvider>>>
     export type UpdateProviderMutationBody = BodyType<UpdateProviderBody>
-    export type UpdateProviderMutationError = ErrorType<unknown>
+    export type UpdateProviderMutationError = ErrorType<UpdateProvider400 | UpdateProvider401 | UpdateProvider403 | UpdateProvider404 | UpdateProvider409 | UpdateProvider500 | UpdateProvider503 | UpdateProviderDefault>
     export type UpdateProviderMutationVariables = {providerId: string;data: BodyType<UpdateProviderBody>}
 
-    export const useUpdateProvider = <TError = ErrorType<unknown>,
+    export const useUpdateProvider = <TError = ErrorType<UpdateProvider400 | UpdateProvider401 | UpdateProvider403 | UpdateProvider404 | UpdateProvider409 | UpdateProvider500 | UpdateProvider503 | UpdateProviderDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProvider>>, TError,UpdateProviderMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateProvider>>,
@@ -1968,9 +3392,9 @@ export const getDeleteProviderUrl = (providerId: string,) => {
   return `/admin/model-config/providers/${providerId}`
 }
 
-export const deleteProvider = async (providerId: string, options?: Parameters<typeof apiMutator>[1]): Promise<void> => {
+export const deleteProvider = async (providerId: string, options?: Parameters<typeof apiMutator>[1]): Promise<DeleteProvider200> => {
 
-  return apiMutator<void>(getDeleteProviderUrl(providerId),
+  return apiMutator<DeleteProvider200>(getDeleteProviderUrl(providerId),
   {
     ...options,
     method: 'DELETE'
@@ -1985,7 +3409,7 @@ export const deleteProvider = async (providerId: string, options?: Parameters<ty
 
 export const getDeleteProviderMutationKey = () => ['deleteProvider'] as const;
 
-export const getDeleteProviderMutationOptions = <TError = ErrorType<unknown>,
+export const getDeleteProviderMutationOptions = <TError = ErrorType<DeleteProvider400 | DeleteProvider401 | DeleteProvider403 | DeleteProvider404 | DeleteProvider409 | DeleteProvider500 | DeleteProvider503 | DeleteProviderDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProvider>>, TError,DeleteProviderMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteProvider>>, TError,DeleteProviderMutationVariables, TContext> => {
 
@@ -2014,10 +3438,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteProviderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteProvider>>>
 
-    export type DeleteProviderMutationError = ErrorType<unknown>
+    export type DeleteProviderMutationError = ErrorType<DeleteProvider400 | DeleteProvider401 | DeleteProvider403 | DeleteProvider404 | DeleteProvider409 | DeleteProvider500 | DeleteProvider503 | DeleteProviderDefault>
     export type DeleteProviderMutationVariables = {providerId: string}
 
-    export const useDeleteProvider = <TError = ErrorType<unknown>,
+    export const useDeleteProvider = <TError = ErrorType<DeleteProvider400 | DeleteProvider401 | DeleteProvider403 | DeleteProvider404 | DeleteProvider409 | DeleteProvider500 | DeleteProvider503 | DeleteProviderDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProvider>>, TError,DeleteProviderMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteProvider>>,
@@ -2058,7 +3482,7 @@ export const getListModelsQueryKey = () => {
     }
 
 
-export const getListModelsQueryOptions = <TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+export const getListModelsQueryOptions = <TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<ListModels400 | ListModels401 | ListModels403 | ListModels404 | ListModels409 | ListModels500 | ListModels503 | ListModelsDefault>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -2077,10 +3501,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListModelsQueryResult = NonNullable<Awaited<ReturnType<typeof listModels>>>
-export type ListModelsQueryError = ErrorType<unknown>
+export type ListModelsQueryError = ErrorType<ListModels400 | ListModels401 | ListModels403 | ListModels404 | ListModels409 | ListModels500 | ListModels503 | ListModelsDefault>
 
 
-export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<unknown>>(
+export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<ListModels400 | ListModels401 | ListModels403 | ListModels404 | ListModels409 | ListModels500 | ListModels503 | ListModelsDefault>>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listModels>>,
@@ -2090,7 +3514,7 @@ export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TE
       >, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<unknown>>(
+export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<ListModels400 | ListModels401 | ListModels403 | ListModels404 | ListModels409 | ListModels500 | ListModels503 | ListModelsDefault>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listModels>>,
@@ -2100,12 +3524,12 @@ export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TE
       >, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<unknown>>(
+export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<ListModels400 | ListModels401 | ListModels403 | ListModels404 | ListModels409 | ListModels500 | ListModels503 | ListModelsDefault>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
-export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<unknown>>(
+export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorType<ListModels400 | ListModels401 | ListModels403 | ListModels404 | ListModels409 | ListModels500 | ListModels503 | ListModelsDefault>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -2131,7 +3555,7 @@ export const getCreateModelUrl = () => {
   return `/admin/model-config/models`
 }
 
-export const createModel = async (createModelBody: CreateModelBody, options?: Parameters<typeof apiMutator>[1]): Promise<CreateModel201> => {
+export const createModel = async (createModelBody: CreateModelBody, options?: Parameters<typeof apiMutator>[1]): Promise<CreateModel200> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -2147,7 +3571,7 @@ export const createModel = async (createModelBody: CreateModelBody, options?: Pa
     }
     return headers;
   };
-return apiMutator<CreateModel201>(getCreateModelUrl(),
+return apiMutator<CreateModel200>(getCreateModelUrl(),
   {
     ...options,
     method: 'POST',
@@ -2162,7 +3586,7 @@ return apiMutator<CreateModel201>(getCreateModelUrl(),
 
 export const getCreateModelMutationKey = () => ['createModel'] as const;
 
-export const getCreateModelMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateModelMutationOptions = <TError = ErrorType<CreateModel400 | CreateModel401 | CreateModel403 | CreateModel404 | CreateModel409 | CreateModel500 | CreateModel503 | CreateModelDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createModel>>, TError,CreateModelMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createModel>>, TError,CreateModelMutationVariables, TContext> => {
 
@@ -2191,10 +3615,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateModelMutationResult = NonNullable<Awaited<ReturnType<typeof createModel>>>
     export type CreateModelMutationBody = BodyType<CreateModelBody>
-    export type CreateModelMutationError = ErrorType<unknown>
+    export type CreateModelMutationError = ErrorType<CreateModel400 | CreateModel401 | CreateModel403 | CreateModel404 | CreateModel409 | CreateModel500 | CreateModel503 | CreateModelDefault>
     export type CreateModelMutationVariables = {data: BodyType<CreateModelBody>}
 
-    export const useCreateModel = <TError = ErrorType<unknown>,
+    export const useCreateModel = <TError = ErrorType<CreateModel400 | CreateModel401 | CreateModel403 | CreateModel404 | CreateModel409 | CreateModel500 | CreateModel503 | CreateModelDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createModel>>, TError,CreateModelMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createModel>>,
@@ -2245,7 +3669,7 @@ return apiMutator<UpdateModel200>(getUpdateModelUrl(modelId),
 
 export const getUpdateModelMutationKey = () => ['updateModel'] as const;
 
-export const getUpdateModelMutationOptions = <TError = ErrorType<unknown>,
+export const getUpdateModelMutationOptions = <TError = ErrorType<UpdateModel400 | UpdateModel401 | UpdateModel403 | UpdateModel404 | UpdateModel409 | UpdateModel500 | UpdateModel503 | UpdateModelDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateModel>>, TError,UpdateModelMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateModel>>, TError,UpdateModelMutationVariables, TContext> => {
 
@@ -2274,10 +3698,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateModelMutationResult = NonNullable<Awaited<ReturnType<typeof updateModel>>>
     export type UpdateModelMutationBody = BodyType<UpdateModelBody>
-    export type UpdateModelMutationError = ErrorType<unknown>
+    export type UpdateModelMutationError = ErrorType<UpdateModel400 | UpdateModel401 | UpdateModel403 | UpdateModel404 | UpdateModel409 | UpdateModel500 | UpdateModel503 | UpdateModelDefault>
     export type UpdateModelMutationVariables = {modelId: string;data: BodyType<UpdateModelBody>}
 
-    export const useUpdateModel = <TError = ErrorType<unknown>,
+    export const useUpdateModel = <TError = ErrorType<UpdateModel400 | UpdateModel401 | UpdateModel403 | UpdateModel404 | UpdateModel409 | UpdateModel500 | UpdateModel503 | UpdateModelDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateModel>>, TError,UpdateModelMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateModel>>,
@@ -2296,9 +3720,9 @@ export const getDeleteModelUrl = (modelId: string,) => {
   return `/admin/model-config/models/${modelId}`
 }
 
-export const deleteModel = async (modelId: string, options?: Parameters<typeof apiMutator>[1]): Promise<void> => {
+export const deleteModel = async (modelId: string, options?: Parameters<typeof apiMutator>[1]): Promise<DeleteModel200> => {
 
-  return apiMutator<void>(getDeleteModelUrl(modelId),
+  return apiMutator<DeleteModel200>(getDeleteModelUrl(modelId),
   {
     ...options,
     method: 'DELETE'
@@ -2313,7 +3737,7 @@ export const deleteModel = async (modelId: string, options?: Parameters<typeof a
 
 export const getDeleteModelMutationKey = () => ['deleteModel'] as const;
 
-export const getDeleteModelMutationOptions = <TError = ErrorType<unknown>,
+export const getDeleteModelMutationOptions = <TError = ErrorType<DeleteModel400 | DeleteModel401 | DeleteModel403 | DeleteModel404 | DeleteModel409 | DeleteModel500 | DeleteModel503 | DeleteModelDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteModel>>, TError,DeleteModelMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteModel>>, TError,DeleteModelMutationVariables, TContext> => {
 
@@ -2342,10 +3766,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteModelMutationResult = NonNullable<Awaited<ReturnType<typeof deleteModel>>>
 
-    export type DeleteModelMutationError = ErrorType<unknown>
+    export type DeleteModelMutationError = ErrorType<DeleteModel400 | DeleteModel401 | DeleteModel403 | DeleteModel404 | DeleteModel409 | DeleteModel500 | DeleteModel503 | DeleteModelDefault>
     export type DeleteModelMutationVariables = {modelId: string}
 
-    export const useDeleteModel = <TError = ErrorType<unknown>,
+    export const useDeleteModel = <TError = ErrorType<DeleteModel400 | DeleteModel401 | DeleteModel403 | DeleteModel404 | DeleteModel409 | DeleteModel500 | DeleteModel503 | DeleteModelDefault>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteModel>>, TError,DeleteModelMutationVariables, TContext>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteModel>>,
@@ -2446,6 +3870,101 @@ export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetUsageQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListProviderAdaptersUrl = () => {
+
+
+
+
+  return `/admin/model-config/provider-adapters`
+}
+
+export const listProviderAdapters = async ( options?: Parameters<typeof apiMutator>[1]): Promise<ListProviderAdapters200Item[]> => {
+
+  return apiMutator<ListProviderAdapters200Item[]>(getListProviderAdaptersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProviderAdaptersQueryKey = () => {
+    return [
+    `/admin/model-config/provider-adapters`
+    ] as const;
+    }
+
+
+export const getListProviderAdaptersQueryOptions = <TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<ListProviderAdapters400 | ListProviderAdapters401 | ListProviderAdapters403 | ListProviderAdapters404 | ListProviderAdapters409 | ListProviderAdapters500 | ListProviderAdapters503 | ListProviderAdaptersDefault>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProviderAdaptersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProviderAdapters>>> = ({ signal }) => listProviderAdapters({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListProviderAdaptersQueryResult = NonNullable<Awaited<ReturnType<typeof listProviderAdapters>>>
+export type ListProviderAdaptersQueryError = ErrorType<ListProviderAdapters400 | ListProviderAdapters401 | ListProviderAdapters403 | ListProviderAdapters404 | ListProviderAdapters409 | ListProviderAdapters500 | ListProviderAdapters503 | ListProviderAdaptersDefault>
+
+
+export function useListProviderAdapters<TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<ListProviderAdapters400 | ListProviderAdapters401 | ListProviderAdapters403 | ListProviderAdapters404 | ListProviderAdapters409 | ListProviderAdapters500 | ListProviderAdapters503 | ListProviderAdaptersDefault>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProviderAdapters>>,
+          TError,
+          Awaited<ReturnType<typeof listProviderAdapters>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListProviderAdapters<TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<ListProviderAdapters400 | ListProviderAdapters401 | ListProviderAdapters403 | ListProviderAdapters404 | ListProviderAdapters409 | ListProviderAdapters500 | ListProviderAdapters503 | ListProviderAdaptersDefault>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProviderAdapters>>,
+          TError,
+          Awaited<ReturnType<typeof listProviderAdapters>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListProviderAdapters<TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<ListProviderAdapters400 | ListProviderAdapters401 | ListProviderAdapters403 | ListProviderAdapters404 | ListProviderAdapters409 | ListProviderAdapters500 | ListProviderAdapters503 | ListProviderAdaptersDefault>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListProviderAdapters<TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<ListProviderAdapters400 | ListProviderAdapters401 | ListProviderAdapters403 | ListProviderAdapters404 | ListProviderAdapters409 | ListProviderAdapters500 | ListProviderAdapters503 | ListProviderAdaptersDefault>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListProviderAdaptersQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

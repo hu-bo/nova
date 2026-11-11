@@ -29,7 +29,10 @@
   },
   "packageManager": "pnpm@9.15.9",
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.53",
+    "@ai-sdk/deepseek": "3.0.44",
     "@ai-sdk/openai": "4.0.66",
+    "@ai-sdk/openai-compatible": "3.0.48",
     "ai": "7.0.99",
     "zod": "4.6.4"
   },

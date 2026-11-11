@@ -35,6 +35,11 @@ const STREAM_ERROR_BY_STATUS: Record<number, string> = {
   503: '服务正在切换，已接收的任务状态会保留。',
   403: '没有权限订阅该会话。',
 };
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
+  );
+}
 class Session {
   snapshot: RawRunStreamSnapshot = EMPTY;
   projected: RunState | null = null;
@@ -43,7 +48,7 @@ class Session {
   listeners = new Set<() => void>();
   batchTimer: ReturnType<typeof setTimeout> | null = null;
   pollTimer: ReturnType<typeof setInterval> | null = null;
-  resync: Promise<string> | null = null;
+  resync: { controller: AbortController; promise: Promise<string> } | null = null;
   resyncFailures = 0;
   retryTimer: ReturnType<typeof setTimeout> | null = null;
   constructor(readonly id: string) {}
@@ -67,8 +72,11 @@ class Session {
     if (this.batchTimer) clearTimeout(this.batchTimer);
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.resync?.controller.abort();
+    this.resync = null;
     this.batchTimer = null;
     this.pollTimer = null;
+    this.retryTimer = null;
   }
 }
 export class RunStreamManager {
@@ -105,7 +113,7 @@ export class RunStreamManager {
     return () => {
       session.refs = Math.max(0, session.refs - 1);
       queueMicrotask(() => {
-        if (!session.refs && !isActiveRun(session.projected?.run?.state)) {
+        if (this.owns(session) && !session.refs && !isActiveRun(session.projected?.run?.state)) {
           session.dispose();
           this.sessions.delete(id);
         }
@@ -126,8 +134,9 @@ export class RunStreamManager {
       await this.resync(session);
       this.open(session);
       return true;
-    } catch {
-      session.publish({ state: 'offline', error: '暂时无法获取会话，请稍后重试。' });
+    } catch (error) {
+      if (this.owns(session) && !isAbortError(error))
+        session.publish({ state: 'offline', error: '暂时无法获取会话，请稍后重试。' });
       return false;
     }
   }
@@ -140,14 +149,11 @@ export class RunStreamManager {
     for (const session of this.sessions.values()) session.dispose();
     this.sessions.clear();
   }
+  private owns(session: Session) {
+    return !this.controller.signal.aborted && this.sessions.get(session.id) === session;
+  }
   private open(session: Session) {
-    if (
-      session.connection ||
-      !session.projected ||
-      this.controller.signal.aborted ||
-      this.sessions.get(session.id) !== session
-    )
-      return;
+    if (session.connection || !session.projected || !this.owns(session)) return;
     const connected = [...this.sessions.values()].filter((item) => item.connection);
     if (connected.length >= 4) {
       const candidate = connected.find((item) => !item.refs);
@@ -156,9 +162,10 @@ export class RunStreamManager {
         candidate.connection = null;
         candidate.publish({ state: 'offline', error: '后台会话按快照更新。' });
         candidate.pollTimer ??= setInterval(() => {
-          void this.resync(candidate).catch(() =>
-            candidate.publish({ error: '后台会话暂时无法更新。' }),
-          );
+          void this.resync(candidate).catch((error: unknown) => {
+            if (this.owns(candidate) && !isAbortError(error))
+              candidate.publish({ error: '后台会话暂时无法更新。' });
+          });
         }, 60000);
       } else {
         session.publish({ state: 'offline', error: '已达到同时订阅上限，请关闭其他会话后重试。' });
@@ -179,11 +186,13 @@ export class RunStreamManager {
       cursor: session.projected.cursor,
       checkReady: serverReady,
       onStateChange: (state) => {
+        if (!this.owns(session)) return;
         if (import.meta.env.DEV)
           console.debug('[runs] 连接 → %s（恢复游标 %s）', state, session.projected?.cursor ?? '-');
         session.publish(state === 'live' ? { state, error: null, retryAt: null } : { state });
       },
       onError: ({ status, retryAfterSeconds }) => {
+        if (!this.owns(session)) return;
         if (import.meta.env.DEV)
           console.debug(
             '[runs] 订阅失败 HTTP %s（retry-after %s 秒）',
@@ -197,7 +206,7 @@ export class RunStreamManager {
       },
       onSnapshotRequired: () => this.resync(session),
       onFrame: (frame) => {
-        if (!session.projected || session.resync) return undefined;
+        if (!this.owns(session) || !session.projected || session.resync) return undefined;
         const parsed = productEventSchema.safeParse(frame.data);
         if (
           !parsed.success ||
@@ -265,21 +274,27 @@ export class RunStreamManager {
         session.retryTimer = null;
         void this.resync(session)
           .then(() => this.open(session))
-          .catch(() => session.publish({ state: 'offline', error: '无法对齐最新快照，请重试。' }));
+          .catch((error: unknown) => {
+            if (this.owns(session) && !isAbortError(error))
+              session.publish({ state: 'offline', error: '无法对齐最新快照，请重试。' });
+          });
       },
       Math.min(4000, 250 * 2 ** session.resyncFailures),
     );
   }
   private resync(session: Session): Promise<string> {
+    if (!this.owns(session)) return Promise.reject(new DOMException('Disposed', 'AbortError'));
     if (!session.resync) {
-      session.resync = getConversationSnapshot(
+      const controller = new AbortController();
+      const signal = AbortSignal.any([controller.signal, this.controller.signal]);
+      const pending = getConversationSnapshot(
         session.id,
         { includeToolResults: this.includeToolResults ? 'true' : 'false' },
-        { signal: this.controller.signal },
+        { signal },
       )
         .then((snapshot) => {
-          if (this.controller.signal.aborted || this.sessions.get(session.id) !== session)
-            throw new DOMException('Disposed', 'AbortError');
+          signal.throwIfAborted();
+          if (!this.owns(session)) throw new DOMException('Disposed', 'AbortError');
           // Cursor and projection are replaced together; drafts belong to the composer and survive this operation.
           if (!session.projected || BigInt(snapshot.cursor) >= BigInt(session.projected.cursor)) {
             this.queryClient.setQueryData(
@@ -296,9 +311,10 @@ export class RunStreamManager {
           return session.projected?.cursor ?? snapshot.cursor;
         })
         .finally(() => {
-          session.resync = null;
+          if (session.resync?.promise === pending) session.resync = null;
         });
+      session.resync = { controller, promise: pending };
     }
-    return session.resync;
+    return session.resync.promise;
   }
 }

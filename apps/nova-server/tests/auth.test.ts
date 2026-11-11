@@ -152,4 +152,12 @@ test("production rejects dev bypass and accepts previous endpoint configuration"
     }).AUTH_SERVICE_URL,
     "https://legacy.example",
   );
+  assert.equal(
+    loadConfig({
+      DATABASE_URL: "postgresql://unused/unused",
+      AUTH_SERVICE_URL: "https://current.example",
+      CASDOOR_ENDPOINT: "https://legacy.example",
+    }).AUTH_SERVICE_URL,
+    "https://current.example",
+  );
 });

@@ -187,7 +187,11 @@ export function RemoteExplorer({
     return entry.kind === mode;
   }
 
-  function selectEntry(entry: RemoteExplorerEntry, index: number, event?: MouseEvent) {
+  function selectEntry(
+    entry: RemoteExplorerEntry,
+    index: number,
+    event?: Pick<MouseEvent, "shiftKey" | "metaKey" | "ctrlKey">,
+  ) {
     setActiveIndex(index);
     if (!selectable(entry)) {
       if (!event?.shiftKey && !event?.metaKey && !event?.ctrlKey) replaceSelection(new Map());
@@ -232,7 +236,7 @@ export function RemoteExplorer({
     setActiveIndex(nextIndex);
     const entry = entries[nextIndex];
     if (entry && selectable(entry)) {
-      selectEntry(entry, nextIndex, event as unknown as MouseEvent);
+      selectEntry(entry, nextIndex, event);
     }
     document.getElementById(`${listId}-${nextIndex}`)?.scrollIntoView({ block: "nearest" });
   }

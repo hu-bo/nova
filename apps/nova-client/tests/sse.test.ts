@@ -87,6 +87,28 @@ describe('SSE wire framing and reconnection', () => {
     connection.shutdown();
     await flush();
   });
+  it('drops a buffered network read that completes after shutdown', async () => {
+    let bodyController!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        bodyController = controller;
+      },
+    });
+    const fetcher = vi.fn(
+      async () =>
+        new Response(body, {
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+    );
+    const onFrame = vi.fn(() => '8');
+    const connection = new SseConnection(options({ fetchImpl: fetcher, onFrame }));
+    await flush();
+    connection.shutdown();
+    bodyController.enqueue(new TextEncoder().encode('id: 8\ndata: {"sequence":"8"}\n\n'));
+    await flush();
+    expect(onFrame).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
   it('stops on 403 and 404 without retrying or silently claiming a live stream', async () => {
     for (const status of [403, 404]) {
       const fetcher = vi.fn(async () => new Response('{}', { status }));

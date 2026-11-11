@@ -4,7 +4,14 @@ import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { modelSchema, type ModelFormValues } from "../model-form.schema";
-import { formFeedbackFrom, type CreateModel, type Model, type Provider } from "@/api/client";
+import {
+  formFeedbackFrom,
+  type CreateModel,
+  type Model,
+  type Provider,
+  type ProviderAdapter,
+  type ThinkingLevel,
+} from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FieldLabel, Input, fieldInputClass } from "@/components/ui/form";
@@ -18,7 +25,6 @@ const defaults: ModelFormValues = {
   maxOutput: 8192,
   thinkingLevels: [],
   parallelToolCalls: true,
-  reasoningFormat: "none",
   inputModalities: ["text"],
   enabled: true,
   priceIn: "0",
@@ -30,6 +36,7 @@ export function ModelForm({
   open,
   model,
   providers,
+  adapters,
   pending,
   onClose,
   onSubmit,
@@ -37,6 +44,7 @@ export function ModelForm({
   open: boolean;
   model: Model | null;
   providers: Provider[];
+  adapters: ProviderAdapter[];
   pending: boolean;
   onClose: () => void;
   onSubmit: (input: CreateModel) => Promise<unknown>;
@@ -52,10 +60,15 @@ export function ModelForm({
     reset,
     setError,
     setValue,
+    getValues,
     watch,
     formState: { errors },
   } = useForm<ModelFormValues>({ resolver: zodResolver(modelSchema), values });
-  const reasoningFormat = watch("reasoningFormat");
+  const selectedProvider = providers.find((provider) => provider.id === watch("providerId"));
+  const adapter = adapters.find((item) => item.id === selectedProvider?.adapterId);
+  const editingLegacyModel = !selectedProvider?.adapterId && model?.providerId === selectedProvider?.id;
+  let thinkingLevels: ThinkingLevel[] = adapter?.thinkingLevels ?? [];
+  if (editingLegacyModel && model) thinkingLevels = model.thinkingLevels;
   const close = () => {
     if (pending) return;
     setFormError(null);
@@ -65,7 +78,12 @@ export function ModelForm({
   const submit = handleRHFSubmit(async (input) => {
     setFormError(null);
     try {
-      await onSubmit(input);
+      // Legacy providers retain their stored format until explicitly migrated to a catalog adapter.
+      const legacyFormat = editingLegacyModel && input.thinkingLevels.length ? model?.reasoningFormat : "none";
+      await onSubmit({
+        ...input,
+        ...(!selectedProvider?.adapterId && legacyFormat ? { reasoningFormat: legacyFormat } : {}),
+      });
       reset();
       onClose();
     } catch (error) {
@@ -80,7 +98,7 @@ export function ModelForm({
     <Dialog
       open={open}
       title={model ? "编辑模型" : "注册模型"}
-      description="模型能力必须按实际上游逐项配置，不能只根据 Provider 推断。"
+      description="供应商自动处理连接方式；容量、输入模态和 Thinking 等级按实际模型配置。"
       size="lg"
       onClose={close}
     >
@@ -105,7 +123,16 @@ export function ModelForm({
                     aria-label="Provider"
                     selectedKey={field.value || null}
                     onSelectionChange={(key) => {
-                      if (typeof key === "string") field.onChange(key);
+                      if (typeof key !== "string") return;
+                      field.onChange(key);
+                      const provider = providers.find((item) => item.id === key);
+                      const next = adapters.find((item) => item.id === provider?.adapterId);
+                      let allowedLevels: ThinkingLevel[] = next?.thinkingLevels ?? [];
+                      if (!provider?.adapterId && model?.providerId === key) allowedLevels = model.thinkingLevels;
+                      setValue(
+                        "thinkingLevels",
+                        getValues("thinkingLevels").filter((level) => allowedLevels.includes(level)),
+                      );
                     }}
                   >
                     <Select.Trigger className={fieldInputClass}>
@@ -150,51 +177,18 @@ export function ModelForm({
                 className={fieldInputClass}
               />
             </FieldLabel>
-            <FieldLabel label="Reasoning 格式" error={errors.reasoningFormat?.message}>
-              <Controller
-                control={control}
-                name="reasoningFormat"
-                render={({ field }) => (
-                  <Select
-                    aria-label="Reasoning 格式"
-                    selectedKey={field.value}
-                    onSelectionChange={(key) => {
-                      if (typeof key === "string") {
-                        field.onChange(key);
-                        if (key === "none") setValue("thinkingLevels", []);
-                      }
-                    }}
-                  >
-                    <Select.Trigger className={fieldInputClass}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {(["none", "openai", "anthropic", "deepseek", "minimax"] as const).map((format) => (
-                          <ListBox.Item key={format} id={format} textValue={format}>
-                            {format}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                )}
-              />
-            </FieldLabel>
           </div>
         </section>
         <section className="grid gap-5 rounded-xl bg-surface-secondary p-5 ring-1 ring-border lg:grid-cols-3">
           <ChoiceGroup title="Thinking 等级" error={errors.thinkingLevels?.message}>
-            {(["off", "low", "medium", "high", "max"] as const).map((level) => (
+            {thinkingLevels.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                此连接未启用 Thinking；如需使用，请选择支持该能力的标准供应商。
+              </p>
+            )}
+            {thinkingLevels.map((level) => (
               <Check key={level} label={level}>
-                <input
-                  {...register("thinkingLevels")}
-                  type="checkbox"
-                  value={level}
-                  disabled={reasoningFormat === "none"}
-                />
+                <input {...register("thinkingLevels")} type="checkbox" value={level} />
               </Check>
             ))}
           </ChoiceGroup>
@@ -238,7 +232,11 @@ export function ModelForm({
           <Button type="button" onPress={close} isDisabled={pending}>
             取消
           </Button>
-          <Button type="submit" variant="primary" isDisabled={pending || providers.length === 0}>
+          <Button
+            type="submit"
+            variant="primary"
+            isDisabled={pending || providers.length === 0 || adapters.length === 0}
+          >
             {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
             {pending ? "正在保存" : "保存模型"}
           </Button>

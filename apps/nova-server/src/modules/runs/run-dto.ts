@@ -126,9 +126,15 @@ export function nativeBlocks(
   return parts.map((part, index) => {
     const blockId = part.id ?? fallbackBlockId(part, index);
     if (part.type === "text") return { id: blockId, type: "text", text: part.text };
-    if (part.type === "thinking") return { id: "thinking", type: "thinking", text: part.text };
+    if (part.type === "thinking") return { id: blockId, type: "thinking", text: part.text };
     if (part.type === "tool-call")
-      return { id: blockId, type: "tool_call", callId: part.callId, name: part.name, args: part.name === "spec_update" ? {} : part.input };
+      return {
+        id: blockId,
+        type: "tool_call",
+        callId: part.callId,
+        name: part.name,
+        args: part.name === "spec_update" ? {} : part.input,
+      };
     if (part.type === "tool-result") {
       const execution =
         executions.find((entry) => entry.callId === part.callId && entry.executionId === messageId) ??
@@ -142,35 +148,13 @@ export function nativeBlocks(
         content: projectToolContent(part.name, part.value),
       };
     }
+    const { metadata: _metadata, ...publicPart } = part;
     return {
       id: blockId,
       type: "custom",
       name: part.type,
-      data: JSON.parse(JSON.stringify(part)),
+      data: JSON.parse(JSON.stringify(publicPart)),
       fallback: part.type === "source" ? (part.title ?? part.uri) : "Attachment",
     };
   });
-}
-
-/** Provider-native thinking blocks that prefix a committed message (generic reasoning + Anthropic signed blocks). */
-export function nativeThinkingBlocks(metadata: import("@nnova/harness").AgentMessage["metadata"]): Block[] {
-  const blocks: Block[] = [];
-  if (metadata?.reasoningContent && typeof metadata.reasoningContent === "string")
-    blocks.unshift({ id: "thinking", type: "thinking", text: metadata.reasoningContent });
-  const nativeContent = metadata?.anthropicContent;
-  if (Array.isArray(nativeContent)) {
-    const thinking = nativeContent
-      .flatMap((part) =>
-        part &&
-        typeof part === "object" &&
-        !Array.isArray(part) &&
-        part.type === "thinking" &&
-        typeof part.thinking === "string"
-          ? [part.thinking]
-          : [],
-      )
-      .join("\n");
-    if (thinking) blocks.unshift({ id: "thinking", type: "thinking", text: thinking });
-  }
-  return blocks;
 }

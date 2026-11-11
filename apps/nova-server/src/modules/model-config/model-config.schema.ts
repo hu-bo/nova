@@ -1,8 +1,18 @@
 import { z } from "zod";
+import { providerCatalog, providerIds } from "@nnova/harness/plugins/model-ai-sdk";
 
 export const providerProtocolSchema = z.enum(["openai", "anthropic"]);
 export const thinkingLevelSchema = z.enum(["off", "low", "medium", "high", "max"]);
 export const reasoningFormatSchema = z.enum(["none", "openai", "anthropic", "deepseek", "minimax"]);
+export const providerAdapterSchema = z.enum(providerIds);
+export const providerAdapterDescriptorSchema = z.object({
+  id: providerAdapterSchema,
+  label: z.string(),
+  defaultBaseURL: z.string().url(),
+  protocol: providerProtocolSchema,
+  reasoningFormat: reasoningFormatSchema,
+  thinkingLevels: z.array(thinkingLevelSchema),
+});
 export const inputModalitySchema = z.enum(["text", "image"]);
 const priceSchema = z
   .string()
@@ -15,23 +25,33 @@ const baseUrlSchema = z
   .max(2048)
   .url()
   .refine((value) => {
-    const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password;
+    const url = URL.parse(value);
+    return url !== null && url.protocol === "https:" && !url.username && !url.password;
   }, "Provider URL must use HTTPS and cannot contain URL credentials");
 
 export const createProviderBodySchema = z
   .object({
-    protocol: providerProtocolSchema,
+    adapterId: providerAdapterSchema.optional(),
+    protocol: providerProtocolSchema.optional(),
     name: z.string().trim().min(1).max(80),
     baseUrl: baseUrlSchema,
     credential: z.string().trim().min(1).max(4096),
     enabled: z.boolean().default(false),
     isPublic: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .refine((input) => input.adapterId !== undefined || input.protocol !== undefined, "Choose a provider adapter")
+  .refine(
+    (input) =>
+      !input.adapterId ||
+      !input.protocol ||
+      providerCatalog.find((item) => item.id === input.adapterId)?.protocol === input.protocol,
+    "Protocol does not match the provider adapter",
+  );
 
 export const updateProviderBodySchema = z
   .object({
+    adapterId: providerAdapterSchema.optional(),
     protocol: providerProtocolSchema.optional(),
     name: z.string().trim().min(1).max(80).optional(),
     baseUrl: baseUrlSchema.optional(),
@@ -51,7 +71,7 @@ const modelPropertiesSchema = z
     maxOutput: z.number().int().positive().max(10_000_000),
     thinkingLevels: z.array(thinkingLevelSchema).max(5).default([]),
     parallelToolCalls: z.boolean().default(true),
-    reasoningFormat: reasoningFormatSchema.default("none"),
+    reasoningFormat: reasoningFormatSchema.optional(),
     inputModalities: z.array(inputModalitySchema).min(1).max(2).default(["text"]),
     enabled: z.boolean().default(false),
     priceIn: priceSchema.default("0"),
@@ -81,7 +101,7 @@ export const modelConfigurationSchema = modelPropertiesSchema.superRefine((model
       message: "Levels require a reasoning format",
     });
   }
-  if (model.reasoningFormat !== "none" && model.thinkingLevels.length === 0) {
+  if (model.reasoningFormat && model.reasoningFormat !== "none" && model.thinkingLevels.length === 0) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["thinkingLevels"],
@@ -101,6 +121,7 @@ export const modelIdParamsSchema = z.object({ modelId: z.string().uuid() }).stri
 
 export const providerSchema = z.object({
   id: z.string().uuid(),
+  adapterId: providerAdapterSchema.nullable(),
   protocol: providerProtocolSchema,
   name: z.string(),
   baseUrl: z.string().url(),

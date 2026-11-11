@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { configurationSchema, type Configuration, type SubmitInput } from "@nova/agent-ui-contracts";
 import { conversations, messages, pendingInputs, projects, projectBindings, runnerOperations, runs, specs, specRevisions, specTaskAttempts, type Database } from "../../../database/index.js";
 import type { SpecEvidence, SpecTask, SpecTaskCheck } from "../../../database/schema/spec-revision.table.js";
@@ -7,10 +7,11 @@ import { DomainError } from "../../shared/domain-error.js";
 import { createScope, type TransactionOptions } from "../../shared/scope.js";
 import { runJournal } from "../runs/index.js";
 import { eventWriter } from "../events/index.js";
-import { specSnapshotSchema, taskPlanSchema, taskStatusSchema } from "./spec.schema.js";
-import type { CreateSpecInput } from "./spec.schema.js";
+import { specSnapshotSchema, taskPlanSchema } from "./spec.schema.js";
+import type { CreateSpecInput, RecordEvidenceInput } from "./spec.schema.js";
 import type { Transaction } from "../../shared/unit-of-work.js";
-import { acceptanceCriteriaIn, validateTaskPlan } from "./spec.validation.js";
+import { acceptanceCriteriaIn, passingEvidenceForCheck, validateTaskPlan } from "./spec.validation.js";
+import { specReadRepository } from "./spec-read.repository.js";
 
 type Stage = "requirements" | "design" | "tasks";
 type Content = string | SpecTask[];
@@ -26,10 +27,12 @@ export class SpecService {
   private readonly scope;
   private readonly journal;
   private readonly events;
-  constructor(private readonly db: Database) {
+  private readonly queries;
+  constructor(db: Database) {
     this.scope = createScope(db);
     this.journal = this.scope.get(runJournal);
     this.events = this.scope.get(eventWriter);
+    this.queries = this.scope.get(specReadRepository);
   }
   private transaction<R>(operation: (tx: Transaction) => Promise<R>, options?: TransactionOptions) {
     return this.scope.transaction((scope) => operation(scope.requireTransaction()), options);
@@ -40,18 +43,16 @@ export class SpecService {
   }
 
   async list(projectId: string, ownerId: string, limit: number, cursor?: string) {
-    const project = await this.db.select({ id: projects.id }).from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.ownerUserId, ownerId), isNull(projects.deletedAt))).limit(1);
-    if (!project.length) throw new DomainError("NOT_FOUND", "Project not found");
-    let cursorDate: Date | undefined, cursorId: string | undefined;
+    const project = await this.queries.findOwnedProject(projectId, ownerId);
+    if (!project) throw new DomainError("NOT_FOUND", "Project not found");
+    let position: { updatedAt: Date; id: string } | undefined;
     if (cursor) {
-      const [date, id] = cursor.split("|"); cursorDate = new Date(date ?? ""); cursorId = id;
-      if (!cursorId || Number.isNaN(cursorDate.getTime())) throw new DomainError("VALIDATION_ERROR", "Invalid cursor");
+      const [date, id] = cursor.split("|");
+      const updatedAt = new Date(date ?? "");
+      if (!id || Number.isNaN(updatedAt.getTime())) throw new DomainError("VALIDATION_ERROR", "Invalid cursor");
+      position = { updatedAt, id };
     }
-    const rows = await this.db.select({ id: specs.id, projectId: specs.projectId, title: specs.title, currentRevision: specs.currentRevision, conversationId: specs.conversationId, updatedAt: specs.updatedAt })
-      .from(specs).innerJoin(projects, eq(projects.id, specs.projectId))
-      .where(and(eq(specs.projectId, projectId), eq(projects.ownerUserId, ownerId), isNull(projects.deletedAt), cursorDate ? or(lt(specs.updatedAt, cursorDate), and(eq(specs.updatedAt, cursorDate), lt(specs.id, cursorId!))) : undefined))
-      .orderBy(desc(specs.updatedAt), desc(specs.id)).limit(limit + 1);
+    const rows = await this.queries.list(projectId, ownerId, limit, position);
     const page = rows.slice(0, limit), last = page.at(-1);
     return { items: page.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() })), nextCursor: rows.length > limit && last ? `${last.updatedAt.toISOString()}|${last.id}` : null };
   }
@@ -128,20 +129,16 @@ export class SpecService {
       const [version] = await tx.select().from(specRevisions).where(and(eq(specRevisions.specId, specId), eq(specRevisions.revision, selected))).limit(1);
       if (!version) throw new DomainError("NOT_FOUND", "Specification revision not found");
       const history = await tx.select({ revision: specRevisions.revision, createdAt: specRevisions.createdAt, createdBy: specRevisions.createdBy }).from(specRevisions).where(eq(specRevisions.specId, specId)).orderBy(desc(specRevisions.revision));
-      const tasks = await Promise.all(version.taskPlan.map(async (task) => {
-        const attempts = await tx.select({ attempt: specTaskAttempts, input: pendingInputs, run: runs }).from(specTaskAttempts)
-          .innerJoin(pendingInputs, eq(pendingInputs.id, specTaskAttempts.pendingInputId)).leftJoin(runs, eq(runs.id, pendingInputs.runId))
-          .where(and(eq(specTaskAttempts.specId, specId), eq(specTaskAttempts.revision, selected), eq(specTaskAttempts.taskKey, task.key))).orderBy(desc(specTaskAttempts.createdAt)).limit(1);
-        const last = attempts[0];
-        let status = last ? attemptStatus(last.input.status, last.run?.state ?? null, last.attempt.releasedAt) : "not_started";
-        const evidencePassed = task.checks.every((check) => version.evidence.some((e) =>
-          e.taskKey === task.key && e.checkKey === check.key && e.passed &&
-          (last ? e.attemptId === last.attempt.id : e.source === "carried"),
-        ));
+      const latestAttempts = await this.queries.tx(tx).latestAttemptsByTask(specId, selected);
+      const tasks = version.taskPlan.map((task) => {
+        const last = latestAttempts.get(task.key);
+        let status = last ? attemptStatus(last.inputStatus, last.runState, last.releasedAt) : "not_started";
+        const evidencePassed = task.checks.every((check) =>
+          passingEvidenceForCheck(version.evidence, task.key, check.key, last?.id),
+        );
         if (evidencePassed) status = "passed";
-        else if (last && last.run?.state === "succeeded") status = "needs_verification";
-        return { key: task.key, status, attemptId: last?.attempt.id ?? null, runId: last?.input.runId ?? null };
-      }));
+        return { key: task.key, status, attemptId: last?.id ?? null, runId: last?.runId ?? null };
+      });
       return specSnapshotSchema.parse({
         id: spec.spec.id, projectId, conversationId: spec.spec.conversationId, title: spec.spec.title,
         currentRevision: spec.spec.currentRevision, revision: selected, requirementsMd: version.requirementsMd, designMd: version.designMd,
@@ -219,8 +216,7 @@ export class SpecService {
       `- Objective: ${task.objective}`, `- Depends on: ${task.dependsOn.length ? task.dependsOn.join(", ") : "None"}`, "- Checks:",
       ...task.checks.map((check) => {
         const currentAttempt = snapshot.tasks.find((item) => item.key === task.key)?.attemptId;
-        const passed = snapshot.evidence.some((entry) => entry.taskKey === task.key && entry.checkKey === check.key && entry.passed &&
-          (currentAttempt ? entry.attemptId === currentAttempt : entry.source === "carried"));
+        const passed = passingEvidenceForCheck(snapshot.evidence, task.key, check.key, currentAttempt ?? undefined);
         return `  - [${passed ? "x" : " "}] ${check.key}: ${check.label} (covers ${check.criterionIds.join(", ") || "none"}; ${check.method.kind === "manual" ? "manual" : [check.method.command, ...check.method.args].join(" ")})`;
       }), "",
     ])].join("\n");
@@ -280,12 +276,16 @@ export class SpecService {
       if (await this.hasUnknownRun(tx, conversation.id)) throw new DomainError("CONFLICT", "Inspect unknown operations before continuing", { reason: "EXECUTION_OUTCOME_UNKNOWN" });
       const task = version.taskPlan.find((entry) => entry.key === taskKey);
       if (!task) throw new DomainError("NOT_FOUND", "Task not found");
-      const taskStates = await Promise.all(task.dependsOn.map(async (dependency) => {
-        const dep = version.taskPlan.find((entry) => entry.key === dependency)!;
-        const [latest] = await tx.select().from(specTaskAttempts).where(and(eq(specTaskAttempts.specId, specId), eq(specTaskAttempts.revision, expected), eq(specTaskAttempts.taskKey, dep.key))).orderBy(desc(specTaskAttempts.createdAt)).limit(1);
-        return dep.checks.every((check) => version.evidence.some((item) => item.taskKey === dep.key && item.checkKey === check.key && item.passed && (latest ? item.attemptId === latest.id : item.source === "carried")));
-      }));
-      if (taskStates.some((passed) => !passed)) throw new DomainError("CONFLICT", "Task dependencies have not passed", { reason: "SPEC_DEPENDENCY_UNMET" });
+      if (task.dependsOn.length) {
+        const latestAttempts = await this.queries.tx(tx).latestAttemptsByTask(specId, expected);
+        const dependenciesPassed = task.dependsOn.every((dependency) => {
+          const dep = version.taskPlan.find((entry) => entry.key === dependency);
+          return dep?.checks.every((check) =>
+            passingEvidenceForCheck(version.evidence, dep.key, check.key, latestAttempts.get(dep.key)?.id),
+          );
+        });
+        if (!dependenciesPassed) throw new DomainError("CONFLICT", "Task dependencies have not passed", { reason: "SPEC_DEPENDENCY_UNMET" });
+      }
       const [active] = await tx.select({ id: specTaskAttempts.id }).from(specTaskAttempts).where(and(eq(specTaskAttempts.specId, specId), isNull(specTaskAttempts.releasedAt))).limit(1);
       if (active || conversation.activeRunId) throw new DomainError("CONFLICT", "Another specification task is active", { reason: "SPEC_BUSY" });
       const [queued] = await tx.select({ id: pendingInputs.id }).from(pendingInputs).where(and(eq(pendingInputs.conversationId, conversation.id), eq(pendingInputs.status, "queued"))).limit(1);
@@ -307,9 +307,9 @@ export class SpecService {
   }
 
   async attempts(projectId: string, specId: string, ownerId: string, revision: number, taskKey?: string, cursor?: string) {
-    const [owned] = await this.db.select({ id: specs.id }).from(specs).innerJoin(projects, eq(projects.id, specs.projectId)).where(and(eq(specs.id, specId), eq(specs.projectId, projectId), eq(projects.ownerUserId, ownerId), isNull(projects.deletedAt))).limit(1);
+    const owned = await this.queries.findOwnedSpec(projectId, specId, ownerId);
     if (!owned) throw new DomainError("NOT_FOUND", "Specification not found");
-    const rows = await this.db.select({ attempt: specTaskAttempts, runId: pendingInputs.runId, runState: runs.state }).from(specTaskAttempts).innerJoin(pendingInputs, eq(pendingInputs.id, specTaskAttempts.pendingInputId)).leftJoin(runs, eq(runs.id, pendingInputs.runId)).where(and(eq(specTaskAttempts.specId, specId), eq(specTaskAttempts.revision, revision), taskKey ? eq(specTaskAttempts.taskKey, taskKey) : undefined, cursor ? lt(specTaskAttempts.id, cursor) : undefined)).orderBy(desc(specTaskAttempts.createdAt), desc(specTaskAttempts.id)).limit(51);
+    const rows = await this.queries.listAttempts(specId, revision, taskKey, cursor);
     return { items: rows.slice(0, 50).map(({ attempt, runId, runState }) => ({ ...attempt, createdAt: attempt.createdAt.toISOString(), releasedAt: attempt.releasedAt?.toISOString() ?? null, runId: runId ?? null, runState: runState ?? null })), nextCursor: rows.length > 50 ? rows[49]!.attempt.id : null };
   }
 
@@ -360,7 +360,8 @@ export class SpecService {
     });
   }
 
-  async recordEvidence(projectId: string, specId: string, ownerId: string, input: { expectedRevision: number; evidenceId: string; taskKey: string; checkKey: string; source: any }) {
+  async recordEvidence(projectId: string, specId: string, ownerId: string, input: RecordEvidenceInput) {
+    const { source } = input;
     const revision = await this.transaction(async (tx) => {
       const { spec, conversation } = await this.lock(tx, projectId, specId, ownerId);
       this.assertRevision(spec.currentRevision, input.expectedRevision);
@@ -371,23 +372,23 @@ export class SpecService {
       if (!task || !check) throw new DomainError("NOT_FOUND", "Task check not found");
       const previous = version.evidence.find((item) => item.id === input.evidenceId);
       if (previous) {
-        const same = previous.taskKey === input.taskKey && previous.checkKey === input.checkKey && previous.note === input.source.note && previous.passed === (input.source.kind === "manual" ? input.source.passed : true);
+        const same = previous.taskKey === input.taskKey && previous.checkKey === input.checkKey && previous.note === source.note && previous.passed === (source.kind === "manual" ? source.passed : true);
         if (!same) throw new DomainError("CONFLICT", "Evidence ID reused with different content");
         return input.expectedRevision;
       }
       let entry: SpecEvidence;
-      if (input.source.kind === "manual") {
-        const [attempt] = await tx.select().from(specTaskAttempts).where(and(eq(specTaskAttempts.id, input.source.attemptId), eq(specTaskAttempts.specId, specId), eq(specTaskAttempts.revision, input.expectedRevision), eq(specTaskAttempts.taskKey, input.taskKey))).limit(1);
+      if (source.kind === "manual") {
+        const [attempt] = await tx.select().from(specTaskAttempts).where(and(eq(specTaskAttempts.id, source.attemptId), eq(specTaskAttempts.specId, specId), eq(specTaskAttempts.revision, input.expectedRevision), eq(specTaskAttempts.taskKey, input.taskKey))).limit(1);
         if (!attempt) throw new DomainError("CONFLICT", "Evidence must match a current task attempt");
         if (!attempt.releasedAt) throw new DomainError("CONFLICT", "Task attempt is still active", { reason: "SPEC_BUSY" });
-        entry = { id: input.evidenceId, taskKey: input.taskKey, checkKey: input.checkKey, passed: input.source.passed, source: "manual", attemptId: attempt.id, note: input.source.note, createdBy: ownerId, createdAt: new Date().toISOString() };
+        entry = { id: input.evidenceId, taskKey: input.taskKey, checkKey: input.checkKey, passed: source.passed, source: "manual", attemptId: attempt.id, note: source.note, createdBy: ownerId, createdAt: new Date().toISOString() };
       } else {
-        const [sourceVersion] = await tx.select().from(specRevisions).where(and(eq(specRevisions.specId, specId), eq(specRevisions.revision, input.source.revision))).limit(1);
-        const carried = sourceVersion?.evidence.find((item) => item.id === input.source.evidenceId && item.passed);
+        const [sourceVersion] = await tx.select().from(specRevisions).where(and(eq(specRevisions.specId, specId), eq(specRevisions.revision, source.revision))).limit(1);
+        const carried = sourceVersion?.evidence.find((item) => item.id === source.evidenceId && item.passed);
         if (!sourceVersion || !carried) throw new DomainError("CONFLICT", "Only passing evidence from this specification can be carried");
         const oldCheck = sourceVersion.taskPlan.find((row) => row.key === carried.taskKey)?.checks.find((row) => row.key === carried.checkKey);
         if (!oldCheck || !sameCheck(oldCheck, check)) throw new DomainError("CONFLICT", "Carried evidence does not match the reviewed check");
-        entry = { id: input.evidenceId, taskKey: input.taskKey, checkKey: input.checkKey, passed: true, source: "carried", fromRevision: input.source.revision, reviewedBy: ownerId, note: input.source.note, createdBy: ownerId, createdAt: new Date().toISOString() };
+        entry = { id: input.evidenceId, taskKey: input.taskKey, checkKey: input.checkKey, passed: true, source: "carried", fromRevision: source.revision, reviewedBy: ownerId, note: source.note, createdBy: ownerId, createdAt: new Date().toISOString() };
       }
       await tx.update(specRevisions).set({ evidence: [...version.evidence, entry] }).where(and(eq(specRevisions.specId, specId), eq(specRevisions.revision, input.expectedRevision)));
       await tx.update(specs).set({ updatedAt: new Date() }).where(eq(specs.id, specId));
@@ -408,17 +409,12 @@ export class SpecService {
       const [active] = await tx.select({ id: specTaskAttempts.id }).from(specTaskAttempts).where(and(eq(specTaskAttempts.specId, specId), isNull(specTaskAttempts.releasedAt))).limit(1);
       if (active) throw new DomainError("CONFLICT", "Task execution is still active", { reason: "SPEC_BUSY" });
       const allChecks = version.taskPlan.flatMap((task) => task.checks.map((check) => ({ taskKey: task.key, checkKey: check.key })));
-      const latestAttempts = new Map<string, string>();
-      for (const task of version.taskPlan) {
-        const [latest] = await tx.select({ id: specTaskAttempts.id }).from(specTaskAttempts).where(and(eq(specTaskAttempts.specId, specId), eq(specTaskAttempts.revision, expected), eq(specTaskAttempts.taskKey, task.key))).orderBy(desc(specTaskAttempts.createdAt)).limit(1);
-        if (latest) latestAttempts.set(task.key, latest.id);
-      }
-      const evidenceIds = allChecks.map(({ taskKey, checkKey }) => version.evidence.find((item) =>
-        item.taskKey === taskKey && item.checkKey === checkKey && item.passed &&
-        (latestAttempts.has(taskKey) ? item.attemptId === latestAttempts.get(taskKey) : item.source === "carried"),
-      )?.id);
-      if (!allChecks.length || evidenceIds.some((id) => !id)) throw new DomainError("CONFLICT", "All task checks need passing evidence", { reason: "SPEC_REVIEW_REQUIRED" });
-      const acceptance = { reviewerId: ownerId, acceptedAt: new Date().toISOString(), evidenceIds: evidenceIds as string[] };
+      const latestAttempts = await this.queries.tx(tx).latestAttemptsByTask(specId, expected);
+      const evidence = allChecks.map(({ taskKey, checkKey }) =>
+        passingEvidenceForCheck(version.evidence, taskKey, checkKey, latestAttempts.get(taskKey)?.id),
+      ).filter((entry) => entry !== undefined);
+      if (!allChecks.length || evidence.length !== allChecks.length) throw new DomainError("CONFLICT", "All task checks need passing evidence", { reason: "SPEC_REVIEW_REQUIRED" });
+      const acceptance = { reviewerId: ownerId, acceptedAt: new Date().toISOString(), evidenceIds: evidence.map((entry) => entry.id) };
       await tx.update(specRevisions).set({ acceptance }).where(and(eq(specRevisions.specId, specId), eq(specRevisions.revision, expected)));
       await tx.update(specs).set({ updatedAt: new Date() }).where(eq(specs.id, specId));
       await this.changedEvent(tx, conversation, specId, expected, "acceptance");

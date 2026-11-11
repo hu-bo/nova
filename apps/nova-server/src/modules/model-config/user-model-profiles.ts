@@ -12,6 +12,7 @@ import { okEnvelope, success } from "../../shared/response.schema.js";
 import { createCredentialCipher, maskCredential } from "../../shared/credential-cipher.js";
 import { type ModelRow, type ProviderRow } from "./model-config.repository.js";
 import { providerProtocolSchema, reasoningFormatSchema, thinkingLevelSchema } from "./model-config.schema.js";
+import { modelProviders, resolveProviderId, type ModelProviderDefinition } from "@nnova/harness/plugins/model-ai-sdk";
 
 export const availableModelSchema = z.object({
   id: z.string().uuid(),
@@ -37,8 +38,9 @@ const endpointSchema = z
   .url()
   .max(2048)
   .refine((value) => {
-    const url = new URL(value);
+    const url = URL.parse(value);
     return (
+      url !== null &&
       !url.username &&
       !url.password &&
       (url.protocol === "https:" ||
@@ -94,7 +96,8 @@ export class UserModelProfilesService {
     if (!id) return;
     const model = (await this.list(owner)).find((entry) => entry.id === id);
     if (!model) throw new DomainError("NOT_FOUND", "Selected model is unavailable", { reason: "MODEL_UNAVAILABLE" });
-    if (effort && !model.thinkingLevels.includes(effort as z.infer<typeof thinkingLevelSchema>))
+    const selectedEffort = thinkingLevelSchema.safeParse(effort);
+    if (effort && (!selectedEffort.success || !model.thinkingLevels.includes(selectedEffort.data)))
       throw new DomainError("INFERENCE_STRENGTH_UNAVAILABLE", "Selected reasoning effort is not supported");
   }
   async resolve(id: string | null, owner: string, effort: string | null) {
@@ -155,6 +158,15 @@ export class UserModelProfilesService {
 function modelDto(row: { model: ModelRow; provider: ProviderRow }, owner: string) {
   const { model, provider } = row;
   const editable = !provider.isPublic && provider.ownerId === owner;
+  const adapter: ModelProviderDefinition =
+    modelProviders[
+      resolveProviderId({
+        ...(provider.adapterId ? { provider: provider.adapterId } : {}),
+        protocol: provider.protocol,
+        reasoningFormat: model.reasoningFormat,
+      })
+    ];
+  const thinkingLevels = model.thinkingLevels.filter((level) => adapter.thinkingLevels.includes(level));
   return availableModelSchema.parse({
     id: model.id,
     label: model.upstreamName,
@@ -165,15 +177,15 @@ function modelDto(row: { model: ModelRow; provider: ProviderRow }, owner: string
     editable,
     contextWindow: Number(model.contextWindow),
     maxOutput: Number(model.maxOutput),
-    reasoningFormat: model.reasoningFormat,
-    thinkingLevels: [...model.thinkingLevels],
+    reasoningFormat: thinkingLevels.length ? adapter.reasoningFormat : "none",
+    thinkingLevels,
     parallelToolCalls: model.parallelToolCalls,
     supportsImages: model.inputModalities.includes("image"),
     priceVersion: model.updatedAt.toISOString(),
     capabilities: [
       "tools",
       ...(model.inputModalities.includes("image") ? ["vision"] : []),
-      ...(model.thinkingLevels.length ? ["reasoning"] : []),
+      ...(thinkingLevels.length ? ["reasoning"] : []),
     ],
     deprecated: false,
   });

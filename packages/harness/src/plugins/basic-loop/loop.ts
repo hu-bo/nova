@@ -6,7 +6,7 @@ import type { AgentMessage, JsonValue } from "../../contracts/message.js";
 import type { RunResult, CompletedRunResult, ToolCallResult, UsageSummary } from "../../contracts/run.js";
 import type { CheckpointPolicy, SessionStore } from "../../contracts/session.js";
 import type { ToolRuntime } from "../../contracts/tool.js";
-import { FrameworkError, safeError, ToolSuspended } from "../../contracts/errors.js";
+import { FrameworkError, safeError, runFailureStatus, ToolSuspended } from "../../contracts/errors.js";
 import { canonical, jsonValue } from "../../shared/json.js";
 type ToolCall = { callId: string; name: string; input: JsonValue };
 type Continuation = {
@@ -384,11 +384,7 @@ export class BasicLoop implements AgentExecutor {
           messageId: partialId,
         });
       }
-      status = run.signal.aborted
-        ? run.signal.reason instanceof FrameworkError && run.signal.reason.code === "TIMED_OUT"
-          ? "timed_out"
-          : "cancelled"
-        : "failed";
+      status = runFailureStatus(run.signal);
       error = safeError(run.signal.aborted ? run.signal.reason : failure);
       if (pending.length) {
         const interrupted: ToolCallResult[] = pending.map((call) => ({

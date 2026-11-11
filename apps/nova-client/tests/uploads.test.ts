@@ -106,6 +106,8 @@ describe('direct upload lifecycle', () => {
     queue.dispose();
   });
   it('cancels removed files and never restores them when a ticket completes late', async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
     let resolve!: (value: unknown) => void;
     mocks.ticket.mockImplementation(
       () =>
@@ -120,7 +122,32 @@ describe('direct upload lifecycle', () => {
     expect(signal.aborted).toBe(true);
     resolve(ticket());
     await Promise.resolve();
+    await Promise.resolve();
     expect(queue.getSnapshot()).toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(mocks.complete).not.toHaveBeenCalled();
+    queue.dispose();
+  });
+
+  it('does not restart a verified attachment when retry is requested again', async () => {
+    vi.stubGlobal('crypto', webcrypto);
+    mocks.ticket.mockResolvedValue(ticket());
+    mocks.complete.mockResolvedValue({
+      key: 'owned/key',
+      size: 11,
+      mime: 'image/png',
+      sha256: 'a'.repeat(64),
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 })),
+    );
+    const queue = new UploadQueue();
+    queue.add([image()]);
+    await waitFor(() => expect(queue.getSnapshot()[0]?.status).toBe('ready'));
+    queue.retry(queue.getSnapshot()[0]!.id);
+    expect(queue.getSnapshot()[0]?.status).toBe('ready');
+    expect(mocks.ticket).toHaveBeenCalledOnce();
     queue.dispose();
   });
 });

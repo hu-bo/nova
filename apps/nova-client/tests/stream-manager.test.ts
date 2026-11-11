@@ -148,6 +148,58 @@ describe('shared stream ownership', () => {
     ).toEqual([{ id: 'b', type: 'text', text: 'xxxxxxxxxx' }]);
     manager.dispose();
   });
+  it('does not let an old release remove a replacement session with the same id', async () => {
+    const manager = new RunStreamManager('alice', new QueryClient());
+    const releaseOld = manager.acquire(conversationId, snapshot());
+    manager.forget(conversationId);
+    releaseOld();
+    const releaseCurrent = manager.acquire(conversationId, snapshot());
+    const current = manager.session(conversationId);
+    await Promise.resolve();
+    expect(manager.session(conversationId)).toBe(current);
+    expect(mocks.connections[1]!.shutdown).not.toHaveBeenCalled();
+    mocks.connections[0]!.options.onError?.({ status: 429, retryAfterSeconds: 10 });
+    expect(current.getSnapshot().error).toBeNull();
+    releaseCurrent();
+    manager.dispose();
+  });
+
+  it('aborts a superseded snapshot and keeps the replacement retry authoritative', async () => {
+    const manager = new RunStreamManager('alice', new QueryClient());
+    manager.acquire(conversationId, snapshot());
+    let completeOld!: (value: ReturnType<typeof snapshot>) => void;
+    let completeCurrent!: (value: ReturnType<typeof snapshot>) => void;
+    mocks.snapshot
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            completeOld = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            completeCurrent = resolve;
+          }),
+      );
+    const previousRetry = manager.retry(conversationId);
+    const previousSignal = mocks.snapshot.mock.calls[0]![2].signal as AbortSignal;
+    const currentRetry = manager.retry(conversationId);
+    expect(previousSignal.aborted).toBe(true);
+    expect(mocks.snapshot).toHaveBeenCalledTimes(2);
+    completeOld(snapshot({ cursor: '5' }));
+    expect(await previousRetry).toBe(false);
+    const sharedSnapshot = mocks.connections[0]!.options.onSnapshotRequired();
+    expect(mocks.snapshot).toHaveBeenCalledTimes(2);
+    completeCurrent(snapshot({ cursor: '9' }));
+    expect(await currentRetry).toBe(true);
+    expect(await sharedSnapshot).toBe('9');
+    expect(manager.session(conversationId).getSnapshot()).toMatchObject({
+      error: null,
+      projection: { cursor: '9' },
+    });
+    manager.dispose();
+  });
   it('resync replaces cursor and data together within the account cache', async () => {
     vi.useFakeTimers();
     const client = new QueryClient();
@@ -194,8 +246,10 @@ describe('shared stream ownership', () => {
     );
     mocks.connections[0]!.options.onFrame(frame('usage.changed', 5, { usage: {} }));
     await vi.advanceTimersByTimeAsync(500);
+    const signal = mocks.snapshot.mock.calls[0]![2].signal as AbortSignal;
     release();
     await Promise.resolve();
+    expect(signal.aborted).toBe(true);
     complete(snapshot({ cursor: '5' }));
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.connections).toHaveLength(1);

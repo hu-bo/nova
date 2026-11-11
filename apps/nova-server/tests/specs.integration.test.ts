@@ -9,6 +9,8 @@ import { SpecService } from "../src/modules/specs/spec.service.js";
 import { createRunService } from "../src/modules/runs/run.service.js";
 import "../src/modules/runs/nova-runtime.js";
 import { DomainError } from "../src/shared/domain-error.js";
+import { passingEvidenceForCheck } from "../src/modules/specs/spec.validation.js";
+import type { SpecEvidence } from "../database/schema/spec-revision.table.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const requirements = (value: string) => `# Export\n\n## 验收条件\n\n### AC-01 导出\n\n${value}\n`;
@@ -16,6 +18,22 @@ const taskPlan = [
   { key: "T-01", title: "准备内容", objective: "准备可导出的内容。", dependsOn: [], checks: [{ key: "C-01", criterionIds: ["AC-01"], label: "内容可读", method: { kind: "command" as const, command: "printf", args: ["ok"] } }] },
   { key: "T-02", title: "验证导出", objective: "确认导出结果。", dependsOn: ["T-01"], checks: [{ key: "C-01", criterionIds: ["AC-01"], label: "文件可下载", method: { kind: "manual" as const } }] },
 ];
+
+test("task evidence follows the current attempt and never crosses task/check boundaries", () => {
+  const evidence: SpecEvidence[] = [
+    { id: "carried", taskKey: "T-01", checkKey: "C-01", passed: true, source: "carried", createdBy: "owner", createdAt: "2026-11-12T00:00:00Z" },
+    { id: "old-attempt", taskKey: "T-01", checkKey: "C-01", passed: true, source: "manual", attemptId: "old", createdBy: "owner", createdAt: "2026-11-12T00:00:00Z" },
+    { id: "failed-check", taskKey: "T-01", checkKey: "C-02", passed: false, source: "automatic", attemptId: "current", createdBy: "owner", createdAt: "2026-11-12T00:00:00Z" },
+    { id: "current-check", taskKey: "T-01", checkKey: "C-01", passed: true, source: "automatic", attemptId: "current", createdBy: "owner", createdAt: "2026-11-12T00:00:00Z" },
+    { id: "other-task", taskKey: "T-02", checkKey: "C-01", passed: true, source: "manual", attemptId: "current", createdBy: "owner", createdAt: "2026-11-12T00:00:00Z" },
+  ];
+  assert.equal(passingEvidenceForCheck(evidence, "T-01", "C-01", undefined)?.id, "carried");
+  assert.equal(passingEvidenceForCheck(evidence, "T-01", "C-01", "current")?.id, "current-check");
+  assert.equal(passingEvidenceForCheck(evidence, "T-01", "C-01", "retry"), undefined);
+  assert.equal(passingEvidenceForCheck(evidence, "T-01", "C-02", "current"), undefined);
+  assert.equal(passingEvidenceForCheck(evidence, "T-03", "C-01", "current"), undefined);
+  assert.equal(passingEvidenceForCheck(evidence, "T-02", "C-01", undefined), undefined);
+});
 
 test("spec workflow is revision-safe, idempotent, permission-scoped, and evidence-bound", { skip: !url }, async (t) => {
   const admin = new Pool({ connectionString: url });

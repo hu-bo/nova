@@ -214,29 +214,24 @@ export class ToolExecutor implements ToolRuntime {
         (!invoked && error instanceof FrameworkError && error.code === "PERSISTENCE_FAILED")
       )
         throw error;
+      let outcome: ToolCallResult["outcome"] = "known";
+      if (error instanceof ToolFailureError) outcome = error.outcome;
+      else if (
+        invoked &&
+        tool?.effects !== "read" &&
+        !(error instanceof FrameworkError && error.code === "NOT_DISPATCHED")
+      )
+        outcome = "unknown";
+      let failureCode = "TOOL_FAILED";
+      if (signal.aborted) failureCode = "CANCELLED";
+      else if (error instanceof z.ZodError) failureCode = inputPrepared ? "INVALID_TOOL_OUTPUT" : "INVALID_TOOL_INPUT";
       result = {
         name: call.name,
         callId: call.callId,
         executionId,
         status: "failed",
-        outcome:
-          error instanceof ToolFailureError
-            ? error.outcome
-            : invoked &&
-                tool?.effects !== "read" &&
-                !(error instanceof FrameworkError && error.code === "NOT_DISPATCHED")
-              ? "unknown"
-              : "known",
-        error: safeError(
-          error,
-          signal.aborted
-            ? "CANCELLED"
-            : error instanceof z.ZodError
-              ? inputPrepared
-                ? "INVALID_TOOL_OUTPUT"
-                : "INVALID_TOOL_INPUT"
-              : "TOOL_FAILED",
-        ),
+        outcome,
+        error: safeError(error, failureCode),
       };
       result.value = {
         error: {

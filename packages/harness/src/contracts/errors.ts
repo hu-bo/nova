@@ -34,6 +34,13 @@ export function safeError(error: unknown, code = "EXECUTION_FAILED"): SafeError 
     : { code, message: "The operation failed." };
 }
 
+/** Kernel setup and agent execution use the same cancellation precedence. */
+export function runFailureStatus(signal: AbortSignal): "failed" | "cancelled" | "timed_out" {
+  if (!signal.aborted) return "failed";
+  if (signal.reason instanceof FrameworkError && signal.reason.code === "TIMED_OUT") return "timed_out";
+  return "cancelled";
+}
+
 /** Authorization suspension preserves the pending tool batch for resumption. */
 export class ToolSuspended extends Error {
   constructor(readonly continuationId: string) {

@@ -14,25 +14,24 @@ export type UploadEntry = {
 };
 const MAX_BYTES = 30 * 1024 * 1024;
 const ALLOWED = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/gif,image/webp';
+export const IMAGE_ACCEPT = [...ALLOWED].join(',');
 /** 图片上传的格式与大小门槛；add 与 retry 共用同一规则。 */
 const isAccepted = (file: File) =>
   ALLOWED.has(file.type) && file.size > 0 && file.size <= MAX_BYTES;
 const REJECTED_MESSAGE = '请选择不超过 30 MiB 的 PNG、JPEG、GIF 或 WebP 图片。';
-export const statusLabel = (status: UploadStatus) =>
-  ({
-    selected: '等待上传',
-    ticketed: '链接已生成',
-    uploading: '正在上传',
-    verifying: '正在验证',
-    ready: '已就绪',
-    failed: '上传失败',
-  })[status];
+const uploadStatusLabels = {
+  selected: '等待上传',
+  ticketed: '链接已生成',
+  uploading: '正在上传',
+  verifying: '正在验证',
+  ready: '已就绪',
+  failed: '上传失败',
+} satisfies Record<UploadStatus, string>;
+export const statusLabel = (status: UploadStatus) => uploadStatusLabels[status];
 export class UploadQueue {
   private entries: UploadEntry[] = [];
   private listeners = new Set<() => void>();
   private controllers = new Map<string, AbortController>();
-  private active = 0;
   private disposed = false;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -43,6 +42,7 @@ export class UploadQueue {
     for (const listener of this.listeners) listener();
   }
   private update(id: string, values: Partial<UploadEntry>) {
+    if (!this.entries.some((entry) => entry.id === id)) return;
     this.entries = this.entries.map((entry) => (entry.id === id ? { ...entry, ...values } : entry));
     this.emit();
   }
@@ -50,16 +50,15 @@ export class UploadQueue {
     if (this.disposed) return;
     const added = Array.from(files)
       .slice(0, Math.max(0, 32 - this.entries.length))
-      .map(
-        (file): UploadEntry =>
-          isAccepted(file)
-            ? { id: uuid(), file, status: 'selected' }
-            : {
-                id: uuid(),
-                file,
-                status: 'failed',
-                error: new ApiError(400, 400, REJECTED_MESSAGE),
-              },
+      .map((file): UploadEntry =>
+        isAccepted(file)
+          ? { id: uuid(), file, status: 'selected' }
+          : {
+              id: uuid(),
+              file,
+              status: 'failed',
+              error: new ApiError(400, 400, REJECTED_MESSAGE),
+            },
       );
     this.entries = [...this.entries, ...added];
     this.emit();
@@ -67,7 +66,7 @@ export class UploadQueue {
   }
   retry(id: string) {
     const entry = this.entries.find((item) => item.id === id);
-    if (entry && isAccepted(entry.file)) {
+    if (entry?.status === 'failed' && isAccepted(entry.file)) {
       this.update(id, { status: 'selected', error: undefined, attachment: undefined });
       this.pump();
     }
@@ -87,17 +86,15 @@ export class UploadQueue {
     this.clear();
   }
   private pump() {
-    while (!this.disposed && this.active < 3) {
+    while (!this.disposed && this.controllers.size < 3) {
       const entry = this.entries.find(
         (item) => item.status === 'selected' && !this.controllers.has(item.id),
       );
       if (!entry) break;
       const controller = new AbortController();
       this.controllers.set(entry.id, controller);
-      this.active += 1;
       void this.upload(entry, controller).finally(() => {
         this.controllers.delete(entry.id);
-        this.active -= 1;
         this.pump();
       });
     }
@@ -109,6 +106,7 @@ export class UploadQueue {
         { filename: entry.file.name, mime: entry.file.type, size: entry.file.size },
         { signal, idempotencyKey: uuid() },
       );
+      signal.throwIfAborted();
       this.update(entry.id, { status: 'ticketed' });
       if (Date.parse(ticket.upload.expiresAt) <= Date.now())
         throw new ApiError(410, 410, '上传链接已过期，请重新上传。');
@@ -120,6 +118,7 @@ export class UploadQueue {
         signal,
         credentials: 'omit',
       });
+      signal.throwIfAborted();
       if (!response.ok)
         throw new ApiError(response.status, response.status, '上传中断，请重新上传。');
       this.update(entry.id, { status: 'verifying' });
@@ -133,6 +132,7 @@ export class UploadQueue {
         { sha256, mime: entry.file.type, size: entry.file.size },
         { signal },
       );
+      signal.throwIfAborted();
       this.update(entry.id, {
         status: 'ready',
         attachment: {

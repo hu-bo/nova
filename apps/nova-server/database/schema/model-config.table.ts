@@ -1,7 +1,9 @@
 import { boolean, index, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import type { ReasoningEffort } from "@nnova/harness";
+import type { ReasoningFormat } from "@nnova/harness/plugins/model-ai-sdk";
 
-export type ThinkingLevel = "off" | "low" | "medium" | "high" | "max";
-export type ReasoningFormat = "none" | "openai" | "anthropic" | "deepseek" | "minimax";
+export type ThinkingLevel = ReasoningEffort;
+export type { ReasoningFormat };
 export type InputModality = "text" | "image";
 
 /** Model catalog entries are soft-deleted so public names remain reserved. */
