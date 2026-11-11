@@ -2,7 +2,7 @@ services:
   nova-server:
     image: node:22-alpine
     container_name: nova-server
-    working_dir: /data/app/agent-server
+    working_dir: /data/app/nova-server
     env_file:
       - .env
     environment:
@@ -12,15 +12,14 @@ services:
       # Runner connections and execution currently share process-local state.
       ROLE: all
       AUTH_MODE: casdoor
-      LOG_DIR: /var/log/nova-server
+      LOG_DIR: /data/app/nova-server/logs
       SWAGGER_UI_ENABLED: "false"
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       MODEL_CONFIG_ENCRYPTION_KEY: ${MODEL_CONFIG_ENCRYPTION_KEY:?Set MODEL_CONFIG_ENCRYPTION_KEY in .env}
     ports:
       - "9203:9203"
     volumes:
-      - .:/data/app/agent-server:ro
-      - nova-server-logs:/var/log/nova-server
+      - .:/data/app/nova-server:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
