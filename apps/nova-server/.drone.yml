@@ -74,7 +74,7 @@ steps:
         - set -eu
         - umask 077
         - APP_NAME=nova-server
-        - APP_DIR=/data/app/agent-server
+        - APP_DIR=/data/app/nova-server
         - RELEASE_ROOT=/temp/app/nova-dsh/nova-server/${DRONE_BUILD_NUMBER}
         - RELEASE_DIR=$RELEASE_ROOT/release
         - BACKUP_DIR=/data/app/nova-dsh-backups/$APP_NAME-${DRONE_BUILD_NUMBER}-$(date -u +%Y%m%dT%H%M%SZ)
@@ -94,7 +94,7 @@ steps:
               docker rm "$container"
             fi
           done
-        - if [ -e "$APP_DIR" ]; then mv "$APP_DIR" "$BACKUP_DIR/agent-server"; fi
+        - if [ -e "$APP_DIR" ]; then mv "$APP_DIR" "$BACKUP_DIR/nova-server"; fi
         - mv "$RELEASE_DIR" "$APP_DIR"
         - cd "$APP_DIR"
         - |
