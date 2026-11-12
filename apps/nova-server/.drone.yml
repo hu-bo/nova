@@ -83,6 +83,8 @@ steps:
         - cd "$RELEASE_DIR"
         - test -s .env
         - test -s dist/src/server.js
+        # Writable logs bind on the read-only app mount; the mount point must pre-exist.
+        - mkdir -p logs
         # Validate and migrate before stopping the current service.
         - docker compose -p nova-server config --quiet
         - docker compose -p nova-server run --rm --no-deps -T nova-server node --env-file=.env scripts/check-deployment.mjs

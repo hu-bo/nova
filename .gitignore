@@ -8,7 +8,7 @@ output/
 .env.*
 !.env.example
 
-apps/agent-server/logs/
+apps/nova-server/logs/
 target/
 packages/runner/vendor/
 

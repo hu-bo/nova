@@ -20,6 +20,10 @@ services:
       - "9203:9203"
     volumes:
       - .:/data/app/nova-server:ro
+      # Host-visible logs: a writable sub-mount layered over the read-only app mount.
+      # The mount point cannot be created inside the read-only bind, so the logs
+      # directory must exist before containers start; the release script creates it.
+      - ./logs:/data/app/nova-server/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -43,9 +47,6 @@ services:
       options:
         max-size: "20m"
         max-file: "5"
-
-volumes:
-  nova-server-logs:
 
 networks:
   shared_network:

@@ -80,7 +80,7 @@ Runner 单独通过 `.github/workflows/runner-release.yml` 发布，沿用 nova 
 nova-server 任务：
 
 1. 构建服务端和所需共享包，打包后拉取生产 `.env`，校验生产配置、认证验证器和独立包导入。
-2. SCP 上传 `nova-server.tar.gz`；解压到 `/temp/app/nova-dsh/nova-server/<构建编号>/release` 并再次预检。
+2. SCP 上传 `nova-server.tar.gz`；解压到 `/temp/app/nova-dsh/nova-server/<构建编号>/release`，创建 `logs` 目录作为日志的可写挂载点，再次预检。
 3. 在暂存版本运行 `drizzle-kit migrate --config=database/drizzle.config.ts`，失败立即终止，旧后端文件和容器保持原状。不使用 schema push。
 4. 停止旧容器，将旧后端目录移动到 `/data/app/nova-dsh-backups/nova-server-<构建编号>-<时间戳>/agent-server`，替换后端并启动。
 5. 使用 `docker compose up -d --force-recreate --wait` 等待 Compose 中的 `/health/ready` 健康检查通过。失败会输出日志和备份位置。
@@ -95,7 +95,7 @@ nova-server 任务：
 
 ## 模型协议错误排查日志
 
-nova-server 已接入 `@hquant/logger-js`。开发环境输出可读日志，生产环境保留 stdout JSON，另写入滚动文件。Compose 将 `/var/log/nova-server` 挂载到独立的 `nova-server-logs` 数据卷，避免只读应用目录导致写入失败，并在容器重建后保留日志。文件按天或 20 MiB 滚动，保留 30 天。直接运行生产 Node 入口时用 `LOG_DIR` 指定可写目录。
+nova-server 已接入 `@hquant/logger-js`。开发环境输出可读日志，生产环境保留 stdout JSON，另写入滚动文件。Compose 把发布目录中宿主机的 `logs` 目录（`/data/app/nova-server/logs`）挂载到 `LOG_DIR` 指向的容器内同名路径，宿主机可直接查看日志。应用目录是只读绑定，可写挂载点无法在其内自动创建，因此发布脚本在解包后先创建 `logs` 目录。切换发布目录时旧日志随备份目录归档，当前目录的日志文件按天或 20 MiB 滚动，保留 30 天。直接运行生产 Node 入口时用 `LOG_DIR` 指定可写目录。
 
 `LOG_LEVEL=info` 已包含请求开始、HTTP 响应、流完成和失败摘要。临时改为 `debug` 并重启，可额外观察每个 SSE 事件的类型和结束原因。提示词、模型输出、工具参数、凭据和原始响应体不写入这些模型诊断日志。
 
