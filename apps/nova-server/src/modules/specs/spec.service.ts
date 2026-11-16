@@ -349,7 +349,7 @@ export class SpecService {
         await this.journal.tx(tx).append(conversation, { runId: run.id, type: "spec.changed", payload: { specId, revision: spec.currentRevision, change: "evidence" } });
         return { ...updated!, releasedAt: resolvedAt.toISOString() };
       }
-      const settledRun = run && ["succeeded", "failed", "timed_out", "cancelled"].includes(run.state);
+      const settledRun = run && ["succeeded", "budget_exhausted", "failed", "timed_out", "cancelled"].includes(run.state);
       const settledQueue = !run && ["removed", "rejected"].includes(reference.input.status);
       if (!settledRun && !settledQueue) throw new DomainError("CONFLICT", "The original operation has not been proven settled", { reason: "EXECUTION_OUTCOME_UNKNOWN" });
       const resolvedAt = new Date();

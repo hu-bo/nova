@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ cancel: vi.fn(), resolve: vi.fn() }));
+const mocks = vi.hoisted(() => ({ cancel: vi.fn(), resolve: vi.fn(), append: vi.fn() }));
+vi.mock('@/api/generated/conversations', () => ({ appendConversationInput: mocks.append }));
 vi.mock('@/features/auth', () => ({ useIdentity: () => ({ identity: { identityId: 'alice' } }) }));
 vi.mock('../src/features/runs/run.commands', () => ({
   cancelRun: mocks.cancel,
@@ -12,9 +13,9 @@ vi.mock('../src/features/runs/run.commands', () => ({
 import { RunPanel } from '../src/features/runs/run-panel';
 import { RunStatus } from '../src/features/runs/run-status';
 import { useRunControls } from '../src/features/runs/run-controls';
-import { initialProjection } from '../src/features/runs/run-event-reducer';
+import { initialProjection, reduceRunEvent } from '../src/features/runs/run-event-reducer';
 import type { RunStreamSnapshot } from '../src/features/runs/run-stream-manager';
-import { snapshot } from './fixtures';
+import { event, snapshot } from './fixtures';
 const stream = (): RunStreamSnapshot => ({
   state: 'live',
   error: null,
@@ -79,18 +80,23 @@ afterEach(() => {
   cleanup();
   mocks.cancel.mockReset();
   mocks.resolve.mockReset();
+  mocks.append.mockReset();
   vi.useRealTimers();
 });
 describe('approval, cancellation and unknown outcomes', () => {
   it('shows that the first message is waiting to start until a run begins', () => {
     const value = stream();
-    value.projection = initialProjection(snapshot({
-      pendingInputs: [{
-        id: 'input-1',
-        state: 'queued',
-        input: { mode: 'next_run', blocks: [{ id: 'text', type: 'text', text: '开始' }] },
-      }],
-    }));
+    value.projection = initialProjection(
+      snapshot({
+        pendingInputs: [
+          {
+            id: 'input-1',
+            state: 'queued',
+            input: { mode: 'next_run', blocks: [{ id: 'text', type: 'text', text: '开始' }] },
+          },
+        ],
+      }),
+    );
     const view = mount(value);
     expect(screen.getByText('等待运行')).toBeDefined();
     expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
@@ -182,12 +188,46 @@ describe('approval, cancellation and unknown outcomes', () => {
     ['MODEL_RATE_LIMITED', '模型服务限流或额度不足，请检查配额或切换模型。'],
     ['MODEL_AUTH_FAILED', '模型服务认证失败，请检查模型的 API 密钥和访问权限。'],
     ['MODEL_REQUEST_FAILED', '模型请求失败，请检查模型配置或稍后重试。'],
-  ])('explains model failure %s', (reason, message) => {
+    ['STEP_LIMIT', '已达到本轮执行步数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。'],
+    ['TOOL_LIMIT', '已达到本轮工具调用次数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。'],
+  ])('explains run failure %s from a saved snapshot', (reason, message) => {
     const value = stream();
-    value.projection!.run = { id: 'run-1', state: 'failed', reason };
+    value.projection = initialProjection(
+      snapshot({ run: { id: 'run-1', state: 'failed', reason } }),
+    );
     mount(value);
     expect(screen.getByRole('alert').textContent).toBe(message);
     expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
+  });
+  it.each([undefined, 'UNRECOGNIZED_ERROR'])(
+    'explains failures with an unmapped reason: %s',
+    (reason) => {
+      const value = stream();
+      value.projection!.run = { id: 'run-1', state: 'failed', ...(reason ? { reason } : {}) };
+      mount(value);
+      expect(screen.getByRole('alert').textContent).toBe(
+        '本轮运行失败，可以发送消息继续处理或稍后重试。',
+      );
+    },
+  );
+  it('shows step exhaustion from the live stream and clears it when another run starts', () => {
+    const value = stream();
+    const view = mount(value);
+    value.projection = reduceRunEvent(
+      value.projection!,
+      event('run.changed', 1, { run: { id: 'run-1', state: 'failed', reason: 'STEP_LIMIT' } }),
+    );
+    view.rerender(view.ui(value));
+    expect(screen.getByRole('alert').textContent).toContain('已达到本轮执行步数上限');
+    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
+
+    value.projection = reduceRunEvent(
+      value.projection,
+      event('run.changed', 2, { run: { id: 'run-2', state: 'running' } }),
+    );
+    view.rerender(view.ui(value));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('正在运行')).toBeDefined();
   });
   it('reports evidence refresh progress without treating it as execution confirmation', async () => {
     const value = stream();
@@ -211,5 +251,55 @@ describe('approval, cancellation and unknown outcomes', () => {
     expect(onRetry).toHaveBeenCalledTimes(2);
     expect(mocks.cancel).not.toHaveBeenCalled();
     expect(mocks.resolve).not.toHaveBeenCalled();
+  });
+  it('continues an exhausted run once, without replaying the original request or treating it as a failure', async () => {
+    mocks.append.mockResolvedValue({});
+    const value = stream();
+    value.projection = initialProjection(
+      snapshot({ run: { id: 'run-1', state: 'budget_exhausted', reason: 'STEP_LIMIT' } }),
+    );
+    const view = mount(value);
+    expect(screen.getAllByText('预算耗尽，任务未完成').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: '继续任务' }));
+    await waitFor(() => expect(mocks.append).toHaveBeenCalledTimes(1));
+    expect(mocks.append.mock.calls[0]?.[1]).toMatchObject({
+      mode: 'next_run',
+      blocks: [{ type: 'text', text: '继续上轮尚未完成的任务，从已保存的进度接着处理。' }],
+    });
+    expect((screen.getByRole('button', { name: '正在继续…' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    value.projection = reduceRunEvent(
+      value.projection!,
+      event('run.changed', 1, { run: { id: 'run-2', state: 'running' } }),
+    );
+    view.rerender(view.ui(value));
+    expect(screen.queryByRole('button', { name: '继续任务' })).toBeNull();
+  });
+  it('reuses the continuation intent after a failed request', async () => {
+    mocks.append.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({});
+    const value = stream();
+    value.projection = initialProjection(
+      snapshot({ run: { id: 'run-1', state: 'budget_exhausted', reason: 'TOOL_LIMIT' } }),
+    );
+    const { result } = mountControls(value);
+    const configuration = {
+      backendId: 'nova',
+      modelId: null,
+      mode: 'build' as const,
+      budget: { maxSteps: 2 },
+    };
+    await act(async () => {
+      await expect(result.current.continueRun.mutateAsync(configuration)).rejects.toThrow(
+        'network',
+      );
+    });
+    await act(async () => {
+      await result.current.continueRun.mutateAsync(configuration);
+    });
+    expect(mocks.append.mock.calls[1]?.[1].configuration.budget).toEqual({ maxSteps: 2 });
+    expect(mocks.append.mock.calls[1]?.[2]).toEqual(mocks.append.mock.calls[0]?.[2]);
   });
 });

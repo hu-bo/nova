@@ -44,6 +44,7 @@ import {
   sessionPersistence,
   sessionStore,
   commitSessionUpdate,
+  applySessionCommit,
   type AgentEvent,
   FrameworkError,
   type SessionCommit,
@@ -92,6 +93,7 @@ import type { RunClaim } from "../src/modules/runs/run.repository.js";
 import { createRunService, type RunService as RunRepository } from "../src/modules/runs/run.service.js";
 import { postgresSessionPlugin } from "../src/modules/runs/postgres-session-store.js";
 import { nativeSnapshot, runtimeAdapters, type RuntimeAdapter } from "../src/modules/runs/runtime-adapter.js";
+import { executionEffectState } from "../src/modules/runs/session-checkpoint.js";
 import "../src/modules/runs/nova-runtime.js";
 import { ConversationExecutor } from "../src/modules/runs/conversation-executor.js";
 import { buildApp } from "../src/app.js";
@@ -101,6 +103,18 @@ import { createJobHost } from "../src/jobs/job-registry.js";
 import { claim as claimJobs, enqueue as enqueueJob } from "../src/jobs/postgres-job-store.js";
 
 const url = process.env.TEST_DATABASE_URL;
+test("effect isolation ignores unconfirmed reads and retains unconfirmed writes", () => {
+  const read: import("@nnova/harness").ExecutionRecord = {
+    executionId: "read", runId: "run", stepId: "step", callId: "read", name: "grep", input: {},
+    idempotencyKey: "read", dispatch: "dispatched", effects: "read",
+    result: { executionId: "read", callId: "read", name: "grep", status: "failed", outcome: "unknown" },
+  };
+  assert.equal(executionEffectState([read, { ...read, executionId: "pending-read", result: undefined }]), "known");
+  const write = { ...read, executionId: "write", effects: "write" as const, result: undefined };
+  assert.equal(executionEffectState([read, write]), "pending");
+  assert.equal(executionEffectState([read, { ...write, result: read.result }]), "unknown");
+  assert.equal(executionEffectState([{ ...write, effects: undefined }]), "pending");
+});
 test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => {
   const admin = new Pool({ connectionString: url });
   const name = "nova_protocol_test_" + randomUUID().replaceAll("-", "");
@@ -246,6 +260,52 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       plugins: [sessionCheckpointPolicyPlugin()],
       ...(policy ? { policies: [policy] } : {}),
     });
+  await t.test("unconfirmed reads do not quarantine subsequent commands in the same workspace", async () => {
+    const binding = {
+      id: randomUUID(), revision: 1, runnerId: randomUUID(), workspaceId: "read-workspace", canonicalCwd: ".", instructions: {},
+    };
+    for (const hasResult of [false, true]) {
+      const conversation = await conversationRepository.create({
+        ownerUserId: owner, mode: "chat", projectId: null, title: "Unconfirmed read",
+        metadata: { configuration: { backendId: "nova", modelId: null, mode: "build" }, binding },
+        initialInput: { blocks: [{ id: "text", type: "text", text: "Read" }] },
+      });
+      const prepared = (await repository.prepare(conversation.id, "reader"))!;
+      const claim = claimOf(prepared);
+      const { checkpoint, revision } = await repository.load(claim);
+      const executionId = randomUUID();
+      const batch: SessionCommit = { execution: {
+        executionId, runId: claim.id, stepId: "read-step", callId: "read-call", name: "grep",
+        input: {}, idempotencyKey: randomUUID(), dispatch: "dispatched", effects: "read",
+        ...(hasResult ? { result: { executionId, name: "grep", callId: "read-call", status: "failed", outcome: "unknown" } as const } : {}),
+      } };
+      await repository.commitSession(claim, revision, applySessionCommit(nativeSnapshot(checkpoint, revision), batch), batch);
+      await repository.finish(claim, "cancelled");
+      const [finished] = await db.select().from(runs).where(eq(runs.id, claim.id));
+      assert.equal(finished?.state, "cancelled");
+      assert.equal(finished?.effectState, "known");
+
+      const nextConversation = await conversationRepository.create({
+        ownerUserId: owner, mode: "chat", projectId: null, title: "Subsequent command",
+        metadata: { configuration: { backendId: "nova", modelId: null, mode: "build" }, binding },
+        initialInput: { blocks: [{ id: "text", type: "text", text: "Write" }] },
+      });
+      const next = (await repository.prepare(nextConversation.id, "writer"))!;
+      const nextClaim = claimOf(next);
+      let invoked = false;
+      const tool = defineTool({
+        name: "write", description: "write", inputSchema: z.object({}), effects: "write",
+        async execute() { invoked = true; return {}; },
+      });
+      const runtime = await harness(repository, nextClaim, tool);
+      try {
+        const result = await runtime.run({ role: "user", parts: [{ type: "text", text: "Write" }] }, { runId: nextClaim.id });
+        assert.equal(result.status, "succeeded", JSON.stringify(result));
+        assert.equal(invoked, true);
+      } finally { await runtime.close(); }
+      await repository.finish(nextClaim, "succeeded");
+    }
+  });
   await t.test("forward migration preserves history and ends nonrecoverable legacy runs", async () => {
     const migrated = await snapshot(legacyId);
     assert.equal(migrated.messages[0]?.sequence, "1");
@@ -1173,6 +1233,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     async (httpTest) => {
       const requests: Record<string, unknown>[] = [];
       let upstreamStatus = 200;
+      let remainingToolSteps = 0;
       const upstream = createServer(async (request, response) => {
         let raw = "";
         for await (const chunk of request) raw += chunk;
@@ -1185,11 +1246,20 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         }
         const toolResult = input.messages.some((message: { role: string }) => message.role === "tool");
         response.writeHead(200, { "content-type": "text/event-stream" });
+        if (input.tool_choice === "none") {
+          response.end('data: ' + JSON.stringify({ choices: [{ delta: { content: "预算耗尽，已保存进度，任务尚未完成。" }, finish_reason: "stop" }] }) + '\n\ndata: [DONE]\n\n');
+          return;
+        }
         if (!input.tools?.length) {
           response.end('data: ' + JSON.stringify({ choices: [{ delta: { content: "请描述你负责的接口。" }, finish_reason: "stop" }] }) + '\n\ndata: [DONE]\n\n');
           return;
         }
-        if (!toolResult) {
+        if (!toolResult || remainingToolSteps > 0) {
+          let callId = "upstream-call";
+          if (remainingToolSteps > 0) {
+            callId = "budget-call-" + remainingToolSteps;
+            remainingToolSteps--;
+          }
           response.write(
             "data: " +
               JSON.stringify({
@@ -1197,7 +1267,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
               }) +
               "\n\n",
           );
-          await delay(80);
+          if (callId === "upstream-call") await delay(80);
           response.write(
             "data: " +
               JSON.stringify({
@@ -1207,7 +1277,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
                       tool_calls: [
                         {
                           index: 0,
-                          id: "upstream-call",
+                          id: callId,
                           type: "function",
                           function: {
                             name: "todo_write",
@@ -1431,8 +1501,8 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
           payload: { blocks: [{ id: "text", type: "text", text: "第二轮" }], mode: "next_run" },
         });
         assert.equal(followup.statusCode, 200, followup.body);
-        const waitForRun = async (state: "succeeded" | "failed") => {
-          for (let attempt = 0; attempt < 200; attempt++) {
+        const waitForRun = async (state: "succeeded" | "failed" | "budget_exhausted", maxAttempts = 200) => {
+          for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const view = (
               await app.inject({ method: "GET", url: "/api/conversations/" + id + "/snapshot", headers })
             ).json().data;
@@ -1462,6 +1532,42 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         const limitedView = await waitForRun("failed");
         assert.equal(limitedView.run.reason, "MODEL_RATE_LIMITED");
         assert.ok(!JSON.stringify(limitedView).includes("Do not expose upstream details"));
+        await httpTest.test("workspace tasks are not limited to 64 model steps or tool executions", async () => {
+          upstreamStatus = 200;
+          remainingToolSteps = 65;
+          const beforeRequests = requests.length;
+          const continued = await app.inject({
+            method: "POST",
+            url: "/api/conversations/" + id + "/inputs",
+            headers,
+            payload: { blocks: [{ id: "text", type: "text", text: "继续处理长任务" }], mode: "next_run" },
+          });
+          assert.equal(continued.statusCode, 200, continued.body);
+          const view = await waitForRun("succeeded", 800);
+          assert.equal(remainingToolSteps, 0);
+          assert.equal(requests.length - beforeRequests, 66);
+          assert.equal(view.run.reason, undefined);
+        });
+        await httpTest.test("explicit budgets persist a separate terminal state and saved progress continues in a new run", async () => {
+          remainingToolSteps = 2;
+          const budgeted = await app.inject({ method: "POST", url: "/api/conversations/" + id + "/inputs", headers,
+            payload: { blocks: [{ id: "text", type: "text", text: "使用一步工作预算" }], mode: "next_run",
+              configuration: { backendId: "nova", modelId: modelEntry!.id, mode: "build", budget: { maxSteps: 1 } } } });
+          assert.equal(budgeted.statusCode, 200, budgeted.body);
+          const stopped = await waitForRun("budget_exhausted");
+          assert.equal(stopped.run.reason, "STEP_LIMIT");
+          assert.equal(stopped.conversation.configuration.budget.maxSteps, 1);
+          assert.ok(JSON.stringify(stopped.messages).includes("预算耗尽，已保存进度"));
+          const [persisted] = await db.select().from(runs).where(eq(runs.id, stopped.run.id));
+          assert.equal(persisted?.state, "budget_exhausted");
+          remainingToolSteps = 0;
+          const continued = await app.inject({ method: "POST", url: "/api/conversations/" + id + "/inputs", headers,
+            payload: { blocks: [{ id: "text", type: "text", text: "继续" }], mode: "next_run" } });
+          assert.equal(continued.statusCode, 200, continued.body);
+          const finished = await waitForRun("succeeded");
+          assert.notEqual(finished.run.id, stopped.run.id);
+          assert.ok(JSON.stringify(requests.at(-1)).includes("预算耗尽，已保存进度"));
+        });
         const config = (await app.inject({ method: "GET", url: "/api/config", headers })).json().data;
         const catalog = await app.inject({ method: "GET", url: "/admin/model-config/models", headers });
         assert.equal(catalog.statusCode, 200, catalog.body);

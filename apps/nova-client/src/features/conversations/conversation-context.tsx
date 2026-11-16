@@ -1,6 +1,7 @@
 import { resolveRemotePath } from '@/features/remotes';
 import { Target } from 'lucide-react';
 import { type ConversationComposerController } from './use-conversation-composer';
+import { Input } from '@/components/ui/input';
 
 export function ConversationContext({
   controller: ctl,
@@ -40,6 +41,36 @@ export function ConversationContext({
           )}
         </div>
       </dl>
+      <fieldset className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-xs">
+        <legend className="font-medium text-slate-700">每轮执行预算</legend>
+        <p className="text-slate-500">留空表示不限制；修改后从下一轮发送开始生效。</p>
+        <label className="block space-y-1">
+          <span>工作步数上限</span>
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            placeholder="不限制"
+            value={ctl.budgetLimits.maxSteps}
+            onChange={(event) =>
+              ctl.setBudgetLimits((limits) => ({ ...limits, maxSteps: event.target.value }))
+            }
+          />
+        </label>
+        <label className="block space-y-1">
+          <span>工具调用次数上限</span>
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            placeholder="不限制"
+            value={ctl.budgetLimits.maxToolCalls}
+            onChange={(event) =>
+              ctl.setBudgetLimits((limits) => ({ ...limits, maxToolCalls: event.target.value }))
+            }
+          />
+        </label>
+      </fieldset>
       {ctl.goalArmed && (
         <div className="mt-4 border-t border-slate-200 pt-4">
           <p className="flex items-center gap-2 text-xs font-medium text-accent">

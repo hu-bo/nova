@@ -178,21 +178,22 @@ test("defineTool still rejects coercion and unknown fields after dynamic extensi
   assert.throws(() => tool.prepare({ value: 1, extra: true }));
 });
 
-test("tool budget failures keep the conversation history paired", async () => {
+test("tool budgets reserve a text summary and keep progress for another run", async () => {
   const model = new ScriptedModel({
     budget: [
       { tool: { name: "strict", input: { value: 1 } } },
-      { tool: { name: "strict", input: { value: 2 } } },
       {
         check(request) {
+          assert.equal(request.toolChoice, "none");
           assert.ok(
             request.messages.some((message) =>
-              message.parts.some((part) => part.type === "tool-result" && part.status === "failed"),
+              message.parts.some((part) => part.type === "tool-result" && part.status === "succeeded"),
             ),
           );
         },
-        text: "recovered",
+        text: "Budget exhausted; one lookup complete, more work remains.",
       },
+      { text: "recovered" },
     ],
   });
   const kernel = await createAgentKernel({
@@ -224,8 +225,9 @@ test("tool budget failures keep the conversation history paired", async () => {
       allowedTools: ["strict"],
     });
     const first = await agent.send({ text: "exhaust" });
-    assert.equal(first.status, "failed");
-    assert.equal(first.error?.code, "TOOL_LIMIT");
+    assert.equal(first.status, "budget_exhausted");
+    assert.equal(first.kind === "completed" && first.budgetReason, "TOOL_LIMIT");
+    assert.equal(first.error, undefined);
     assert.equal((await agent.send({ text: "recover" })).text, "recovered");
   } finally {
     await kernel.dispose();

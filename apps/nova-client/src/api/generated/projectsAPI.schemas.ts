@@ -974,6 +974,19 @@ export const RenameConversation200ConfigurationReasoningEffort = {
   max: 'max',
 } as const;
 
+export type RenameConversation200ConfigurationBudget = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxSteps?: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxToolCalls?: number;
+};
+
 export type RenameConversation200Configuration = {
   /** @minLength 1 */
   backendId: string;
@@ -991,6 +1004,7 @@ export type RenameConversation200Configuration = {
      * @maxLength 128
      */
   remoteConnectionId?: string;
+  budget?: RenameConversation200ConfigurationBudget;
 };
 
 export type RenameConversation200 = {
@@ -1100,6 +1114,19 @@ export const ListConversations200ItemsItemConfigurationReasoningEffort = {
   max: 'max',
 } as const;
 
+export type ListConversations200ItemsItemConfigurationBudget = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxSteps?: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxToolCalls?: number;
+};
+
 export type ListConversations200ItemsItemConfiguration = {
   /** @minLength 1 */
   backendId: string;
@@ -1117,6 +1144,7 @@ export type ListConversations200ItemsItemConfiguration = {
      * @maxLength 128
      */
   remoteConnectionId?: string;
+  budget?: ListConversations200ItemsItemConfigurationBudget;
 };
 
 export type ListConversations200ItemsItem = {
@@ -1200,6 +1228,19 @@ export const CreateConversationBodyConfigurationReasoningEffort = {
   max: 'max',
 } as const;
 
+export type CreateConversationBodyConfigurationBudget = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxSteps?: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxToolCalls?: number;
+};
+
 export type CreateConversationBodyConfiguration = {
   /** @minLength 1 */
   backendId?: string;
@@ -1217,6 +1258,7 @@ export type CreateConversationBodyConfiguration = {
      * @maxLength 128
      */
   remoteConnectionId?: string;
+  budget?: CreateConversationBodyConfigurationBudget;
 };
 
 export type CreateConversationBodyGoal = {
@@ -1445,6 +1487,19 @@ export const CreateConversation200ConfigurationReasoningEffort = {
   max: 'max',
 } as const;
 
+export type CreateConversation200ConfigurationBudget = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxSteps?: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxToolCalls?: number;
+};
+
 export type CreateConversation200Configuration = {
   /** @minLength 1 */
   backendId: string;
@@ -1462,6 +1517,7 @@ export type CreateConversation200Configuration = {
      * @maxLength 128
      */
   remoteConnectionId?: string;
+  budget?: CreateConversation200ConfigurationBudget;
 };
 
 export type CreateConversation200 = {
@@ -1553,6 +1609,19 @@ export const GetConversationSnapshot200ConversationConfigurationReasoningEffort 
   max: 'max',
 } as const;
 
+export type GetConversationSnapshot200ConversationConfigurationBudget = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxSteps?: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxToolCalls?: number;
+};
+
 export type GetConversationSnapshot200ConversationConfiguration = {
   /** @minLength 1 */
   backendId: string;
@@ -1570,6 +1639,7 @@ export type GetConversationSnapshot200ConversationConfiguration = {
      * @maxLength 128
      */
   remoteConnectionId?: string;
+  budget?: GetConversationSnapshot200ConversationConfigurationBudget;
 };
 
 export type GetConversationSnapshot200Conversation = {
@@ -2095,6 +2165,7 @@ export const GetConversationSnapshot200RunState = {
   paused: 'paused',
   cancelling: 'cancelling',
   succeeded: 'succeeded',
+  budget_exhausted: 'budget_exhausted',
   failed: 'failed',
   timed_out: 'timed_out',
   cancelled: 'cancelled',
@@ -2474,6 +2545,19 @@ export const GetConversationSnapshot200PendingInputsItemInputConfigurationReason
   max: 'max',
 } as const;
 
+export type GetConversationSnapshot200PendingInputsItemInputConfigurationBudget = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxSteps?: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxToolCalls?: number;
+};
+
 export type GetConversationSnapshot200PendingInputsItemInputConfiguration = {
   /** @minLength 1 */
   backendId: string;
@@ -2491,6 +2575,7 @@ export type GetConversationSnapshot200PendingInputsItemInputConfiguration = {
      * @maxLength 128
      */
   remoteConnectionId?: string;
+  budget?: GetConversationSnapshot200PendingInputsItemInputConfigurationBudget;
 };
 
 export type GetConversationSnapshot200PendingInputsItemInputSkill = {
@@ -2870,6 +2955,19 @@ export const AppendConversationInputBodyConfigurationReasoningEffort = {
   max: 'max',
 } as const;
 
+export type AppendConversationInputBodyConfigurationBudget = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxSteps?: number;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  maxToolCalls?: number;
+};
+
 export type AppendConversationInputBodyConfiguration = {
   /** @minLength 1 */
   backendId?: string;
@@ -2887,6 +2985,7 @@ export type AppendConversationInputBodyConfiguration = {
      * @maxLength 128
      */
   remoteConnectionId?: string;
+  budget?: AppendConversationInputBodyConfigurationBudget;
 };
 
 export type AppendConversationInputBodySkill = {
@@ -5112,6 +5211,7 @@ export const CancelRun200State = {
   paused: 'paused',
   cancelling: 'cancelling',
   succeeded: 'succeeded',
+  budget_exhausted: 'budget_exhausted',
   failed: 'failed',
   timed_out: 'timed_out',
   cancelled: 'cancelled',

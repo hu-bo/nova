@@ -1,6 +1,6 @@
 # @nova/coding-harness
 
-将 `@nnova/harness`、`@nova/tools` 和宿主提供的 Runner 装配成一个可扩展的 Agent 会话。默认保留 64 步、64 次工具调用、15 分钟运行期限、4 个并行读取、1 个并行写入和 100,000 字节工具结果上限。
+将 `@nnova/harness`、`@nova/tools` 和宿主提供的 Runner 装配成一个可扩展的 Agent 会话。默认不限制步数和工具调用次数，保留 15 分钟运行期限、4 个并行读取、1 个并行写入和 100,000 字节工具结果上限，并在上下文接近模型窗口时自动生成摘要。
 
 ## 使用
 
@@ -28,7 +28,9 @@ try {
 
 不传 `session` 和 `workspaceId` 时，自动使用 `chatProfile`，不注册远程文件或命令工具。可通过 `tools` 添加搜索、网页读取等宿主工具。只提供一部分远程配置会报错，不会降级为普通聊天。
 
-`run` 接受字符串或 Harness `AgentMessage`，支持附件、显式 `runId`、`reasoningEffort`、取消和单次事件回调。`resume`、`compact`、`cancel`、`updateModel`、`inspect`、`inspectPlugins` 复用底层契约；默认 Loop 不会主动创建审批 continuation，`resume` 供具有等待能力的 Loop 使用。压缩需要配置 compaction 插件，否则返回 `skipped`。
+`run` 接受字符串或 Harness `AgentMessage`，支持附件、显式 `runId`、`reasoningEffort`、取消和单次事件回调。`resume`、`compact`、`cancel`、`updateModel`、`inspect`、`inspectPlugins` 复用底层契约；默认 Loop 不会主动创建审批 continuation，`resume` 供具有等待能力的 Loop 使用。默认模型摘要保留最近消息和完整工具配对，原始历史不删除；摘要请求计入运行用量，并共享取消和超时。可通过 `components.compaction` 替换压缩策略。
+
+`maxSteps` 和 `maxToolCalls` 仅在显式提供正整数时生效，分别控制工作步骤和工具调用。预算耗尽后额外预留一次禁止工具的总结请求；终态为 `budget_exhausted`，`budgetReason` 为 `STEP_LIMIT` 或 `TOOL_LIMIT`，不使用 `error` 表达预算耗尽。新的 `run` 保留已保存进度并重置预算。取消、超时和真实模型/工具异常仍按各自语义停止。
 
 ## 预设与计划门禁
 
@@ -54,6 +56,7 @@ try {
 | `policies`                                    | Harness `ToolPolicy[]`，传入会话身份、输入、取消信号和执行标识     |
 | `components.sessionStore`                     | 替换默认内存存储插件                                               |
 | `components.context` / `toolRuntime` / `loop` | 替换对应默认能力提供者                                             |
+| `components.compaction`                       | 替换默认模型摘要策略                                               |
 | `plugins`                                     | 添加 Skills、MCP、压缩、遥测等插件；重复提供同一能力会报错         |
 | `createContext`                               | 每次远程工具调用按需创建 SDK 上下文，可装配日志或环境适配          |
 

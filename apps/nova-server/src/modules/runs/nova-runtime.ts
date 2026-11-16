@@ -21,6 +21,7 @@ import type { RemoteConnectionService } from "../remotes/index.js";
 import type { RunnerConnections } from "../runners/index.js";
 import { configuredModelPlugin } from "./configured-model.js";
 import { postgresSessionPlugin } from "./postgres-session-store.js";
+import { executionEffectState } from "./session-checkpoint.js";
 import { sshToolContext } from "./ssh-tool-context.js";
 import { resolveProjectInstructions } from "./project-instructions.js";
 import type { ConversationRow, RunClaim } from "./run.repository.js";
@@ -313,8 +314,8 @@ export class NovaRuntime implements RuntimeAdapter {
           },
         } satisfies PluginDefinition] : []),
       ],
-      maxSteps: 32,
-      maxToolCalls: 64,
+      ...(configuration.budget?.maxSteps === undefined ? {} : { maxSteps: configuration.budget.maxSteps }),
+      ...(configuration.budget?.maxToolCalls === undefined ? {} : { maxToolCalls: configuration.budget.maxToolCalls }),
       maxRunMs: 30 * 60000,
       maxParallelReads: 4,
       maxParallelWrites: 1,
@@ -380,7 +381,11 @@ export class NovaRuntime implements RuntimeAdapter {
     }
     if (result.kind === "suspended") return { kind: "waiting" };
     if (result.error) this.deps.logger.error({ error: result.error, modelId: route.model.id }, "Harness run failed");
-    return { kind: "completed", state: result.status, ...(result.error ? { reason: result.error.code } : {}) };
+    return {
+      kind: "completed", state: result.status,
+      ...(result.budgetReason ? { reason: result.budgetReason } : {}),
+      ...(result.error ? { reason: result.error.code } : {}),
+    };
   }
   async dispose() {
     await this.harness?.close();
@@ -388,11 +393,7 @@ export class NovaRuntime implements RuntimeAdapter {
   async cancel() {
     this.harness?.cancel();
     const { checkpoint } = await this.deps.repository.load(this.deps.claim);
-    return checkpoint.executions.some(
-      (entry) => entry.result?.outcome === "unknown" || (!entry.result && entry.dispatch === "dispatched"),
-    )
-      ? ("unknown" as const)
-      : ("confirmed" as const);
+    return executionEffectState(checkpoint.executions) === "known" ? "confirmed" : "unknown";
   }
 }
 runtimeAdapters.set("nova", {

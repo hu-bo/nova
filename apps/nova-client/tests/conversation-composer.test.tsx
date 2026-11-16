@@ -122,6 +122,49 @@ afterEach(() => {
   mocks.summary.mockReset();
 });
 describe('SSH filesystem selection', () => {
+  it('leaves budgets unlimited by default and validates explicit optional limits', async () => {
+    mocks.create.mockResolvedValue({ id: 'budgeted' });
+    const draft = mount();
+    expect(draft.result.current.budgetLimits).toEqual({ maxSteps: '', maxToolCalls: '' });
+    await act(async () => {
+      await draft.result.current.submit(submission('默认预算'));
+    });
+    expect(mocks.create.mock.calls[0]?.[0].configuration.budget).toBeUndefined();
+    await act(async () => {
+      draft.result.current.setBudgetLimits({ maxSteps: '2', maxToolCalls: '3' });
+    });
+    await act(async () => {
+      await draft.result.current.submit(submission('设置预算'));
+    });
+    expect(mocks.create.mock.calls.at(-1)?.[0].configuration.budget).toEqual({
+      maxSteps: 2,
+      maxToolCalls: 3,
+    });
+    const before = mocks.create.mock.calls.length;
+    await act(async () => {
+      draft.result.current.setBudgetLimits({ maxSteps: '0', maxToolCalls: '3' });
+    });
+    await act(async () => {
+      await draft.result.current.submit(submission('无效预算'));
+    });
+    expect(mocks.create.mock.calls.length).toBe(before);
+    expect(draft.result.current.error).toBeDefined();
+  });
+  it('can remove a saved execution budget by clearing both limits', async () => {
+    mocks.append.mockResolvedValue({});
+    const draft = mount({
+      conversationId: 'existing',
+      runtime: { backendId: 'nova', modelId: null, mode: 'build', budget: { maxSteps: 2 } },
+    });
+    expect(draft.result.current.budgetLimits.maxSteps).toBe('2');
+    await act(async () => {
+      draft.result.current.setBudgetLimits({ maxSteps: '', maxToolCalls: '' });
+    });
+    await act(async () => {
+      await draft.result.current.submit(submission('取消预算'));
+    });
+    expect(mocks.append.mock.calls[0]?.[0].configuration.budget).toBeUndefined();
+  });
   it('creates a text-only chat agent and explicitly submits the selected version on every answer', async () => {
     mocks.create.mockResolvedValue({ id: 'career' });
     const onCreated = vi.fn();

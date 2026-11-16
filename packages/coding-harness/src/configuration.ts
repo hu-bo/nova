@@ -71,8 +71,9 @@ export function resolveConfiguration(options: CodingHarnessOptions) {
       .join("\n\n"),
     plan,
     maxRunMs: positiveInteger(options.maxRunMs ?? 15 * 60_000, "maxRunMs", 2_147_483_647),
-    maxSteps: positiveInteger(options.maxSteps ?? 64, "maxSteps"),
-    maxToolCalls: positiveInteger(options.maxToolCalls ?? 64, "maxToolCalls"),
+    maxSteps: options.maxSteps === undefined ? undefined : positiveInteger(options.maxSteps, "maxSteps"),
+    maxToolCalls:
+      options.maxToolCalls === undefined ? undefined : positiveInteger(options.maxToolCalls, "maxToolCalls"),
     maxParallelReads: positiveInteger(options.maxParallelReads ?? 4, "maxParallelReads"),
     maxParallelWrites: positiveInteger(options.maxParallelWrites ?? 1, "maxParallelWrites"),
     maxToolOutputBytes: positiveInteger(options.maxToolOutputBytes ?? 100_000, "maxToolOutputBytes"),

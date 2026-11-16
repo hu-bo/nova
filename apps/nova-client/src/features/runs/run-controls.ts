@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { DecisionRequest, DecisionResponse } from '@nova/chat-ui';
+import type { Configuration } from '@nova/agent-ui-contracts';
 import { CommandIntent } from '@/api/command-intent';
 import { queryKeys } from '@/api/query-keys';
 import { useIdentity } from '@/features/auth';
+import { appendConversationInput } from '@/api/generated/conversations';
+import type { AppendConversationInputBody } from '@/api/generated/projectsAPI.schemas';
 import { isActiveRun } from './run-event-reducer';
 import { cancelRun, respondInteraction } from './run.commands';
 import type { RunStreamSnapshot } from './run-stream-manager';
@@ -36,6 +39,7 @@ export function useRunControls(stream: RunStreamSnapshot) {
   const client = useQueryClient();
   const cancelIntent = useRef(new CommandIntent());
   const decisionIntent = useRef(new CommandIntent());
+  const continueIntent = useRef(new CommandIntent());
   const [now, setNow] = useState(Date.now());
   const projection = stream.projection;
   const decision = projection?.decisions[0];
@@ -56,6 +60,61 @@ export function useRunControls(stream: RunStreamSnapshot) {
     },
     onSuccess: () => {
       cancelIntent.current.accepted();
+    },
+    onError: refresh,
+  });
+  const continueRun = useMutation({
+    mutationFn: (configuration?: Configuration) => {
+      if (!projection || projection.run?.state !== 'budget_exhausted')
+        throw new Error('No exhausted run to continue');
+      const skill = projection.data.messages.findLast((message) => message.role === 'user')?.skill;
+      let nextConfiguration: AppendConversationInputBody['configuration'];
+      if (configuration) {
+        nextConfiguration = {
+          backendId: configuration.backendId,
+          modelId: configuration.modelId,
+          mode: configuration.mode,
+          ...(configuration.agentProfile ? { agentProfile: configuration.agentProfile } : {}),
+          ...(configuration.reasoningEffort
+            ? { reasoningEffort: configuration.reasoningEffort }
+            : {}),
+          ...(configuration.remoteConnectionId
+            ? { remoteConnectionId: configuration.remoteConnectionId }
+            : {}),
+        };
+        if (configuration.budget)
+          nextConfiguration.budget = {
+            ...(configuration.budget.maxSteps === undefined
+              ? {}
+              : { maxSteps: configuration.budget.maxSteps }),
+            ...(configuration.budget.maxToolCalls === undefined
+              ? {}
+              : { maxToolCalls: configuration.budget.maxToolCalls }),
+          };
+      }
+      const payload: AppendConversationInputBody = {
+        mode: 'next_run' as const,
+        ...(nextConfiguration ? { configuration: nextConfiguration } : {}),
+        blocks: [
+          {
+            id: 'text',
+            type: 'text' as const,
+            text: '继续上轮尚未完成的任务，从已保存的进度接着处理。',
+          },
+        ],
+        ...(skill ? { skill: { id: skill.id, version: skill.version } } : {}),
+      };
+      return appendConversationInput(projection.conversationId, payload, {
+        idempotencyKey: continueIntent.current.prepare({
+          conversationId: projection.conversationId,
+          runId: projection.run.id,
+          payload,
+        }),
+      });
+    },
+    onSuccess: async () => {
+      continueIntent.current.accepted();
+      await refresh();
     },
     onError: refresh,
   });
@@ -84,9 +143,11 @@ export function useRunControls(stream: RunStreamSnapshot) {
   });
   const resetCancel = cancel.reset;
   const resetResolve = resolve.reset;
+  const resetContinue = continueRun.reset;
   useEffect(() => {
     resetCancel();
-  }, [projection?.run?.id, resetCancel]);
+    resetContinue();
+  }, [projection?.run?.id, resetCancel, resetContinue]);
   useEffect(() => {
     resetResolve();
     setNow(Date.now());
@@ -121,7 +182,7 @@ export function useRunControls(stream: RunStreamSnapshot) {
   const canCancel = Boolean(
     projection?.run?.id && isActiveRun(projection?.run?.state) && !cancelling,
   );
-  return { cancel, resolve, decision, request, remaining, cancelling, canCancel, now };
+  return { cancel, continueRun, resolve, decision, request, remaining, cancelling, canCancel, now };
 }
 
 export type RunControls = ReturnType<typeof useRunControls>;

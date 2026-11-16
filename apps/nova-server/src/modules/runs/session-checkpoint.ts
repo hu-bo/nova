@@ -1,5 +1,11 @@
-import { type SessionCommit, type SessionSnapshot } from "@nnova/harness";
+import { type ExecutionRecord, type SessionCommit, type SessionSnapshot } from "@nnova/harness";
 import type { Checkpoint } from "./runtime-adapter.js";
+
+export function executionEffectState(executions: readonly ExecutionRecord[]) {
+  const effects = executions.filter((entry) => entry.effects !== "read");
+  if (effects.some((entry) => entry.result?.outcome === "unknown")) return "unknown";
+  return effects.some((entry) => !entry.result && entry.dispatch === "dispatched") ? "pending" : "known";
+}
 
 export function checkpointAfter(checkpoint: Checkpoint, next: SessionSnapshot, batch: SessionCommit): Checkpoint {
   const updated: Checkpoint = {
@@ -20,6 +26,7 @@ export function checkpointAfter(checkpoint: Checkpoint, next: SessionSnapshot, b
     updated.outcome = {
       kind: "completed",
       state: batch.run.status,
+      ...(batch.run.budgetReason ? { reason: batch.run.budgetReason } : {}),
       ...(batch.run.error ? { reason: batch.run.error.code } : {}),
     };
   else if (batch.messages?.some((message) => message.role === "user")) delete updated.outcome;

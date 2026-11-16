@@ -9,7 +9,11 @@ import type {
 } from '@nova/chat-ui';
 import { z } from 'zod';
 import type { Attachment, Configuration, InputBlock, QueuedInput } from '@nova/agent-ui-contracts';
-import { CHAT_AGENT_PROFILE, type SkillSelection } from '@nova/agent-ui-contracts';
+import {
+  CHAT_AGENT_PROFILE,
+  executionBudgetSchema,
+  type SkillSelection,
+} from '@nova/agent-ui-contracts';
 import { useListSkills } from '@/api/generated/skills';
 import { summariseRunnerFiles } from '@/api/generated/runners';
 import { summariseRemoteFiles } from '@/api/generated/remotes';
@@ -214,6 +218,25 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const [executionMode, setExecutionMode] = useState<'build' | 'plan'>(
     storedOptions?.executionMode ?? runtime?.mode ?? 'build',
   );
+  const [budgetLimits, setBudgetLimits] = useState({
+    maxSteps: runtime?.budget?.maxSteps?.toString() ?? '',
+    maxToolCalls: runtime?.budget?.maxToolCalls?.toString() ?? '',
+  });
+  useEffect(() => {
+    setBudgetLimits({
+      maxSteps: runtime?.budget?.maxSteps?.toString() ?? '',
+      maxToolCalls: runtime?.budget?.maxToolCalls?.toString() ?? '',
+    });
+  }, [runtime?.budget?.maxSteps, runtime?.budget?.maxToolCalls]);
+  const parsedBudget = executionBudgetSchema.safeParse({
+    maxSteps: budgetLimits.maxSteps.trim() ? Number(budgetLimits.maxSteps) : undefined,
+    maxToolCalls: budgetLimits.maxToolCalls.trim() ? Number(budgetLimits.maxToolCalls) : undefined,
+  });
+  const executionBudget =
+    parsedBudget.success &&
+    (parsedBudget.data.maxSteps !== undefined || parsedBudget.data.maxToolCalls !== undefined)
+      ? parsedBudget.data
+      : undefined;
   const [specArmed, setSpecArmed] = useState(
     options.initialSpecMode ?? storedOptions?.specArmed ?? false,
   );
@@ -457,8 +480,11 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       const profileId = submission.model ?? modelProfileId;
       const profile = modelSettings.profiles.find((entry) => entry.id === profileId);
       const requestedEffort = submission.reasoningEffort ?? reasoningEffort;
+      if (!parsedBudget.success)
+        throw new ApiError(400, 400, '执行预算需要填写正整数，留空表示不限制。');
       const runConfig: Configuration = {
         backendId: runtime?.backendId ?? 'nova',
+        ...(executionBudget ? { budget: executionBudget } : {}),
         ...(chatAgent ? { agentProfile: runtime?.agentProfile ?? CHAT_AGENT_PROFILE } : {}),
         modelId: await modelSettings.resolveModelId(profileId),
         reasoningEffort: profile?.thinkingLevels.includes(requestedEffort as ModelThinkingLevel)
@@ -722,6 +748,10 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     projectId,
     executionMode,
     setExecutionMode,
+    budgetLimits,
+    setBudgetLimits,
+    executionBudget,
+    budgetValid: parsedBudget.success,
     modelProfileId,
     modelProfiles: modelSettings.profiles,
     modelLoading: modelSettings.catalogLoading,

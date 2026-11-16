@@ -208,6 +208,7 @@ export function aiSdkModelPlugin(config: AiSdkModelConfig, options: AiSdkModelOp
               providerOptions: binding.providerOptions,
               messages: await modelMessages(request.messages, options.resolveImageUrl),
               tools,
+              ...(request.toolChoice ? { toolChoice: request.toolChoice } : {}),
               abortSignal: signal,
               maxOutputTokens: route.maxOutputTokens,
               maxRetries: 0,

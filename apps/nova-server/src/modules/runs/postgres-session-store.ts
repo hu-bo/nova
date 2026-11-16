@@ -23,7 +23,7 @@ function persistenceError(error: unknown): FrameworkError {
   if (error instanceof DomainError && error.details?.reason === "REVISION_CONFLICT")
     return new FrameworkError("REVISION_CONFLICT", "Checkpoint revision changed");
   if (error instanceof DomainError && error.details?.reason === "NOT_DISPATCHED")
-    return new FrameworkError("NOT_DISPATCHED", "Execution environment requires inspection");
+    return new FrameworkError("NOT_DISPATCHED", error.message);
   if (error instanceof DomainError)
     return new FrameworkError(
       error.message.includes("limit") ? "SESSION_LIMIT" : "FENCE_CONFLICT",

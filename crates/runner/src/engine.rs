@@ -546,7 +546,7 @@ impl App {
     }
 
     async fn execute(
-        &self,
+        self: &Arc<Self>,
         record: &Arc<Mutex<OperationRecord>>,
         mut cancel: watch::Receiver<bool>,
         events: &EventQueues,
@@ -569,74 +569,93 @@ impl App {
                 "Workspace is registered read-only.".into(),
             ));
         }
-        match params {
-            Params::ListFiles(request) => self
-                .list_files(
-                    &request.path,
-                    request.depth,
-                    request.max_entries,
-                    &cancel,
-                    operation.expires_at_unix_ms,
-                )
-                .map(ResultPayload::ListFiles)
-                .map_err(error_to_failure),
-            Params::ReadFile(request) => self
-                .read_file(
-                    &request.path,
-                    request.offset,
-                    request.max_bytes,
-                    &cancel,
-                    operation.expires_at_unix_ms,
-                )
-                .map(ResultPayload::ReadFile)
-                .map_err(error_to_failure),
-            Params::ReadText(request) => self
-                .read_text(
-                    &request.path,
-                    request.offset,
-                    request.limit,
-                    request.max_bytes,
-                    &cancel,
-                    operation.expires_at_unix_ms,
-                )
-                .map(ResultPayload::ReadText)
-                .map_err(error_to_failure),
-            Params::Search(request) => self
-                .search(
-                    &request.query,
-                    &request.path,
-                    &request.glob,
-                    request.max_results,
-                    &cancel,
-                    operation.expires_at_unix_ms,
-                )
-                .map(ResultPayload::Search)
-                .map_err(error_to_failure),
-            Params::WriteFile(request) => self
-                .write_file(
-                    &request.path,
-                    &request.contents,
-                    &request.expected_sha256,
-                    &cancel,
-                    operation.expires_at_unix_ms,
-                )
-                .map(ResultPayload::WriteFile)
-                .map_err(error_to_failure),
-            Params::ApplyPatch(request) => self
-                .apply_patch(
-                    &request.path,
-                    &request.edits,
-                    &request.expected_sha256,
-                    &cancel,
-                    operation.expires_at_unix_ms,
-                )
-                .map(ResultPayload::ApplyPatch)
-                .map_err(error_to_failure),
-            Params::ExecuteCommand(request) => self
+        if let Params::ExecuteCommand(request) = params {
+            return self
                 .execute_command(record, request, &mut cancel, events)
                 .await
-                .map(ResultPayload::ExecuteCommand),
+                .map(ResultPayload::ExecuteCommand);
         }
+        let app = self.clone();
+        // Filesystem traversal and I/O must leave the runtime free to receive cancellation and heartbeats.
+        tokio::task::spawn_blocking(move || {
+            let params = operation
+                .params
+                .as_ref()
+                .expect("checked operation parameters");
+            match params {
+                Params::ListFiles(request) => app
+                    .list_files(
+                        &request.path,
+                        request.depth,
+                        request.max_entries,
+                        &cancel,
+                        operation.expires_at_unix_ms,
+                    )
+                    .map(ResultPayload::ListFiles)
+                    .map_err(error_to_failure),
+                Params::ReadFile(request) => app
+                    .read_file(
+                        &request.path,
+                        request.offset,
+                        request.max_bytes,
+                        &cancel,
+                        operation.expires_at_unix_ms,
+                    )
+                    .map(ResultPayload::ReadFile)
+                    .map_err(error_to_failure),
+                Params::ReadText(request) => app
+                    .read_text(
+                        &request.path,
+                        request.offset,
+                        request.limit,
+                        request.max_bytes,
+                        &cancel,
+                        operation.expires_at_unix_ms,
+                    )
+                    .map(ResultPayload::ReadText)
+                    .map_err(error_to_failure),
+                Params::Search(request) => app
+                    .search(
+                        &request.query,
+                        &request.path,
+                        &request.glob,
+                        request.max_results,
+                        &cancel,
+                        operation.expires_at_unix_ms,
+                    )
+                    .map(ResultPayload::Search)
+                    .map_err(error_to_failure),
+                Params::WriteFile(request) => app
+                    .write_file(
+                        &request.path,
+                        &request.contents,
+                        &request.expected_sha256,
+                        &cancel,
+                        operation.expires_at_unix_ms,
+                    )
+                    .map(ResultPayload::WriteFile)
+                    .map_err(error_to_failure),
+                Params::ApplyPatch(request) => app
+                    .apply_patch(
+                        &request.path,
+                        &request.edits,
+                        &request.expected_sha256,
+                        &cancel,
+                        operation.expires_at_unix_ms,
+                    )
+                    .map(ResultPayload::ApplyPatch)
+                    .map_err(error_to_failure),
+                Params::ExecuteCommand(_) => unreachable!("commands execute asynchronously"),
+            }
+        })
+        .await
+        .map_err(|_| {
+            (
+                OperationStatus::Failed,
+                ErrorCode::Io,
+                "Workspace operation task failed.".into(),
+            )
+        })?
     }
 
     fn list_files(
@@ -850,7 +869,7 @@ impl App {
         let mut matches = Vec::new();
         let cap = max_results.clamp(1, 1_000) as usize;
         let walker = WalkBuilder::new(&base)
-            .standard_filters(false)
+            .require_git(false)
             .follow_links(false)
             .build();
         let mut truncated = false;
@@ -1481,6 +1500,8 @@ fn error_to_failure(error: WorkspaceError) -> (OperationStatus, ErrorCode, Strin
         WorkspaceError::Io(_) => ErrorCode::Io,
     };
     let message = match code {
+        ErrorCode::Cancelled => "Workspace operation was cancelled.",
+        ErrorCode::Timeout => "Workspace operation deadline expired.",
         ErrorCode::OutOfWorkspace => "Path escapes the registered workspace.",
         ErrorCode::NotFound => "Workspace path was not found.",
         ErrorCode::Exists => "File already exists; supply its current digest to replace it.",
@@ -1566,5 +1587,206 @@ impl Drop for WindowsJob {
         unsafe {
             windows_sys::Win32::Foundation::CloseHandle(self.0 as _);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proto::nova::runner::v1::{ExecuteCommandRequest, SearchRequest};
+
+    struct TestWorkspace(PathBuf);
+
+    impl TestWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!("nova-runner-test-{}", Uuid::new_v4()));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+
+        fn app(&self) -> Arc<App> {
+            App::new(&Config {
+                server: "ws://127.0.0.1:1".into(),
+                token: "test".into(),
+                workspace: self.0.clone(),
+                workspace_id: "test".into(),
+                display_name: "test".into(),
+                runner_id: "test".into(),
+                max_concurrency: 1,
+                read_only: false,
+            })
+            .unwrap()
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    async fn submit(
+        app: &Arc<App>,
+        params: Params,
+    ) -> (String, mpsc::UnboundedReceiver<RunnerEnvelope>) {
+        let (control, receiver) = mpsc::unbounded_channel();
+        let (output, _output_receiver) = mpsc::channel(16);
+        let events = EventQueues { control, output };
+        app.set_events(events.clone()).await;
+        let mut operation = Operation {
+            operation_id: Uuid::new_v4().to_string(),
+            target_boot_id: app.boot_id.clone(),
+            workspace_id: "test".into(),
+            protocol_version: 2,
+            expires_at_unix_ms: unix_time_ms() + 10_000,
+            timeout_ms: 10_000,
+            params: Some(params),
+            ..Default::default()
+        };
+        operation.params_sha256 = operation_digest(&operation).unwrap().to_vec();
+        let id = operation.operation_id.clone();
+        app.submit(id.clone(), operation, &events).await;
+        (id, receiver)
+    }
+
+    async fn terminal(receiver: &mut mpsc::UnboundedReceiver<RunnerEnvelope>) -> OperationResult {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if let Some(RunnerPayload::Result(result)) = receiver.recv().await.unwrap().payload
+                {
+                    return result;
+                }
+            }
+        })
+        .await
+        .unwrap()
+    }
+
+    #[test]
+    fn search_respects_ignore_rules_and_globs() {
+        let workspace = TestWorkspace::new();
+        fs::create_dir(workspace.0.join("src")).unwrap();
+        fs::create_dir(workspace.0.join("node_modules")).unwrap();
+        fs::write(workspace.0.join(".gitignore"), "node_modules/\n").unwrap();
+        fs::write(workspace.0.join("src/main.ts"), "const matchMe = 1;\n").unwrap();
+        fs::write(workspace.0.join("main.ts"), "matchMe\n").unwrap();
+        fs::write(workspace.0.join("src/main.js"), "matchMe\n").unwrap();
+        fs::write(workspace.0.join("node_modules/dep.ts"), "matchMe\n").unwrap();
+        let (_sender, cancel) = watch::channel(false);
+        let result = workspace
+            .app()
+            .search(
+                "matchMe",
+                ".",
+                "**/*.ts",
+                100,
+                &cancel,
+                unix_time_ms() + 10_000,
+            )
+            .unwrap();
+        let mut paths: Vec<_> = result
+            .matches
+            .iter()
+            .map(|item| item.path.as_str())
+            .collect();
+        paths.sort_unstable();
+        assert_eq!(paths, ["main.ts", "src/main.ts"]);
+        assert!(!result.truncated);
+    }
+
+    #[test]
+    fn workspace_io_leaves_runtime_free_to_cancel() {
+        let workspace = TestWorkspace::new();
+        let app = workspace.app();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let (ready, started) = tokio::sync::oneshot::channel();
+            let (release, wait) = std::sync::mpsc::channel();
+            let blocker = tokio::task::spawn_blocking(move || {
+                ready.send(()).unwrap();
+                let _ = wait.recv();
+            });
+            started.await.unwrap();
+            let (id, mut receiver) = submit(
+                &app,
+                Params::Search(SearchRequest {
+                    query: "test".into(),
+                    path: ".".into(),
+                    glob: "**/*.ts".into(),
+                    max_results: 100,
+                }),
+            )
+            .await;
+            tokio::task::yield_now().await;
+            assert_eq!(app.heartbeat_state().await.0, [id.clone()]);
+            app.cancel(&id).await;
+            release.send(()).unwrap();
+            blocker.await.unwrap();
+            let result = terminal(&mut receiver).await;
+            assert_eq!(result.status, OperationStatus::Cancelled as i32);
+            let error = result.error.unwrap();
+            assert_eq!(error.code, ErrorCode::Cancelled as i32);
+            assert_eq!(error.message, "Workspace operation was cancelled.");
+        });
+    }
+
+    #[tokio::test]
+    async fn git_status_runs_with_separate_arguments() {
+        let workspace = TestWorkspace::new();
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "--quiet"])
+                .current_dir(&workspace.0)
+                .status()
+                .unwrap()
+                .success()
+        );
+        fs::write(workspace.0.join("untracked.ts"), "test\n").unwrap();
+        let app = workspace.app();
+        let (_, mut receiver) = submit(
+            &app,
+            Params::ExecuteCommand(ExecuteCommandRequest {
+                executable: "git".into(),
+                args: vec!["status".into(), "--short".into()],
+                cwd: ".".into(),
+                timeout_ms: 10_000,
+                ..Default::default()
+            }),
+        )
+        .await;
+        let result = terminal(&mut receiver).await;
+        assert_eq!(
+            result.status,
+            OperationStatus::Succeeded as i32,
+            "{:?}",
+            result.error
+        );
+        let Some(ResultPayload::ExecuteCommand(output)) = result.result else {
+            panic!("missing command output")
+        };
+        assert_eq!(output.exit_code, 0);
+        assert!(
+            String::from_utf8(output.stdout)
+                .unwrap()
+                .contains("?? untracked.ts")
+        );
+    }
+
+    #[test]
+    fn workspace_deadline_has_a_specific_error() {
+        let (_sender, cancel) = watch::channel(false);
+        let failure = error_to_failure(check_operation(&cancel, 0).unwrap_err());
+        assert_eq!(
+            failure,
+            (
+                OperationStatus::TimedOut,
+                ErrorCode::Timeout,
+                "Workspace operation deadline expired.".into()
+            )
+        );
     }
 }

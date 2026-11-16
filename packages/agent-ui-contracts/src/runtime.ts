@@ -8,6 +8,7 @@ export const runStateSchema = z.enum([
   "paused",
   "cancelling",
   "succeeded",
+  "budget_exhausted",
   "failed",
   "timed_out",
   "cancelled",
@@ -22,6 +23,12 @@ export const runViewSchema = z
     error: publicErrorSchema.optional(),
   })
   .strict();
+export const executionBudgetSchema = z
+  .object({
+    maxSteps: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+    maxToolCalls: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  })
+  .strict();
 export const configurationSchema = z
   .object({
     backendId: z.string().min(1).default("nova"),
@@ -30,6 +37,7 @@ export const configurationSchema = z
     mode: z.enum(["build", "plan"]).default("build"),
     reasoningEffort: z.enum(["off", "low", "medium", "high", "max"]).optional(),
     remoteConnectionId: idSchema.optional(),
+    budget: executionBudgetSchema.optional(),
   })
   .strict();
 export const outputTailSchema = z

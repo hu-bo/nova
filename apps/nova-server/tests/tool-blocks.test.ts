@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ToolFailureError } from "@nnova/harness";
 import { applyEvent, outputTail, snapshotSchema, type Message, type ProductEvent } from "@nova/agent-ui-contracts";
 import { createRemoteTools } from "@nova/tools/harness";
 import { chatEventOutput, chatMessageOutput, chatSnapshotOutput } from "../src/modules/chat-tool-output.js";
@@ -126,6 +127,30 @@ test("projects runtime failures as error blocks", () => {
     outcome: "known",
   });
   assert.deepEqual(blocks, [{ id: "content", type: "error", error: { code: "NOT_FOUND", message: "File not found" } }]);
+});
+
+test("remote cancellation keeps its code separate from the display message", async () => {
+  const signal = new AbortController().signal;
+  const unused = async (): Promise<never> => { throw new Error("Unexpected filesystem call"); };
+  const [grep] = createRemoteTools({
+    createContext: async () => ({
+      cwd: ".", signal, exec: unused,
+      fs: { read: unused, readBytes: unused, list: unused, write: unused, patch: unused,
+        grep: async () => ({ ok: false, error: { code: "CANCELLED", message: "Workspace operation was cancelled.", outcome: "known" } }),
+      },
+    }),
+  }).filter((tool) => tool.name === "grep");
+  assert.ok(grep);
+  await assert.rejects(grep.execute({ pattern: "test", glob: "**/*.ts" }, {
+    signal, namespace: "test", identity: {}, sessionId: "session", runId: "run", executionId: "execution", callId: "call", idempotencyKey: "key",
+  }), (error: unknown) => {
+    assert.ok(error instanceof ToolFailureError);
+    assert.equal(error.code, "CANCELLED");
+    assert.deepEqual(projectToolContent("grep", { error: { code: error.code, message: error.message } }), [
+      { id: "content", type: "error", error: { code: "CANCELLED", message: "Workspace operation was cancelled." } },
+    ]);
+    return true;
+  });
 });
 
 test("truncates oversized output", () => {

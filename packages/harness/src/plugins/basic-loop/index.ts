@@ -14,8 +14,8 @@ import { BasicLoop } from "./loop.js";
 export function basicLoopPlugin(
   config: { maxSteps?: number; maxToolCalls?: number; maxLengthContinuations?: number } = {},
 ): PluginDefinition {
-  const maxSteps = positive(config.maxSteps ?? 12, "maxSteps");
-  const maxToolCalls = positive(config.maxToolCalls ?? 24, "maxToolCalls");
+  const maxSteps = config.maxSteps === undefined ? undefined : positive(config.maxSteps, "maxSteps");
+  const maxToolCalls = config.maxToolCalls === undefined ? undefined : positive(config.maxToolCalls, "maxToolCalls");
   const maxLengthContinuations = positive(config.maxLengthContinuations ?? 2, "maxLengthContinuations");
   return {
     manifest: {

@@ -63,6 +63,7 @@ export interface CodingHarnessComponents {
   readonly context?: PluginDefinition;
   readonly toolRuntime?: PluginDefinition;
   readonly loop?: PluginDefinition;
+  readonly compaction?: PluginDefinition;
 }
 
 interface HarnessConfiguration {
@@ -80,6 +81,7 @@ interface HarnessConfiguration {
   readonly policies?: readonly ToolPolicy[];
   readonly components?: CodingHarnessComponents;
   readonly plugins?: readonly PluginDefinition[];
+  /** Optional work budgets. Exhaustion reserves one additional text-only summary request. */
   readonly maxSteps?: number;
   readonly maxToolCalls?: number;
   readonly maxRunMs?: number;

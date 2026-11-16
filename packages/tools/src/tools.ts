@@ -56,7 +56,7 @@ function remoteFailure(
   }
   throw new ToolFailureError(
     error.code,
-    `${error.code}: ${error.message}`,
+    error.message,
     error.outcome,
     Object.keys(combined).length ? toJson(combined) : undefined,
   );

@@ -3,7 +3,7 @@ import type { AgentExecutor, RunExecution, SessionDefinition } from "../../contr
 import type { ContextBuilder, ContextCompactor } from "../../contracts/context.js";
 import type { ModelAdapter, ModelChunk } from "../../contracts/model.js";
 import type { AgentMessage, JsonValue } from "../../contracts/message.js";
-import type { RunResult, CompletedRunResult, ToolCallResult, UsageSummary } from "../../contracts/run.js";
+import type { BudgetReason, RunResult, CompletedRunResult, ToolCallResult, UsageSummary } from "../../contracts/run.js";
 import type { CheckpointPolicy, SessionStore } from "../../contracts/session.js";
 import type { ToolRuntime } from "../../contracts/tool.js";
 import { FrameworkError, safeError, runFailureStatus, ToolSuspended } from "../../contracts/errors.js";
@@ -22,6 +22,8 @@ type Continuation = {
   text: string;
   continuationText: string;
   lengthContinuations: number;
+  budgetReason?: BudgetReason;
+  usageSamples?: number;
 };
 const unknownUsage = (): UsageSummary => ({
   inputTokens: null,
@@ -38,16 +40,19 @@ export class BasicLoop implements AgentExecutor {
     private readonly tools: ToolRuntime,
     private readonly compactor: () => ContextCompactor | undefined,
     private readonly checkpoints: () => readonly CheckpointPolicy[],
-    private readonly limits: { maxSteps: number; maxToolCalls: number; maxLengthContinuations: number },
+    private readonly limits: { maxSteps?: number; maxToolCalls?: number; maxLengthContinuations: number },
   ) {}
   async compact(run: RunExecution) {
     const compactor = this.compactor();
     if (!compactor) return { status: "skipped" as const, reason: "CAPABILITY_UNAVAILABLE" };
     return {
-      status: (await compactor.compact({
-        signal: run.signal,
-        route: run.model,
-      }))
+      status: (
+        await compactor.compact({
+          signal: run.signal,
+          route: run.model,
+          force: true,
+        })
+      ).compacted
         ? ("compacted" as const)
         : ("skipped" as const),
     };
@@ -56,6 +61,16 @@ export class BasicLoop implements AgentExecutor {
     let results: ToolCallResult[] = [];
     let text = "";
     let usage = unknownUsage();
+    let usageSamples = 0;
+    const recordUsage = (next: UsageSummary) => {
+      usage = {
+        inputTokens: this.addUsage(usage.inputTokens, next.inputTokens, usageSamples),
+        outputTokens: this.addUsage(usage.outputTokens, next.outputTokens, usageSamples),
+        cachedInputTokens: this.addUsage(usage.cachedInputTokens, next.cachedInputTokens, usageSamples),
+        reasoningTokens: this.addUsage(usage.reasoningTokens, next.reasoningTokens, usageSamples),
+      };
+      usageSamples++;
+    };
     let pending: ToolCall[] = [];
     let continuationText = "";
     let lengthContinuations = 0;
@@ -75,6 +90,8 @@ export class BasicLoop implements AgentExecutor {
           throw new FrameworkError("INVALID_CONTINUATION", "No continuation exists for this run.");
         results = [...continuation.results];
         usage = continuation.usage;
+        usageSamples = continuation.usageSamples ?? continuation.step;
+        if (continuation.phase === "completed" && continuation.budgetReason) status = "budget_exhausted";
         text = continuation.text;
         continuationText = continuation.continuationText;
         lengthContinuations = continuation.lengthContinuations;
@@ -118,9 +135,14 @@ export class BasicLoop implements AgentExecutor {
           initialSnapshot.revision,
         );
       }
-      for (let step = continuation.step; continuation.phase !== "completed" && step < this.limits.maxSteps; step++) {
+      for (let step = continuation.step; continuation.phase !== "completed"; step++) {
         run.signal.throwIfAborted();
         for (const policy of this.checkpoints()) await policy.before("agent/pre-step", run.signal);
+        let budgetReason: BudgetReason | undefined = continuation.budgetReason;
+        if (!budgetReason && this.limits.maxSteps !== undefined && step >= this.limits.maxSteps)
+          budgetReason = "STEP_LIMIT";
+        if (!budgetReason && this.limits.maxToolCalls !== undefined && results.length >= this.limits.maxToolCalls)
+          budgetReason = "TOOL_LIMIT";
         const stepId = randomUUID();
         const recoveringDraft = Boolean(
           run.resume && step === continuation.step && continuation.phase === "model" && continuation.messageId,
@@ -138,6 +160,8 @@ export class BasicLoop implements AgentExecutor {
           text,
           continuationText,
           lengthContinuations,
+          usageSamples,
+          ...(budgetReason ? { budgetReason } : {}),
         };
         const beforeModel = await this.store.load();
         await this.store.commit({ continuation: jsonValue(continuation) }, beforeModel.revision);
@@ -157,20 +181,26 @@ export class BasicLoop implements AgentExecutor {
           route: run.model,
           toolSchemaCharacters: JSON.stringify(tools).length,
         };
+        const compactor = this.compactor();
+        const compact = async (force = false) => {
+          if (!compactor) return;
+          const result = await compactor.compact({ ...contextInput, runId: run.runId, force });
+          if (result.usage) recordUsage(this.validateUsage(result.usage));
+        };
+        await compact();
         let messages;
         try {
           messages = await this.context.build(contextInput);
         } catch (failure) {
-          const compactor = this.compactor();
           if (!(failure instanceof FrameworkError) || failure.code !== "CONTEXT_LIMIT" || !compactor) throw failure;
-          await compactor.compact({ signal: run.signal, route: run.model });
+          await compact(true);
           messages = await this.context.build(contextInput);
         }
         let completed: AgentMessage | undefined;
         let finish: Extract<ModelChunk, { type: "finished" }>["reason"] | undefined;
         let stepUsage = unknownUsage();
         const events = new Map<string, ToolCall>();
-        const requestMessages: readonly AgentMessage[] = continuationText
+        let requestMessages: readonly AgentMessage[] = continuationText
           ? [
               ...messages,
               { role: "assistant", parts: [{ type: "text", text: continuationText }] },
@@ -185,6 +215,19 @@ export class BasicLoop implements AgentExecutor {
               },
             ]
           : messages;
+        if (budgetReason)
+          requestMessages = [
+            ...requestMessages,
+            {
+              role: "system",
+              parts: [
+                {
+                  type: "text",
+                  text: `${budgetReason}: The configured work budget is exhausted. Tools are disabled. In the user's language, explain that the task is unfinished, summarize completed work and verified results, list remaining work and the next useful step. Do not claim completion. The user can continue in another run.`,
+                },
+              ],
+            },
+          ];
         for (const policy of this.checkpoints()) await policy.before("llm/stream", run.signal);
         run.signal.throwIfAborted();
         for await (const chunk of this.model.stream({
@@ -193,6 +236,7 @@ export class BasicLoop implements AgentExecutor {
           stepId,
           messages: requestMessages,
           tools,
+          ...(budgetReason ? { toolChoice: "none" as const } : {}),
           signal: run.signal,
           ...(run.reasoningEffort ? { reasoningEffort: run.reasoningEffort } : {}),
           route: run.model,
@@ -266,12 +310,9 @@ export class BasicLoop implements AgentExecutor {
           if (!call || call.name !== event.name || canonical(call.input) !== canonical(event.input))
             throw new FrameworkError("MODEL_PROTOCOL", "Tool event and assistant message disagree.");
         }
-        usage = {
-          inputTokens: this.addUsage(usage.inputTokens, stepUsage.inputTokens, step),
-          outputTokens: this.addUsage(usage.outputTokens, stepUsage.outputTokens, step),
-          cachedInputTokens: this.addUsage(usage.cachedInputTokens, stepUsage.cachedInputTokens, step),
-          reasoningTokens: this.addUsage(usage.reasoningTokens, stepUsage.reasoningTokens, step),
-        };
+        recordUsage(stepUsage);
+        if (budgetReason && calls.length)
+          throw new FrameworkError("MODEL_PROTOCOL", "Model requested tools during the budget summary.");
         const stepText = completed.parts
           .filter((part) => part.type === "text")
           .map((part) => part.text)
@@ -282,12 +323,7 @@ export class BasicLoop implements AgentExecutor {
           const lengthSnapshot = await this.store.load();
           await this.store.commit({ continuation: jsonValue(continuation) }, lengthSnapshot.revision);
           lengthContinuations++;
-          if (
-            calls.length ||
-            !stepText ||
-            lengthContinuations > this.limits.maxLengthContinuations ||
-            step + 1 === this.limits.maxSteps
-          )
+          if (calls.length || !stepText || lengthContinuations > this.limits.maxLengthContinuations || budgetReason)
             throw new FrameworkError(
               "MODEL_LENGTH",
               "Model reached the configured output limit. Increase the model output limit or ask for a shorter response.",
@@ -315,6 +351,7 @@ export class BasicLoop implements AgentExecutor {
           pending: calls,
           results,
           usage,
+          usageSamples,
           text,
           continuationText: "",
           lengthContinuations,
@@ -332,6 +369,7 @@ export class BasicLoop implements AgentExecutor {
           messageId,
         });
         if (!calls.length) {
+          if (budgetReason) status = "budget_exhausted";
           text = committed.parts
             .filter((part) => part.type === "text")
             .map((part) => part.text)
@@ -339,8 +377,28 @@ export class BasicLoop implements AgentExecutor {
           break;
         }
         pending = calls;
-        if (results.length + calls.length > this.limits.maxToolCalls)
-          throw new FrameworkError("TOOL_LIMIT", "Tool call budget exhausted.");
+        if (this.limits.maxToolCalls !== undefined && results.length + calls.length > this.limits.maxToolCalls) {
+          const rejected: ToolCallResult[] = calls.map((call) => ({
+            name: call.name,
+            callId: call.callId,
+            executionId: randomUUID(),
+            status: "failed",
+            value: { error: { code: "TOOL_LIMIT", message: "Not dispatched: the tool budget cannot fit this batch." } },
+          }));
+          results.push(...rejected);
+          continuation = {
+            ...continuation,
+            phase: "model",
+            step: step + 1,
+            messageId: "",
+            pending: [],
+            results,
+            budgetReason: "TOOL_LIMIT",
+          };
+          await this.commitResults(rejected, continuation);
+          pending = [];
+          continue;
+        }
         const executed = await this.tools.execute(calls, { ...run, stepId });
         results.push(...executed);
         continuation = { ...continuation, phase: "model", step: step + 1, messageId: "", pending: [], results };
@@ -352,7 +410,6 @@ export class BasicLoop implements AgentExecutor {
             "A tool may still have applied its effect. The loop stopped without retrying or issuing further tool calls.",
           );
         run.signal.throwIfAborted();
-        if (step + 1 === this.limits.maxSteps) throw new FrameworkError("STEP_LIMIT", "Agent step budget exhausted.");
       }
     } catch (failure) {
       if (failure instanceof ToolSuspended && continuation) {
@@ -411,6 +468,9 @@ export class BasicLoop implements AgentExecutor {
       text,
       toolCalls: results,
       usage,
+      ...(status === "budget_exhausted" && continuation?.budgetReason
+        ? { budgetReason: continuation.budgetReason }
+        : {}),
       ...(error ? { error } : {}),
     };
     const snapshot = await this.store.load();

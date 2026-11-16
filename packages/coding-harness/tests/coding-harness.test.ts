@@ -4,6 +4,7 @@ import { posix } from "node:path";
 import test from "node:test";
 import {
   agentExecutor,
+  FrameworkError,
   defineDynamicTool,
   modelRouter,
   sessionDefinition,
@@ -22,7 +23,7 @@ import {
 import { contextPlugin } from "@nnova/harness/plugins/context";
 import { memorySessionPlugin } from "@nnova/harness/plugins/session-memory";
 import { toolRuntimePlugin } from "@nnova/harness/plugins/tools";
-import { summaryCompactionPlugin } from "@nnova/harness/plugins/compaction";
+import { modelCompactionPlugin, summaryCompactionPlugin } from "@nnova/harness/plugins/compaction";
 import type { FileSystem, Result, RunnerFailure, RunnerSession, ToolContextOptions } from "@nova/runner-sdk";
 import { createCodingHarness, codingProfile, dashboardProfile, type CodingHarnessOptions } from "../src/index.js";
 
@@ -446,7 +447,7 @@ test("custom plan paths, trusted restoration, legacy restoration and disabled ga
   assert.equal((await harness.run("Work")).toolCalls[0]?.error?.code, "TOOL_DENIED");
 });
 
-test("component replacement restores history without duplicate providers, and additive compaction works", async (t) => {
+test("component replacement restores history without duplicate providers and replaces compaction", async (t) => {
   const model = new ScriptedModel([{ text: "done" }]);
   const initial: SessionSnapshot = {
     revision: 3,
@@ -473,8 +474,8 @@ test("component replacement restores history without duplicate providers, and ad
       }),
       context: { ...contextPlugin(), manifest: { ...contextPlugin().manifest, id: "test.context" } },
       toolRuntime: { ...toolRuntimePlugin(), manifest: { ...toolRuntimePlugin().manifest, id: "test.runtime" } },
+      compaction: summaryCompactionPlugin({ keepRecentMessages: 2, thresholdRatio: 0.0001 }),
     },
-    plugins: [summaryCompactionPlugin({ keepRecentMessages: 2, thresholdRatio: 0.0001 })],
   });
   t.after(() => harness.close());
   assert.equal((await harness.inspect()).revision, 3);
@@ -759,12 +760,81 @@ test("a replacement loop can suspend and resume with bounded deadlines and facad
   assert.equal((await harness.inspect()).waiting, false);
   assert.equal(observations.length, 2);
   assert.ok(timeouts.every((timeout) => timeout > 0 && timeout <= 1_000));
-  assert.equal((await harness.compact()).status, "skipped");
+  assert.equal((await harness.compact()).status, "compacted");
 });
 
-test("tool budgets stop dispatch before exceeding the configured call limit", async (t) => {
+test("work steps and tool calls are unlimited by default", async (t) => {
+  for (const toolSteps of [33, 96]) {
+    await t.test(`${toolSteps} tool steps`, async (t) => {
+      const model = new ScriptedModel([
+        ...Array.from({ length: toolSteps }, () => call("lookup")),
+        {
+          text: "done",
+          check(request) {
+            assert.equal(request.messages.filter((message) => message.role === "tool").length, toolSteps);
+          },
+        },
+      ]);
+      const harness = await createCodingHarness({ model: model.binding(), tools: [hostTool("lookup", "read")] });
+      t.after(() => harness.close());
+      const result = await harness.run("Work");
+      assert.equal(result.toolCalls.length, toolSteps);
+      assert.equal(result.status, "succeeded");
+      assert.equal(result.text, "done");
+    });
+  }
+});
+
+test("explicit step and tool budgets reserve a text-only summary and reset for another run", async (t) => {
+  for (const [budget, reason] of [
+    [{ maxSteps: 1 }, "STEP_LIMIT"],
+    [{ maxToolCalls: 1 }, "TOOL_LIMIT"],
+  ] as const) {
+    await t.test(reason, async (t) => {
+      const model = new ScriptedModel([
+        call("lookup"),
+        {
+          text: "One lookup finished; implementation remains.",
+          check(request) {
+            assert.equal(request.toolChoice, "none");
+          },
+        },
+        { text: "continued" },
+      ]);
+      const harness = await createCodingHarness({
+        model: model.binding(),
+        ...budget,
+        tools: [hostTool("lookup", "read")],
+      });
+      t.after(() => harness.close());
+      const result = await harness.run("Work");
+      assert.equal(result.status, "budget_exhausted");
+      assert.equal(result.kind === "completed" && result.budgetReason, reason);
+      assert.equal(result.error, undefined);
+      assert.equal(result.toolCalls.length, 1);
+      assert.match(result.text, /implementation remains/);
+      assert.equal((await harness.run("Continue")).text, "continued");
+    });
+  }
+});
+
+test("tool budgets reject an oversized batch before dispatch and keep tool history paired", async (t) => {
   let calls = 0;
-  const model = new ScriptedModel([call("lookup"), call("lookup")]);
+  const model = new ScriptedModel([
+    {
+      calls: [
+        { name: "lookup", input: {} },
+        { name: "lookup", input: {} },
+      ],
+    },
+    {
+      text: "Budget too small for the requested batch.",
+      check(request) {
+        assert.equal(request.toolChoice, "none");
+        assert.equal(request.messages.filter((message) => message.role === "tool").length, 2);
+      },
+    },
+  ]);
   const harness = await createCodingHarness({
     model: model.binding(),
     maxToolCalls: 1,
@@ -776,6 +846,209 @@ test("tool budgets stop dispatch before exceeding the configured call limit", as
     ],
   });
   t.after(() => harness.close());
-  assert.equal((await harness.run("Work")).error?.code, "TOOL_LIMIT");
-  assert.equal(calls, 1);
+  assert.equal((await harness.run("Work")).status, "budget_exhausted");
+  assert.equal(calls, 0);
+});
+
+test("automatic model compaction preserves recent tool pairs and merges repeated summaries without deleting history", async (t) => {
+  const usage = { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0, reasoningTokens: 0 };
+  const model = new ScriptedModel([
+    {
+      text: "Goal retained; first lookup complete.",
+      check(request) {
+        assert.equal(request.toolChoice, "none");
+      },
+    },
+    {
+      text: "first answer",
+      check(request) {
+        assert.match(JSON.stringify(request.messages), /Goal retained/);
+        assert.equal(request.messages.filter((message) => message.role === "tool").length, 1);
+      },
+    },
+    {
+      text: "Goal retained; first answer verified; new task pending.",
+      check(request) {
+        assert.match(JSON.stringify(request.messages), /Goal retained; first lookup complete/);
+      },
+    },
+    {
+      text: "second answer",
+      check(request) {
+        assert.match(JSON.stringify(request.messages), /new task pending/);
+      },
+    },
+  ]);
+  const stream = model.stream.bind(model);
+  model.stream = async function* (request) {
+    for await (const chunk of stream(request)) {
+      if (chunk.type === "finished") yield { type: "usage", usage };
+      yield chunk;
+    }
+  };
+  const messages: SessionSnapshot["messages"] = [
+    { role: "user", parts: [{ type: "text", text: "Original goal " + "details ".repeat(40) }] },
+    { role: "assistant", parts: [{ type: "text", text: "Investigating" }] },
+    { role: "assistant", parts: [{ type: "tool-call", callId: "old-call", name: "lookup", input: {} }] },
+    {
+      role: "tool",
+      parts: [{ type: "tool-result", callId: "old-call", name: "lookup", status: "succeeded", value: { found: true } }],
+    },
+  ];
+  let saved: SessionSnapshot | undefined;
+  const harness = await createCodingHarness({
+    model: model.binding(),
+    tools: [hostTool("lookup", "read")],
+    components: {
+      sessionStore: memorySessionPlugin({
+        initialSnapshot: { revision: 0, messages, runs: [], executions: [] },
+        onCommit: (snapshot) => {
+          saved = snapshot;
+        },
+      }),
+      compaction: modelCompactionPlugin({ thresholdRatio: 0.0001, keepRecentMessages: 2 }),
+    },
+  });
+  t.after(() => harness.close());
+  const first = await harness.run("Continue");
+  assert.equal(first.status, "succeeded", JSON.stringify(first.error));
+  assert.equal(first.usage.inputTokens, 20);
+  assert.equal(first.usage.outputTokens, 4);
+  assert.equal(saved?.messages.length, 6);
+  assert.equal(saved?.summary?.throughMessage, 2, "a tool call cannot be separated from its result");
+  const second = await harness.run("Next");
+  assert.equal(second.status, "succeeded", JSON.stringify(second.error));
+  assert.equal(saved?.messages.length, 8);
+  assert.match(saved?.summary?.text ?? "", /first answer verified/);
+});
+
+test("cancellation and deadlines still interrupt budget summaries", async (t) => {
+  for (const cancel of [false, true]) {
+    await t.test(cancel ? "cancel" : "timeout", async (t) => {
+      const started = Promise.withResolvers<void>();
+      const model = new ScriptedModel([
+        call("lookup"),
+        {
+          text: "unused",
+          check: async (request) => {
+            assert.equal(request.toolChoice, "none");
+            started.resolve();
+            await waitForAbort(request.signal);
+          },
+        },
+      ]);
+      const harness = await createCodingHarness({
+        model: model.binding(),
+        maxSteps: 1,
+        maxRunMs: cancel ? 5_000 : 100,
+        tools: [hostTool("lookup", "read")],
+      });
+      t.after(() => harness.close());
+      const running = harness.run("Work");
+      await started.promise;
+      if (cancel) harness.cancel();
+      assert.equal((await running).status, cancel ? "cancelled" : "timed_out");
+    });
+  }
+});
+
+test("failed or cancelled compaction leaves the original history and summary untouched", async (t) => {
+  for (const cancel of [false, true]) {
+    await t.test(cancel ? "cancel" : "model failure", async (t) => {
+      const started = Promise.withResolvers<void>();
+      const model = new ScriptedModel([
+        {
+          text: "unused",
+          check: async (request) => {
+            assert.equal(request.toolChoice, "none");
+            started.resolve();
+            if (cancel) await waitForAbort(request.signal);
+            else throw new Error("private provider details");
+          },
+        },
+      ]);
+      const original: SessionSnapshot = {
+        revision: 0,
+        runs: [],
+        executions: [],
+        messages: [
+          { role: "user", parts: [{ type: "text", text: "original objective" }] },
+          { role: "assistant", parts: [{ type: "text", text: "verified progress" }] },
+          { role: "user", parts: [{ type: "text", text: "more work" }] },
+          { role: "assistant", parts: [{ type: "text", text: "pending edits" }] },
+        ],
+      };
+      let saved: SessionSnapshot | undefined;
+      const harness = await createCodingHarness({
+        model: model.binding(),
+        components: {
+          sessionStore: memorySessionPlugin({
+            initialSnapshot: original,
+            onCommit: (snapshot) => {
+              saved = snapshot;
+            },
+          }),
+          compaction: modelCompactionPlugin({ thresholdRatio: 0.0001, keepRecentMessages: 1 }),
+        },
+      });
+      t.after(() => harness.close());
+      const running = harness.run("Continue");
+      await started.promise;
+      if (cancel) harness.cancel();
+      const result = await running;
+      assert.equal(result.status, cancel ? "cancelled" : "failed");
+      assert.equal(saved?.summary, undefined);
+      assert.deepEqual(saved?.messages.slice(0, original.messages.length), original.messages);
+      assert.doesNotMatch(JSON.stringify(result), /private provider details/);
+    });
+  }
+});
+
+test("recovery after committing a budget summary preserves its terminal meaning without another model request", async (t) => {
+  let saved: SessionSnapshot | undefined;
+  const first = await createCodingHarness({
+    model: new ScriptedModel([call("lookup"), { text: "Budget exhausted; more work remains." }]).binding(),
+    maxSteps: 1,
+    tools: [hostTool("lookup", "read")],
+    components: {
+      sessionStore: memorySessionPlugin({
+        onCommit(snapshot) {
+          saved = snapshot;
+          const continuation = snapshot.continuation;
+          if (
+            continuation &&
+            typeof continuation === "object" &&
+            !Array.isArray(continuation) &&
+            continuation.phase === "completed"
+          )
+            throw new FrameworkError("PERSISTENCE_FAILED", "Commit acknowledgement lost");
+        },
+      }),
+    },
+  });
+  t.after(() => first.close());
+  await first.run("Work", { runId: "recover-budget" });
+  assert.ok(saved);
+  const continuation = saved.continuation;
+  assert.ok(
+    continuation &&
+      typeof continuation === "object" &&
+      !Array.isArray(continuation) &&
+      typeof continuation.continuationId === "string",
+  );
+  const model = new ScriptedModel([]);
+  const restored = await createCodingHarness({
+    model: model.binding(),
+    components: { sessionStore: memorySessionPlugin({ initialSnapshot: saved }) },
+  });
+  t.after(() => restored.close());
+  const result = await restored.resume({
+    runId: "recover-budget",
+    continuationId: continuation.continuationId,
+    input: null,
+  });
+  assert.equal(result.status, "budget_exhausted");
+  assert.equal(result.kind === "completed" && result.budgetReason, "STEP_LIMIT");
+  assert.match(result.text, /more work remains/);
+  assert.equal(model.requests.length, 0);
 });

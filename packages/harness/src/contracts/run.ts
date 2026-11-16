@@ -1,6 +1,7 @@
 import type { SafeError } from "./errors.js";
 import type { JsonValue } from "./message.js";
-export type TerminalStatus = "succeeded" | "failed" | "cancelled" | "timed_out";
+export type TerminalStatus = "succeeded" | "budget_exhausted" | "failed" | "cancelled" | "timed_out";
+export type BudgetReason = "STEP_LIMIT" | "TOOL_LIMIT";
 export interface UsageSummary {
   inputTokens: number | null;
   outputTokens: number | null;
@@ -24,6 +25,7 @@ export interface CompletedRunResult {
   text: string;
   toolCalls: readonly ToolCallResult[];
   usage: UsageSummary;
+  budgetReason?: BudgetReason;
   error?: SafeError;
 }
 export interface SuspendedRunResult {

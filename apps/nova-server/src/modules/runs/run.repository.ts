@@ -37,7 +37,7 @@ import { bindingSchema } from "../projects/index.js";
 import { advanceStream, streamStateOf, type StreamState } from "./stream-state.js";
 import { runProjectionReader, type RunProjectionReader } from "./run-projection.repository.js";
 import { readCheckpoint } from "./session-checkpoint.repository.js";
-import { checkpointAfter } from "./session-checkpoint.js";
+import { checkpointAfter, executionEffectState } from "./session-checkpoint.js";
 import { skillView } from "../skills/index.js";
 import { taskPlanSchema } from "../specs/spec.schema.js";
 import { specDraftCandidateSchema } from "@nova/tools/harness";
@@ -363,7 +363,7 @@ export class RunRepository {
         workerId,
         leaseUntil: new Date(Date.now() + 30000),
         deadlineAt: new Date(Date.now() + 30 * 60000),
-        budget: { maxToolCalls: 64 },
+        budget: configuration.budget ?? {},
         ...checkpointStorage(checkpoint),
         projection: emptyProjection(conversation),
       })
@@ -702,7 +702,8 @@ export class RunRepository {
     if (run.revision !== expectedRevision)
       throw new DomainError("CONFLICT", "Checkpoint revision changed", { reason: "REVISION_CONFLICT" });
     if (!run.checkpoint) throw new DomainError("CONFLICT", "Checkpoint unavailable");
-    if (next.executions.length > Number(run.budget.maxToolCalls ?? 64))
+    const maxToolCalls = run.checkpoint.configuration.budget?.maxToolCalls;
+    if (maxToolCalls !== undefined && next.executions.length > maxToolCalls)
       throw new DomainError("CONFLICT", "Tool execution limit exceeded");
     if (run.state === "cancelling" && batch.execution?.dispatch === "dispatched" && !batch.execution.result)
       throw new DomainError("CONFLICT", "Run is cancelling", { reason: "NOT_DISPATCHED" });
@@ -1103,9 +1104,7 @@ export class RunRepository {
 
     const { conversation, run } = await this.ownedClaim(tx, claim);
     if (run.state === "cancelling") state = "cancelled";
-    const unknown = run.checkpoint?.executions.some(
-      (entry) => entry.result?.outcome === "unknown" || (!entry.result && entry.dispatch === "dispatched"),
-    );
+    const unknown = run.checkpoint && executionEffectState(run.checkpoint.executions) !== "known";
     if (unknown) state = "cancelled_unconfirmed";
     const specExecution = run.checkpoint?.specExecution;
     if (specExecution?.kind === "task") {
@@ -1365,16 +1364,12 @@ const draftMessageStates = {
   paused: "failed",
   cancelling: "failed",
   succeeded: "completed",
+  budget_exhausted: "completed",
   failed: "failed",
   timed_out: "failed",
   cancelled: "cancelled",
   cancelled_unconfirmed: "cancelled",
 } satisfies Record<RunState, Message["state"]>;
-function executionEffectState(executions: readonly import("@nnova/harness").ExecutionRecord[]): RunRow["effectState"] {
-  const effects = executions.filter((entry) => entry.effects !== "read");
-  if (effects.some((entry) => entry.result?.outcome === "unknown")) return "unknown";
-  return effects.some((entry) => !entry.result && entry.dispatch === "dispatched") ? "pending" : "known";
-}
 type Environment = { kind: "none" } | { kind: "ssh"; remoteId: string } | { kind: "runner"; runnerId: string; workspaceId: string | null };
 
 /** 执行环境标识的唯一来源: ssh 连接优先, 其次 runner 工作区; 其余数据都从 parts 派生. */

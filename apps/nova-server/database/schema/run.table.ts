@@ -19,6 +19,7 @@ export type RunState =
   | "paused"
   | "cancelling"
   | "succeeded"
+  | "budget_exhausted"
   | "failed"
   | "timed_out"
   | "cancelled"

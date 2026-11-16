@@ -29,7 +29,7 @@ export type AgentEvent = {
     }
   | {
       type: "run.finished";
-      status: "succeeded" | "failed" | "cancelled" | "timed_out";
+      status: import("./run.js").TerminalStatus;
     }
 );
 export interface EventObserver {

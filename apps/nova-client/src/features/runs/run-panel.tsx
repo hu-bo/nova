@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice } from '@/components/error-notice';
+import type { Configuration } from '@nova/agent-ui-contracts';
 import type { RunControls } from './run-controls';
 import type { RunStreamSnapshot } from './run-stream-manager';
-const modelErrors: Record<string, string> = {
+const runErrors: Record<string, string> = {
   MODEL_RATE_LIMITED: '模型服务限流或额度不足，请检查配额或切换模型。',
   MODEL_AUTH_FAILED: '模型服务认证失败，请检查模型的 API 密钥和访问权限。',
   MODEL_REQUEST_FAILED: '模型请求失败，请检查模型配置或稍后重试。',
+  STEP_LIMIT: '已达到本轮执行步数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。',
+  TOOL_LIMIT: '已达到本轮工具调用次数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。',
 };
 
 /** 决策过期倒计时文案：无过期时间为空串，剩余 0 秒视为授权已过期。 */
@@ -51,7 +54,7 @@ function VerificationNotice({ onRetry }: { onRetry: () => Promise<boolean> }) {
  * 运行事件面板。运行状态行已移至会话标题栏的 `RunStatus` 指示（任务详情开关左侧）；
  * 决策裁决 UI 已移入 `Chat` 的决策浮层（与参考实现一致）；
  * 工具参数与输出由 `Chat` 的消息内工具块渲染，不再在此重复展示。
- * 这里只保留流错误、模型失败提示、核实面板与决策倒计时摘要。
+ * 这里只保留流错误、运行失败提示、核实面板与决策倒计时摘要。
  * TODO 计划由 `Chat` 的侧栏 / 折叠面板渲染，不再在此重复。
  * 开发期诊断不在这里：连接 / 协议 / 快照对齐异常由 `run-stream-manager` 输出到浏览器控制台。
  */
@@ -59,10 +62,16 @@ export function RunPanel({
   stream,
   controls,
   onRetry,
+  executionEnabled = true,
+  continuationConfiguration,
+  budgetValid = true,
 }: {
   stream: RunStreamSnapshot;
   controls: RunControls;
   onRetry: () => Promise<boolean>;
+  executionEnabled?: boolean;
+  continuationConfiguration?: Configuration;
+  budgetValid?: boolean;
 }) {
   const projection = stream.projection;
   const { cancel, decision, remaining } = controls;
@@ -77,10 +86,37 @@ export function RunPanel({
           {stream.error}
         </p>
       )}
-      {runState === 'failed' && projection?.run?.reason && modelErrors[projection.run.reason] && (
+      {runState === 'failed' && (
         <p role="alert" className="text-sm text-rose-600">
-          {modelErrors[projection.run.reason]}
+          {runErrors[projection?.run?.reason ?? ''] ??
+            '本轮运行失败，可以发送消息继续处理或稍后重试。'}
         </p>
+      )}
+      {runState === 'budget_exhausted' && (
+        <div
+          className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm"
+          role="status"
+        >
+          <strong>预算耗尽，任务未完成</strong>
+          <p className="mt-1">已保存当前进度。继续后将开启新一轮，并重新计算本轮预算。</p>
+          <Button
+            className="mt-2"
+            variant="outline"
+            disabled={
+              !executionEnabled ||
+              !budgetValid ||
+              controls.continueRun.isPending ||
+              controls.continueRun.isSuccess ||
+              Boolean(projection?.startingInput)
+            }
+            onPress={() => controls.continueRun.mutate(continuationConfiguration)}
+          >
+            {controls.continueRun.isPending || controls.continueRun.isSuccess
+              ? '正在继续…'
+              : '继续任务'}
+          </Button>
+          {controls.continueRun.error && <ErrorNotice error={controls.continueRun.error} />}
+        </div>
       )}
       {unknown && <VerificationNotice key={projection?.run?.id} onRetry={onRetry} />}
       {cancel.error && <ErrorNotice error={cancel.error} />}

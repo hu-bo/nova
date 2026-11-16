@@ -399,7 +399,17 @@ export function ConversationWorkspace({
         </div>
       </header>
       <div className="max-h-[35vh] shrink-0 overflow-y-auto">
-        <RunPanel stream={stream} controls={controls} onRetry={stream.retry} />
+        <RunPanel
+          stream={stream}
+          controls={controls}
+          onRetry={stream.retry}
+          executionEnabled={executionEnabled}
+          continuationConfiguration={{
+            ...(projection?.data.conversation.configuration ?? data.conversation.configuration),
+            budget: ctl.executionBudget,
+          }}
+          budgetValid={ctl.budgetValid}
+        />
       </div>
       {exportHistory.error != null && <ErrorNotice error={exportHistory.error} />}
       {config.error && <ErrorNotice error={config.error} onRetry={() => void config.refetch()} />}

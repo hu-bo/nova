@@ -1,6 +1,7 @@
 import { createAgentKernel, toolPolicies, type PluginDefinition, type ToolDefinition } from "@nnova/harness";
 import { basicLoopPlugin } from "@nnova/harness/plugins/basic-loop";
 import { contextPlugin } from "@nnova/harness/plugins/context";
+import { modelCompactionPlugin } from "@nnova/harness/plugins/compaction";
 import { memorySessionPlugin } from "@nnova/harness/plugins/session-memory";
 import { toolRuntimePlugin } from "@nnova/harness/plugins/tools";
 import { aiSdkModelPlugin } from "@nnova/harness/plugins/model-ai-sdk";
@@ -102,6 +103,7 @@ export async function createCodingHarness(options: CodingHarnessOptions): Promis
       model.plugin,
       components?.context ?? contextPlugin(),
       components?.sessionStore ?? memorySessionPlugin(),
+      components?.compaction ?? modelCompactionPlugin(),
       components?.toolRuntime ??
         toolRuntimePlugin({
           maxParallelReads: configuration.maxParallelReads,
@@ -111,7 +113,10 @@ export async function createCodingHarness(options: CodingHarnessOptions): Promis
       ...(gate ? [gate.plugin()] : []),
       ...(policies.length ? [policyPlugin] : []),
       components?.loop ??
-        basicLoopPlugin({ maxSteps: configuration.maxSteps, maxToolCalls: configuration.maxToolCalls }),
+        basicLoopPlugin({
+          ...(configuration.maxSteps === undefined ? {} : { maxSteps: configuration.maxSteps }),
+          ...(configuration.maxToolCalls === undefined ? {} : { maxToolCalls: configuration.maxToolCalls }),
+        }),
       ...(options.plugins ?? []),
     ],
   });

@@ -4024,6 +4024,24 @@
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 128
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "maxSteps": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 9007199254740991
+                                },
+                                "maxToolCalls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -4647,6 +4665,24 @@
                                     "type": "string",
                                     "minLength": 1,
                                     "maxLength": 128
+                                  },
+                                  "budget": {
+                                    "type": "object",
+                                    "properties": {
+                                      "maxSteps": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "exclusiveMinimum": true,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "maxToolCalls": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "exclusiveMinimum": true,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "additionalProperties": false
                                   }
                                 },
                                 "required": [
@@ -4906,6 +4942,24 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 128
+                      },
+                      "budget": {
+                        "type": "object",
+                        "properties": {
+                          "maxSteps": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "maxToolCalls": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "additionalProperties": false
@@ -5396,6 +5450,24 @@
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 128
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "maxSteps": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 9007199254740991
+                                },
+                                "maxToolCalls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -5782,6 +5854,24 @@
                                   "type": "string",
                                   "minLength": 1,
                                   "maxLength": 128
+                                },
+                                "budget": {
+                                  "type": "object",
+                                  "properties": {
+                                    "maxSteps": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "maxToolCalls": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -7051,6 +7141,7 @@
                                 "paused",
                                 "cancelling",
                                 "succeeded",
+                                "budget_exhausted",
                                 "failed",
                                 "timed_out",
                                 "cancelled",
@@ -7843,6 +7934,24 @@
                                         "type": "string",
                                         "minLength": 1,
                                         "maxLength": 128
+                                      },
+                                      "budget": {
+                                        "type": "object",
+                                        "properties": {
+                                          "maxSteps": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "exclusiveMinimum": true,
+                                            "maximum": 9007199254740991
+                                          },
+                                          "maxToolCalls": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "exclusiveMinimum": true,
+                                            "maximum": 9007199254740991
+                                          }
+                                        },
+                                        "additionalProperties": false
                                       }
                                     },
                                     "required": [
@@ -8671,6 +8780,24 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 128
+                      },
+                      "budget": {
+                        "type": "object",
+                        "properties": {
+                          "maxSteps": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "maxToolCalls": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "additionalProperties": false
@@ -21543,6 +21670,7 @@
                             "paused",
                             "cancelling",
                             "succeeded",
+                            "budget_exhausted",
                             "failed",
                             "timed_out",
                             "cancelled",

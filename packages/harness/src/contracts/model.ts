@@ -20,6 +20,7 @@ export interface ModelStepRequest {
     inputSchema: JsonValue;
   }[];
   signal: AbortSignal;
+  toolChoice?: "none";
   reasoningEffort?: ReasoningEffort;
   route?: ModelRouteSnapshot;
 }
