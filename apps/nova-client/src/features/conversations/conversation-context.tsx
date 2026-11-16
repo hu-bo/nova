@@ -11,6 +11,8 @@ export function ConversationContext({
   let workEnvironment = '普通 Chat';
   if (ctl.selectedRemote) workEnvironment = ctl.selectedRemote.name + ' · SSH';
   else if (ctl.binding?.runnerId) workEnvironment = '项目 Runner';
+  let executionLabel = ctl.executionMode === 'plan' ? 'Plan · 只读分析与规划' : 'Build · 推进实现';
+  if (ctl.chatAgent) executionLabel = '文字对话 · 无外部工具';
   return (
     <section className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
       <h2 className="text-xs font-semibold text-slate-500">会话上下文</h2>
@@ -24,9 +26,7 @@ export function ConversationContext({
         </div>
         <div>
           <dt className="text-slate-500">模式</dt>
-          <dd className="mt-1 font-medium text-slate-700">
-            {ctl.executionMode === 'plan' ? 'Plan · 只读分析与规划' : 'Build · 推进实现'}
-          </dd>
+          <dd className="mt-1 font-medium text-slate-700">{executionLabel}</dd>
         </div>
         <div>
           <dt className="text-slate-500">工作环境</dt>

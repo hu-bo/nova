@@ -53,7 +53,30 @@ import {
 } from "@nnova/harness";
 import { z } from "zod";
 import { sessionCheckpointPolicyPlugin } from "@nnova/harness/plugins/session-checkpoint-policy";
-import { applyEvent, productEventSchema, snapshotSchema, type Message, type Snapshot } from "@nova/agent-ui-contracts";
+import { applyEvent, productEventSchema, snapshotSchema, CHAT_AGENT_PROFILE, configurationSchema, type Message, type Snapshot } from "@nova/agent-ui-contracts";
+import { acceptExecution, validateAgentProfile } from "../src/modules/runs/agent-profile.js";
+import { careerCoachSkill } from "@nova/tools/harness";
+
+test("chat agent admission isolates skills, permissions and immutable input snapshots", () => {
+  const configuration = configurationSchema.parse({ agentProfile: CHAT_AGENT_PROFILE, mode: "plan" });
+  const input = { blocks: [{ id: "text", type: "text" as const, text: "修改简历" }], mode: "next_run" as const,
+    skill: { id: careerCoachSkill.id, version: careerCoachSkill.version } };
+  validateAgentProfile(configuration, "chat", false);
+  const accepted = acceptExecution(configuration, input);
+  assert.equal(accepted.skill?.content, careerCoachSkill.content);
+  assert.match(accepted.agentProfile!.systemPrompt, /Read-only permissions do not restrict rewriting text/);
+  assert.doesNotMatch(accepted.agentProfile!.systemPrompt, /PLAN MODE|BUILD MODE|workspace|finish_goal|spec_read/);
+  assert.equal(acceptExecution(configuration, { ...input, skill: undefined }).skill, undefined);
+  for (const invalid of [
+    { ...configuration, mode: "build" as const }, { ...configuration, remoteConnectionId: "remote" },
+    { ...configuration, backendId: "other" }, { ...configuration, agentProfile: { id: "chat" as const, version: "2.0.0" } },
+  ]) assert.throws(() => validateAgentProfile(invalid, "chat", false));
+  assert.throws(() => validateAgentProfile(configuration, "project", false));
+  assert.throws(() => validateAgentProfile(configuration, "chat", true));
+  assert.throws(() => acceptExecution(configurationSchema.parse({}), input));
+  assert.throws(() => acceptExecution(configuration, { ...input, mode: "steer" }));
+  assert.throws(() => acceptExecution(configuration, { ...input, skill: { id: careerCoachSkill.id, version: "2.0.0" } }));
+});
 import {
   createDatabase,
   conversations,
@@ -703,6 +726,28 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       await host.stop();
     }
   });
+  await t.test("job handler failures are recorded and reported", async () => {
+    const id = randomUUID();
+    await enqueueJob({ db, job: { kind: "conversation.context-compact", aggregateId: id, payload: {} } });
+    const error = new Error("injected failure");
+    const reported: unknown[] = [];
+    const host = createJobHost({
+      db,
+      workerLeaseSeconds: 30,
+      pollIntervalMs: 10,
+      registry: new Map([["conversation.context-compact", async () => { throw error; }]]),
+      onError: (cause) => reported.push(cause),
+    });
+    host.start();
+    try {
+      for (let attempt = 0; attempt < 300 && !reported.length; attempt++) await delay(10);
+      assert.deepEqual(reported, [error]);
+      const result = await pool.query("select status, attempt, safe_error_code from jobs where aggregate_id=$1", [id]);
+      assert.deepEqual(result.rows, [{ status: "queued", attempt: 1, safe_error_code: "Error" }]);
+    } finally {
+      await host.stop();
+    }
+  });
   await t.test("input dedupe, confirmed consumption, native pairing and snapshot/journal equivalence", async () => {
     const conversation = await newConversation();
     const input = {
@@ -973,7 +1018,53 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
           },
           initialInput: { blocks: [{ id: "text", type: "text", text: "Retry elsewhere" }] },
         });
-        assert.equal(await repository.prepare(another.id, "another-worker"), null);
+        const next = await repository.prepare(another.id, "another-worker");
+        assert.ok(next, "an unknown effect in another conversation must not block the run");
+        const nextClaim = claimOf(next);
+        let reads = 0;
+        const read = defineTool({
+          name: "read",
+          description: "read",
+          inputSchema: z.object({}),
+          outputSchema: z.object({ done: z.boolean() }),
+          effects: "read",
+          async execute() { reads++; return { done: true }; },
+        });
+        const reader = await harness(repository, nextClaim, read);
+        const input = {
+          id: next.command.kind === "start" ? next.command.messageId : randomUUID(),
+          role: "user" as const,
+          parts: [{ type: "text" as const, text: "Read only" }],
+        };
+        try {
+          const readResult = await reader.run(input, { runId: nextClaim.id });
+          assert.equal(readResult.status, "succeeded");
+          assert.equal(reads, 1);
+        } finally {
+          await reader.close();
+        }
+        await repository.finish(nextClaim, "succeeded");
+
+        const writeConversation = await conversationRepository.create({
+          ownerUserId: owner, mode: "chat", projectId: null, title: "Blocked write",
+          metadata: { configuration: { backendId: "nova", modelId: null, mode: "build" }, binding },
+          initialInput: { blocks: [{ id: "text", type: "text", text: "Attempt a write" }] },
+        });
+        const writeRun = await repository.prepare(writeConversation.id, "write-worker");
+        assert.ok(writeRun);
+        const writeClaim = claimOf(writeRun);
+        const writer = await harness(repository, writeClaim, tool);
+        try {
+          const writeResult = await writer.run({
+            id: writeRun.command.kind === "start" ? writeRun.command.messageId : randomUUID(),
+            role: "user", parts: [{ type: "text", text: "Attempt a write" }],
+          }, { runId: writeClaim.id });
+          assert.equal(effects, 0, "the write must not be dispatched");
+          assert.equal(writeResult.toolCalls[0]?.error?.code, "NOT_DISPATCHED");
+        } finally {
+          await writer.close();
+        }
+        await repository.finish(writeClaim, "succeeded");
       } else {
         assert.equal(result.status, "succeeded", JSON.stringify(result));
         await repository.finish(nextClaim, "succeeded");
@@ -1094,6 +1185,10 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         }
         const toolResult = input.messages.some((message: { role: string }) => message.role === "tool");
         response.writeHead(200, { "content-type": "text/event-stream" });
+        if (!input.tools?.length) {
+          response.end('data: ' + JSON.stringify({ choices: [{ delta: { content: "请描述你负责的接口。" }, finish_reason: "stop" }] }) + '\n\ndata: [DONE]\n\n');
+          return;
+        }
         if (!toolResult) {
           response.write(
             "data: " +
@@ -1373,6 +1468,82 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         assert.ok(Array.isArray(catalog.json().data));
         assert.equal("contractVersion" in config, false);
         assert.equal(config.capabilities.uploads, false);
+        await httpTest.test("career chats pin profile and skill snapshots, recover and wait for each real answer", async () => {
+          upstreamStatus = 200;
+          const skill = { id: careerCoachSkill.id, version: careerCoachSkill.version };
+          const configuration = { backendId: "nova", modelId: modelEntry!.id, mode: "plan", agentProfile: CHAT_AGENT_PROFILE };
+          const blocks = [{ id: "text", type: "text", text: "项目是团队做的，我只负责接口。请模拟面试。" }];
+          const createdCoach = await app.inject({ method: "POST", url: "/api/conversations/", headers,
+            payload: { mode: "chat", configuration, initialInput: { blocks, skill } } });
+          assert.equal(createdCoach.statusCode, 200, createdCoach.body);
+          const coachId: string = createdCoach.json().data.id;
+          const baseUrl = "/api/conversations/" + coachId;
+          const readCoach = async () => (await app.inject({ method: "GET", url: baseUrl + "/snapshot", headers })).json().data;
+          const [queued] = await db.select().from(pendingInputs).where(eq(pendingInputs.conversationId, coachId));
+          assert.ok(queued?.payload.execution?.agentProfile && queued.payload.execution.skill);
+          const execution = { agentProfile: { ...queued.payload.execution.agentProfile,
+            systemPrompt: queued.payload.execution.agentProfile.systemPrompt + "\nPinned profile marker" },
+            skill: { ...queued.payload.execution.skill, content: queued.payload.execution.skill.content + "\nPinned skill marker" } };
+          await db.update(pendingInputs).set({ payload: { ...queued.payload, execution } }).where(eq(pendingInputs.id, queued.id));
+          const prepared = await repository.prepare(coachId, "crashed-worker");
+          assert.ok(prepared?.run.checkpoint);
+          assert.deepEqual(prepared.run.checkpoint.execution, execution);
+          await db.update(runs).set({ leaseUntil: new Date(0) }).where(eq(runs.id, prepared.run.id));
+          const requestOffset = requests.length;
+          const runOnce = async () => {
+            const now = new Date();
+            await executor.handle({ jobId: randomUUID(), kind: "run.wake", aggregateId: coachId,
+              dedupeKey: null, payload: {}, schemaVersion: 1, availableAt: now, attempt: 0, maxAttempts: 3,
+              leaseUntil: null, status: "running", safeErrorCode: null, createdAt: now, updatedAt: now });
+            const view = await readCoach();
+            assert.equal(view.run?.state, "succeeded");
+            assert.equal(view.pendingInputs.length, 0);
+            assert.equal(view.conversation.activeRunId, undefined);
+            assert.equal(view.capabilities.tools, false);
+            assert.equal(view.capabilities.steering, false);
+            return view;
+          };
+          const first = await runOnce();
+          assert.equal(first.messages[0].skill.version, skill.version);
+          assert.ok(!JSON.stringify(first).includes("Pinned skill marker"));
+          const firstRequest = requests[requestOffset]!;
+          assert.equal(z.array(z.unknown()).optional().parse(firstRequest.tools)?.length ?? 0, 0);
+          const firstMessages = providerMessagesSchema.parse(firstRequest.messages);
+          assert.match(firstMessages[0]!.content!, /Pinned profile marker/);
+          assert.doesNotMatch(firstMessages[0]!.content!, /PLAN MODE|BUILD MODE|Runner operating system|finish_goal|spec_read|workspace/);
+          assert.ok(firstMessages.some((message) => message.content?.includes("Pinned skill marker")));
+          for (const payload of [
+            { blocks, skill: { ...skill, version: "9.0.0" } }, { blocks, skill, mode: "steer" },
+            { blocks, configuration: { ...configuration, agentProfile: undefined } },
+            { blocks, configuration: { ...configuration, mode: "build" } },
+            { blocks, goal: { objective: "自动代答" } },
+          ]) {
+            const invalid = await app.inject({ method: "POST", url: baseUrl + "/inputs", headers, payload });
+            assert.ok(invalid.statusCode >= 400 && invalid.statusCode < 500, invalid.body);
+          }
+          for (const payload of [
+            { blocks: [{ id: "text", type: "text", text: "我只设计了接口协议。" }], skill },
+            { blocks: [{ id: "text", type: "text", text: "结束面试，只依据实际问答复盘。" }], skill },
+            { blocks: [{ id: "text", type: "text", text: "现在普通聊天" }] },
+          ]) {
+            const accepted = await app.inject({ method: "POST", url: baseUrl + "/inputs", headers, payload });
+            assert.equal(accepted.statusCode, 200, accepted.body);
+            await runOnce();
+          }
+          const finalCoach = await readCoach();
+          const users = finalCoach.messages.filter((message: Message) => message.role === "user");
+          assert.deepEqual(users.map((message: Message) => message.skill?.version), ["1.0.0", "1.0.0", "1.0.0", undefined]);
+          const ordinary = providerMessagesSchema.parse(requests.at(-1)!.messages);
+          assert.ok(!ordinary.some((message) => message.content?.includes("# 求职教练")));
+          const codingInjection = await app.inject({ method: "POST", url: "/api/conversations/" + id + "/inputs", headers, payload: { blocks, skill } });
+          assert.equal(codingInjection.statusCode, 409);
+          const profileSwitch = await app.inject({ method: "POST", url: "/api/conversations/" + id + "/inputs", headers, payload: { blocks, configuration } });
+          assert.equal(profileSwitch.statusCode, 409);
+          const catalog = await app.inject({ method: "GET", url: "/api/skills", headers });
+          assert.equal(catalog.statusCode, 200, catalog.body);
+          assert.deepEqual(catalog.json().data.items.map((entry: { id: string; version: string }) => ({ id: entry.id, version: entry.version })), [skill]);
+          assert.ok(!catalog.body.includes("# 求职教练"));
+        });
         assert.equal(
           (
             await app.inject({

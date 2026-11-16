@@ -38,6 +38,9 @@ export function Composer<TMetadata = unknown>({
   onReasoningEffortChange,
   skills = [],
   onSkillInvoke,
+  productSkills = [],
+  selectedProductSkill,
+  onProductSkillChange,
   contextUsage,
   accept,
   attachments = [],
@@ -71,6 +74,9 @@ export function Composer<TMetadata = unknown>({
   const selectedSkill = matchingSkills[Math.min(selectedSkillIndex, Math.max(0, matchingSkills.length - 1))];
   const hasDraft = Boolean(text.trim() || files.length || attachments.length);
   const canSubmit = !locked && !submitDisabled && hasDraft;
+  const activeProductSkill = productSkills.find(
+    (skill) => skill.id === selectedProductSkill?.id && skill.version === selectedProductSkill.version,
+  );
 
   // Grow the field in the layout engine wherever the stylesheet managed to apply
   // `field-sizing: content`; measuring here would dirty style and then read layout on every key.
@@ -223,6 +229,39 @@ export function Composer<TMetadata = unknown>({
               />
             </label>
 
+            {productSkills.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 py-1 text-xs">
+                <select
+                  aria-label="选择技能"
+                  disabled={locked}
+                  className="max-w-full rounded-md border bg-transparent px-2 py-1"
+                  value={selectedProductSkill ? `${selectedProductSkill.id}@${selectedProductSkill.version}` : ""}
+                  onChange={(event) => {
+                    const skill = productSkills.find((item) => `${item.id}@${item.version}` === event.target.value);
+                    onProductSkillChange?.(skill ? { id: skill.id, version: skill.version } : null);
+                  }}
+                >
+                  <option value="">普通聊天 · 选择技能</option>
+                  {productSkills.map((skill) => (
+                    <option key={`${skill.id}@${skill.version}`} value={`${skill.id}@${skill.version}`}>
+                      {skill.name} · 内置 · {skill.version}
+                    </option>
+                  ))}
+                </select>
+                {selectedProductSkill && (
+                  <button
+                    type="button"
+                    disabled={locked}
+                    aria-label="移除技能"
+                    className="rounded-full bg-slate-100 px-2 py-1 dark:bg-slate-800"
+                    onClick={() => onProductSkillChange?.(null)}
+                  >
+                    {activeProductSkill?.name ?? selectedProductSkill.id} ×
+                  </button>
+                )}
+                {selectedProductSkill && <span className="text-slate-500">{activeProductSkill?.description}</span>}
+              </div>
+            )}
             <ComposerSkillMenu
               listId={skillListId}
               skills={matchingSkills}

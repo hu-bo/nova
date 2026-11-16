@@ -9,6 +9,8 @@ import type {
 } from '@nova/chat-ui';
 import { z } from 'zod';
 import type { Attachment, Configuration, InputBlock, QueuedInput } from '@nova/agent-ui-contracts';
+import { CHAT_AGENT_PROFILE, type SkillSelection } from '@nova/agent-ui-contracts';
+import { useListSkills } from '@/api/generated/skills';
 import { summariseRunnerFiles } from '@/api/generated/runners';
 import { summariseRemoteFiles } from '@/api/generated/remotes';
 import type {
@@ -133,6 +135,9 @@ export interface ConversationComposerOptions {
   projectId?: string | undefined;
   specSession?: boolean;
   initialSpecMode?: boolean;
+  careerCoach?: boolean;
+  initialSkill?: SkillSelection;
+  contextEpoch?: number;
   startingSpec?: boolean;
   onStartSpec?: (input: { message: string; configuration: Configuration }) => Promise<void>;
   binding: GetProjectBinding200 | null;
@@ -142,7 +147,7 @@ export interface ConversationComposerOptions {
   steeringEnabled?: boolean | undefined;
   pendingInputs: PendingInput[];
   contextUsage?: { estimatedInputTokens: number; maxInputTokens: number } | undefined;
-  onCreated?: ((id: string) => void) | undefined;
+  onCreated?: ((id: string, skill: SkillSelection | null) => void) | undefined;
   onClearContext?: (() => void) | undefined;
 }
 
@@ -160,10 +165,32 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     onClearContext,
   } = options;
   const { identity } = useIdentity();
+  const chatAgent =
+    !options.specSession &&
+    mode === 'chat' &&
+    Boolean(options.careerCoach || runtime?.agentProfile);
+  const skillCatalog = useListSkills({ query: { enabled: chatAgent } });
+  const [selectedSkill, setSelectedSkill] = useState<SkillSelection | null>(
+    options.initialSkill ?? null,
+  );
+  const initializedSkill = useRef(Boolean(options.initialSkill));
+  const previousEpoch = useRef(options.contextEpoch);
+  useEffect(() => {
+    if (!initializedSkill.current && options.careerCoach && skillCatalog.data) {
+      initializedSkill.current = true;
+      const skill = skillCatalog.data.items.find((item) => item.id === 'nova.career-coach');
+      if (skill) setSelectedSkill({ id: skill.id, version: skill.version });
+    }
+  }, [options.careerCoach, skillCatalog.data]);
+  useEffect(() => {
+    if (previousEpoch.current !== options.contextEpoch) setSelectedSkill(null);
+    previousEpoch.current = options.contextEpoch;
+  }, [options.contextEpoch]);
   const config = useClientConfig();
   const modelSettings = useModelSettings();
   const remoteCatalog = useRemoteConnectionsQuery();
-  const draftId = conversationId ?? 'new:' + mode + ':' + (projectId ?? '');
+  const draftId =
+    conversationId ?? 'new:' + (chatAgent ? 'career' : mode) + ':' + (projectId ?? '');
   const accountId = identity!.identityId;
   const modelStore = useMemo(
     () => new LocalStore('nova_selected_model_profile:' + accountId, LEGACY_MODEL_STORE.get()),
@@ -187,7 +214,9 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const [executionMode, setExecutionMode] = useState<'build' | 'plan'>(
     storedOptions?.executionMode ?? runtime?.mode ?? 'build',
   );
-  const [specArmed, setSpecArmed] = useState(options.initialSpecMode ?? storedOptions?.specArmed ?? false);
+  const [specArmed, setSpecArmed] = useState(
+    options.initialSpecMode ?? storedOptions?.specArmed ?? false,
+  );
   const [goalArmed, setGoalArmed] = useState(storedOptions?.goalArmed ?? false);
   const [maxIterations, setMaxIterations] = useState(storedOptions?.maxIterations ?? 10);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(
@@ -205,7 +234,8 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const steer = useSteerPendingInputMutation(conversationId);
   const uploads = useUploadQueue();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const sending = create.isPending || append.isPending || modelSettings.saving || Boolean(options.startingSpec);
+  const sending =
+    create.isPending || append.isPending || modelSettings.saving || Boolean(options.startingSpec);
   const remoteConnectionId =
     mode === 'project' ? (binding?.remoteConnectionId ?? '') : (runtime?.remoteConnectionId ?? '');
   const selectedRemote = remoteCatalog.data?.items.find((entry) => entry.id === remoteConnectionId);
@@ -288,51 +318,84 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   }
 
   const skills = useMemo<ComposerSkill[]>(
-    () => [
-      {
-        id: 'goal',
-        command: 'goal',
-        label: '设置目标',
-        description: '把下一条消息作为目标，持续推进并记录完成标准',
-      },
-      {
-        id: 'plan',
-        command: 'plan',
-        label: '切换 Plan 模式',
-        description: '先分析和制定方案，不修改文件',
-      },
-      { id: 'build', command: 'build', label: '切换 Build 模式', description: '按任务推进实现' },
-      ...(!conversationId ? [{ id: 'spec', command: 'spec', label: '切换 Spec 模式', description: '发送首条需求后打开规格工作台' }] : []),
-      ...(conversationId
-        ? [{ id: 'clear', command: 'clear', label: '清除上下文', disabled: isRunning }]
-        : []),
-    ].filter((skill) => !options.specSession || !['goal', 'build'].includes(skill.id)),
-    [conversationId, isRunning, options.specSession],
+    () =>
+      [
+        {
+          id: 'goal',
+          command: 'goal',
+          label: '设置目标',
+          description: '把下一条消息作为目标，持续推进并记录完成标准',
+        },
+        {
+          id: 'plan',
+          command: 'plan',
+          label: '切换 Plan 模式',
+          description: '先分析和制定方案，不修改文件',
+        },
+        { id: 'build', command: 'build', label: '切换 Build 模式', description: '按任务推进实现' },
+        ...(!conversationId
+          ? [
+              {
+                id: 'spec',
+                command: 'spec',
+                label: '切换 Spec 模式',
+                description: '发送首条需求后打开规格工作台',
+              },
+            ]
+          : []),
+        ...(conversationId
+          ? [{ id: 'clear', command: 'clear', label: '清除上下文', disabled: isRunning }]
+          : []),
+      ].filter(
+        (skill) =>
+          (!options.specSession || !['goal', 'build'].includes(skill.id)) &&
+          (!chatAgent || skill.id === 'clear'),
+      ),
+    [conversationId, isRunning, options.specSession, chatAgent],
   );
 
   async function submit(submission: ComposerSubmission<Attachment>): Promise<boolean> {
     setError(null);
     let message = submission.text.trim();
+    if (
+      chatAgent &&
+      (/^\/(goal|plan|build|spec)(?:\s+|$)/.test(message) ||
+        submission.attachments.length ||
+        submission.files.length)
+    ) {
+      setError(new ApiError(409, 'CHAT_TEXT_ONLY', '求职会话支持文字对话，请粘贴简历和岗位描述。'));
+      return false;
+    }
     let nextMode: Configuration['mode'] = options.specSession ? 'plan' : executionMode;
-    let startsGoal = goalArmed;
-    let startsSpec = !conversationId && specArmed;
+    let startsGoal = !chatAgent && goalArmed;
+    let startsSpec = !chatAgent && !conversationId && specArmed;
     const command = /^\/(goal|plan|build|spec)(?:\s+|$)/.exec(message);
     if (command) {
       const name = command[1]!;
       message = message.slice(command[0].length).trim();
       if (name === 'spec' && conversationId) {
-        setError(new ApiError(409, 'SPEC_NEW_CONVERSATION_REQUIRED', '请在新会话中选择 Spec 模式开始一份规格。'));
+        setError(
+          new ApiError(
+            409,
+            'SPEC_NEW_CONVERSATION_REQUIRED',
+            '请在新会话中选择 Spec 模式开始一份规格。',
+          ),
+        );
         return false;
       }
       if (name === 'spec' && !conversationId) {
-        startsSpec = true; startsGoal = false;
-        setSpecArmed(true); setGoalArmed(false);
+        startsSpec = true;
+        startsGoal = false;
+        setSpecArmed(true);
+        setGoalArmed(false);
       } else if (name === 'goal') {
-        startsSpec = false; setSpecArmed(false);
+        startsSpec = false;
+        setSpecArmed(false);
         startsGoal = true;
         setGoalArmed(true);
       } else {
-        startsSpec = false; setSpecArmed(false);
+        startsSpec = false;
+        setSpecArmed(false);
         nextMode = name === 'plan' ? 'plan' : 'build';
         setExecutionMode(nextMode);
       }
@@ -346,7 +409,13 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       return false;
     }
     if (options.specSession && (nextMode !== 'plan' || startsGoal)) {
-      setError(new ApiError(409, 'SPEC_SESSION_RESTRICTED', '规格会话使用 Plan 讨论；请从任务卡片发起 Build 执行。'));
+      setError(
+        new ApiError(
+          409,
+          'SPEC_SESSION_RESTRICTED',
+          '规格会话使用 Plan 讨论；请从任务卡片发起 Build 执行。',
+        ),
+      );
       return false;
     }
     if (startsSpec && !projectId) {
@@ -354,7 +423,13 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       return false;
     }
     if (startsSpec && (submission.attachments.length || submission.files.length)) {
-      setError(new ApiError(400, 'SPEC_TEXT_REQUIRED', '请先使用文字需求启动 Spec；附件可在专用会话中继续补充。'));
+      setError(
+        new ApiError(
+          400,
+          'SPEC_TEXT_REQUIRED',
+          '请先使用文字需求启动 Spec；附件可在专用会话中继续补充。',
+        ),
+      );
       return false;
     }
     if (mode === 'project' && !binding && !options.specSession && !startsSpec) {
@@ -384,11 +459,12 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       const requestedEffort = submission.reasoningEffort ?? reasoningEffort;
       const runConfig: Configuration = {
         backendId: runtime?.backendId ?? 'nova',
+        ...(chatAgent ? { agentProfile: runtime?.agentProfile ?? CHAT_AGENT_PROFILE } : {}),
         modelId: await modelSettings.resolveModelId(profileId),
         reasoningEffort: profile?.thinkingLevels.includes(requestedEffort as ModelThinkingLevel)
           ? (requestedEffort as ModelThinkingLevel)
           : undefined,
-        mode: startsSpec ? 'plan' : nextMode,
+        mode: chatAgent || startsSpec ? 'plan' : nextMode,
         remoteConnectionId: remoteConnectionId || undefined,
       };
       if (config.data?.capabilities.execution && !runConfig.modelId)
@@ -406,7 +482,8 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         ? { objective: message, maxIterations, acceptanceCriteria }
         : undefined;
       if (startsSpec) {
-        if (!options.onStartSpec) throw new ApiError(400, 'SPEC_UNAVAILABLE', '当前页面无法启动 Spec。');
+        if (!options.onStartSpec)
+          throw new ApiError(400, 'SPEC_UNAVAILABLE', '当前页面无法启动 Spec。');
         await options.onStartSpec({ message, configuration: runConfig });
         saveDraft(accountId, draftId, '');
         setText('');
@@ -417,6 +494,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
           blocks,
           mode: 'next_run',
           configuration: runConfig,
+          ...(chatAgent && selectedSkill ? { skill: selectedSkill } : {}),
           ...(goal ? { goal } : {}),
         });
       } else {
@@ -425,12 +503,12 @@ export function useConversationComposer(options: ConversationComposerOptions) {
           ...(mode === 'project' && projectId ? { projectId } : {}),
           configuration: runConfig,
           ...(goal ? { goal } : {}),
-          initialInput: { blocks },
+          initialInput: { blocks, ...(chatAgent && selectedSkill ? { skill: selectedSkill } : {}) },
         });
         saveDraft(accountId, draftId, '');
         setText('');
         optionStore.set(null);
-        onCreated?.(conversation.id);
+        onCreated?.(conversation.id, selectedSkill);
       }
       uploads.clear();
       setRemote([]);
@@ -447,10 +525,16 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       setSpecArmed(false);
       if (options.goal && options.goal.status !== 'completed') setGoalDialogOpen(true);
       else setGoalArmed(true);
-    } else if (skill.id === 'spec') { setSpecArmed(true); setGoalArmed(false); }
-    else if (skill.id === 'plan') { setSpecArmed(false); setExecutionMode('plan'); }
-    else if (skill.id === 'build') { setSpecArmed(false); setExecutionMode('build'); }
-    else if (skill.id === 'clear') onClearContext?.();
+    } else if (skill.id === 'spec') {
+      setSpecArmed(true);
+      setGoalArmed(false);
+    } else if (skill.id === 'plan') {
+      setSpecArmed(false);
+      setExecutionMode('plan');
+    } else if (skill.id === 'build') {
+      setSpecArmed(false);
+      setExecutionMode('build');
+    } else if (skill.id === 'clear') onClearContext?.();
   }
   const canSteer = isRunning && options.steeringEnabled === true;
   const queuedMessages = useMemo<ChatQueuedMessage[]>(
@@ -582,8 +666,8 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     onTextChange: changeText,
     ...(!usesRemoteFiles ? { onFilesSelected: (files: File[]) => uploads.add(files) } : {}),
     disabled: sending,
-    submitDisabled: blocked,
-    allowFiles: !usesRemoteFiles && Boolean(config.data?.capabilities.uploads),
+    submitDisabled: blocked || (chatAgent && skillCatalog.isPending),
+    allowFiles: !chatAgent && !usesRemoteFiles && Boolean(config.data?.capabilities.uploads),
     accept: IMAGE_ACCEPT,
     attachments,
     onAttachmentsChange: (next) => {
@@ -594,7 +678,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
           if (entry.status === 'ready' && !ids.has(entry.id)) uploads.remove(entry.id);
       }
     },
-    onAttachmentButtonClick: addAttachment,
+    ...(!chatAgent ? { onAttachmentButtonClick: addAttachment } : {}),
     models: modelOptions,
     model: modelProfileId,
     onModelChange: changeModel,
@@ -603,10 +687,17 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     onReasoningEffortChange: changeReasoning,
     skills,
     onSkillInvoke: invokeSkill,
+    productSkills: chatAgent ? skillCatalog.data?.items : undefined,
+    selectedProductSkill: selectedSkill,
+    onProductSkillChange: setSelectedSkill,
     contextUsage,
-    placeholder,
+    placeholder: chatAgent ? '粘贴简历和岗位描述，或继续回答面试问题…' : placeholder,
   };
   return {
+    chatAgent,
+    selectedSkill,
+    setSelectedSkill,
+    skillCatalogError: skillCatalog.error,
     specSession: Boolean(options.specSession),
     canStartSpec: !conversationId,
     specArmed,

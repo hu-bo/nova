@@ -10,7 +10,7 @@ import { eventWriter } from "../events/index.js";
 import { specSnapshotSchema, taskPlanSchema } from "./spec.schema.js";
 import type { CreateSpecInput, RecordEvidenceInput } from "./spec.schema.js";
 import type { Transaction } from "../../shared/unit-of-work.js";
-import { acceptanceCriteriaIn, passingEvidenceForCheck, validateTaskPlan } from "./spec.validation.js";
+import { acceptanceCriteriaIn, passingEvidenceForCheck, validateRequirements, validateTaskPlan } from "./spec.validation.js";
 import { specReadRepository } from "./spec-read.repository.js";
 
 type Stage = "requirements" | "design" | "tasks";
@@ -191,8 +191,7 @@ export class SpecService {
       if (version.acceptance) return expected;
       if (version.reviews[stage]?.revision === expected) return expected;
       if (stage === "requirements") {
-        const criteria = acceptanceCriteriaIn(version.requirementsMd);
-        if (!criteria.length || new Set(criteria).size !== criteria.length) throw new DomainError("VALIDATION_ERROR", "Requirements need unique AC-xx headings under ## 验收条件");
+        validateRequirements(version.requirementsMd);
       }
       if (stage === "design" && version.reviews.requirements?.revision !== expected) throw new DomainError("CONFLICT", "Confirm requirements first", { reason: "SPEC_REVIEW_REQUIRED" });
       if (stage === "design" && !version.designMd?.trim()) throw new DomainError("VALIDATION_ERROR", "Design draft is empty");

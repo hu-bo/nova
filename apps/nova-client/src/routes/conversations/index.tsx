@@ -3,5 +3,8 @@ import { z } from 'zod';
 import { ConversationPage } from '@/features/conversations';
 export const Route = createFileRoute('/conversations/')({
   component: ConversationPage,
-  validateSearch: z.object({ projectId: z.uuid().optional(), mode: z.literal('spec').optional() }),
+  validateSearch: z.object({
+    projectId: z.uuid().optional(),
+    mode: z.enum(['spec', 'career']).optional(),
+  }),
 });

@@ -28,13 +28,28 @@ export function acceptanceCriteriaIn(markdown: string) {
       continue;
     }
     if (fence !== null) continue;
-    const section = /^##\s+(.+?)\s*$/.exec(line);
+    if (/^#\s+/.test(line)) { inAcceptanceSection = false; continue; }
+    const section = /^##\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
     if (section) { inAcceptanceSection = section[1] === "验收条件"; continue; }
     if (!inAcceptanceSection) continue;
     const match = /^###\s+(AC-\d{2,})(?:\s|$)/.exec(line);
     if (match) found.push(match[1]!);
   }
   return found;
+}
+
+export function validateRequirements(markdown: string) {
+  const criteria = acceptanceCriteriaIn(markdown);
+  if (!criteria.length) {
+    throw new DomainError("VALIDATION_ERROR", "Requirements need acceptance criterion headings under ## 验收条件", { reason: "SPEC_CRITERIA_MISSING" });
+  }
+  const seen = new Set<string>();
+  for (const criterion of criteria) {
+    if (seen.has(criterion)) {
+      throw new DomainError("VALIDATION_ERROR", "Acceptance criterion IDs must be unique", { reason: "SPEC_CRITERION_DUPLICATE", criterionId: criterion });
+    }
+    seen.add(criterion);
+  }
 }
 
 export function validateTaskPlan(tasks: SpecTask[], criteria: string[]) {

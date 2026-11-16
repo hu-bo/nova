@@ -49,7 +49,7 @@ import type {
   MessageListScrollState,
 } from '@nova/chat-ui';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import {
   ClipboardList,
   Download,
@@ -61,7 +61,9 @@ import {
   Target,
   Trash2,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { skillSelectionSchema } from '@nova/agent-ui-contracts';
+import { CareerCoachTasks } from './career-coach-tasks';
 import { Chat } from './chat-lazy';
 import {
   ComposerGoalHeader,
@@ -122,6 +124,12 @@ export function ConversationWorkspace({
   const { identity } = useIdentity();
   const client = useQueryClient();
   const navigate = useNavigate();
+  const search = useSearch({ strict: false });
+  const initialSkill = skillSelectionSchema.safeParse('skill' in search ? search.skill : undefined);
+  useEffect(() => {
+    if (!embedded && initialSkill.success)
+      void navigate({ to: '/conversations/$id', params: { id }, search: {}, replace: true });
+  }, [embedded, id, initialSkill.success, navigate]);
   const config = useClientConfig();
   const controls = useRunControls(stream);
   const { preferences, update } = usePreferences();
@@ -180,7 +188,12 @@ export function ConversationWorkspace({
         });
         void navigate({ to: '/conversations' });
       }
-      if (dialog === 'clear') setClearNotice('上下文已清除；历史消息仍保留在当前会话中。');
+      if (dialog === 'clear') {
+        setClearNotice('上下文已清除；历史消息仍保留在当前会话中。');
+        ctl.setSelectedSkill(null);
+        if (!embedded)
+          void navigate({ to: '/conversations/$id', params: { id }, search: {}, replace: true });
+      }
       await client.invalidateQueries({
         queryKey: queryKeys.conversations.root(identity!.identityId),
       });
@@ -194,6 +207,8 @@ export function ConversationWorkspace({
     projectId: data.conversation.projectId ?? undefined,
     binding: data.binding,
     runtime: data.conversation.configuration,
+    ...(initialSkill.success ? { initialSkill: initialSkill.data } : {}),
+    contextEpoch: projection?.data.conversation.epoch ?? data.conversation.epoch,
     goal: projection?.goal ?? data.goal,
     isRunning: active,
     steeringEnabled:
@@ -261,7 +276,11 @@ export function ConversationWorkspace({
       (block) => block.type === 'text' || block.type === 'image' || block.type === 'file',
     );
     if (!blocks?.length) return;
-    retryAppend.mutate({ blocks, mode: 'next_run' });
+    retryAppend.mutate({
+      blocks,
+      mode: 'next_run',
+      ...(raw?.skill ? { skill: { id: raw.skill.id, version: raw.skill.version } } : {}),
+    });
   }
   const feedback: ChatFeedback[] = [];
   if (ctl.error && !(ctl.error instanceof ApiError && ctl.error.notified))
@@ -278,7 +297,7 @@ export function ConversationWorkspace({
       <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 pr-4 pl-16 text-xs text-slate-500 lg:pl-6">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 py-1">
           <h1 className="min-w-0 max-w-full truncate text-sm font-semibold text-slate-800">
-            {embedded ? '专用项目会话 · Plan' : (data.conversation.title || '未命名会话')}
+            {embedded ? '专用项目会话 · Plan' : data.conversation.title || '未命名会话'}
           </h1>
           {data.binding?.runnerId && (
             <span className="hidden sm:block">
@@ -313,6 +332,11 @@ export function ConversationWorkspace({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {!ctl.chatAgent && !embedded && (
+            <Link to="/conversations" search={{ mode: 'career' }} className="text-accent">
+              打开求职会话
+            </Link>
+          )}
           <RunStatus
             stream={stream}
             controls={controls}
@@ -320,56 +344,58 @@ export function ConversationWorkspace({
             executionEnabled={executionEnabled}
           />
           {!embedded && <ConversationDetailsToggle />}
-          {!embedded && <Popover isOpen={menuOpen} onOpenChange={setMenuOpen}>
-            <Button variant="ghost" isIconOnly aria-label="会话操作">
-              <Ellipsis size={17} />
-            </Button>
-            <Popover.Content placement="bottom end">
-              <Popover.Dialog>
-                <ListBox
-                  aria-label="会话操作"
-                  selectionMode="none"
-                  disabledKeys={[
-                    ...(maintenanceLocked ? ['clear', 'delete'] : []),
-                    ...(exportHistory.count !== null ? ['export'] : []),
-                  ]}
-                  onAction={(key) => {
-                    setMenuOpen(false);
-                    if (key === 'export') {
-                      void exportHistory.start();
-                      return;
-                    }
-                    edit.reset();
-                    if (key === 'rename') setTitle(data.conversation.title ?? '');
-                    if (key === 'rename' || key === 'clear' || key === 'delete') setDialog(key);
-                  }}
-                >
-                  <ListBox.Item id="rename" textValue="重命名会话">
-                    <Pencil size={15} />
-                    <Label>重命名会话</Label>
-                  </ListBox.Item>
-                  <ListBox.Item id="export" textValue="导出 Markdown">
-                    <Download size={15} />
-                    <div>
-                      <Label>导出 Markdown</Label>
-                      <Description>包含完整已保存历史</Description>
-                    </div>
-                  </ListBox.Item>
-                  <ListBox.Item id="clear" textValue="清空上下文">
-                    <Sparkles size={15} />
-                    <div>
-                      <Label>清空上下文</Label>
-                      <Description>保留消息历史</Description>
-                    </div>
-                  </ListBox.Item>
-                  <ListBox.Item id="delete" textValue="删除会话" variant="danger">
-                    <Trash2 size={15} />
-                    <Label>删除会话</Label>
-                  </ListBox.Item>
-                </ListBox>
-              </Popover.Dialog>
-            </Popover.Content>
-          </Popover>}
+          {!embedded && (
+            <Popover isOpen={menuOpen} onOpenChange={setMenuOpen}>
+              <Button variant="ghost" isIconOnly aria-label="会话操作">
+                <Ellipsis size={17} />
+              </Button>
+              <Popover.Content placement="bottom end">
+                <Popover.Dialog>
+                  <ListBox
+                    aria-label="会话操作"
+                    selectionMode="none"
+                    disabledKeys={[
+                      ...(maintenanceLocked ? ['clear', 'delete'] : []),
+                      ...(exportHistory.count !== null ? ['export'] : []),
+                    ]}
+                    onAction={(key) => {
+                      setMenuOpen(false);
+                      if (key === 'export') {
+                        void exportHistory.start();
+                        return;
+                      }
+                      edit.reset();
+                      if (key === 'rename') setTitle(data.conversation.title ?? '');
+                      if (key === 'rename' || key === 'clear' || key === 'delete') setDialog(key);
+                    }}
+                  >
+                    <ListBox.Item id="rename" textValue="重命名会话">
+                      <Pencil size={15} />
+                      <Label>重命名会话</Label>
+                    </ListBox.Item>
+                    <ListBox.Item id="export" textValue="导出 Markdown">
+                      <Download size={15} />
+                      <div>
+                        <Label>导出 Markdown</Label>
+                        <Description>包含完整已保存历史</Description>
+                      </div>
+                    </ListBox.Item>
+                    <ListBox.Item id="clear" textValue="清空上下文">
+                      <Sparkles size={15} />
+                      <div>
+                        <Label>清空上下文</Label>
+                        <Description>保留消息历史</Description>
+                      </div>
+                    </ListBox.Item>
+                    <ListBox.Item id="delete" textValue="删除会话" variant="danger">
+                      <Trash2 size={15} />
+                      <Label>删除会话</Label>
+                    </ListBox.Item>
+                  </ListBox>
+                </Popover.Dialog>
+              </Popover.Content>
+            </Popover>
+          )}
         </div>
       </header>
       <div className="max-h-[35vh] shrink-0 overflow-y-auto">
@@ -409,6 +435,8 @@ export function ConversationWorkspace({
         <ErrorNotice error={history.error} onRetry={() => void history.fetchNextPage()} />
       )}
       <ComposerUploads controller={ctl} />
+      {ctl.chatAgent && <CareerCoachTasks onSelect={(text) => ctl.composer.onTextChange?.(text)} />}
+      {ctl.skillCatalogError && <ErrorNotice error={ctl.skillCatalogError} />}
       <Chat<Attachment>
         showToolCalls={preferences.showToolCalls}
         sidebarOpen={!embedded && preferences.contextPanelOpen}

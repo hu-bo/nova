@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { ProductSkill, SkillSelection } from "@nova/agent-ui-contracts";
 import type { UploadAttachment } from "./upload-cover.js";
 
 export interface ComposerOption {
@@ -54,6 +55,9 @@ export interface ComposerProps<TMetadata = unknown> {
   reasoningEffort?: string | undefined;
   onReasoningEffortChange?: ((effort: string) => void) | undefined;
   skills?: readonly ComposerSkill[] | undefined;
+  productSkills?: readonly ProductSkill[] | undefined;
+  selectedProductSkill?: SkillSelection | null | undefined;
+  onProductSkillChange?: ((skill: SkillSelection | null) => void) | undefined;
   onSkillInvoke?: ((skill: ComposerSkill) => void | Promise<void>) | undefined;
   contextUsage?: ComposerContextUsage | undefined;
   accept?: string | undefined;

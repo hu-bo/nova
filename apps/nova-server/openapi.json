@@ -3590,6 +3590,40 @@
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               },
+                              "skill": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "version": {
+                                    "type": "string",
+                                    "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "description": {
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string",
+                                    "enum": [
+                                      "builtin"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "version",
+                                  "name",
+                                  "description",
+                                  "source"
+                                ],
+                                "additionalProperties": false
+                              },
                               "source": {
                                 "type": "object",
                                 "properties": {
@@ -3940,6 +3974,26 @@
                               "default": "nova",
                               "type": "string",
                               "minLength": 1
+                            },
+                            "agentProfile": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "enum": [
+                                    "chat"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "string",
+                                  "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "version"
+                              ],
+                              "additionalProperties": false
                             },
                             "modelId": {
                               "default": null,
@@ -4544,6 +4598,26 @@
                                     "type": "string",
                                     "minLength": 1
                                   },
+                                  "agentProfile": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "enum": [
+                                          "chat"
+                                        ]
+                                      },
+                                      "version": {
+                                        "type": "string",
+                                        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "version"
+                                    ],
+                                    "additionalProperties": false
+                                  },
                                   "modelId": {
                                     "default": null,
                                     "nullable": true,
@@ -4782,6 +4856,26 @@
                         "default": "nova",
                         "type": "string",
                         "minLength": 1
+                      },
+                      "agentProfile": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "chat"
+                            ]
+                          },
+                          "version": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "version"
+                        ],
+                        "additionalProperties": false
                       },
                       "modelId": {
                         "default": null,
@@ -5157,6 +5251,25 @@
                             }
                           ]
                         }
+                      },
+                      "skill": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "version": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "version"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -5233,6 +5346,26 @@
                               "default": "nova",
                               "type": "string",
                               "minLength": 1
+                            },
+                            "agentProfile": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "enum": [
+                                    "chat"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "string",
+                                  "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "version"
+                              ],
+                              "additionalProperties": false
                             },
                             "modelId": {
                               "default": null,
@@ -5599,6 +5732,26 @@
                                   "default": "nova",
                                   "type": "string",
                                   "minLength": 1
+                                },
+                                "agentProfile": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chat"
+                                      ]
+                                    },
+                                    "version": {
+                                      "type": "string",
+                                      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "version"
+                                  ],
+                                  "additionalProperties": false
                                 },
                                 "modelId": {
                                   "default": null,
@@ -6809,6 +6962,40 @@
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               },
+                              "skill": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "version": {
+                                    "type": "string",
+                                    "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "description": {
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string",
+                                    "enum": [
+                                      "builtin"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "version",
+                                  "name",
+                                  "description",
+                                  "source"
+                                ],
+                                "additionalProperties": false
+                              },
                               "source": {
                                 "type": "object",
                                 "properties": {
@@ -7607,6 +7794,26 @@
                                         "type": "string",
                                         "minLength": 1
                                       },
+                                      "agentProfile": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "enum": [
+                                              "chat"
+                                            ]
+                                          },
+                                          "version": {
+                                            "type": "string",
+                                            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "version"
+                                        ],
+                                        "additionalProperties": false
+                                      },
                                       "modelId": {
                                         "default": null,
                                         "nullable": true,
@@ -7642,6 +7849,25 @@
                                       "backendId",
                                       "modelId",
                                       "mode"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "skill": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 128
+                                      },
+                                      "version": {
+                                        "type": "string",
+                                        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "version"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -8396,6 +8622,26 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "agentProfile": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "chat"
+                            ]
+                          },
+                          "version": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "version"
+                        ],
+                        "additionalProperties": false
+                      },
                       "modelId": {
                         "default": null,
                         "nullable": true,
@@ -8427,6 +8673,25 @@
                         "maxLength": 128
                       }
                     },
+                    "additionalProperties": false
+                  },
+                  "skill": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "version": {
+                        "type": "string",
+                        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "version"
+                    ],
                     "additionalProperties": false
                   },
                   "goal": {
@@ -8863,6 +9128,127 @@
                     "code",
                     "message",
                     "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/skills": {
+      "get": {
+        "operationId": "listSkills",
+        "tags": [
+          "skills"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [
+                        200
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 128
+                              },
+                              "version": {
+                                "type": "string",
+                                "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "builtin"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "name",
+                              "description",
+                              "source"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
                   ],
                   "additionalProperties": false
                 }
@@ -23430,6 +23816,412 @@
         }
       }
     },
+    "/admin/model-config/provider-adapters": {
+      "get": {
+        "operationId": "listProviderAdapters",
+        "tags": [
+          "model-config"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [
+                        200
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "openai",
+                              "openai-compatible",
+                              "anthropic",
+                              "deepseek",
+                              "minimax",
+                              "minimax-anthropic"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "defaultBaseURL": {
+                            "type": "string",
+                            "format": "uri"
+                          },
+                          "protocol": {
+                            "type": "string",
+                            "enum": [
+                              "openai",
+                              "anthropic"
+                            ]
+                          },
+                          "reasoningFormat": {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "openai",
+                              "anthropic",
+                              "deepseek",
+                              "minimax"
+                            ]
+                          },
+                          "thinkingLevels": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "off",
+                                "low",
+                                "medium",
+                                "high",
+                                "max"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "defaultBaseURL",
+                          "protocol",
+                          "reasoningFormat",
+                          "thinkingLevels"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subCode": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/model-config/providers": {
       "get": {
         "operationId": "listProviders",
@@ -23462,6 +24254,18 @@
                             "type": "string",
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "adapterId": {
+                            "nullable": true,
+                            "type": "string",
+                            "enum": [
+                              "openai",
+                              "openai-compatible",
+                              "anthropic",
+                              "deepseek",
+                              "minimax",
+                              "minimax-anthropic"
+                            ]
                           },
                           "protocol": {
                             "type": "string",
@@ -23503,6 +24307,7 @@
                         },
                         "required": [
                           "id",
+                          "adapterId",
                           "protocol",
                           "name",
                           "baseUrl",
@@ -23845,6 +24650,17 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "adapterId": {
+                    "type": "string",
+                    "enum": [
+                      "openai",
+                      "openai-compatible",
+                      "anthropic",
+                      "deepseek",
+                      "minimax",
+                      "minimax-anthropic"
+                    ]
+                  },
                   "protocol": {
                     "type": "string",
                     "enum": [
@@ -23878,7 +24694,6 @@
                   }
                 },
                 "required": [
-                  "protocol",
                   "name",
                   "baseUrl",
                   "credential"
@@ -23912,6 +24727,18 @@
                           "type": "string",
                           "format": "uuid",
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "adapterId": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": [
+                            "openai",
+                            "openai-compatible",
+                            "anthropic",
+                            "deepseek",
+                            "minimax",
+                            "minimax-anthropic"
+                          ]
                         },
                         "protocol": {
                           "type": "string",
@@ -23953,6 +24780,7 @@
                       },
                       "required": [
                         "id",
+                        "adapterId",
                         "protocol",
                         "name",
                         "baseUrl",
@@ -24296,6 +25124,17 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "adapterId": {
+                    "type": "string",
+                    "enum": [
+                      "openai",
+                      "openai-compatible",
+                      "anthropic",
+                      "deepseek",
+                      "minimax",
+                      "minimax-anthropic"
+                    ]
+                  },
                   "protocol": {
                     "type": "string",
                     "enum": [
@@ -24367,6 +25206,18 @@
                           "format": "uuid",
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
+                        "adapterId": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": [
+                            "openai",
+                            "openai-compatible",
+                            "anthropic",
+                            "deepseek",
+                            "minimax",
+                            "minimax-anthropic"
+                          ]
+                        },
                         "protocol": {
                           "type": "string",
                           "enum": [
@@ -24407,6 +25258,7 @@
                       },
                       "required": [
                         "id",
+                        "adapterId",
                         "protocol",
                         "name",
                         "baseUrl",
@@ -25609,7 +26461,6 @@
                     "type": "boolean"
                   },
                   "reasoningFormat": {
-                    "default": "none",
                     "type": "string",
                     "enum": [
                       "none",
@@ -26173,7 +27024,6 @@
                     "type": "boolean"
                   },
                   "reasoningFormat": {
-                    "default": "none",
                     "type": "string",
                     "enum": [
                       "none",

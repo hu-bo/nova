@@ -4,7 +4,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerSubmission } from '@nova/chat-ui';
 import type { Attachment } from '@nova/agent-ui-contracts';
-import { attachmentSchema } from '@nova/agent-ui-contracts';
+import { attachmentSchema, CHAT_AGENT_PROFILE } from '@nova/agent-ui-contracts';
 import { validWorkspacePath } from '../src/features/projects/project-environment';
 import { resolveRemotePath, relativeRemotePath } from '../src/features/remotes/remote.queries';
 const mocks = vi.hoisted(() => ({
@@ -24,6 +24,22 @@ vi.mock('@/api/generated/remotes', () => ({
   summariseRemoteFiles: mocks.summary,
 }));
 vi.mock('@/features/auth', () => ({ useIdentity: () => ({ identity: { identityId: 'alice' } }) }));
+vi.mock('@/api/generated/skills', () => ({
+  useListSkills: () => ({
+    data: {
+      items: [
+        {
+          id: 'nova.career-coach',
+          version: '1.0.0',
+          name: '求职教练',
+          description: '简历和面试',
+          source: 'builtin',
+        },
+      ],
+    },
+    error: null,
+  }),
+}));
 vi.mock('@/features/models', () => ({
   ModelLabel: () => null,
   useClientConfig: () => ({
@@ -106,40 +122,137 @@ afterEach(() => {
   mocks.summary.mockReset();
 });
 describe('SSH filesystem selection', () => {
+  it('creates a text-only chat agent and explicitly submits the selected version on every answer', async () => {
+    mocks.create.mockResolvedValue({ id: 'career' });
+    const onCreated = vi.fn();
+    const draft = mount({ careerCoach: true, onCreated });
+    await waitFor(() => expect(draft.result.current.selectedSkill?.id).toBe('nova.career-coach'));
+    expect(draft.result.current.composer.allowFiles).toBe(false);
+    expect(draft.result.current.composer.skills).toEqual([]);
+    await act(async () => {
+      await draft.result.current.submit(submission('修改简历'));
+    });
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'chat',
+        configuration: expect.objectContaining({ agentProfile: CHAT_AGENT_PROFILE, mode: 'plan' }),
+        initialInput: expect.objectContaining({
+          skill: { id: 'nova.career-coach', version: '1.0.0' },
+        }),
+      }),
+    );
+    draft.unmount();
+    const chat = mount({
+      conversationId: 'career',
+      contextEpoch: 1,
+      initialSkill: { id: 'nova.career-coach', version: '1.0.0' },
+      runtime: { backendId: 'nova', modelId: null, mode: 'plan', agentProfile: CHAT_AGENT_PROFILE },
+    });
+    for (const answer of ['我只负责接口', '结束面试']) {
+      await act(async () => {
+        await chat.result.current.submit(submission(answer));
+      });
+      expect(mocks.append.mock.calls.at(-1)?.[0].skill).toEqual({
+        id: 'nova.career-coach',
+        version: '1.0.0',
+      });
+    }
+    act(() => chat.result.current.setSelectedSkill(null));
+    await act(async () => {
+      await chat.result.current.submit(submission('普通聊天'));
+    });
+    expect(mocks.append.mock.calls.at(-1)?.[0]).not.toHaveProperty('skill');
+    mocks.append.mockClear();
+    await act(async () => {
+      await chat.result.current.submit(submission('/goal 自动回答'));
+    });
+    expect(mocks.append).not.toHaveBeenCalled();
+  });
+  it('clears the local skill selection when the context epoch changes', async () => {
+    const client = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result, rerender } = renderHook(
+      ({ epoch }) =>
+        useConversationComposer({
+          conversationId: 'career',
+          mode: 'chat',
+          binding: null,
+          isRunning: false,
+          pendingInputs: [],
+          contextEpoch: epoch,
+          initialSkill: { id: 'nova.career-coach', version: '1.0.0' },
+          runtime: {
+            backendId: 'nova',
+            modelId: null,
+            mode: 'plan',
+            agentProfile: CHAT_AGENT_PROFILE,
+          },
+        }),
+      { wrapper, initialProps: { epoch: 1 } },
+    );
+    expect(result.current.selectedSkill).not.toBeNull();
+    rerender({ epoch: 2 });
+    await waitFor(() => expect(result.current.selectedSkill).toBeNull());
+  });
   it('arms Spec locally and starts it only after the first text submission', async () => {
     const onStartSpec = vi.fn().mockResolvedValue(undefined);
     const { result } = mount({ mode: 'project', projectId: 'project', onStartSpec });
-    act(() => { result.current.setSpecArmed(true); result.current.composer.onTextChange?.('导出项目会话'); });
+    act(() => {
+      result.current.setSpecArmed(true);
+      result.current.composer.onTextChange?.('导出项目会话');
+    });
     expect(onStartSpec).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
-    await act(async () => { await result.current.submit(submission('导出项目会话')); });
-    expect(onStartSpec).toHaveBeenCalledWith(expect.objectContaining({
-      message: '导出项目会话', configuration: expect.objectContaining({ mode: 'plan' }),
-    }));
+    await act(async () => {
+      await result.current.submit(submission('导出项目会话'));
+    });
+    expect(onStartSpec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: '导出项目会话',
+        configuration: expect.objectContaining({ mode: 'plan' }),
+      }),
+    );
     expect(mocks.create).not.toHaveBeenCalled();
     expect(result.current.composer.value).toBe('');
   });
   it('keeps the first Spec query when creation fails', async () => {
-    const { result } = mount({ mode: 'project', projectId: 'project', initialSpecMode: true,
-      onStartSpec: vi.fn().mockRejectedValue(new Error('offline')) });
+    const { result } = mount({
+      mode: 'project',
+      projectId: 'project',
+      initialSpecMode: true,
+      onStartSpec: vi.fn().mockRejectedValue(new Error('offline')),
+    });
     act(() => result.current.composer.onTextChange?.('保留这份需求'));
-    await act(async () => { await result.current.submit(submission('保留这份需求')); });
+    await act(async () => {
+      await result.current.submit(submission('保留这份需求'));
+    });
     expect(result.current.composer.value).toBe('保留这份需求');
     expect(result.current.specArmed).toBe(true);
   });
   it('allows an unbound Spec session to discuss drafts in Plan and excludes Build/goal shortcuts', async () => {
     mocks.append.mockResolvedValue({ inputId: 'spec-input' });
     const { result } = mount({
-      conversationId: 'spec-conversation', mode: 'project', projectId: 'project',
-      specSession: true, binding: null,
+      conversationId: 'spec-conversation',
+      mode: 'project',
+      projectId: 'project',
+      specSession: true,
+      binding: null,
       runtime: { backendId: 'nova', modelId: null, mode: 'build' },
     });
-    await act(async () => { await result.current.submit(submission('修订需求')); });
+    await act(async () => {
+      await result.current.submit(submission('修订需求'));
+    });
     expect(result.current.unboundOpen).toBe(false);
     expect(mocks.append.mock.calls[0]![0].configuration.mode).toBe('plan');
-    expect(result.current.composer.skills?.some((skill) => ['build', 'goal'].includes(skill.id))).toBe(false);
+    expect(
+      result.current.composer.skills?.some((skill) => ['build', 'goal'].includes(skill.id)),
+    ).toBe(false);
     mocks.append.mockClear();
-    await act(async () => { await result.current.submit(submission('/build run')); });
+    await act(async () => {
+      await result.current.submit(submission('/build run'));
+    });
     expect(mocks.append).not.toHaveBeenCalled();
   });
   it('ignores the removed SSH selection in old drafts for a new ordinary Chat', async () => {
@@ -263,7 +376,7 @@ describe('conversation commands', () => {
       accepted = await result.current.submit(submission('first message'));
     });
     expect(accepted).toBe(true);
-    expect(onCreated).toHaveBeenCalledWith('new-conversation');
+    expect(onCreated).toHaveBeenCalledWith('new-conversation', null);
     expect(mocks.create.mock.calls[1]![0]).toMatchObject({
       mode: 'chat',
       initialInput: { blocks: [{ id: 'text', type: 'text', text: 'first message' }] },

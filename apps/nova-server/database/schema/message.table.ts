@@ -11,6 +11,7 @@ export const messages = pgTable(
     state: text("state").$type<Message["state"]>().default("completed").notNull(),
     blocks: jsonb("blocks").$type<Block[]>().default([]).notNull(),
     source: jsonb("source").$type<Message["source"]>(),
+    skill: jsonb("skill").$type<Message["skill"]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

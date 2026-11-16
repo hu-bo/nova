@@ -10,6 +10,8 @@ export function ComposerGoalHeader({
 }: {
   controller: ConversationComposerController;
 }) {
+  if (ctl.chatAgent)
+    return <p className="px-2 py-1 text-xs text-slate-500">文字对话 · 请粘贴简历和岗位描述</p>;
   if (ctl.specArmed)
     return (
       <p className="flex items-center gap-2 px-2 pb-2 pt-1 text-xs text-accent">

@@ -18,6 +18,7 @@ import { startConversationExecution, runsModule } from "./modules/runs/index.js"
 import { modelConfigAdminModule, userModelProfilesModule } from "./modules/model-config/index.js";
 import { remotesModule } from "./modules/remotes/index.js";
 import { specsModule } from "./modules/specs/index.js";
+import { skillsModule } from "./modules/skills/index.js";
 import { databasePlugin } from "./plugins/database.js";
 import { registerErrorHandlers } from "./plugins/errors.js";
 import { registerOpenApi } from "./plugins/openapi.js";
@@ -98,6 +99,7 @@ export async function buildApp(config: AppConfig, options: { exportMode?: boolea
       await app.register(healthModule);
       await app.register(projectsModule, { prefix: "/api" });
       await app.register(conversationsModule, { prefix: "/api" });
+      await app.register(skillsModule, { prefix: "/api" });
       await app.register(specsModule, { prefix: "/api" });
       await app.register(async (scope) => attachmentsModule(scope, uploadStorage), { prefix: "/api" });
       await app.register(runnersModule, { prefix: "/api" });

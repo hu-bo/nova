@@ -23,4 +23,5 @@ export {
   queuedInput,
 } from "./run-dto.js";
 export { runtimeAdapters } from "./runtime-adapter.js";
+export { validateAgentProfile, acceptExecution } from "./agent-profile.js";
 export { runProjectionReader } from "./run-projection.repository.js";

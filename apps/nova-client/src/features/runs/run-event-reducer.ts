@@ -116,6 +116,7 @@ export function messageView(
           conversationId,
           role: message.role,
           createdAt: Date.parse(message.createdAt),
+          ...(message.skill ? { skill: message.skill } : {}),
           blocks: message.blocks.map((block) => {
             const cached = block.type === 'tool_call' ? undefined : blockViews.get(block);
             let converted = cached ?? blockView(block, operations);

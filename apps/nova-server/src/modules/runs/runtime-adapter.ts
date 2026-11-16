@@ -1,6 +1,7 @@
 import type { ExecutionRecord, SessionSnapshot } from "@nnova/harness";
 import type { FastifyBaseLogger } from "fastify";
 import type { UploadStorage } from "../attachments/index.js";
+import type { AcceptedExecution } from "./agent-profile.js";
 import type {
   Capabilities,
   Configuration,
@@ -16,6 +17,7 @@ export interface Checkpoint {
   backendId: string;
   epoch: number;
   configuration: Configuration;
+  execution?: AcceptedExecution;
   nativeState: JsonValue;
   executions: ExecutionRecord[];
   interactions: (Interaction & { response?: InteractionResponse; acceptedRevision?: number })[];

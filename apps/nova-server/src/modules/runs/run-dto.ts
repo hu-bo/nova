@@ -51,6 +51,7 @@ export const queuedInput = (input: PendingInputRow) => ({
     blocks: input.payload.blocks,
     mode: input.mode,
     ...(input.payload.configuration ? { configuration: input.payload.configuration } : {}),
+    ...(input.payload.skill ? { skill: input.payload.skill } : {}),
   },
 });
 
@@ -63,11 +64,16 @@ export const messageDTO = (row: MessageRow): Message => ({
   blocks: row.blocks,
   createdAt: row.createdAt.toISOString(),
   ...(row.source ? { source: row.source } : {}),
+  ...(row.skill ? { skill: row.skill } : {}),
 });
 
 export function effectiveCapabilities(conversation: ConversationRow, enabled = true): Capabilities {
   const environment = Boolean(conversation.metadata.binding || conversation.metadata.configuration?.remoteConnectionId);
   const backend = runtimeAdapters.get(conversation.metadata.configuration?.backendId ?? "nova")?.capabilities;
+  if (conversation.metadata.configuration?.agentProfile) return {
+    tools: false, approval: false, question: false, steering: false,
+    resume: enabled && Boolean(backend?.resume), compact: false, images: false, files: false,
+  };
   return {
     tools: enabled && Boolean(backend?.tools),
     approval:

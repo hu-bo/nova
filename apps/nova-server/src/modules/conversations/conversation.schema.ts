@@ -12,6 +12,7 @@ import {
   snapshotSchema,
   submitInputSchema,
   attachmentSchema,
+  skillSelectionSchema,
 } from "@nova/agent-ui-contracts";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 import { bindingSchema } from "../projects/index.js";
@@ -32,7 +33,7 @@ export const createConversationBodySchema = z
     title: z.string().trim().min(1).max(200).optional(),
     configuration: configurationSchema.optional(),
     goal: goalInputSchema.optional(),
-    initialInput: z.object({ blocks: inputBlocksSchema }).strict().optional(),
+    initialInput: z.object({ blocks: inputBlocksSchema, skill: skillSelectionSchema.optional() }).strict().optional(),
   })
   .strict()
   .refine((input) => input.mode !== "project" || Boolean(input.projectId), "Project conversation requires projectId");

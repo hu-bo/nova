@@ -7,6 +7,7 @@ import {
   sessionStore,
   type AgentMessage,
   type ToolPolicy,
+  type PluginDefinition,
 } from "@nnova/harness";
 import type { Configuration, Goal } from "@nova/agent-ui-contracts";
 import { createCodingHarness, type CodingHarness } from "@nova/coding-harness";
@@ -53,7 +54,11 @@ const goalPrompt = (goal: Goal) =>
 const specDraftPrompt = (draft: Extract<NonNullable<Checkpoint["specExecution"]>, { kind: "generation" }>) =>
   "Generate the " +
   draft.stage +
-  " draft requested by the user. Read the bound revision with spec_read, then submit the complete candidate with spec_update. Do not write specification files to the workspace.";
+  " draft requested by the user. Read the bound revision with spec_read. " +
+  (draft.stage === "requirements"
+    ? "First investigate available context. If essential information is missing, ask the user focused questions in the conversation and wait for their reply instead of submitting a candidate. Once sufficient information is available, prepare and submit the complete draft with spec_update."
+    : "Submit the complete candidate with spec_update.") +
+  " Do not write specification files to the workspace.";
 // 段落顺序与空段跳过构成 systemPrompt 的版式契约；"不适用"以 undefined/"" 传入并被跳过.
 export const buildSystemInstructions = (sections: {
   mode: Configuration["mode"];
@@ -90,6 +95,10 @@ export class NovaRuntime implements RuntimeAdapter {
   async execute(command: RuntimeCommand, context: RuntimeContext): Promise<RuntimeOutcome> {
     const { prepared, claim, repository } = this.deps;
     const { conversation, configuration, binding } = prepared;
+    const chatAgent = Boolean(configuration.agentProfile);
+    const execution = context.checkpoint.execution;
+    if (chatAgent && !execution?.agentProfile)
+      throw new DomainError("CONFLICT", "Pinned agent profile is unavailable");
     const route = await this.deps.models.resolve(
       configuration.modelId,
       conversation.ownerUserId,
@@ -101,9 +110,9 @@ export class NovaRuntime implements RuntimeAdapter {
     }
     const remoteId = binding?.remoteConnectionId ?? configuration.remoteConnectionId;
     const workspace = binding?.canonicalCwd ?? ".";
-    const hasWorkspace = Boolean(remoteId || binding?.runnerId);
+    const hasWorkspace = !chatAgent && Boolean(remoteId || binding?.runnerId);
     let runnerInstructions: string | undefined;
-    if (!remoteId && binding?.runnerId) {
+    if (!chatAgent && !remoteId && binding?.runnerId) {
       const { session } = await this.deps.runners.require(binding.runnerId, conversation.ownerUserId);
       runnerInstructions = runnerOsInstructions(session.identity.platform);
     }
@@ -133,7 +142,7 @@ export class NovaRuntime implements RuntimeAdapter {
         : []),
     ].map((original) => (original.name === "git_diff" ? { ...original, effects: "write" as const } : original));
     const specExecution = context.checkpoint.specExecution;
-    if (prepared.specRevision && specExecution) {
+    if (!chatAgent && prepared.specRevision && specExecution) {
       tools.push(...createSpecTools({
         revision: specExecution.revision,
         snapshot: z.json().parse({
@@ -149,7 +158,7 @@ export class NovaRuntime implements RuntimeAdapter {
         ...(specExecution.kind === "generation" ? { stage: specExecution.stage } : {}),
       }));
     }
-    if (conversation.metadata.goal?.status === "active")
+    if (!chatAgent && conversation.metadata.goal?.status === "active")
       tools.push(
         defineTool({
           name: "finish_goal",
@@ -165,7 +174,7 @@ export class NovaRuntime implements RuntimeAdapter {
           },
         }),
       );
-    tools.push(
+    if (!chatAgent) tools.push(
       defineTool({
         name: "todo_write",
         description: "Replace the current work plan with concrete items.",
@@ -227,7 +236,7 @@ export class NovaRuntime implements RuntimeAdapter {
     };
     const goal = conversation.metadata.goal;
     const instructionSignal = AbortSignal.any([context.signal, AbortSignal.timeout(15_000)]);
-    const projectInstructions = await resolveProjectInstructions(
+    const projectInstructions = chatAgent ? "" : await resolveProjectInstructions(
       binding?.instructions,
       async () => {
         if (remoteId)
@@ -251,7 +260,7 @@ export class NovaRuntime implements RuntimeAdapter {
       },
       instructionSignal,
     );
-    const instructions = buildSystemInstructions({
+    const instructions = execution?.agentProfile?.systemPrompt ?? buildSystemInstructions({
       mode: configuration.mode,
       runnerInstructions,
       projectInstructions,
@@ -260,6 +269,10 @@ export class NovaRuntime implements RuntimeAdapter {
       hasWorkspace,
       workspace,
     });
+    const selectedSkills = [
+      ...(!chatAgent && specExecution ? [specSkill] : []),
+      ...(execution?.skill ? [execution.skill] : []),
+    ];
     this.harness = await createCodingHarness({
       model: {
         plugin: configuredModelPlugin(route, this.deps.uploads, conversation.ownerUserId, this.deps.logger),
@@ -275,8 +288,8 @@ export class NovaRuntime implements RuntimeAdapter {
       components: { sessionStore: postgresSessionPlugin(repository, claim) },
       plugins: [
         sessionCheckpointPolicyPlugin(),
-        ...(specExecution ? [skillsPlugin({ skills: [specSkill], selected: [specSkill.id] })] : []),
-        {
+        ...(selectedSkills.length ? [skillsPlugin({ skills: selectedSkills, selected: selectedSkills.map((skill) => skill.id) })] : []),
+        ...(!chatAgent ? [{
           manifest: {
             id: "nova.steering",
             version: "0.1.0",
@@ -298,7 +311,7 @@ export class NovaRuntime implements RuntimeAdapter {
               },
             });
           },
-        },
+        } satisfies PluginDefinition] : []),
       ],
       maxSteps: 32,
       maxToolCalls: 64,

@@ -187,6 +187,11 @@ const MessageRow = memo(function MessageRow({
         {userText && <CopyButton text={userText} label="复制消息" className="-my-1 text-slate-400" />}
       </div>
       <div className="grid min-w-0 gap-2">{renderBlocks(blocks, renderers, onOpenPath)}</div>
+      {message.skill && (
+        <p className="mt-2 text-xs text-slate-500">
+          {message.skill.name} · {message.skill.version}
+        </p>
+      )}
       {hasFailed && (
         <div className="mt-2 flex items-center gap-2 text-xs text-rose-600 dark:text-rose-400">
           <CircleAlert className="size-3.5" aria-hidden="true" />

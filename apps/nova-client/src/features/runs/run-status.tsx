@@ -41,25 +41,30 @@ export function RunStatus({
   const projection = stream.projection;
   const { cancelling, now } = controls;
   const run = projection?.run;
-  const presentation = run ? runPresentation[run.state] : null;
+  const awaitingStart =
+    projection?.startingInput?.state === 'queued' &&
+    !projection.startingInput.runId &&
+    !isActiveRun(run?.state);
+  let presentation = run ? runPresentation[run.state] : null;
+  if (awaitingStart) presentation = runPresentation.queued;
   const indicator =
     stream.state === 'live' ? (presentation?.indicator ?? 'bg-slate-400') : 'bg-amber-500';
   let statusLabel = presentation?.label ?? '';
-  if (run) {
+  if (run && !awaitingStart) {
     if (cancelling && isActiveRun(run.state)) {
       statusLabel = '正在请求停止，等待设备确认';
     } else if (run.reason === 'RUNNER_OFFLINE') {
       statusLabel = '设备离线，运行已暂停';
     }
   }
-  if (!projection?.run && stream.state === 'live') return null;
+  if (!presentation && stream.state === 'live') return null;
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
       <span className="flex items-center gap-2">
         <span className={'size-1.5 rounded-full ' + indicator} />
         {stream.state === 'live' ? '' : connections[stream.state]}
       </span>
-      {run && (
+      {presentation && (
         <span role="status" className="font-medium">
           {statusLabel}
         </span>

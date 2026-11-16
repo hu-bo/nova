@@ -2,11 +2,13 @@ import { z } from "zod";
 import { decimalSequenceSchema, idSchema, inputBlocksSchema, messageSchema } from "./messages.js";
 import { capabilitiesSchema, configurationSchema, runViewSchema, toolOperationSchema, usageSchema } from "./runtime.js";
 import { interactionSchema } from "./interactions.js";
+import { skillSelectionSchema } from "./skills.js";
 export const submitInputSchema = z
   .object({
     blocks: inputBlocksSchema,
     mode: z.enum(["next_run", "steer"]).default("next_run"),
     configuration: configurationSchema.optional(),
+    skill: skillSelectionSchema.optional(),
   })
   .strict();
 export const inputReceiptSchema = z

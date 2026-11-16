@@ -82,6 +82,24 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe('approval, cancellation and unknown outcomes', () => {
+  it('shows that the first message is waiting to start until a run begins', () => {
+    const value = stream();
+    value.projection = initialProjection(snapshot({
+      pendingInputs: [{
+        id: 'input-1',
+        state: 'queued',
+        input: { mode: 'next_run', blocks: [{ id: 'text', type: 'text', text: '开始' }] },
+      }],
+    }));
+    const view = mount(value);
+    expect(screen.getByText('等待运行')).toBeDefined();
+    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
+
+    value.projection = initialProjection(snapshot({ run: { id: 'run-1', state: 'running' } }));
+    view.rerender(view.ui(value));
+    expect(screen.getByText('正在运行')).toBeDefined();
+    expect(screen.queryByText('等待运行')).toBeNull();
+  });
   it('does not approve an expired decision or make any automatic request', async () => {
     const value = stream();
     value.projection!.decisions = [decision(new Date(Date.now() - 1000).toISOString())];

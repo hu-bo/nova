@@ -28,15 +28,18 @@ import { ConversationContext } from './conversation-context';
 import { ConversationDetailsToggle } from './conversation-details-toggle';
 import { UnboundDialog } from './unbound-dialog';
 import { useConversationComposer } from './use-conversation-composer';
+import { CareerCoachTasks } from './career-coach-tasks';
 
 export function DraftWorkspace({
   mode: initialMode,
   projectId: initialProjectId,
   initialSpecMode = false,
+  careerCoach = false,
 }: {
   mode: 'chat' | 'project';
   projectId?: string | undefined;
   initialSpecMode?: boolean;
+  careerCoach?: boolean;
 }) {
   const navigate = useNavigate();
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -54,6 +57,7 @@ export function DraftWorkspace({
     binding: mode === 'project' ? (binding.data ?? null) : null,
     isRunning: false,
     initialSpecMode,
+    careerCoach,
     startingSpec: startSpec.isPending,
     onStartSpec: async (input) => {
       if (!projectId) throw new Error('请选择项目。');
@@ -66,7 +70,13 @@ export function DraftWorkspace({
       });
     },
     pendingInputs: [],
-    onCreated: (id) => void navigate({ to: '/conversations/$id', params: { id }, replace: true }),
+    onCreated: (id, skill) =>
+      void navigate({
+        to: '/conversations/$id',
+        params: { id },
+        search: skill ? { skill } : {},
+        replace: true,
+      }),
   });
   const { preferences } = usePreferences();
   const unbound = mode === 'project' && !binding.isPending && !binding.data && !binding.error;
@@ -86,6 +96,16 @@ export function DraftWorkspace({
     document
       .querySelector<HTMLTextAreaElement>('.conversation-workspace .nova-composer-textarea')
       ?.focus();
+  }
+  let heading = '今天想推进什么？';
+  let description = '从一个问题、一个计划，或一个明确的目标开始。';
+  if (mode === 'project') {
+    heading = '一起推进这个项目';
+    description = project.data?.name ?? '项目会话';
+  }
+  if (careerCoach) {
+    heading = '求职教练';
+    description = '粘贴简历和岗位描述，一起改写简历或逐题练习面试。';
   }
   return (
     <div
@@ -107,13 +127,9 @@ export function DraftWorkspace({
         >
           <header className="mb-7 text-center">
             <h1 className="text-2xl font-medium tracking-tight text-slate-800 sm:text-3xl">
-              {mode === 'project' ? '一起推进这个项目' : '今天想推进什么？'}
+              {heading}
             </h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              {mode === 'project'
-                ? (project.data?.name ?? '项目会话')
-                : '从一个问题、一个计划，或一个明确的目标开始。'}
-            </p>
+            <p className="mt-3 text-sm leading-6 text-slate-500">{description}</p>
           </header>
           <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-slate-500">
             {projectId ? (
@@ -191,52 +207,69 @@ export function DraftWorkspace({
               <ErrorNotice error={ctl.error} />
             </div>
           )}
-          <div
-            className="mx-auto mt-5 flex max-w-2xl flex-wrap justify-center gap-2"
-            aria-label="快捷任务"
-          >
-            <Button
-              variant="secondary"
-              onPress={() => start('请帮助我理解当前项目的结构、关键模块和工作流程。', true)}
+          {ctl.skillCatalogError && <ErrorNotice error={ctl.skillCatalogError} />}
+          {careerCoach && <CareerCoachTasks onSelect={start} includeFinish={false} />}
+          {!careerCoach && (
+            <Link
+              to="/conversations"
+              search={{ mode: 'career' }}
+              className="mt-5 block text-center text-sm text-accent"
             >
-              <FolderKanban size={14} />
-              理解项目
-            </Button>
-            <Button
-              variant="secondary"
-              aria-pressed={ctl.specArmed}
-              onPress={() => {
-                ctl.setSpecArmed(true);
-                ctl.setGoalArmed(false);
-                document
-                  .querySelector<HTMLTextAreaElement>(
-                    '.conversation-workspace .nova-composer-textarea',
-                  )
-                  ?.focus();
-              }}
-            >
-              <ClipboardList size={14} />
-              Spec 模式
-            </Button>
-            <Button variant="secondary" onPress={() => start('请帮我定位并分析这个问题：')}>
-              <Bug size={14} />
-              排查问题
-            </Button>
-            <Button
-              variant="secondary"
-              onPress={() => start('请审查当前修改，重点检查正确性、边界情况和可维护性。', true)}
-            >
-              <GitPullRequest size={14} />
-              代码审查
-            </Button>
-            <Button variant="secondary" onPress={() => start(undefined, false, true)}>
-              <Target size={14} />
-              设定目标
-            </Button>
-          </div>
-          <p className="mt-5 text-center text-[11px] text-slate-500">
-            Enter 发送 · Shift+Enter 换行 · /goal 设置目标 · /plan 切换规划
-          </p>
+              打开求职会话
+            </Link>
+          )}
+          {!careerCoach && (
+            <>
+              <div
+                className="mx-auto mt-5 flex max-w-2xl flex-wrap justify-center gap-2"
+                aria-label="快捷任务"
+              >
+                <Button
+                  variant="secondary"
+                  onPress={() => start('请帮助我理解当前项目的结构、关键模块和工作流程。', true)}
+                >
+                  <FolderKanban size={14} />
+                  理解项目
+                </Button>
+                <Button
+                  variant="secondary"
+                  aria-pressed={ctl.specArmed}
+                  onPress={() => {
+                    ctl.setSpecArmed(true);
+                    ctl.setGoalArmed(false);
+                    document
+                      .querySelector<HTMLTextAreaElement>(
+                        '.conversation-workspace .nova-composer-textarea',
+                      )
+                      ?.focus();
+                  }}
+                >
+                  <ClipboardList size={14} />
+                  Spec 模式
+                </Button>
+                <Button variant="secondary" onPress={() => start('请帮我定位并分析这个问题：')}>
+                  <Bug size={14} />
+                  排查问题
+                </Button>
+                <Button
+                  variant="secondary"
+                  onPress={() =>
+                    start('请审查当前修改，重点检查正确性、边界情况和可维护性。', true)
+                  }
+                >
+                  <GitPullRequest size={14} />
+                  代码审查
+                </Button>
+                <Button variant="secondary" onPress={() => start(undefined, false, true)}>
+                  <Target size={14} />
+                  设定目标
+                </Button>
+              </div>
+              <p className="mt-5 text-center text-[11px] text-slate-500">
+                Enter 发送 · Shift+Enter 换行 · /goal 设置目标 · /plan 切换规划
+              </p>
+            </>
+          )}
           {config.data && !config.data.capabilities.execution && (
             <p role="status" className="mt-3 text-center text-[11px] text-slate-500">
               执行服务待就绪，当前发送会保存消息和所选配置。

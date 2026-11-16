@@ -7,7 +7,7 @@ import type { UserModelProfilesService } from "../model-config/index.js";
 import type { RemoteConnectionService } from "../remotes/index.js";
 import { conversationSnapshotSchema, type CreateConversationInput } from "./conversation.schema.js";
 import { conversationView } from "../runs/index.js";
-import { runtimeAdapters } from "../runs/index.js";
+import { runtimeAdapters, validateAgentProfile } from "../runs/index.js";
 type ConversationDependencies = {
   repository: ConversationRepository;
   bindings: Pick<ProjectBindingService, "get">;
@@ -23,6 +23,7 @@ export class ConversationService {
   async create(input: CreateConversationInput, owner: string, key?: string) {
     return this.transaction(async ({ repository, bindings, models, remotes }) => {
       const configuration = configurationSchema.parse(input.configuration ?? {});
+      validateAgentProfile(configuration, input.mode, Boolean(input.goal));
       await this.validateConfiguration(configuration, owner, models, remotes);
       const binding = input.mode === "project" && input.projectId ? await bindings.get(input.projectId, owner) : null;
       if (input.mode === "project" && !binding)
@@ -88,6 +89,7 @@ export class ConversationService {
       });
       if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
       const configuration = input.configuration ?? configurationSchema.parse(conversation.metadata.configuration ?? {});
+      validateAgentProfile(configuration, conversation.mode, Boolean(input.goal || conversation.metadata.goal));
       if (input.mode === "steer" && !runtimeAdapters.get(configuration.backendId)?.capabilities.steering)
         throw new DomainError("CONFLICT", "Steering is not supported by this backend");
       await this.validateConfiguration(configuration, input.ownerUserId, models, remotes);

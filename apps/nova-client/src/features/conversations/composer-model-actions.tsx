@@ -41,23 +41,25 @@ export function ComposerModelActions({
           icon={<BrainCircuit aria-hidden="true" />}
         />
       )}
-      <ComposerOptionMenu
-        label="Agent 模式"
-        value={activeMode}
-        options={executionModeOptions}
-        disabled={ctl.sending || ctl.specSession}
-        onChange={(value) => {
-          if (value === 'spec') {
-            ctl.setSpecArmed(true);
-            ctl.setGoalArmed(false);
-          }
-          if (value === 'plan' || value === 'build') {
-            ctl.setSpecArmed(false);
-            ctl.setExecutionMode(value);
-          }
-        }}
-        icon={<Icon aria-hidden="true" />}
-      />
+      {!ctl.chatAgent && (
+        <ComposerOptionMenu
+          label="Agent 模式"
+          value={activeMode}
+          options={executionModeOptions}
+          disabled={ctl.sending || ctl.specSession}
+          onChange={(value) => {
+            if (value === 'spec') {
+              ctl.setSpecArmed(true);
+              ctl.setGoalArmed(false);
+            }
+            if (value === 'plan' || value === 'build') {
+              ctl.setSpecArmed(false);
+              ctl.setExecutionMode(value);
+            }
+          }}
+          icon={<Icon aria-hidden="true" />}
+        />
+      )}
     </div>
   );
 }

@@ -87,7 +87,7 @@ export function SpecAcceptance({ spec }: { spec: GetSpec200 }) {
         </div>
         {!matrix.length && (
           <p className="mt-4 text-sm text-muted-foreground">
-            在需求的「## 验收条件」下声明「### AC-01」后，这里会显示覆盖矩阵。
+            与助手完善需求并生成验收条件后，这里会显示覆盖矩阵。
           </p>
         )}
       </section>

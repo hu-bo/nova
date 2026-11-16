@@ -7,9 +7,10 @@ import test from "node:test";
 import { createDatabase, conversations, pendingInputs, projects, runnerOperations, runs } from "../database/index.js";
 import { SpecService } from "../src/modules/specs/spec.service.js";
 import { createRunService } from "../src/modules/runs/run.service.js";
-import "../src/modules/runs/nova-runtime.js";
+import { buildSystemInstructions } from "../src/modules/runs/nova-runtime.js";
+import { specSkill } from "@nova/tools/harness";
 import { DomainError } from "../src/shared/domain-error.js";
-import { passingEvidenceForCheck } from "../src/modules/specs/spec.validation.js";
+import { acceptanceCriteriaIn, passingEvidenceForCheck, validateRequirements } from "../src/modules/specs/spec.validation.js";
 import type { SpecEvidence } from "../database/schema/spec-revision.table.js";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -18,6 +19,28 @@ const taskPlan = [
   { key: "T-01", title: "准备内容", objective: "准备可导出的内容。", dependsOn: [], checks: [{ key: "C-01", criterionIds: ["AC-01"], label: "内容可读", method: { kind: "command" as const, command: "printf", args: ["ok"] } }] },
   { key: "T-02", title: "验证导出", objective: "确认导出结果。", dependsOn: ["T-01"], checks: [{ key: "C-01", criterionIds: ["AC-01"], label: "文件可下载", method: { kind: "manual" as const } }] },
 ];
+
+test("requirements generation can ask for missing information before submitting a draft", () => {
+  const instructions = buildSystemInstructions({
+    mode: "plan", runnerInstructions: undefined, projectInstructions: "", goal: null,
+    hasWorkspace: false, workspace: ".",
+    specExecution: { kind: "generation", specId: "spec", revision: 1, stage: "requirements" },
+  });
+  assert.match(instructions, /ask the user focused questions/);
+  assert.match(instructions, /instead of submitting a candidate/);
+  assert.match(specSkill.content, /After clarifying requirements, submit the draft without requiring the user to ask again/);
+  assert.match(specSkill.content, /do not ask them to write Markdown or acceptance criteria/);
+});
+
+test("acceptance headings support closing markers and end at the next section", () => {
+  const markdown = "## 验收条件 ##\n### AC-01 导出\n~~~md\n### AC-02 示例\n~~~\n# 其他\n### AC-03 不属于验收条件";
+  assert.deepEqual(acceptanceCriteriaIn(markdown), ["AC-01"]);
+  assert.deepEqual(acceptanceCriteriaIn("## 验收条件\n### AC-01\n### AC-01 重复"), ["AC-01", "AC-01"]);
+  assert.deepEqual(acceptanceCriteriaIn("## 验收条件##\n### AC-01"), []);
+  assert.throws(() => validateRequirements("姓名、手机号、家庭地址"), (error) => error instanceof DomainError && error.details?.reason === "SPEC_CRITERIA_MISSING");
+  assert.throws(() => validateRequirements("## 验收条件\n### AC-01\n### AC-01 重复"), (error) => error instanceof DomainError && error.details?.reason === "SPEC_CRITERION_DUPLICATE" && error.details.criterionId === "AC-01");
+  assert.doesNotThrow(() => validateRequirements(markdown));
+});
 
 test("task evidence follows the current attempt and never crosses task/check boundaries", () => {
   const evidence: SpecEvidence[] = [

@@ -780,6 +780,26 @@ export type ListConversationMessages200ItemsItemBlocksItem = {
 })[];
 };
 
+export type ListConversationMessages200ItemsItemSkillSource = typeof ListConversationMessages200ItemsItemSkillSource[keyof typeof ListConversationMessages200ItemsItemSkillSource];
+
+
+export const ListConversationMessages200ItemsItemSkillSource = {
+  builtin: 'builtin',
+} as const;
+
+export type ListConversationMessages200ItemsItemSkill = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  name: string;
+  description: string;
+  source: ListConversationMessages200ItemsItemSkillSource;
+};
+
 export type ListConversationMessages200ItemsItemSource = {
   /**
      * @minLength 1
@@ -812,6 +832,7 @@ export type ListConversationMessages200ItemsItem = {
   blocks: ListConversationMessages200ItemsItemBlocksItem[];
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
+  skill?: ListConversationMessages200ItemsItemSkill;
   source?: ListConversationMessages200ItemsItemSource;
 };
 
@@ -921,6 +942,19 @@ export const RenameConversation200Mode = {
   project: 'project',
 } as const;
 
+export type RenameConversation200ConfigurationAgentProfileId = typeof RenameConversation200ConfigurationAgentProfileId[keyof typeof RenameConversation200ConfigurationAgentProfileId];
+
+
+export const RenameConversation200ConfigurationAgentProfileId = {
+  chat: 'chat',
+} as const;
+
+export type RenameConversation200ConfigurationAgentProfile = {
+  id: RenameConversation200ConfigurationAgentProfileId;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type RenameConversation200ConfigurationMode = typeof RenameConversation200ConfigurationMode[keyof typeof RenameConversation200ConfigurationMode];
 
 
@@ -943,6 +977,7 @@ export const RenameConversation200ConfigurationReasoningEffort = {
 export type RenameConversation200Configuration = {
   /** @minLength 1 */
   backendId: string;
+  agentProfile?: RenameConversation200ConfigurationAgentProfile;
   /**
      * @minLength 1
      * @maxLength 128
@@ -1033,6 +1068,19 @@ export const ListConversations200ItemsItemMode = {
   project: 'project',
 } as const;
 
+export type ListConversations200ItemsItemConfigurationAgentProfileId = typeof ListConversations200ItemsItemConfigurationAgentProfileId[keyof typeof ListConversations200ItemsItemConfigurationAgentProfileId];
+
+
+export const ListConversations200ItemsItemConfigurationAgentProfileId = {
+  chat: 'chat',
+} as const;
+
+export type ListConversations200ItemsItemConfigurationAgentProfile = {
+  id: ListConversations200ItemsItemConfigurationAgentProfileId;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type ListConversations200ItemsItemConfigurationMode = typeof ListConversations200ItemsItemConfigurationMode[keyof typeof ListConversations200ItemsItemConfigurationMode];
 
 
@@ -1055,6 +1103,7 @@ export const ListConversations200ItemsItemConfigurationReasoningEffort = {
 export type ListConversations200ItemsItemConfiguration = {
   /** @minLength 1 */
   backendId: string;
+  agentProfile?: ListConversations200ItemsItemConfigurationAgentProfile;
   /**
      * @minLength 1
      * @maxLength 128
@@ -1119,6 +1168,19 @@ export const CreateConversationBodyMode = {
   project: 'project',
 } as const;
 
+export type CreateConversationBodyConfigurationAgentProfileId = typeof CreateConversationBodyConfigurationAgentProfileId[keyof typeof CreateConversationBodyConfigurationAgentProfileId];
+
+
+export const CreateConversationBodyConfigurationAgentProfileId = {
+  chat: 'chat',
+} as const;
+
+export type CreateConversationBodyConfigurationAgentProfile = {
+  id: CreateConversationBodyConfigurationAgentProfileId;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type CreateConversationBodyConfigurationMode = typeof CreateConversationBodyConfigurationMode[keyof typeof CreateConversationBodyConfigurationMode];
 
 
@@ -1141,6 +1203,7 @@ export const CreateConversationBodyConfigurationReasoningEffort = {
 export type CreateConversationBodyConfiguration = {
   /** @minLength 1 */
   backendId?: string;
+  agentProfile?: CreateConversationBodyConfigurationAgentProfile;
   /**
      * @minLength 1
      * @maxLength 128
@@ -1309,12 +1372,23 @@ export type CreateConversationBodyInitialInputBlocksItem = {
 };
 };
 
+export type CreateConversationBodyInitialInputSkill = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type CreateConversationBodyInitialInput = {
   /**
      * @minItems 1
      * @maxItems 64
      */
   blocks: CreateConversationBodyInitialInputBlocksItem[];
+  skill?: CreateConversationBodyInitialInputSkill;
 };
 
 export type CreateConversationBody = {
@@ -1339,6 +1413,19 @@ export const CreateConversation200Mode = {
   project: 'project',
 } as const;
 
+export type CreateConversation200ConfigurationAgentProfileId = typeof CreateConversation200ConfigurationAgentProfileId[keyof typeof CreateConversation200ConfigurationAgentProfileId];
+
+
+export const CreateConversation200ConfigurationAgentProfileId = {
+  chat: 'chat',
+} as const;
+
+export type CreateConversation200ConfigurationAgentProfile = {
+  id: CreateConversation200ConfigurationAgentProfileId;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type CreateConversation200ConfigurationMode = typeof CreateConversation200ConfigurationMode[keyof typeof CreateConversation200ConfigurationMode];
 
 
@@ -1361,6 +1448,7 @@ export const CreateConversation200ConfigurationReasoningEffort = {
 export type CreateConversation200Configuration = {
   /** @minLength 1 */
   backendId: string;
+  agentProfile?: CreateConversation200ConfigurationAgentProfile;
   /**
      * @minLength 1
      * @maxLength 128
@@ -1433,6 +1521,19 @@ export const GetConversationSnapshot200ConversationMode = {
   project: 'project',
 } as const;
 
+export type GetConversationSnapshot200ConversationConfigurationAgentProfileId = typeof GetConversationSnapshot200ConversationConfigurationAgentProfileId[keyof typeof GetConversationSnapshot200ConversationConfigurationAgentProfileId];
+
+
+export const GetConversationSnapshot200ConversationConfigurationAgentProfileId = {
+  chat: 'chat',
+} as const;
+
+export type GetConversationSnapshot200ConversationConfigurationAgentProfile = {
+  id: GetConversationSnapshot200ConversationConfigurationAgentProfileId;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type GetConversationSnapshot200ConversationConfigurationMode = typeof GetConversationSnapshot200ConversationConfigurationMode[keyof typeof GetConversationSnapshot200ConversationConfigurationMode];
 
 
@@ -1455,6 +1556,7 @@ export const GetConversationSnapshot200ConversationConfigurationReasoningEffort 
 export type GetConversationSnapshot200ConversationConfiguration = {
   /** @minLength 1 */
   backendId: string;
+  agentProfile?: GetConversationSnapshot200ConversationConfigurationAgentProfile;
   /**
      * @minLength 1
      * @maxLength 128
@@ -1927,6 +2029,26 @@ export type GetConversationSnapshot200MessagesItemBlocksItem = {
 })[];
 };
 
+export type GetConversationSnapshot200MessagesItemSkillSource = typeof GetConversationSnapshot200MessagesItemSkillSource[keyof typeof GetConversationSnapshot200MessagesItemSkillSource];
+
+
+export const GetConversationSnapshot200MessagesItemSkillSource = {
+  builtin: 'builtin',
+} as const;
+
+export type GetConversationSnapshot200MessagesItemSkill = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  name: string;
+  description: string;
+  source: GetConversationSnapshot200MessagesItemSkillSource;
+};
+
 export type GetConversationSnapshot200MessagesItemSource = {
   /**
      * @minLength 1
@@ -1959,6 +2081,7 @@ export type GetConversationSnapshot200MessagesItem = {
   blocks: GetConversationSnapshot200MessagesItemBlocksItem[];
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
+  skill?: GetConversationSnapshot200MessagesItemSkill;
   source?: GetConversationSnapshot200MessagesItemSource;
 };
 
@@ -2319,6 +2442,19 @@ export const GetConversationSnapshot200PendingInputsItemInputMode = {
   steer: 'steer',
 } as const;
 
+export type GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId = typeof GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId[keyof typeof GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId];
+
+
+export const GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId = {
+  chat: 'chat',
+} as const;
+
+export type GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfile = {
+  id: GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type GetConversationSnapshot200PendingInputsItemInputConfigurationMode = typeof GetConversationSnapshot200PendingInputsItemInputConfigurationMode[keyof typeof GetConversationSnapshot200PendingInputsItemInputConfigurationMode];
 
 
@@ -2341,6 +2477,7 @@ export const GetConversationSnapshot200PendingInputsItemInputConfigurationReason
 export type GetConversationSnapshot200PendingInputsItemInputConfiguration = {
   /** @minLength 1 */
   backendId: string;
+  agentProfile?: GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfile;
   /**
      * @minLength 1
      * @maxLength 128
@@ -2356,6 +2493,16 @@ export type GetConversationSnapshot200PendingInputsItemInputConfiguration = {
   remoteConnectionId?: string;
 };
 
+export type GetConversationSnapshot200PendingInputsItemInputSkill = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type GetConversationSnapshot200PendingInputsItemInput = {
   /**
      * @minItems 1
@@ -2364,6 +2511,7 @@ export type GetConversationSnapshot200PendingInputsItemInput = {
   blocks: GetConversationSnapshot200PendingInputsItemInputBlocksItem[];
   mode: GetConversationSnapshot200PendingInputsItemInputMode;
   configuration?: GetConversationSnapshot200PendingInputsItemInputConfiguration;
+  skill?: GetConversationSnapshot200PendingInputsItemInputSkill;
 };
 
 export type GetConversationSnapshot200PendingInputsItem = {
@@ -2690,6 +2838,19 @@ export const AppendConversationInputBodyMode = {
   steer: 'steer',
 } as const;
 
+export type AppendConversationInputBodyConfigurationAgentProfileId = typeof AppendConversationInputBodyConfigurationAgentProfileId[keyof typeof AppendConversationInputBodyConfigurationAgentProfileId];
+
+
+export const AppendConversationInputBodyConfigurationAgentProfileId = {
+  chat: 'chat',
+} as const;
+
+export type AppendConversationInputBodyConfigurationAgentProfile = {
+  id: AppendConversationInputBodyConfigurationAgentProfileId;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
 export type AppendConversationInputBodyConfigurationMode = typeof AppendConversationInputBodyConfigurationMode[keyof typeof AppendConversationInputBodyConfigurationMode];
 
 
@@ -2712,6 +2873,7 @@ export const AppendConversationInputBodyConfigurationReasoningEffort = {
 export type AppendConversationInputBodyConfiguration = {
   /** @minLength 1 */
   backendId?: string;
+  agentProfile?: AppendConversationInputBodyConfigurationAgentProfile;
   /**
      * @minLength 1
      * @maxLength 128
@@ -2725,6 +2887,16 @@ export type AppendConversationInputBodyConfiguration = {
      * @maxLength 128
      */
   remoteConnectionId?: string;
+};
+
+export type AppendConversationInputBodySkill = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
 };
 
 export type AppendConversationInputBodyGoal = {
@@ -2750,6 +2922,7 @@ export type AppendConversationInputBody = {
   blocks: AppendConversationInputBodyBlocksItem[];
   mode?: AppendConversationInputBodyMode;
   configuration?: AppendConversationInputBodyConfiguration;
+  skill?: AppendConversationInputBodySkill;
   goal?: AppendConversationInputBodyGoal;
 };
 
@@ -2790,6 +2963,30 @@ export type RemoveConversationInput200 = typeof RemoveConversationInput200[keyof
 
 export const RemoveConversationInput200 = {
 } as const;
+
+export type ListSkills200ItemsItemSource = typeof ListSkills200ItemsItemSource[keyof typeof ListSkills200ItemsItemSource];
+
+
+export const ListSkills200ItemsItemSource = {
+  builtin: 'builtin',
+} as const;
+
+export type ListSkills200ItemsItem = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  name: string;
+  description: string;
+  source: ListSkills200ItemsItemSource;
+};
+
+export type ListSkills200 = {
+  items: ListSkills200ItemsItem[];
+};
 
 export type ListSpecsParams = {
 /**
@@ -5379,6 +5576,72 @@ export type DeleteUserModelProfile200 = typeof DeleteUserModelProfile200[keyof t
 export const DeleteUserModelProfile200 = {
 } as const;
 
+export type ListProviderAdapters200ItemId = typeof ListProviderAdapters200ItemId[keyof typeof ListProviderAdapters200ItemId];
+
+
+export const ListProviderAdapters200ItemId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
+export type ListProviderAdapters200ItemProtocol = typeof ListProviderAdapters200ItemProtocol[keyof typeof ListProviderAdapters200ItemProtocol];
+
+
+export const ListProviderAdapters200ItemProtocol = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+} as const;
+
+export type ListProviderAdapters200ItemReasoningFormat = typeof ListProviderAdapters200ItemReasoningFormat[keyof typeof ListProviderAdapters200ItemReasoningFormat];
+
+
+export const ListProviderAdapters200ItemReasoningFormat = {
+  none: 'none',
+  openai: 'openai',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+} as const;
+
+export type ListProviderAdapters200ItemThinkingLevelsItem = typeof ListProviderAdapters200ItemThinkingLevelsItem[keyof typeof ListProviderAdapters200ItemThinkingLevelsItem];
+
+
+export const ListProviderAdapters200ItemThinkingLevelsItem = {
+  off: 'off',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  max: 'max',
+} as const;
+
+export type ListProviderAdapters200Item = {
+  id: ListProviderAdapters200ItemId;
+  label: string;
+  defaultBaseURL: string;
+  protocol: ListProviderAdapters200ItemProtocol;
+  reasoningFormat: ListProviderAdapters200ItemReasoningFormat;
+  thinkingLevels: ListProviderAdapters200ItemThinkingLevelsItem[];
+};
+
+/**
+ * @nullable
+ */
+export type ListProviders200ItemAdapterId = typeof ListProviders200ItemAdapterId[keyof typeof ListProviders200ItemAdapterId] | null;
+
+
+export const ListProviders200ItemAdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
 export type ListProviders200ItemProtocol = typeof ListProviders200ItemProtocol[keyof typeof ListProviders200ItemProtocol];
 
 
@@ -5390,6 +5653,8 @@ export const ListProviders200ItemProtocol = {
 export type ListProviders200Item = {
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
+  /** @nullable */
+  adapterId: ListProviders200ItemAdapterId;
   protocol: ListProviders200ItemProtocol;
   name: string;
   baseUrl: string;
@@ -5404,6 +5669,18 @@ export type ListProviders200Item = {
   updatedAt: string;
 };
 
+export type CreateProviderBodyAdapterId = typeof CreateProviderBodyAdapterId[keyof typeof CreateProviderBodyAdapterId];
+
+
+export const CreateProviderBodyAdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
 export type CreateProviderBodyProtocol = typeof CreateProviderBodyProtocol[keyof typeof CreateProviderBodyProtocol];
 
 
@@ -5413,7 +5690,8 @@ export const CreateProviderBodyProtocol = {
 } as const;
 
 export type CreateProviderBody = {
-  protocol: CreateProviderBodyProtocol;
+  adapterId?: CreateProviderBodyAdapterId;
+  protocol?: CreateProviderBodyProtocol;
   /**
      * @minLength 1
      * @maxLength 80
@@ -5433,6 +5711,21 @@ export type CreateProviderBody = {
   isPublic?: boolean;
 };
 
+/**
+ * @nullable
+ */
+export type CreateProvider200AdapterId = typeof CreateProvider200AdapterId[keyof typeof CreateProvider200AdapterId] | null;
+
+
+export const CreateProvider200AdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
 export type CreateProvider200Protocol = typeof CreateProvider200Protocol[keyof typeof CreateProvider200Protocol];
 
 
@@ -5444,6 +5737,8 @@ export const CreateProvider200Protocol = {
 export type CreateProvider200 = {
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
+  /** @nullable */
+  adapterId: CreateProvider200AdapterId;
   protocol: CreateProvider200Protocol;
   name: string;
   baseUrl: string;
@@ -5458,6 +5753,18 @@ export type CreateProvider200 = {
   updatedAt: string;
 };
 
+export type UpdateProviderBodyAdapterId = typeof UpdateProviderBodyAdapterId[keyof typeof UpdateProviderBodyAdapterId];
+
+
+export const UpdateProviderBodyAdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
 export type UpdateProviderBodyProtocol = typeof UpdateProviderBodyProtocol[keyof typeof UpdateProviderBodyProtocol];
 
 
@@ -5467,6 +5774,7 @@ export const UpdateProviderBodyProtocol = {
 } as const;
 
 export type UpdateProviderBody = {
+  adapterId?: UpdateProviderBodyAdapterId;
   protocol?: UpdateProviderBodyProtocol;
   /**
      * @minLength 1
@@ -5484,6 +5792,21 @@ export type UpdateProviderBody = {
   isPublic?: boolean;
 };
 
+/**
+ * @nullable
+ */
+export type UpdateProvider200AdapterId = typeof UpdateProvider200AdapterId[keyof typeof UpdateProvider200AdapterId] | null;
+
+
+export const UpdateProvider200AdapterId = {
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  minimax: 'minimax',
+  'minimax-anthropic': 'minimax-anthropic',
+} as const;
+
 export type UpdateProvider200Protocol = typeof UpdateProvider200Protocol[keyof typeof UpdateProvider200Protocol];
 
 
@@ -5495,6 +5818,8 @@ export const UpdateProvider200Protocol = {
 export type UpdateProvider200 = {
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
+  /** @nullable */
+  adapterId: UpdateProvider200AdapterId;
   protocol: UpdateProvider200Protocol;
   name: string;
   baseUrl: string;

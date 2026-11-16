@@ -37,6 +37,43 @@ function renderLoaded(element: ReactNode): Promise<string> {
 }
 
 describe("chat-ui", () => {
+  it("renders product skill selection separately from commands and records the applied version", () => {
+    const skill = {
+      id: "nova.career-coach",
+      version: "1.0.0",
+      name: "求职教练",
+      description: "简历和面试",
+      source: "builtin" as const,
+    };
+    const composer = renderToStaticMarkup(
+      <Composer
+        productSkills={[skill]}
+        selectedProductSkill={skill}
+        skills={[{ id: "clear", command: "clear", label: "清除上下文" }]}
+        onProductSkillChange={() => undefined}
+        onSubmit={() => undefined}
+      />,
+    );
+    expect(composer).toContain('aria-label="选择技能"');
+    expect(composer).toContain('aria-label="移除技能"');
+    expect(composer).toContain('value="nova.career-coach@1.0.0"');
+    const messages = renderToStaticMarkup(
+      <MessageList
+        messages={[
+          {
+            id: "m",
+            conversationId: "c",
+            role: "user",
+            blocks: [{ type: "text", text: "我的简历" }],
+            status: "done",
+            createdAt: 1,
+            skill,
+          },
+        ]}
+      />,
+    );
+    expect(messages).toContain("求职教练 · 1.0.0");
+  });
   it("renders image attachments with an accessible preview and an unavailable fallback", () => {
     const block = { type: "image" as const, key: "upload", name: "截图.png", mimeType: "image/png" };
     const html = renderToStaticMarkup(<BlockView block={{ ...block, url: "https://storage.example/image.png" }} />);

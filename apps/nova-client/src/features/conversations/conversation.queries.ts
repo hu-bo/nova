@@ -1,4 +1,4 @@
-import type { Configuration, InputBlock, SubmitInput } from '@nova/agent-ui-contracts';
+import type { Configuration, SubmitInput } from '@nova/agent-ui-contracts';
 import { useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -26,7 +26,7 @@ export type ConversationMode = ConversationDTO['mode'];
 export type CreateConversationRequest = Omit<
   CreateConversationBody,
   'configuration' | 'initialInput'
-> & { configuration?: Configuration; initialInput?: { blocks: InputBlock[] } };
+> & { configuration?: Configuration; initialInput?: Pick<SubmitInput, 'blocks' | 'skill'> };
 export type PendingInputRequest = SubmitInput & Pick<AppendConversationInputBody, 'goal'>;
 export function useConversationsQuery(input: { limit?: number; mode?: ConversationMode } = {}) {
   const { identity } = useIdentity();

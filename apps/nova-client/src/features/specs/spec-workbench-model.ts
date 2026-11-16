@@ -1,13 +1,31 @@
 import { markdownLanguage } from '@codemirror/lang-markdown';
 import type { GetSpec200, GetSpec200TaskPlanItem } from '@/api/generated/projectsAPI.schemas';
+import { ApiError } from '@/api/api-error';
+
+export function specReviewError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.details?.reason === 'SPEC_CRITERIA_MISSING') {
+      return '需求草稿缺少验收条件。请在右侧会话中与助手补充需求，由助手整理并更新草稿后再确认。';
+    }
+    if (error.details?.reason === 'SPEC_CRITERION_DUPLICATE') {
+      const id = error.details.criterionId;
+      if (typeof id === 'string' && /^AC-\d{2,}$/.test(id)) {
+        return `验收条件编号 ${id} 重复。请在右侧会话中让助手整理并更新草稿后再确认。`;
+      }
+      return '验收条件编号重复。请在右侧会话中让助手整理并更新草稿后再确认。';
+    }
+  }
+  return error instanceof Error ? error.message : '操作失败，请重试。';
+}
 
 export function parseAcceptanceCriteria(markdown: string) {
   const criteria: { id: string; title: string; from: number }[] = [];
   let inSection = false;
   markdownLanguage.parser.parse(markdown).iterate({
     enter(node) {
+      if (node.name === 'ATXHeading1') inSection = false;
       if (node.name === 'ATXHeading2') {
-        inSection = /^##\s+验收条件\s*#*\s*$/.test(markdown.slice(node.from, node.to));
+        inSection = /^##\s+验收条件(?:\s+#+)?\s*$/.test(markdown.slice(node.from, node.to));
       }
       if (!inSection || node.name !== 'ATXHeading3') return;
       const match = /^###\s+(AC-\d{2,})(?:\s+(.*?))?\s*#*\s*$/.exec(

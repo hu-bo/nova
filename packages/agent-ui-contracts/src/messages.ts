@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productSkillSchema } from "./skills.js";
 export const idSchema = z.string().min(1).max(128);
 export const decimalSequenceSchema = z
   .string()
@@ -106,6 +107,7 @@ export const messageSchema = z
       .array(blockSchema)
       .refine((blocks) => new Set(blocks.map((block) => block.id)).size === blocks.length, "Duplicate block ID"),
     createdAt: z.iso.datetime(),
+    skill: productSkillSchema.optional(),
     source: z.object({ agentId: idSchema, parentRunId: idSchema.optional() }).strict().optional(),
   })
   .strict();

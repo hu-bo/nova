@@ -1,4 +1,4 @@
-import type { Todo as ProductTodo } from "@nova/agent-ui-contracts";
+import type { Todo as ProductTodo, ProductSkill } from "@nova/agent-ui-contracts";
 import type { ReactNode } from "react";
 
 export type ToolStatus = "queued" | "running" | "ok" | "error" | "cancelled" | "unknown";
@@ -39,6 +39,7 @@ export interface ChatMessage {
   blocks: Block[];
   status: "streaming" | "done" | "error" | "aborted";
   createdAt: number;
+  skill?: ProductSkill;
 }
 
 export type DecisionRequest =

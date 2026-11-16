@@ -28,6 +28,7 @@ import type {
   DeleteModel200,
   DeleteProvider200,
   ListModels200Item,
+  ListProviderAdapters200Item,
   ListProviders200Item,
   UpdateModel200,
   UpdateModelBody,
@@ -62,6 +63,100 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListProviderAdaptersUrl = () => {
+
+
+
+
+  return `/admin/model-config/provider-adapters`
+}
+
+export const listProviderAdapters = async ( options?: Parameters<typeof apiFetch>[1]): Promise<ListProviderAdapters200Item[]> => {
+
+  return apiFetch<ListProviderAdapters200Item[]>(getListProviderAdaptersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProviderAdaptersQueryKey = () => {
+    return [
+    `/admin/model-config/provider-adapters`
+    ] as const;
+    }
+
+
+export const getListProviderAdaptersQueryOptions = <TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProviderAdaptersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProviderAdapters>>> = ({ signal }) => listProviderAdapters({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListProviderAdaptersQueryResult = NonNullable<Awaited<ReturnType<typeof listProviderAdapters>>>
+export type ListProviderAdaptersQueryError = ErrorType<void>
+
+
+export function useListProviderAdapters<TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProviderAdapters>>,
+          TError,
+          Awaited<ReturnType<typeof listProviderAdapters>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListProviderAdapters<TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProviderAdapters>>,
+          TError,
+          Awaited<ReturnType<typeof listProviderAdapters>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListProviderAdapters<TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListProviderAdapters<TData = Awaited<ReturnType<typeof listProviderAdapters>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderAdapters>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListProviderAdaptersQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
 
 export const getListProvidersUrl = () => {
 

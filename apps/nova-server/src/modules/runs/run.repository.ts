@@ -38,6 +38,7 @@ import { advanceStream, streamStateOf, type StreamState } from "./stream-state.j
 import { runProjectionReader, type RunProjectionReader } from "./run-projection.repository.js";
 import { readCheckpoint } from "./session-checkpoint.repository.js";
 import { checkpointAfter } from "./session-checkpoint.js";
+import { skillView } from "../skills/index.js";
 import { taskPlanSchema } from "../specs/spec.schema.js";
 import { specDraftCandidateSchema } from "@nova/tools/harness";
 import { acceptanceCriteriaIn, validateTaskPlan } from "../specs/spec.validation.js";
@@ -331,7 +332,6 @@ export class RunRepository {
         : null;
     const messageId = randomUUID();
     const environment = environmentKey(conversation, configuration);
-    if (await environmentUnsettled(tx, conversation, configuration)) return null;
     let specExecution: Checkpoint["specExecution"] = input?.payload.spec;
     if (!specExecution && conversation.metadata.specId) {
       const [spec] = await tx.select().from(specs).where(and(
@@ -344,6 +344,7 @@ export class RunRepository {
       backendId: configuration.backendId,
       epoch: conversation.contextEpoch,
       configuration,
+      execution: input?.payload.execution ?? {},
       nativeState: inherited?.nativeState ?? { messages: [], runs: [] },
       executions: [],
       interactions: [],
@@ -750,6 +751,8 @@ export class RunRepository {
         role: native.role,
         state: "completed",
         blocks,
+        ...(native.role === "user" && run.checkpoint.execution?.skill
+          ? { skill: skillView(run.checkpoint.execution.skill) } : {}),
         createdAt: draft?.createdAt ?? new Date().toISOString(),
       });
       await insertMessage(tx, conversation.id, message);
@@ -1340,6 +1343,7 @@ async function insertMessage(tx: Transaction, conversationId: string, message: M
     state: message.state,
     blocks: message.blocks,
     source: message.source ?? null,
+    skill: message.skill ?? null,
     createdAt: new Date(message.createdAt),
   });
 }

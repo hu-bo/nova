@@ -28,6 +28,8 @@ import {
   messageDTO,
   publicInteraction,
   queuedInput,
+  validateAgentProfile,
+  acceptExecution,
   runProjectionReader,
 } from "../runs/index.js";
 import { DomainError } from "../../shared/domain-error.js";
@@ -69,6 +71,11 @@ async function enqueue(
     configuration: input.configuration ?? configurationSchema.parse(conversation.metadata.configuration ?? {}),
   };
   if (conversation.metadata.specId) normalized.configuration = { ...normalized.configuration, mode: "plan" };
+  const currentProfile = conversation.metadata.configuration?.agentProfile;
+  if (fingerprint(normalized.configuration.agentProfile) !== fingerprint(currentProfile))
+    throw new DomainError("CONFLICT", "Agent profiles cannot change within a conversation");
+  validateAgentProfile(normalized.configuration, conversation.mode, Boolean(input.goal || conversation.metadata.goal));
+  const execution = acceptExecution(normalized.configuration, normalized);
   const signature = fingerprint(input);
   if (key) {
     const [previous] = await tx
@@ -139,7 +146,7 @@ async function enqueue(
       conversationId: conversation.id,
       sequence: (last?.sequence ?? 0n) + 1n,
       mode: input.mode,
-      payload: normalized,
+      payload: { ...normalized, execution },
       idempotencyKey: key ?? null,
       fingerprint: signature,
     })
@@ -159,7 +166,7 @@ export const conversationRepository = defineRepository(
         projectId: string | null;
         title: string | null;
         metadata: ConversationMetadata;
-        initialInput?: { blocks: InputBlock[] };
+        initialInput?: { blocks: InputBlock[]; skill?: SubmitInput["skill"] };
         idempotencyKey?: string;
       }) {
         const tx = requireTransaction();
@@ -205,7 +212,7 @@ export const conversationRepository = defineRepository(
           await enqueue(
             tx,
             row,
-            { blocks: input.initialInput.blocks, mode: "next_run", configuration: input.metadata.configuration },
+            { ...input.initialInput, mode: "next_run", configuration: input.metadata.configuration },
             journal,
             "initial:" + row.id,
           );
@@ -288,6 +295,7 @@ export const conversationRepository = defineRepository(
             mode: input.mode,
             ...(input.configuration ? { configuration: input.configuration } : {}),
             ...(input.goal ? { goal: input.goal } : {}),
+            ...(input.skill ? { skill: input.skill } : {}),
           },
           journal,
           input.idempotencyKey,
@@ -331,7 +339,8 @@ export const conversationRepository = defineRepository(
           conversation.metadata.specId ||
           !conversation.activeRunId ||
           !effectiveCapabilities(conversation).steering ||
-          row.payload.blocks.some((block) => block.type !== "text")
+          row.payload.blocks.some((block) => block.type !== "text") ||
+          row.payload.skill || conversation.metadata.configuration?.agentProfile
         )
           throw new DomainError("CONFLICT", "Input cannot become steering");
         if (row.mode === "steer") return inputReceipt(row);
@@ -373,6 +382,7 @@ export const conversationRepository = defineRepository(
 
         const conversation = await lockOwned(tx, id, owner);
         if (conversation.metadata.specId) throw new DomainError("CONFLICT", "Goals are disabled in specification sessions", { reason: "SPEC_SESSION_RESTRICTED" });
+        if (conversation.metadata.configuration?.agentProfile) throw new DomainError("CONFLICT", "Goals are unavailable for chat agents");
         const goal = conversation.metadata.goal;
         if (!goal) throw new DomainError("NOT_FOUND", "Goal not found");
         if (goal.revision !== revision)

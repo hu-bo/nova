@@ -1,9 +1,11 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
 import type { GetSpec200 } from '@/api/generated/projectsAPI.schemas';
+import { ApiError } from '@/api/api-error';
 import { SpecAcceptance } from '@/features/specs/spec-acceptance';
 import {
   parseAcceptanceCriteria,
+  specReviewError,
   taskDependencyError,
 } from '@/features/specs/spec-workbench-model';
 
@@ -52,6 +54,28 @@ it('parses AC headings only within the acceptance section, excluding fenced code
   const markdown =
     '### AC-99 outside\n## 验收条件\n### AC-01 导出\n\n~~~md\n### AC-02 code\n~~~\n\n## 范围\n### AC-03 outside';
   expect(parseAcceptanceCriteria(markdown).map((item) => item.id)).toEqual(['AC-01']);
+  expect(
+    parseAcceptanceCriteria('## 验收条件 ##\n### AC-01 导出\n# 其他\n### AC-02 其他').map(
+      (item) => item.id,
+    ),
+  ).toEqual(['AC-01']);
+  expect(parseAcceptanceCriteria('## 验收条件##\n### AC-01')).toEqual([]);
+});
+it('explains missing and duplicate acceptance criteria in review errors', () => {
+  expect(
+    specReviewError(
+      new ApiError(400, 400, 'generic', undefined, undefined, { reason: 'SPEC_CRITERIA_MISSING' }),
+    ),
+  ).toContain('与助手补充需求');
+  expect(
+    specReviewError(
+      new ApiError(400, 400, 'generic', undefined, undefined, {
+        reason: 'SPEC_CRITERION_DUPLICATE',
+        criterionId: 'AC-01',
+      }),
+    ),
+  ).toContain('AC-01 重复');
+  expect(specReviewError(new ApiError(409, 409, '状态已变更'))).toBe('状态已变更');
 });
 it('detects missing and cyclic task dependencies before save', () => {
   expect(taskDependencyError([{ ...spec.taskPlan[0]!, dependsOn: ['T-99'] }])).toContain('不存在');

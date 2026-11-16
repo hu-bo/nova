@@ -32,7 +32,11 @@ import { useIdentity } from '@/features/auth';
 import { MarkdownEditor } from './markdown-editor';
 import { useSpecQuery } from './spec.queries';
 import { SpecAcceptance } from './spec-acceptance';
-import { parseAcceptanceCriteria, taskDependencyError } from './spec-workbench-model';
+import {
+  parseAcceptanceCriteria,
+  specReviewError,
+  taskDependencyError,
+} from './spec-workbench-model';
 
 const stageList = [
   { id: 'requirements', label: '需求', icon: FileText },
@@ -116,7 +120,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
     setDirty(stable(value) !== stable(serverDraft));
     setError('');
   };
-  async function mutate(action: () => Promise<unknown>) {
+  async function mutate(action: () => Promise<unknown>, formatError = errorText) {
     if (pending) return;
     setPending(true);
     setError('');
@@ -131,7 +135,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
         }),
       ]);
     } catch (cause) {
-      setError(errorText(cause));
+      setError(formatError(cause));
       if (cause instanceof ApiError && cause.details?.reason === 'SPEC_REVISION_STALE') {
         setConflict(true);
         void current.refetch();
@@ -348,8 +352,16 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
                 size="sm"
                 disabled={pending || dirty || reviewed}
                 onPress={() =>
-                  void mutate(() =>
-                    reviewSpecStage(projectId, specId, stage, { expectedRevision: spec.revision }),
+                  void mutate(
+                    () =>
+                      reviewSpecStage(
+                        projectId,
+                        specId,
+                        stage,
+                        { expectedRevision: spec.revision },
+                        { silent: true },
+                      ),
+                    specReviewError,
                   )
                 }
               >
@@ -643,8 +655,7 @@ function TaskPlanEditor({
                                   kind: 'command',
                                   command:
                                     check.method.kind === 'command' ? check.method.command : '',
-                                  args:
-                                    check.method.kind === 'command' ? check.method.args : [],
+                                  args: check.method.kind === 'command' ? check.method.args : [],
                                   ...(event.target.value ? { cwd: event.target.value } : {}),
                                 },
                               };

@@ -130,6 +130,7 @@ export class JobHost {
         safeErrorCode: code,
         rescheduleAfterSeconds: 30,
       });
+      this.deps.onError?.(error);
     } finally {
       clearInterval(leaseHeartbeat);
     }

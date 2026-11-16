@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { idSchema, publicErrorSchema } from "./messages.js";
+import { agentProfileSchema } from "./skills.js";
 export const runStateSchema = z.enum([
   "queued",
   "running",
@@ -24,6 +25,7 @@ export const runViewSchema = z
 export const configurationSchema = z
   .object({
     backendId: z.string().min(1).default("nova"),
+    agentProfile: agentProfileSchema.optional(),
     modelId: idSchema.nullable().default(null),
     mode: z.enum(["build", "plan"]).default("build"),
     reasoningEffort: z.enum(["off", "low", "medium", "high", "max"]).optional(),
