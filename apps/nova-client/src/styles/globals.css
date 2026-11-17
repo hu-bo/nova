@@ -171,16 +171,28 @@
   display: none;
 }
 .conversation-workspace .nova-composer-textarea {
-  min-height: 5.5rem;
+  /* 初始 2 行（2×24px 行高 + 12px 内边距）；field-sizing 让内容超出后自然长高。 */
+  min-height: 3.75rem;
 }
 @media (max-width: 640px) {
+  /* 移动端把输入框底部压成一行：不换行，模型名截断，按钮收紧。 */
+  .conversation-workspace .nova-composer-input-row,
+  .conversation-workspace .nova-composer-options,
+  .conversation-workspace .nova-model-controls {
+    flex-wrap: nowrap;
+  }
   .conversation-workspace .nova-composer-input-row > div:last-child {
-    width: 100%;
     min-width: 0;
     flex-shrink: 1;
-    justify-content: flex-end;
   }
   .conversation-workspace .nova-model-controls {
-    flex: 1;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .conversation-workspace .nova-composer-input-row [data-slot='button'] {
+    gap: 0.25rem;
+    height: 1.75rem;
+    padding-inline: 0.5rem;
+    font-size: 0.75rem;
   }
 }

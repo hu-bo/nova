@@ -56,7 +56,8 @@ describe("chat-ui", () => {
     );
     expect(composer).toContain('aria-label="选择技能"');
     expect(composer).toContain('aria-label="移除技能"');
-    expect(composer).toContain('value="nova.career-coach@1.0.0"');
+    expect(composer).toContain("求职教练");
+    expect(composer).not.toContain("<select");
     const messages = renderToStaticMarkup(
       <MessageList
         messages={[
@@ -489,6 +490,7 @@ describe("chat-ui", () => {
           toolName: "bash",
           args: { command: "git", args: ["reset", "--hard", "HEAD~1"] },
           risk: "exec",
+          message: "同一条助手消息中包含 3 次相同调用，请确认后继续。",
         }}
         onResolve={() => undefined}
         onAbort={() => undefined}
@@ -497,6 +499,7 @@ describe("chat-ui", () => {
     const todo = renderToStaticMarkup(<TodoPanel items={[{ id: "1", text: "verify", status: "in_progress" }]} />);
     expect(decision).toContain("git reset --hard HEAD~1");
     expect(decision).toContain("需要授权");
+    expect(decision).toContain("同一条助手消息中包含 3 次相同调用，请确认后继续。");
     expect(decision).toContain("允许执行");
     expect(decision).toContain('data-slot="card"');
     expect(decision).toContain("总是允许");

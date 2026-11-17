@@ -1,6 +1,13 @@
 import { Sparkles } from "lucide-react";
 import type { ComposerSkill } from "./composer-types.js";
 
+export function findSkillMention(text: string, cursor: number) {
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(text.slice(0, cursor));
+  if (!match) return null;
+  const suffix = /^[^\s@]*/.exec(text.slice(cursor))![0];
+  return { start: cursor - match[1]!.length - 1, end: cursor + suffix.length, query: match[1]!.toLocaleLowerCase() };
+}
+
 export function matchComposerSkills(text: string, skills: readonly ComposerSkill[]): ComposerSkill[] {
   if (!text.startsWith("/")) return [];
   const query = text.slice(1);
@@ -17,20 +24,23 @@ export function ComposerSkillMenu({
   skills,
   selected,
   onSelect,
+  trigger = "/",
 }: {
   listId: string;
   skills: readonly ComposerSkill[];
   selected: ComposerSkill | undefined;
   onSelect?: ((skill: ComposerSkill) => void) | undefined;
+  trigger?: "/" | "@";
 }) {
-  if (skills.length === 0) return null;
+  if (skills.length === 0 && trigger === "/") return null;
   return (
     <div
       id={listId}
       role="listbox"
-      aria-label="可用技能"
-      className="nova-scrollbar absolute bottom-[calc(100%+0.5rem)] left-0 right-0 z-30 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-xl shadow-slate-950/10 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+      aria-label={trigger === "@" ? "选择技能" : "可用命令"}
+      className="nova-scrollbar absolute bottom-[calc(100%+0.5rem)] left-0 z-30 max-h-64 w-80 max-w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-950/10 dark:border-slate-700 dark:bg-slate-900"
     >
+      {skills.length === 0 && <p className="px-3 py-4 text-sm text-slate-500">没有匹配的技能</p>}
       {skills.map((skill) => {
         const isSelected = skill === selected;
         return (
@@ -53,11 +63,20 @@ export function ComposerSkillMenu({
               {skill.icon ?? <Sparkles className="size-4" aria-hidden="true" />}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="flex items-baseline gap-2">
+              {trigger === "@" ? (
+                <>
+                  <span className="block truncate text-sm font-medium">{skill.label}</span>
+                  {skill.description && (
+                    <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
+                      {skill.description}
+                    </span>
+                  )}
+                </>
+              ) : (
                 <code className="text-xs text-slate-400">
                   /{skill.command} {skill.label}
                 </code>
-              </span>
+              )}
             </span>
           </button>
         );

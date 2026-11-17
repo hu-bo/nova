@@ -2,6 +2,7 @@ import { ModelConfigService } from "../src/modules/model-config/model-config.ser
 import { createModelConfigRepository } from "../src/modules/model-config/model-config.repository.js";
 import { createModelBodySchema } from "../src/modules/model-config/model-config.schema.js";
 import { createRunRepository } from "../src/modules/runs/run.repository.js";
+import { readCheckpoint } from "../src/modules/runs/session-checkpoint.repository.js";
 import { createScope, defineService } from "../src/shared/scope.js";
 import { createProjectRepository } from "../src/modules/projects/project.repository.js";
 import { runJournal } from "../src/modules/runs/run.repository.js";
@@ -1234,6 +1235,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       const requests: Record<string, unknown>[] = [];
       let upstreamStatus = 200;
       let remainingToolSteps = 0;
+      let duplicateToolBatch = false;
       const upstream = createServer(async (request, response) => {
         let raw = "";
         for await (const chunk of request) raw += chunk;
@@ -1274,10 +1276,10 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
                 choices: [
                   {
                     delta: {
-                      tool_calls: [
+                      tool_calls: Array.from({ length: duplicateToolBatch ? 4 : 1 }, (_, index) => (
                         {
-                          index: 0,
-                          id: callId,
+                          index,
+                          id: duplicateToolBatch ? `${callId}-${index}` : callId,
                           type: "function",
                           function: {
                             name: "todo_write",
@@ -1285,8 +1287,8 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
                               items: [{ id: "todo", text: "检查结果", status: "completed" }],
                             }),
                           },
-                        },
-                      ],
+                        }
+                      )),
                     },
                     finish_reason: "tool_calls",
                   },
@@ -1294,6 +1296,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
               }) +
               "\n\n",
           );
+          duplicateToolBatch = false;
         } else
           response.write(
             "data: " + JSON.stringify({ choices: [{ delta: { content: "完成😀" }, finish_reason: "stop" }] }) + "\n\n",
@@ -1501,7 +1504,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
           payload: { blocks: [{ id: "text", type: "text", text: "第二轮" }], mode: "next_run" },
         });
         assert.equal(followup.statusCode, 200, followup.body);
-        const waitForRun = async (state: "succeeded" | "failed" | "budget_exhausted", maxAttempts = 200) => {
+        const waitForRun = async (state: "succeeded" | "failed" | "budget_exhausted" | "waiting", maxAttempts = 200) => {
           for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const view = (
               await app.inject({ method: "GET", url: "/api/conversations/" + id + "/snapshot", headers })
@@ -1531,7 +1534,12 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         assert.equal(limited.statusCode, 200, limited.body);
         const limitedView = await waitForRun("failed");
         assert.equal(limitedView.run.reason, "MODEL_RATE_LIMITED");
-        assert.ok(!JSON.stringify(limitedView).includes("Do not expose upstream details"));
+        // 提供商原文随失败消息的错误块一起交付, 不再只停留在运行摘要里.
+        const limitedMessage = limitedView.messages.find((message: { state: string }) => message.state === "failed");
+        assert.ok(limitedMessage, "failed assistant message is committed");
+        const limitedError = limitedMessage!.blocks.find((block: { type: string }) => block.type === "error");
+        assert.equal(limitedError?.type, "error");
+        assert.deepEqual(limitedError!.error, { code: "MODEL_RATE_LIMITED", message: "Do not expose upstream details" });
         await httpTest.test("workspace tasks are not limited to 64 model steps or tool executions", async () => {
           upstreamStatus = 200;
           remainingToolSteps = 65;
@@ -1567,6 +1575,36 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
           const finished = await waitForRun("succeeded");
           assert.notEqual(finished.run.id, stopped.run.id);
           assert.ok(JSON.stringify(requests.at(-1)).includes("预算耗尽，已保存进度"));
+        });
+        await httpTest.test("repeated read calls ask once in plan mode and resume without replaying completed tools", async () => {
+          remainingToolSteps = 1;
+          duplicateToolBatch = true;
+          const submitted = await app.inject({ method: "POST", url: "/api/conversations/" + id + "/inputs", headers,
+            payload: { blocks: [{ id: "text", type: "text", text: "重复调用确认" }], mode: "next_run",
+              configuration: { backendId: "nova", modelId: modelEntry!.id, mode: "plan" } } });
+          assert.equal(submitted.statusCode, 200, submitted.body);
+          const waiting = await waitForRun("waiting");
+          assert.equal(waiting.capabilities.approval, true);
+          const pending = waiting.interactions.filter((interaction: { state: string }) => interaction.state === "pending");
+          assert.equal(pending.length, 1);
+          const decision = pending[0];
+          assert.match(decision.message, /同一条助手消息.*4 次/);
+          assert.equal(decision.risk, "read");
+          assert.deepEqual(decision.allowedScopes, ["once"]);
+          const [paused] = await db.select().from(runs).where(eq(runs.id, waiting.run.id));
+          const pausedCheckpoint = await readCheckpoint(db, paused!);
+          assert.equal(pausedCheckpoint?.executions.filter((entry) => entry.dispatch === "dispatched").length, 2);
+          const url = "/api/runs/" + waiting.run.id + "/interactions/" + decision.id + "/respond";
+          const invalidScope = await app.inject({ method: "POST", url, headers,
+            payload: { expectedRevision: decision.revision, response: { kind: "approval", decision: "allow", scope: "session" } } });
+          assert.equal(invalidScope.statusCode, 400, invalidScope.body);
+          const approved = await app.inject({ method: "POST", url, headers,
+            payload: { expectedRevision: decision.revision, response: { kind: "approval", decision: "allow", scope: "once" } } });
+          assert.equal(approved.statusCode, 200, approved.body);
+          const finished = await waitForRun("succeeded");
+          assert.equal(finished.run.id, waiting.run.id);
+          assert.equal(finished.operations.length, 4);
+          assert.equal(finished.interactions.filter((item: { state: string }) => item.state === "pending").length, 0);
         });
         const config = (await app.inject({ method: "GET", url: "/api/config", headers })).json().data;
         const catalog = await app.inject({ method: "GET", url: "/admin/model-config/models", headers });

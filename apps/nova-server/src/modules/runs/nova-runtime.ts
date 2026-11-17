@@ -12,6 +12,7 @@ import {
 import type { Configuration, Goal } from "@nova/agent-ui-contracts";
 import { createCodingHarness, type CodingHarness } from "@nova/coding-harness";
 import { sessionCheckpointPolicyPlugin } from "@nnova/harness/plugins/session-checkpoint-policy";
+import { toolLoopDetectionPlugin } from "@nnova/harness/plugins/tool-loop-detection";
 import { createRemoteTools, createSpecTools, specSkill } from "@nova/tools/harness";
 import { skillsPlugin } from "@nnova/harness/plugins/skills";
 import { z } from "zod";
@@ -274,6 +275,7 @@ export class NovaRuntime implements RuntimeAdapter {
       ...(!chatAgent && specExecution ? [specSkill] : []),
       ...(execution?.skill ? [execution.skill] : []),
     ];
+    const repetitionConfirmations = new Map<string, ReturnType<ToolPolicy["authorize"]>>();
     this.harness = await createCodingHarness({
       model: {
         plugin: configuredModelPlugin(route, this.deps.uploads, conversation.ownerUserId, this.deps.logger),
@@ -289,6 +291,30 @@ export class NovaRuntime implements RuntimeAdapter {
       components: { sessionStore: postgresSessionPlugin(repository, claim) },
       plugins: [
         sessionCheckpointPolicyPlugin(),
+        toolLoopDetectionPlugin({
+          confirm: async (request) => {
+            request.context.signal.throwIfAborted();
+            const pending = repetitionConfirmations.get(request.key);
+            if (pending) return pending;
+            const prior = context.checkpoint.interactions.find((item) => item.callId === request.key);
+            if (prior) {
+              if (prior.state === "pending") return { kind: "ask", continuationId: prior.id };
+              return prior.response?.kind === "approval" && prior.response.decision === "allow" ? "allow" : "deny";
+            }
+            const tool = tools.find((item) => item.name === request.name);
+            let risk: "read" | "write" | "exec" = "read";
+            if (tool?.effects !== "read") risk = request.name === "bash" || request.name === "git_diff" ? "exec" : "write";
+            const confirmation = repository.requestInteraction(claim, {
+              id: randomUUID(), revision: 1, state: "pending",
+              expiresAt: new Date(Date.now() + 10 * 60000).toISOString(),
+              callId: request.key, kind: "approval", toolName: request.name, args: request.input,
+              message: `同一条助手消息中包含 ${request.occurrences} 次参数相同的 ${request.name} 调用。第 3 次起需要确认，是否继续本条消息中的这一组重复调用？`,
+              risk, allowedScopes: ["once"],
+            }).then((interaction) => ({ kind: "ask" as const, continuationId: interaction.id }));
+            repetitionConfirmations.set(request.key, confirmation);
+            return confirmation;
+          },
+        }),
         ...(selectedSkills.length ? [skillsPlugin({ skills: selectedSkills, selected: selectedSkills.map((skill) => skill.id) })] : []),
         ...(!chatAgent ? [{
           manifest: {
@@ -380,11 +406,16 @@ export class NovaRuntime implements RuntimeAdapter {
       result = await this.harness.run({ id: command.messageId, role: "user", parts }, options);
     }
     if (result.kind === "suspended") return { kind: "waiting" };
-    if (result.error) this.deps.logger.error({ error: result.error, modelId: route.model.id }, "Harness run failed");
+    // 日志只落安全文案; 提供商原文仅通过 detail 交给消息展示.
+    if (result.error)
+      this.deps.logger.error(
+        { errorCode: result.error.code, errorMessage: result.error.message, modelId: route.model.id },
+        "Harness run failed",
+      );
     return {
       kind: "completed", state: result.status,
       ...(result.budgetReason ? { reason: result.budgetReason } : {}),
-      ...(result.error ? { reason: result.error.code } : {}),
+      ...(result.error ? { reason: result.error.code, ...(result.error.detail ? { detail: result.error.detail } : {}) } : {}),
     };
   }
   async dispose() {

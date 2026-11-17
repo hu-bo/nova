@@ -157,6 +157,7 @@ export function postgresSessionPlugin(repository: RunService, claim: RunClaim): 
           }),
       );
       const store: SessionStore = {
+        peek: () => cached?.snapshot,
         async load() {
           if (cached && cached.snapshot.revision === (await repository.sessionRevision(claim))) return cached.snapshot;
           const { checkpoint, revision } = await repository.load(claim);

@@ -42,6 +42,7 @@ export function memorySessionPlugin(
       if (!Number.isSafeInteger(state.revision) || state.revision < 0)
         throw new FrameworkError("SESSION_CORRUPT", "Initial session snapshot revision is invalid.");
       const store: SessionStore = {
+        peek: () => state,
         async load() {
           return structuredClone(state);
         },

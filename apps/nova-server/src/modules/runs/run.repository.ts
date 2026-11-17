@@ -1099,7 +1099,7 @@ export class RunRepository {
     await this.journal.wake(conversation.id, "cancel:" + run.id);
     return { id: run.id, state: "cancelling" as const };
   }
-  async finish(claim: RunClaim, state: RunState, reason?: string) {
+  async finish(claim: RunClaim, state: RunState, reason?: string, detail?: string) {
     const tx = this.transactionContext();
 
     const { conversation, run } = await this.ownedClaim(tx, claim);
@@ -1212,7 +1212,10 @@ export class RunRepository {
       }
     }
     for (const draft of run.projection?.messages.filter((message) => message.state === "streaming") ?? []) {
-      const message = { ...draft, state: draftMessageStates[state] };
+      const message: Message = { ...draft, state: draftMessageStates[state] };
+      // 失败的助手消息自带错误块: 提供商原文优先, 缺失时按错误码给中文兜底文案.
+      if (message.state === "failed" && reason)
+        message.blocks = [...message.blocks, { id: "error", type: "error", error: { code: reason, message: detail ?? runFailureCopy(reason) } }];
       await insertMessage(tx, conversation.id, { ...message, runId: run.id });
       await this.journal.append(conversation, { runId: run.id, type: "message.committed", payload: { message } });
     }
@@ -1370,6 +1373,23 @@ const draftMessageStates = {
   cancelled: "cancelled",
   cancelled_unconfirmed: "cancelled",
 } satisfies Record<RunState, Message["state"]>;
+/** 失败运行写入消息错误块的兜底文案: 提供商原文存在时不使用本表. */
+function runFailureCopy(reason: string): string {
+  return (
+    {
+      MODEL_RATE_LIMITED: "模型服务限流或额度不足，请检查配额或切换模型。",
+      MODEL_AUTH_FAILED: "模型服务认证失败，请检查模型的 API 密钥和访问权限。",
+      MODEL_REQUEST_FAILED: "模型请求失败，请检查模型配置或稍后重试。",
+      MODEL_TRANSPORT: "无法连接模型服务，请检查网络或模型配置后重试。",
+      MODEL_TIMEOUT: "模型请求超时，请稍后重试。",
+      MODEL_PROTOCOL: "模型返回内容异常，请稍后重试。",
+      MODEL_LENGTH: "模型输出达到长度上限，回复可能不完整。",
+      STEP_LIMIT: "已达到本轮执行步数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。",
+      TOOL_LIMIT: "已达到本轮工具调用次数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。",
+      RUN_DEADLINE: "本轮运行超过时限被中止，可以发送消息继续处理或稍后重试。",
+    }[reason] ?? "本轮运行失败，可以发送消息继续处理或稍后重试。"
+  );
+}
 type Environment = { kind: "none" } | { kind: "ssh"; remoteId: string } | { kind: "runner"; runnerId: string; workspaceId: string | null };
 
 /** 执行环境标识的唯一来源: ssh 连接优先, 其次 runner 工作区; 其余数据都从 parts 派生. */

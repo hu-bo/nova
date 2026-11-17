@@ -292,7 +292,12 @@ export class BasicLoop implements AgentExecutor {
               finish = chunk.reason;
               break;
             case "error":
-              throw new FrameworkError(chunk.error.code, "Model request failed.", chunk.error.retryable);
+              throw new FrameworkError(
+                chunk.error.code,
+                "Model request failed.",
+                chunk.error.retryable,
+                chunk.error.detail,
+              );
           }
         }
         if (!completed)

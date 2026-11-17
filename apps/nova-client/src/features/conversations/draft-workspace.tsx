@@ -103,7 +103,7 @@ export function DraftWorkspace({
     heading = '一起推进这个项目';
     description = project.data?.name ?? '项目会话';
   }
-  if (careerCoach) {
+  if (ctl.chatAgent) {
     heading = '求职教练';
     description = '粘贴简历和岗位描述，一起改写简历或逐题练习面试。';
   }
@@ -208,17 +208,8 @@ export function DraftWorkspace({
             </div>
           )}
           {ctl.skillCatalogError && <ErrorNotice error={ctl.skillCatalogError} />}
-          {careerCoach && <CareerCoachTasks onSelect={start} includeFinish={false} />}
-          {!careerCoach && (
-            <Link
-              to="/conversations"
-              search={{ mode: 'career' }}
-              className="mt-5 block text-center text-sm text-accent"
-            >
-              打开求职会话
-            </Link>
-          )}
-          {!careerCoach && (
+          {ctl.chatAgent && <CareerCoachTasks onSelect={start} includeFinish={false} />}
+          {!ctl.chatAgent && (
             <>
               <div
                 className="mx-auto mt-5 flex max-w-2xl flex-wrap justify-center gap-2"
@@ -274,11 +265,6 @@ export function DraftWorkspace({
             <p role="status" className="mt-3 text-center text-[11px] text-slate-500">
               执行服务待就绪，当前发送会保存消息和所选配置。
             </p>
-          )}
-          {preferences.contextPanelOpen && (
-            <div className="mt-5 rounded-xl border p-4 xl:hidden">
-              <ConversationContext controller={ctl} />
-            </div>
           )}
           {config.error && (
             <div className="mt-3">

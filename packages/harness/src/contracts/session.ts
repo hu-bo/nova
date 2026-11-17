@@ -38,6 +38,8 @@ export interface SessionCommit {
 }
 export interface SessionStore {
   load(): Promise<SessionSnapshot>;
+  /** Last locally confirmed snapshot, without I/O. Absent until a persistent store has loaded. */
+  peek?(): SessionSnapshot | undefined;
   commit(batch: SessionCommit, expectedRevision: number): Promise<SessionSnapshot>;
   /** An owned store may serialize additive updates without a separate load/commit race. */
   update?(batch: SessionCommit): Promise<SessionSnapshot>;

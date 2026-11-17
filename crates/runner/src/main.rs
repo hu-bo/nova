@@ -117,7 +117,12 @@ async fn connect_once(app: Arc<App>, config: &Config) -> Result<(), Box<dyn std:
     };
     let welcome = wire::ServerEnvelope::decode(bytes)?;
     let Some(ServerPayload::Welcome(welcome)) = welcome.payload else {
-        return Err("Runner connection was not admitted by the SDK".into());
+        // 保留 SDK 拒绝原因 (如 Token 无效), 否则首个 Rejection 帧会被泛化成无信息量的文案。
+        let reason = match welcome.payload {
+            Some(ServerPayload::Rejection(error)) => format!("SDK rejected connection: {}", error.message),
+            _ => "Runner connection was not admitted by the SDK".to_owned(),
+        };
+        return Err(reason.into());
     };
     if welcome.protocol_version != 2 {
         return Err("SDK protocol version mismatch".into());

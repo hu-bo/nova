@@ -23,3 +23,20 @@ test('anonymous visitors can read connection metadata but cannot read Runner tok
   const tokens = await app.inject({ method: 'GET', url: '/runner-tokens' });
   assert.equal(tokens.statusCode, 401);
 });
+
+test('connection metadata advertises wss:// when the proxy forwarded an https protocol', async (t) => {
+  // 与 app.ts 相同的生产形态: Nginx 终结 TLS 后重写 x-forwarded-proto, Fastify 需 trustProxy 才采信。
+  const app = Fastify({ logger: false, trustProxy: true });
+  t.after(() => app.close());
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
+  app.decorateRequest('principal', null);
+  registerErrorHandlers(app);
+  await runnerRoutes(app, {} as RunnerTokenService, {} as RunnerService);
+  const response = await app.inject({
+    method: 'GET', url: '/runner-connection',
+    headers: { host: 'nova.8and1.cn', 'x-forwarded-proto': 'https' },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json().data, { endpoint: 'wss://nova.8and1.cn/runner/v1/connect' });
+});

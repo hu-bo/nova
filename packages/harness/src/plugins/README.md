@@ -14,6 +14,7 @@ Plugins 是框架能力的实现与组合层。每个插件通过 Manifest 声�
 | `sessionCheckpointPolicyPlugin` | session | `checkpointPolicies`   | 在模型请求、工具派发和下一步开始前等待存储 flush     |
 | `summaryCompactionPlugin`       | session | `contextCompactor`     | 完整消息前缀的有界摘要压缩                           |
 | `toolRuntimePlugin`             | session | `toolRuntime`          | 工具目录、allow-list、策略、准入、执行和结果         |
+| `toolLoopDetectionPlugin`       | session | `toolPolicies` / `contextContributions` | 同消息重复调用确认、相同结果提醒；由历史重建计数 |
 | `telemetryPlugin`               | session | `eventJournal`         | 有界事件保留、重放和隔离 observer                    |
 | `skillsPlugin`                  | session | `contextContributions` | 显式选择的有界 Markdown 上下文资源                   |
 | `mcpPlugin`                     | session | `toolDefinitions`      | 将宿主提供的 MCP-like client 桥接为动态工具          |

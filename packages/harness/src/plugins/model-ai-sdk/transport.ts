@@ -14,7 +14,7 @@ export interface AiSdkModelOptions {
   requestTimeoutMs?: number;
 }
 
-/** Observe HTTP without exposing request text, credentials, query parameters or provider error bodies. */
+/** Observe HTTP without exposing request text, credentials or query parameters; error bodies are forwarded for provider classification. */
 export function modelTransport(
   options: AiSdkModelOptions,
   log: AiSdkModelLogger | undefined,
@@ -47,10 +47,15 @@ export function modelTransport(
       },
       "Model response received",
     );
-    // Let the SDK classify HTTP errors, while discarding sensitive provider response text.
+    // Let the SDK classify HTTP errors; keep a bounded body so the provider error text survives parsing.
     if (!response.ok) {
-      await response.body?.cancel();
-      return new Response("", { status: response.status, statusText: response.statusText, headers: response.headers });
+      let text = "";
+      try {
+        text = await response.text();
+      } catch {
+        text = "";
+      }
+      return new Response(text.slice(0, 8192), { status: response.status, statusText: response.statusText });
     }
     if (!response.body) throw new FrameworkError("MODEL_PROTOCOL", "Model response has no stream.");
     const body = response.body.pipeThrough(

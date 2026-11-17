@@ -8,6 +8,7 @@ export function ConversationDetailsToggle() {
     <Button
       variant="ghost"
       isIconOnly
+      className="hidden xl:inline-flex"
       aria-label={preferences.contextPanelOpen ? '收起任务详情' : '展开任务详情'}
       title={preferences.contextPanelOpen ? '收起任务详情' : '展开任务详情'}
       aria-pressed={preferences.contextPanelOpen}

@@ -49,7 +49,7 @@ import type {
   MessageListScrollState,
 } from '@nova/chat-ui';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import {
   ClipboardList,
   Download,
@@ -215,6 +215,12 @@ export function ConversationWorkspace({
       executionEnabled && (projection?.data.capabilities ?? data.capabilities).steering,
     pendingInputs,
     contextUsage: projection?.usage,
+    onCreated: (conversationId, skill) =>
+      void navigate({
+        to: '/conversations/$id',
+        params: { id: conversationId },
+        search: skill ? { skill } : {},
+      }),
     onClearContext: () => {
       edit.reset();
       setDialog('clear');
@@ -332,11 +338,6 @@ export function ConversationWorkspace({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {!ctl.chatAgent && !embedded && (
-            <Link to="/conversations" search={{ mode: 'career' }} className="text-accent">
-              打开求职会话
-            </Link>
-          )}
           <RunStatus
             stream={stream}
             controls={controls}

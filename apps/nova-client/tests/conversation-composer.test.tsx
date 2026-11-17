@@ -211,6 +211,70 @@ describe('SSH filesystem selection', () => {
     });
     expect(mocks.append).not.toHaveBeenCalled();
   });
+  it('starts a chat agent directly from a skill selected in the ordinary draft', async () => {
+    mocks.create.mockResolvedValue({ id: 'skill-chat' });
+    const draft = mount();
+    expect(draft.result.current.composer.productSkills?.[0]?.id).toBe('nova.career-coach');
+    act(() => draft.result.current.composer.onTextChange?.('保留简历正文'));
+    act(() =>
+      draft.result.current.composer.onProductSkillChange?.({
+        id: 'nova.career-coach',
+        version: '1.0.0',
+      }),
+    );
+    expect(draft.result.current.chatAgent).toBe(true);
+    expect(draft.result.current.composer.value).toBe('保留简历正文');
+    await act(async () => {
+      await draft.result.current.submit(submission('保留简历正文'));
+    });
+    expect(mocks.create.mock.calls[0]?.[0]).toMatchObject({
+      configuration: { agentProfile: CHAT_AGENT_PROFILE, mode: 'plan' },
+      initialInput: { skill: { id: 'nova.career-coach', version: '1.0.0' } },
+    });
+  });
+  it('creates a separate skill conversation without changing a coding conversation or its remote', async () => {
+    mocks.create.mockResolvedValue({ id: 'new-skill-chat' });
+    const onCreated = vi.fn();
+    const draft = mount({
+      conversationId: 'coding',
+      onCreated,
+      runtime: { backendId: 'nova', modelId: null, mode: 'build', remoteConnectionId: 'remote-1' },
+    });
+    act(() =>
+      draft.result.current.composer.onProductSkillChange?.({
+        id: 'nova.career-coach',
+        version: '1.0.0',
+      }),
+    );
+    expect(draft.result.current.composer.placeholder).toContain('独立');
+    await act(async () => {
+      await draft.result.current.submit(submission('修改简历'));
+    });
+    expect(mocks.append).not.toHaveBeenCalled();
+    expect(mocks.create.mock.calls[0]?.[0].configuration).toMatchObject({
+      agentProfile: CHAT_AGENT_PROFILE,
+      mode: 'plan',
+    });
+    expect(mocks.create.mock.calls[0]?.[0].configuration.remoteConnectionId).toBeUndefined();
+    expect(onCreated).toHaveBeenCalledWith('new-skill-chat', {
+      id: 'nova.career-coach',
+      version: '1.0.0',
+    });
+  });
+  it('returns to coding behavior when a draft skill is removed and excludes project skills', () => {
+    const draft = mount();
+    act(() =>
+      draft.result.current.composer.onProductSkillChange?.({
+        id: 'nova.career-coach',
+        version: '1.0.0',
+      }),
+    );
+    act(() => draft.result.current.composer.onProductSkillChange?.(null));
+    expect(draft.result.current.chatAgent).toBe(false);
+    expect(draft.result.current.composer.skills?.some((skill) => skill.id === 'build')).toBe(true);
+    const project = mount({ mode: 'project', projectId: 'project' });
+    expect(project.result.current.composer.productSkills).toBeUndefined();
+  });
   it('clears the local skill selection when the context epoch changes', async () => {
     const client = new QueryClient();
     const wrapper = ({ children }: { children: ReactNode }) => (

@@ -104,6 +104,7 @@ export function DecisionPrompt({
             <p className="mt-1 text-xs leading-5 text-indigo-700/85 dark:text-indigo-200/80">
               {request.toolName} 请求执行一项 {approvalRiskLabels[request.risk]}
             </p>
+            {request.message && <p className="mt-1 text-sm leading-5">{request.message}</p>}
           </div>
         </CardHeader>
         <div

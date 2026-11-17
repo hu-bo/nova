@@ -8,6 +8,7 @@ import {
   defineDynamicTool,
   modelRouter,
   sessionDefinition,
+  sessionStore,
   toolDefinitions,
   type AgentEvent,
   type JsonValue,
@@ -24,6 +25,7 @@ import { contextPlugin } from "@nnova/harness/plugins/context";
 import { memorySessionPlugin } from "@nnova/harness/plugins/session-memory";
 import { toolRuntimePlugin } from "@nnova/harness/plugins/tools";
 import { modelCompactionPlugin, summaryCompactionPlugin } from "@nnova/harness/plugins/compaction";
+import { toolLoopDetectionPlugin, type RepeatedToolCallConfirmation } from "@nnova/harness/plugins/tool-loop-detection";
 import type { FileSystem, Result, RunnerFailure, RunnerSession, ToolContextOptions } from "@nova/runner-sdk";
 import { createCodingHarness, codingProfile, dashboardProfile, type CodingHarnessOptions } from "../src/index.js";
 
@@ -226,7 +228,7 @@ function hostTool(
     name,
     description: name,
     effects,
-    inputSchema: { type: "object" },
+    inputSchema: { type: "object", additionalProperties: true },
     outputSchema: { type: "object", additionalProperties: true },
     execute,
   });
@@ -1051,4 +1053,288 @@ test("recovery after committing a budget summary preserves its terminal meaning 
   assert.equal(result.kind === "completed" && result.budgetReason, "STEP_LIMIT");
   assert.match(result.text, /more work remains/);
   assert.equal(model.requests.length, 0);
+});
+
+test("repetition detection adds no store loads when a locally confirmed snapshot is available", async (t) => {
+  const loads: number[] = [];
+  for (const enabled of [false, true]) {
+    let count = 0;
+    const instrumentation: PluginDefinition = {
+      manifest: {
+        id: "test.store-loads",
+        version: "1.0.0",
+        apiVersion: 1,
+        scope: "session",
+        requires: [sessionStore],
+        provides: [],
+      },
+      setup(context) {
+        const store = context.resolve(sessionStore);
+        const load = store.load.bind(store);
+        store.load = async () => {
+          count++;
+          return load();
+        };
+      },
+    };
+    const model = new ScriptedModel([...Array.from({ length: 5 }, () => call("lookup")), { text: "done" }]);
+    const harness = await createCodingHarness({
+      model: model.binding(),
+      tools: [hostTool("lookup", "read")],
+      plugins: [instrumentation, ...(enabled ? [toolLoopDetectionPlugin({ confirm: async () => "allow" })] : [])],
+    });
+    t.after(() => harness.close());
+    assert.equal((await harness.run("Investigate")).status, "succeeded");
+    loads.push(count);
+  }
+  assert.ok(loads[0]! > 0, "the real session persistence path must be exercised");
+  assert.equal(loads[1], loads[0], "policy and warning checks must reuse the confirmed snapshot");
+});
+
+test("same-message repetitions require a scoped confirmation before the third invocation, including parallel calls", async (t) => {
+  for (const decision of ["allow", "deny"] as const) {
+    await t.test(decision, async (t) => {
+      let executions = 0;
+      let response: typeof decision | undefined;
+      const requests = new Map<string, RepeatedToolCallConfirmation>();
+      const batch: Step = {
+        calls: [
+          { name: "update", input: { x: 1, y: 2 } },
+          { name: "update", input: { x: 2 } },
+          { name: "update", input: { y: 2, x: 1 } },
+          { name: "update", input: { x: 1, y: 2 } },
+          { name: "update", input: { y: 2, x: 1 } },
+        ],
+      };
+      const model = new ScriptedModel([batch, { text: "done" }, batch]);
+      const harness = await createCodingHarness({
+        model: model.binding(),
+        tools: [
+          hostTool("update", "write", async () => {
+            executions++;
+            return { ok: true };
+          }),
+        ],
+        policies: [{ id: "ordinary-approval", authorize: async () => "allow" }],
+        plugins: [
+          toolLoopDetectionPlugin({
+            confirm: async (request) => {
+              requests.set(request.key, request);
+              return response ?? { kind: "ask", continuationId: "loop-confirmation" };
+            },
+          }),
+        ],
+      });
+      t.after(() => harness.close());
+      const waiting = await harness.run("Work", { runId: "loop-run" });
+      assert.equal(waiting.kind, "suspended");
+      assert.equal(executions, 3, "only the first two repetitions and the different call may execute");
+      assert.equal(requests.size, 1, "all later repetitions share one confirmation scope");
+      assert.equal([...requests.values()][0]?.occurrences, 4);
+      const firstKey = [...requests.keys()][0];
+      response = decision;
+      const result = await harness.resume({ runId: "loop-run", continuationId: "loop-confirmation", input: null });
+      assert.equal(result.status, "succeeded", JSON.stringify(result.error));
+      assert.equal(executions, decision === "allow" ? 5 : 3);
+      assert.equal(result.toolCalls.filter((call) => call.status === "failed").length, decision === "deny" ? 2 : 0);
+      assert.equal(model.requests.length, 2, "resume cannot replay the model or completed tools");
+      response = undefined;
+      const next = await harness.run("Another request", { runId: "next-loop-run" });
+      assert.equal(next.kind, "suspended");
+      assert.equal(requests.size, 2);
+      assert.notEqual([...requests.keys()].at(-1), firstKey);
+    });
+  }
+});
+
+test("identical successful outputs warn on the third occurrence across interleaved calls, without changing results", async (t) => {
+  const warned = (request: ModelStepRequest) => JSON.stringify(request.messages).includes("[Tool repetition warning]");
+  const model = new ScriptedModel([
+    call("lookup", { x: 1, y: 2 }),
+    { ...call("lookup", { x: 2 }), check: (request) => assert.equal(warned(request), false) },
+    call("lookup", { y: 2, x: 1 }),
+    { ...call("lookup", { x: 2 }), check: (request) => assert.equal(warned(request), false) },
+    call("lookup", { x: 1, y: 2 }),
+    {
+      ...call("lookup", { x: 3 }),
+      check(request) {
+        assert.equal(warned(request), true);
+        for (const message of request.messages)
+          for (const part of message.parts)
+            if (part.type === "tool-result") assert.deepEqual(part.value, { found: true });
+      },
+    },
+    { text: "changed approach", check: (request) => assert.equal(warned(request), false) },
+    call("lookup", { x: 1, y: 2 }),
+    call("lookup", { x: 1, y: 2 }),
+    { text: "new turn", check: (request) => assert.equal(warned(request), false) },
+  ]);
+  const harness = await createCodingHarness({
+    model: model.binding(),
+    tools: [hostTool("lookup", "read", async () => ({ found: true }))],
+    plugins: [
+      toolLoopDetectionPlugin({
+        confirm: async () => {
+          throw new Error("One call per message must not need confirmation");
+        },
+      }),
+    ],
+  });
+  t.after(() => harness.close());
+  assert.equal((await harness.run("Investigate")).status, "succeeded");
+  assert.equal((await harness.run("Recheck")).status, "succeeded");
+});
+
+test("changed outputs and failed calls reset identical-result streaks", async (t) => {
+  let count = 0;
+  const model = new ScriptedModel([
+    ...Array.from({ length: 7 }, () => ({
+      ...call("lookup"),
+      check(request: ModelStepRequest) {
+        assert.equal(JSON.stringify(request.messages).includes("[Tool repetition warning]"), false);
+      },
+    })),
+    {
+      text: "done",
+      check(request) {
+        assert.equal(JSON.stringify(request.messages).includes("[Tool repetition warning]"), false);
+      },
+    },
+  ]);
+  const harness = await createCodingHarness({
+    model: model.binding(),
+    tools: [
+      hostTool("lookup", "read", async () => {
+        count++;
+        if (count === 5) throw new FrameworkError("NOT_FOUND", "Not found");
+        return { version: count < 3 ? 1 : 2 };
+      }),
+    ],
+    plugins: [toolLoopDetectionPlugin({ confirm: async () => "deny" })],
+  });
+  t.after(() => harness.close());
+  assert.equal((await harness.run("Check changes")).status, "succeeded");
+});
+
+test("repetition confirmation survives a restart without replaying completed effects", async (t) => {
+  let executions = 0;
+  let saved: SessionSnapshot | undefined;
+  let key: string | undefined;
+  const tool = hostTool("update", "write", async () => {
+    executions++;
+    return { ok: true };
+  });
+  const first = await createCodingHarness({
+    model: new ScriptedModel([{ calls: Array.from({ length: 3 }, () => ({ name: "update", input: {} })) }]).binding(),
+    tools: [tool],
+    components: {
+      sessionStore: memorySessionPlugin({
+        onCommit: (snapshot) => {
+          saved = snapshot;
+        },
+      }),
+    },
+    plugins: [
+      toolLoopDetectionPlugin({
+        confirm: async (request) => {
+          key = request.key;
+          return { kind: "ask", continuationId: "durable-loop" };
+        },
+      }),
+    ],
+  });
+  t.after(() => first.close());
+  assert.equal((await first.run("Work", { runId: "durable-loop-run" })).kind, "suspended");
+  assert.equal(executions, 2);
+  assert.ok(saved);
+  await first.close();
+  const model = new ScriptedModel([
+    {
+      text: "resumed",
+      check(request) {
+        assert.match(JSON.stringify(request.messages), /Tool repetition warning/);
+      },
+    },
+  ]);
+  const restored = await createCodingHarness({
+    model: model.binding(),
+    tools: [tool],
+    components: { sessionStore: memorySessionPlugin({ initialSnapshot: saved }) },
+    plugins: [
+      toolLoopDetectionPlugin({
+        confirm: async (request) => {
+          assert.equal(request.key, key);
+          return "allow";
+        },
+      }),
+    ],
+  });
+  t.after(() => restored.close());
+  const result = await restored.resume({ runId: "durable-loop-run", continuationId: "durable-loop", input: null });
+  assert.equal(result.status, "succeeded", JSON.stringify(result.error));
+  assert.equal(executions, 3);
+  assert.equal(model.requests.length, 1);
+});
+
+test("compaction retains repetition evidence without copying warnings into saved tool output", async (t) => {
+  let saved: SessionSnapshot | undefined;
+  const model = new ScriptedModel([
+    call("lookup"),
+    call("lookup"),
+    call("lookup"),
+    {
+      text: "use another approach",
+      check(request) {
+        assert.match(JSON.stringify(request.messages), /Tool repetition warning/);
+        assert.ok(saved?.summary && saved.summary.throughMessage >= 5);
+      },
+    },
+  ]);
+  const harness = await createCodingHarness({
+    model: model.binding(),
+    tools: [hostTool("lookup", "read")],
+    components: {
+      compaction: summaryCompactionPlugin({ thresholdRatio: 0.0001, keepRecentMessages: 2 }),
+      sessionStore: memorySessionPlugin({
+        onCommit: (snapshot) => {
+          saved = snapshot;
+        },
+      }),
+    },
+    plugins: [toolLoopDetectionPlugin({ confirm: async () => "deny" })],
+  });
+  t.after(() => harness.close());
+  const result = await harness.run("Investigate");
+  assert.equal(result.status, "succeeded", JSON.stringify(result.error));
+  assert.doesNotMatch(JSON.stringify(saved?.messages), /Tool repetition warning/);
+});
+
+test("cancellation during repetition confirmation prevents subsequent dispatch", async (t) => {
+  const entered = Promise.withResolvers<void>();
+  let executions = 0;
+  const harness = await createCodingHarness({
+    model: new ScriptedModel([{ calls: Array.from({ length: 4 }, () => ({ name: "lookup", input: {} })) }]).binding(),
+    tools: [
+      hostTool("lookup", "read", async () => {
+        executions++;
+        return { ok: true };
+      }),
+    ],
+    plugins: [
+      toolLoopDetectionPlugin({
+        confirm: async (request) => {
+          entered.resolve();
+          await waitForAbort(request.context.signal);
+          return "allow";
+        },
+      }),
+    ],
+  });
+  t.after(() => harness.close());
+  const running = harness.run("Work");
+  await entered.promise;
+  harness.cancel();
+  const result = await running;
+  assert.equal(result.status, "cancelled");
+  assert.ok(executions <= 2);
 });

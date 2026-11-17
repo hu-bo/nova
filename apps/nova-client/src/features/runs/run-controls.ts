@@ -174,6 +174,7 @@ export function useRunControls(stream: RunStreamSnapshot) {
             args: decision.args,
             allowedScopes: decision.allowedScopes,
             risk: decision.risk,
+            ...(decision.message ? { message: decision.message } : {}),
             ...(decision.codeChanges ? { codeChanges: decision.codeChanges } : {}),
           };
   }

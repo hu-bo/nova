@@ -14,6 +14,7 @@ export const interactionSchema = z.discriminatedUnion("kind", [
       toolName: z.string(),
       args: jsonValueSchema,
       risk: z.enum(["read", "write", "exec"]),
+      message: z.string().min(1).max(2000).optional(),
       allowedScopes: z.array(z.enum(["once", "session"])).min(1),
       codeChanges: z
         .array(z.object({ path: z.string(), oldText: z.string(), newText: z.string() }).strict())

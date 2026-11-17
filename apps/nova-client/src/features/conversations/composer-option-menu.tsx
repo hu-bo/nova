@@ -9,6 +9,7 @@ export function ComposerOptionMenu({
   options,
   disabled,
   icon,
+  className,
   onChange,
 }: {
   label: string;
@@ -16,12 +17,13 @@ export function ComposerOptionMenu({
   options: readonly { value: string; label: string; description?: string; disabled?: boolean }[];
   disabled: boolean;
   icon: ReactNode;
+  className?: string;
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover isOpen={open} onOpenChange={setOpen}>
-      <Button variant="ghost" disabled={disabled} aria-label={label}>
+      <Button variant="ghost" disabled={disabled} aria-label={label} {...(className ? { className } : {})}>
         <span aria-hidden="true" className="[&_svg]:size-4">
           {icon}
         </span>

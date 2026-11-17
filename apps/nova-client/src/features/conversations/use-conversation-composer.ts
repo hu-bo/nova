@@ -169,14 +169,14 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     onClearContext,
   } = options;
   const { identity } = useIdentity();
-  const chatAgent =
-    !options.specSession &&
-    mode === 'chat' &&
-    Boolean(options.careerCoach || runtime?.agentProfile);
-  const skillCatalog = useListSkills({ query: { enabled: chatAgent } });
   const [selectedSkill, setSelectedSkill] = useState<SkillSelection | null>(
     options.initialSkill ?? null,
   );
+  const supportsSkills = !options.specSession && mode === 'chat';
+  const chatAgent =
+    supportsSkills && Boolean(options.careerCoach || runtime?.agentProfile || selectedSkill);
+  const startsSkillConversation = chatAgent && Boolean(conversationId) && !runtime?.agentProfile;
+  const skillCatalog = useListSkills({ query: { enabled: supportsSkills } });
   const initializedSkill = useRef(Boolean(options.initialSkill));
   const previousEpoch = useRef(options.contextEpoch);
   useEffect(() => {
@@ -194,7 +194,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const modelSettings = useModelSettings();
   const remoteCatalog = useRemoteConnectionsQuery();
   const draftId =
-    conversationId ?? 'new:' + (chatAgent ? 'career' : mode) + ':' + (projectId ?? '');
+    conversationId ?? 'new:' + (options.careerCoach ? 'career' : mode) + ':' + (projectId ?? '');
   const accountId = identity!.identityId;
   const modelStore = useMemo(
     () => new LocalStore('nova_selected_model_profile:' + accountId, LEGACY_MODEL_STORE.get()),
@@ -491,7 +491,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
           ? (requestedEffort as ModelThinkingLevel)
           : undefined,
         mode: chatAgent || startsSpec ? 'plan' : nextMode,
-        remoteConnectionId: remoteConnectionId || undefined,
+        remoteConnectionId: !chatAgent ? remoteConnectionId || undefined : undefined,
       };
       if (config.data?.capabilities.execution && !runConfig.modelId)
         throw new ApiError(400, 'MODEL_REQUIRED', '请先选择或配置一个模型。');
@@ -515,7 +515,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         setText('');
         setSpecArmed(false);
         optionStore.set(null);
-      } else if (conversationId) {
+      } else if (conversationId && !startsSkillConversation) {
         await append.mutateAsync({
           blocks,
           mode: 'next_run',
@@ -678,13 +678,18 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   }
   const explorerProps = buildExplorerProps();
 
-  let placeholder = '想规划、实现或讨论什么？/ 使用命令…';
+  const inputHint = supportsSkills ? '@ 选择技能，/ 使用命令…' : '/ 使用命令…';
+  let placeholder = '想规划、实现或讨论什么？' + inputHint;
   if (isRunning) {
     placeholder = '继续补充任务，发送后进入队列…';
   } else if (executionMode === 'plan') {
-    placeholder = '先分析和制定计划，/ 使用命令…';
+    placeholder = '先分析和制定计划，' + inputHint;
   } else if (goalArmed) {
     placeholder = '描述一个明确、可验证的目标…';
+  }
+  if (chatAgent) {
+    placeholder = '粘贴简历和岗位描述，或输入 @ 选择技能…';
+    if (startsSkillConversation) placeholder = '输入内容，发送后开启独立的技能会话…';
   }
 
   const composer: ChatComposerConfig<Attachment> = {
@@ -713,11 +718,17 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     onReasoningEffortChange: changeReasoning,
     skills,
     onSkillInvoke: invokeSkill,
-    productSkills: chatAgent ? skillCatalog.data?.items : undefined,
+    productSkills: supportsSkills ? skillCatalog.data?.items : undefined,
     selectedProductSkill: selectedSkill,
-    onProductSkillChange: setSelectedSkill,
+    onProductSkillChange: (skill) => {
+      setSelectedSkill(skill);
+      if (skill) {
+        setSpecArmed(false);
+        setGoalArmed(false);
+      }
+    },
     contextUsage,
-    placeholder: chatAgent ? '粘贴简历和岗位描述，或继续回答面试问题…' : placeholder,
+    placeholder,
   };
   return {
     chatAgent,

@@ -448,12 +448,13 @@ test("shared stream accepts terminal finish without DONE and rejects truncation,
       code: "MODEL_PROTOCOL",
     },
     { name: "malformed JSON", body: "data: {bad\n\n", code: "MODEL_PROTOCOL" },
-    { name: "HTTP rate limit", body: "provider-secret", status: 429, code: "MODEL_RATE_LIMITED" },
-    { name: "HTTP authentication", body: "provider-secret", status: 401, code: "MODEL_AUTH_FAILED" },
+    { name: "HTTP rate limit", body: "provider-secret", status: 429, code: "MODEL_RATE_LIMITED", detail: true },
+    { name: "HTTP authentication", body: "provider-secret", status: 401, code: "MODEL_AUTH_FAILED", detail: true },
     {
       name: "upstream error frame",
       body: frame({ error: { message: "provider-secret", type: "provider" } }),
       code: "MODEL_REQUEST_FAILED",
+      detail: true,
     },
     {
       name: "invalid tool arguments",
@@ -488,7 +489,11 @@ test("shared stream accepts terminal finish without DONE and rejects truncation,
         await assert.rejects(consume(model), (error: unknown) => {
           assert.ok(error instanceof Error && "code" in error);
           assert.equal(error.code, scenario.code);
+          // Stable wording stays in message; provider text is only carried in detail.
           assert.ok(!error.message.includes("provider-secret"));
+          const detail = "detail" in error ? String(error.detail ?? "") : "";
+          if ("detail" in scenario && scenario.detail) assert.ok(detail.includes("provider-secret"));
+          else assert.ok(!detail.includes("provider-secret"));
           return true;
         });
       else assert.equal((await consume(model)).at(-1)?.type, "finished");

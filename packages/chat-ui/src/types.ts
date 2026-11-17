@@ -49,6 +49,7 @@ export type DecisionRequest =
       toolName: string;
       args: unknown;
       risk: "read" | "write" | "exec";
+      message?: string | undefined;
       codeChanges?: CodeChange[] | undefined;
       allowedScopes?: ("once" | "session")[] | undefined;
     }

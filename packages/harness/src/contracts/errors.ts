@@ -4,12 +4,15 @@ export interface SafeError {
   readonly code: string;
   readonly message: string;
   readonly retryable?: boolean;
+  /** Verbatim provider error text for user-facing display; absent when the provider gave none. */
+  readonly detail?: string;
 }
 export class FrameworkError extends Error implements SafeError {
   constructor(
     readonly code: string,
     message: string,
     readonly retryable = false,
+    readonly detail?: string,
   ) {
     super(message);
     this.name = "FrameworkError";
@@ -27,10 +30,15 @@ export class ToolFailureError extends FrameworkError {
     this.name = "ToolFailureError";
   }
 }
-/** Untrusted provider/handler messages never become public diagnostics. */
+/** Provider text is only ever carried in `detail`; `message` keeps safe, stable wording. */
 export function safeError(error: unknown, code = "EXECUTION_FAILED"): SafeError {
   return error instanceof FrameworkError
-    ? { code: error.code, message: error.message, retryable: error.retryable }
+    ? {
+        code: error.code,
+        message: error.message,
+        retryable: error.retryable,
+        ...(error.detail === undefined ? {} : { detail: error.detail }),
+      }
     : { code, message: "The operation failed." };
 }
 

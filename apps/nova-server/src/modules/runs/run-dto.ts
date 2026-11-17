@@ -69,7 +69,8 @@ export const messageDTO = (row: MessageRow): Message => ({
 
 export function effectiveCapabilities(conversation: ConversationRow, enabled = true): Capabilities {
   const environment = Boolean(conversation.metadata.binding || conversation.metadata.configuration?.remoteConnectionId);
-  const backend = runtimeAdapters.get(conversation.metadata.configuration?.backendId ?? "nova")?.capabilities;
+  const backendId = conversation.metadata.configuration?.backendId ?? "nova";
+  const backend = runtimeAdapters.get(backendId)?.capabilities;
   if (conversation.metadata.configuration?.agentProfile) return {
     tools: false, approval: false, question: false, steering: false,
     resume: enabled && Boolean(backend?.resume), compact: false, images: false, files: false,
@@ -77,7 +78,8 @@ export function effectiveCapabilities(conversation: ConversationRow, enabled = t
   return {
     tools: enabled && Boolean(backend?.tools),
     approval:
-      enabled && environment && conversation.metadata.configuration?.mode !== "plan" && Boolean(backend?.approval),
+      enabled && Boolean(backend?.approval) &&
+      (backendId === "nova" || (environment && conversation.metadata.configuration?.mode !== "plan")),
     question: enabled && Boolean(backend?.question),
     steering: enabled && Boolean(backend?.steering),
     resume: enabled && Boolean(backend?.resume),

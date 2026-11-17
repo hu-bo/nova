@@ -68,6 +68,7 @@ export interface ChatProps<TMetadata = unknown> {
   explorer?: RemoteExplorerProps | undefined;
   /** Passed through to `MessageList` so hosts can override block rendering (e.g. signed attachment images). */
   renderers?: BlockRenderers | undefined;
+  /** Rendered in the desktop (xl) aside only; narrow screens keep the focused message view. */
   sidebar?: ReactNode | undefined;
   /** Hosts may let users hide context while retaining a focused message view. */
   sidebarOpen?: boolean | undefined;
@@ -150,12 +151,6 @@ export function Chat<TMetadata = unknown>({
 
         <div className="min-w-0 shrink-0 overflow-visible border-slate-200 bg-white px-3 pb-0 pt-1 sm:px-4 sm:pb-1.5">
           <div className="nova-chat-content">
-            {sidebarOpen && sidebar && (
-              <details open className="mb-2 rounded-xl border border-slate-200 px-3 py-2 text-xs xl:hidden">
-                <summary className="cursor-pointer text-slate-500">任务详情</summary>
-                <div className="mt-3 max-h-[28dvh] overflow-y-auto">{sidebar}</div>
-              </details>
-            )}
             {sidebarOpen && incompleteTodos > 0 && (
               <div className="mb-2 xl:hidden">
                 <TodoPanel items={state.todos} collapsed />

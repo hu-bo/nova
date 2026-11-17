@@ -27,7 +27,12 @@ export function checkpointAfter(checkpoint: Checkpoint, next: SessionSnapshot, b
       kind: "completed",
       state: batch.run.status,
       ...(batch.run.budgetReason ? { reason: batch.run.budgetReason } : {}),
-      ...(batch.run.error ? { reason: batch.run.error.code } : {}),
+      ...(batch.run.error
+        ? {
+            reason: batch.run.error.code,
+            ...(batch.run.error.detail ? { detail: batch.run.error.detail } : {}),
+          }
+        : {}),
     };
   else if (batch.messages?.some((message) => message.role === "user")) delete updated.outcome;
   return updated;

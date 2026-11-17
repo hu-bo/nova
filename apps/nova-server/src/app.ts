@@ -35,6 +35,10 @@ declare module "fastify" {
 export async function buildApp(config: AppConfig, options: { exportMode?: boolean } = {}) {
   const app = Fastify({
     loggerInstance: createAppLogger(config),
+    // 部署固定经 Nginx 单层反代, 且 Nginx 用 proxy_set_header 重写 x-forwarded-* (static-site conf.d),
+    // 不存在客户端可注入的伪造链; 开启后 request.protocol 才能把 TLS 终结识别为 https,
+    // /api/runner-connection 才会下发 wss:// 连接地址而非明文 ws://.
+    trustProxy: true,
   });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);

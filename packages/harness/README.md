@@ -108,7 +108,7 @@ contracts  →  kernel  →  session/run runtime
 - `dispose()` 会拒绝新工作，取消并等待受管执行，再按逆序释放插件资源；调用可重复且复用关闭 Promise。
 - `AbortSignal` 会传递到模型、工具、Task Handler 和外部 client。取消信号不等于底层函数已经停止；不合作的同进程函数在真正结束前不会提前释放资源。
 - 接受前的配置、依赖和容量错误会抛出 `FrameworkError`；已接受的 Agent/Task 执行以结构化结果返回失败、取消或超时状态。
-- Provider、工具和未知异常不会把 token、secret、原始 provider body 或 stack trace 暴露给公共错误。
+- 公共错误的 `message` 只保留稳定文案，不会带上 token、secret 或 stack trace；provider 返回的报错原文单独放在 `SafeError.detail`，由宿主决定如何展示（当前服务端将其写入失败消息的错误块）。
 
 ## 当前范围
 

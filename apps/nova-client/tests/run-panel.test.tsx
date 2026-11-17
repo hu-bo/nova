@@ -141,13 +141,15 @@ describe('approval, cancellation and unknown outcomes', () => {
   it('submits the displayed revision and reuses an intent after a failed decision request', async () => {
     mocks.resolve.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({});
     const value = stream();
-    value.projection!.decisions = [decision(null)];
+    value.projection!.decisions = [{ ...decision(null), message: '同一条助手消息中包含 3 次相同调用，请确认。', allowedScopes: ['once'] }];
     const { result } = mountControls(value);
     expect(result.current.request).toMatchObject({
       kind: 'approval',
       decisionId: 'decision-1',
       toolName: 'exec',
       risk: 'exec',
+      message: '同一条助手消息中包含 3 次相同调用，请确认。',
+      allowedScopes: ['once'],
     });
     await act(async () => {
       await expect(
@@ -184,33 +186,16 @@ describe('approval, cancellation and unknown outcomes', () => {
     expect(screen.getByText('已停止')).toBeDefined();
     expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
   });
-  it.each([
-    ['MODEL_RATE_LIMITED', '模型服务限流或额度不足，请检查配额或切换模型。'],
-    ['MODEL_AUTH_FAILED', '模型服务认证失败，请检查模型的 API 密钥和访问权限。'],
-    ['MODEL_REQUEST_FAILED', '模型请求失败，请检查模型配置或稍后重试。'],
-    ['STEP_LIMIT', '已达到本轮执行步数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。'],
-    ['TOOL_LIMIT', '已达到本轮工具调用次数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。'],
-  ])('explains run failure %s from a saved snapshot', (reason, message) => {
+  it('does not render a failure alert: run errors live in the failed message itself', () => {
     const value = stream();
     value.projection = initialProjection(
-      snapshot({ run: { id: 'run-1', state: 'failed', reason } }),
+      snapshot({ run: { id: 'run-1', state: 'failed', reason: 'MODEL_RATE_LIMITED' } }),
     );
     mount(value);
-    expect(screen.getByRole('alert').textContent).toBe(message);
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
   });
-  it.each([undefined, 'UNRECOGNIZED_ERROR'])(
-    'explains failures with an unmapped reason: %s',
-    (reason) => {
-      const value = stream();
-      value.projection!.run = { id: 'run-1', state: 'failed', ...(reason ? { reason } : {}) };
-      mount(value);
-      expect(screen.getByRole('alert').textContent).toBe(
-        '本轮运行失败，可以发送消息继续处理或稍后重试。',
-      );
-    },
-  );
-  it('shows step exhaustion from the live stream and clears it when another run starts', () => {
+  it('clears the failure state when another run starts', () => {
     const value = stream();
     const view = mount(value);
     value.projection = reduceRunEvent(
@@ -218,7 +203,7 @@ describe('approval, cancellation and unknown outcomes', () => {
       event('run.changed', 1, { run: { id: 'run-1', state: 'failed', reason: 'STEP_LIMIT' } }),
     );
     view.rerender(view.ui(value));
-    expect(screen.getByRole('alert').textContent).toContain('已达到本轮执行步数上限');
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
 
     value.projection = reduceRunEvent(
@@ -226,7 +211,6 @@ describe('approval, cancellation and unknown outcomes', () => {
       event('run.changed', 2, { run: { id: 'run-2', state: 'running' } }),
     );
     view.rerender(view.ui(value));
-    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText('正在运行')).toBeDefined();
   });
   it('reports evidence refresh progress without treating it as execution confirmation', async () => {

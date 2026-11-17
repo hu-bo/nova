@@ -36,7 +36,12 @@ export interface RuntimeCommit {
   consumedInputIds?: string[];
 }
 export type RuntimeOutcome =
-  | { kind: "completed"; state: "succeeded" | "budget_exhausted" | "failed" | "cancelled" | "timed_out"; reason?: string }
+  | {
+      kind: "completed";
+      state: "succeeded" | "budget_exhausted" | "failed" | "cancelled" | "timed_out";
+      reason?: string;
+      detail?: string;
+    }
   | { kind: "waiting" | "paused"; reason?: string };
 export type RuntimeCommand = { kind: "start"; input: SubmitInput; messageId: string } | { kind: "recover" };
 export interface RuntimeContext {

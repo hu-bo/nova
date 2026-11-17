@@ -2,6 +2,7 @@ import {
   streamText,
   isStepCount,
   APICallError,
+  StreamProviderError,
   TypeValidationError,
   InvalidResponseDataError,
   JSONParseError,
@@ -380,6 +381,16 @@ function tokenCount(value: number | undefined): number | null {
   return value;
 }
 
+/** Provider error text for display: single line, length-bounded, only from typed provider errors. */
+function providerDetail(error: unknown): string | undefined {
+  let raw: string | undefined;
+  if (APICallError.isInstance(error)) raw = error.message || error.responseBody;
+  else if (StreamProviderError.isInstance(error)) raw = error.message;
+  const text = raw?.replace(/\s+/g, " ").trim();
+  if (!text) return undefined;
+  return text.length > 2000 ? text.slice(0, 2000) + "…" : text;
+}
+
 function modelFailure(
   error: unknown,
   signal: AbortSignal,
@@ -392,12 +403,13 @@ function modelFailure(
   }
   if (error instanceof FrameworkError) return error;
   if (error instanceof Error && error.cause instanceof FrameworkError) return error.cause;
+  const detail = providerDetail(error);
   if (APICallError.isInstance(error)) {
     const status = error.statusCode;
-    if (status === 429) return new FrameworkError("MODEL_RATE_LIMITED", "Model rate limit exceeded.");
+    if (status === 429) return new FrameworkError("MODEL_RATE_LIMITED", "Model rate limit exceeded.", false, detail);
     if (status === 401 || status === 403)
-      return new FrameworkError("MODEL_AUTH_FAILED", "Model authentication failed.");
-    return new FrameworkError("MODEL_REQUEST_FAILED", "Model request failed.");
+      return new FrameworkError("MODEL_AUTH_FAILED", "Model authentication failed.", false, detail);
+    return new FrameworkError("MODEL_REQUEST_FAILED", "Model request failed.", false, detail);
   }
   if (
     TypeValidationError.isInstance(error) ||
@@ -405,5 +417,5 @@ function modelFailure(
     JSONParseError.isInstance(error)
   )
     return new FrameworkError("MODEL_PROTOCOL", "Invalid model stream.");
-  return new FrameworkError(fallback, "Model request failed.");
+  return new FrameworkError(fallback, "Model request failed.", false, detail);
 }

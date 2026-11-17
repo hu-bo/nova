@@ -1,10 +1,10 @@
-import { BrainCircuit, CircleStop, Cpu, LoaderCircle, Send } from "lucide-react";
+import { BrainCircuit, ChevronDown, CircleStop, Cpu, LoaderCircle, Puzzle, Send, X } from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "./components/ui/button.js";
 import { Card } from "./components/ui/card.js";
 import { ComposerContextUsageIndicator } from "./composer-context-usage.js";
 import { ComposerOptionMenu } from "./composer-option-menu.js";
-import { ComposerSkillMenu, matchComposerSkills } from "./composer-skill-menu.js";
+import { ComposerSkillMenu, findSkillMention, matchComposerSkills } from "./composer-skill-menu.js";
 import type { ComposerProps, ComposerSkill, ComposerSubmission } from "./composer-types.js";
 import { Textarea } from "./components/ui/textarea.js";
 import { UploadCover } from "./upload-cover.js";
@@ -62,6 +62,8 @@ export function Composer<TMetadata = unknown>({
   const [invokingSkill, setInvokingSkill] = useState(false);
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
   const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
+  const [productSkillMenuOpen, setProductSkillMenuOpen] = useState(false);
+  const [cursor, setCursor] = useState(text.length);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const maxHeightRef = useRef<number | null>(null);
   const growsNativelyRef = useRef<boolean | null>(null);
@@ -70,8 +72,30 @@ export function Composer<TMetadata = unknown>({
   const previousLengthRef = useRef(0);
   const skillListId = useId();
   const locked = disabled || submitting || invokingSkill;
-  const matchingSkills = skillMenuDismissed ? [] : matchComposerSkills(text, skills);
-  const selectedSkill = matchingSkills[Math.min(selectedSkillIndex, Math.max(0, matchingSkills.length - 1))];
+  const mention = findSkillMention(text, cursor);
+  const showProductSkills =
+    !locked &&
+    !skillMenuDismissed &&
+    Boolean(onProductSkillChange) &&
+    productSkills.length > 0 &&
+    (productSkillMenuOpen || mention !== null);
+  const matchingSkills = skillMenuDismissed || locked ? [] : matchComposerSkills(text, skills);
+  const matchingProductSkills: ComposerSkill[] = productSkills
+    .filter(
+      (skill) =>
+        !mention ||
+        productSkillMenuOpen ||
+        [skill.name, skill.description, skill.id].some((value) => value.toLocaleLowerCase().includes(mention.query)),
+    )
+    .map((skill) => ({
+      id: `${skill.id}@${skill.version}`,
+      command: skill.id,
+      label: skill.name,
+      description: skill.description,
+    }));
+  const menuSkills = showProductSkills ? matchingProductSkills : matchingSkills;
+  const selectedSkill = menuSkills[Math.min(selectedSkillIndex, Math.max(0, menuSkills.length - 1))];
+  const menuOpen = showProductSkills || matchingSkills.length > 0;
   const hasDraft = Boolean(text.trim() || files.length || attachments.length);
   const canSubmit = !locked && !submitDisabled && hasDraft;
   const activeProductSkill = productSkills.find(
@@ -159,29 +183,51 @@ export function Composer<TMetadata = unknown>({
       .finally(() => setInvokingSkill(false));
   }
 
-  function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Escape" && isRunning && onAbort) {
-      event.preventDefault();
-      void onAbort();
-      return;
+  function selectProductSkill(item: ComposerSkill) {
+    const skill = productSkills.find((candidate) => `${candidate.id}@${candidate.version}` === item.id);
+    if (locked || !skill || !onProductSkillChange) return;
+    if (mention) {
+      setText(text.slice(0, mention.start) + text.slice(mention.end));
+      setCursor(mention.start);
     }
-    if (matchingSkills.length > 0) {
+    onProductSkillChange({ id: skill.id, version: skill.version });
+    setProductSkillMenuOpen(false);
+    setSkillMenuDismissed(true);
+    textareaRef.current?.focus();
+    if (mention) {
+      requestAnimationFrame(() => textareaRef.current?.setSelectionRange(mention.start, mention.start));
+    }
+  }
+
+  function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.nativeEvent.isComposing) return;
+    if (menuOpen) {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         const direction = event.key === "ArrowDown" ? 1 : -1;
-        setSelectedSkillIndex((current) => (current + direction + matchingSkills.length) % matchingSkills.length);
+        if (menuSkills.length > 0)
+          setSelectedSkillIndex((current) => (current + direction + menuSkills.length) % menuSkills.length);
         return;
       }
       if (event.key === "Escape") {
         event.preventDefault();
         setSkillMenuDismissed(true);
+        setProductSkillMenuOpen(false);
         return;
       }
-      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && selectedSkill) {
+      if (!event.shiftKey && (event.key === "Enter" || (event.key === "Tab" && selectedSkill))) {
         event.preventDefault();
-        invokeSkill(selectedSkill);
+        if (selectedSkill) {
+          if (showProductSkills) selectProductSkill(selectedSkill);
+          else invokeSkill(selectedSkill);
+        }
         return;
       }
+    }
+    if (event.key === "Escape" && isRunning && onAbort) {
+      event.preventDefault();
+      void onAbort();
+      return;
     }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -190,7 +236,15 @@ export function Composer<TMetadata = unknown>({
   }
 
   return (
-    <Card className="nova-composer nova-chat-content overflow-visible rounded-2xl">
+    <Card
+      className="nova-composer nova-chat-content relative overflow-visible rounded-2xl"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setSkillMenuDismissed(true);
+          setProductSkillMenuOpen(false);
+        }
+      }}
+    >
       <UploadCover
         files={files}
         onFilesChange={(next) => {
@@ -207,6 +261,24 @@ export function Composer<TMetadata = unknown>({
         {({ onPaste, trigger }) => (
           <form className="p-1.5" onSubmit={submit}>
             {headerContent}
+            {selectedProductSkill && (
+              <div className="px-2 pt-1.5">
+                <button
+                  type="button"
+                  disabled={locked}
+                  aria-label="移除技能"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-200"
+                  onClick={() => {
+                    onProductSkillChange?.(null);
+                    textareaRef.current?.focus();
+                  }}
+                >
+                  <Puzzle className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{activeProductSkill?.name ?? selectedProductSkill.id}</span>
+                  <X className="size-3 shrink-0" aria-hidden="true" />
+                </button>
+              </div>
+            )}
             <label className="block px-2">
               <span className="sr-only">消息</span>
               <Textarea
@@ -215,63 +287,57 @@ export function Composer<TMetadata = unknown>({
                 disabled={locked}
                 onChange={(event) => {
                   setText(event.currentTarget.value);
+                  setCursor(event.currentTarget.selectionStart);
                   setSelectedSkillIndex(0);
                   setSkillMenuDismissed(false);
+                  setProductSkillMenuOpen(false);
                 }}
+                onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
                 onKeyDown={keyDown}
                 onPaste={allowFiles ? onPaste : undefined}
                 rows={2}
                 placeholder={placeholder}
                 className="nova-composer-textarea nova-scrollbar min-h-16 max-h-[204px] resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
-                aria-expanded={matchingSkills.length > 0}
-                aria-controls={matchingSkills.length > 0 ? skillListId : undefined}
+                aria-expanded={menuOpen}
+                aria-controls={menuOpen ? skillListId : undefined}
                 aria-activedescendant={selectedSkill ? `${skillListId}-${selectedSkill.id}` : undefined}
               />
             </label>
 
-            {productSkills.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 py-1 text-xs">
-                <select
-                  aria-label="选择技能"
-                  disabled={locked}
-                  className="max-w-full rounded-md border bg-transparent px-2 py-1"
-                  value={selectedProductSkill ? `${selectedProductSkill.id}@${selectedProductSkill.version}` : ""}
-                  onChange={(event) => {
-                    const skill = productSkills.find((item) => `${item.id}@${item.version}` === event.target.value);
-                    onProductSkillChange?.(skill ? { id: skill.id, version: skill.version } : null);
-                  }}
-                >
-                  <option value="">普通聊天 · 选择技能</option>
-                  {productSkills.map((skill) => (
-                    <option key={`${skill.id}@${skill.version}`} value={`${skill.id}@${skill.version}`}>
-                      {skill.name} · 内置 · {skill.version}
-                    </option>
-                  ))}
-                </select>
-                {selectedProductSkill && (
-                  <button
-                    type="button"
-                    disabled={locked}
-                    aria-label="移除技能"
-                    className="rounded-full bg-slate-100 px-2 py-1 dark:bg-slate-800"
-                    onClick={() => onProductSkillChange?.(null)}
-                  >
-                    {activeProductSkill?.name ?? selectedProductSkill.id} ×
-                  </button>
-                )}
-                {selectedProductSkill && <span className="text-slate-500">{activeProductSkill?.description}</span>}
-              </div>
+            {menuOpen && (
+              <ComposerSkillMenu
+                listId={skillListId}
+                skills={menuSkills}
+                selected={selectedSkill}
+                trigger={showProductSkills ? "@" : "/"}
+                onSelect={showProductSkills ? selectProductSkill : onSkillInvoke && invokeSkill}
+              />
             )}
-            <ComposerSkillMenu
-              listId={skillListId}
-              skills={matchingSkills}
-              selected={selectedSkill}
-              onSelect={onSkillInvoke ? invokeSkill : undefined}
-            />
 
             <div className="nova-composer-input-row flex min-w-0 items-center justify-between gap-2  border-slate-100 pt-1.5 dark:border-slate-800/80">
               <div className="nova-composer-options flex min-w-0 flex-wrap items-center gap-1">
                 {trigger}
+                {productSkills.length > 0 && onProductSkillChange && (
+                  <button
+                    type="button"
+                    disabled={locked}
+                    aria-label="选择技能"
+                    aria-haspopup="listbox"
+                    aria-expanded={showProductSkills}
+                    aria-controls={showProductSkills ? skillListId : undefined}
+                    className="nova-composer-option-trigger"
+                    onClick={() => {
+                      setProductSkillMenuOpen(!showProductSkills);
+                      setSkillMenuDismissed(showProductSkills);
+                      setSelectedSkillIndex(0);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    <Puzzle className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span>技能</span>
+                    <ChevronDown className="size-3 shrink-0" aria-hidden="true" />
+                  </button>
+                )}
                 {toolbarStart}
                 {!toolbarEnd && models.length > 0 && (
                   <ComposerOptionMenu

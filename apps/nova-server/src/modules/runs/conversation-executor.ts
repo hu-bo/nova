@@ -89,7 +89,7 @@ export class ConversationExecutor {
       }
       if (prepared.command.kind === "recover" && prepared.run.checkpoint?.outcome) {
         const outcome = prepared.run.checkpoint.outcome;
-        await this.repository.finish(claim, outcome.state, outcome.reason);
+        await this.repository.finish(claim, outcome.state, outcome.reason, outcome.detail);
         return;
       }
       const factory = runtimeAdapters.get(prepared.configuration.backendId)?.create;
@@ -130,7 +130,7 @@ export class ConversationExecutor {
         }
         if (outcome.state !== "succeeded") {
           logger.warn({ state: outcome.state, reason: outcome.reason }, "Conversation run ended without success");
-          await this.repository.finish(claim, outcome.state, outcome.reason);
+          await this.repository.finish(claim, outcome.state, outcome.reason, outcome.detail);
           return;
         }
         const checkpoint = await this.repository.load(claim);

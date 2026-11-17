@@ -2315,6 +2315,11 @@ export type GetConversationSnapshot200InteractionsItem = {
   toolName: string;
   args:  | null | boolean | number | string | unknown[] | {[key: string]: unknown};
   risk: 'read' | 'write' | 'exec';
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  message?: string;
   /** @minItems 1 */
   allowedScopes: ('once' | 'session')[];
   codeChanges?: {
@@ -5306,6 +5311,11 @@ export type RespondInteraction200 = {
   toolName: string;
   args:  | null | boolean | number | string | unknown[] | {[key: string]: unknown};
   risk: 'read' | 'write' | 'exec';
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  message?: string;
   /** @minItems 1 */
   allowedScopes: ('once' | 'session')[];
   codeChanges?: {

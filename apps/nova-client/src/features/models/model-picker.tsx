@@ -71,7 +71,7 @@ export function ModelPicker({
         title={selected ? selected.model + ' · ' + selected.providerName : '选择或配置模型'}
       >
         <Cpu size={15} />
-        <span className="max-w-36 truncate text-xs sm:max-w-48">
+        <span className="max-w-24 truncate text-xs sm:max-w-48">
           {selected?.model ?? (loading ? '加载模型…' : '选择模型')}
         </span>
         <ChevronDown size={12} />
