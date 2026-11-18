@@ -20,7 +20,7 @@ libc = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 regex = { workspace = true }
-# 仅用于向 rustls 特征图注入 ring 提供方 (见工作区 Cargo.toml 注释)。
+# Runner 启动时显式注册 ring 提供方。
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

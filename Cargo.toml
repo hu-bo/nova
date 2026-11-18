@@ -27,7 +27,7 @@ thiserror = "2"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio = { version = "1", features = ["full"] }
 # tokio-tungstenite 0.26 的 rustls-tls-webpki-roots 不再附带加密提供方,
-# 需由 nova-runner 直接依赖 rustls 并启用 ring, 否则 wss 握手时 rustls 找不到 CryptoProvider 而 panic。
+# 由 nova-runner 直接依赖 rustls、启用 ring 并在启动时显式注册。
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
 toml = "0.8"
 tracing = "0.1"

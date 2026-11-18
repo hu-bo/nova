@@ -45,6 +45,10 @@ use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 显式选择提供方，避免依赖特征合并后 rustls 无法自动确定 CryptoProvider。
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .map_err(|_| "Rustls CryptoProvider was already initialized")?;
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
