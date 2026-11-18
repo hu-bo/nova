@@ -37,7 +37,8 @@ import { bindingSchema } from "../projects/index.js";
 import { advanceStream, streamStateOf, type StreamState } from "./stream-state.js";
 import { runProjectionReader, type RunProjectionReader } from "./run-projection.repository.js";
 import { readCheckpoint } from "./session-checkpoint.repository.js";
-import { checkpointAfter, executionEffectState } from "./session-checkpoint.js";
+import { cancelPendingTools, checkpointAfter, executionEffectState } from "./session-checkpoint.js";
+import { projectToolContent } from "./tool-blocks.js";
 import { skillView } from "../skills/index.js";
 import { taskPlanSchema } from "../specs/spec.schema.js";
 import { specDraftCandidateSchema } from "@nova/tools/harness";
@@ -1104,6 +1105,38 @@ export class RunRepository {
 
     const { conversation, run } = await this.ownedClaim(tx, claim);
     if (run.state === "cancelling") state = "cancelled";
+    if (run.checkpoint && (state === "cancelled" || state === "cancelled_unconfirmed")) {
+      const settled = cancelPendingTools(run.checkpoint);
+      run.checkpoint = settled.checkpoint;
+      for (const result of settled.results) {
+        const outcome = publicOutcome(result) ?? result.status;
+        const message: Message = {
+          id: result.executionId,
+          runId: run.id,
+          sequence: (++conversation.lastMessageSequence).toString(),
+          role: "tool",
+          state: "completed",
+          blocks: [
+            {
+              id: "result:" + result.callId,
+              type: "tool_result",
+              callId: result.callId,
+              operationId: result.executionId,
+              outcome,
+              content: projectToolContent(result.name, result.value ?? null),
+            },
+          ],
+          createdAt: new Date().toISOString(),
+        };
+        await insertMessage(tx, conversation.id, message);
+        await this.journal.append(conversation, { runId: run.id, type: "message.committed", payload: { message } });
+        await this.journal.append(conversation, {
+          runId: run.id,
+          type: "tool.changed",
+          payload: { operation: { id: result.executionId, callId: result.callId, state: outcome } },
+        });
+      }
+    }
     const unknown = run.checkpoint && executionEffectState(run.checkpoint.executions) !== "known";
     if (unknown) state = "cancelled_unconfirmed";
     const specExecution = run.checkpoint?.specExecution;

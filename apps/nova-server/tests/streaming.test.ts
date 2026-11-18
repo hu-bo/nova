@@ -247,7 +247,7 @@ test("configured model delegates protocol handling and logs safe correlated fail
         }) + done,
       protocol: "openai",
       status: 200,
-      failure: "MODEL_PROTOCOL",
+      deferred: true,
     },
     {
       name: "upstream error",
@@ -375,6 +375,19 @@ test("configured model delegates protocol handling and logs safe correlated fail
       } else if ("transportError" in scenario) {
         await assert.rejects(consume, { code: "MODEL_TRANSPORT" });
         assert.equal(logs.find((entry) => entry.msg === "Model stream failed")!.errorCode, "MODEL_TRANSPORT");
+      } else if ("deferred" in scenario) {
+        // 不规范的工具调用不再终止这一轮：原文交给工具层判定，日志只留结构、ID 和长度。
+        await consume();
+        const call = chunks.find((chunk) => chunk.type === "tool.call");
+        assert.ok(call?.type === "tool.call");
+        assert.equal(call.name, "bash");
+        assert.equal(call.input, secret);
+        assert.deepEqual(chunks.at(-1), { type: "finished", reason: "tool-calls" });
+        const warning = logs.find((entry) => entry.msg === "Model tool call deferred to tool validation.")!;
+        assert.equal(warning.toolName, "bash");
+        assert.equal(warning.toolCallId, "call");
+        assert.equal(warning.toolInputBytes, secret.length);
+        assert.equal(warning.unavailableTool, true);
       } else {
         await consume();
         assert.deepEqual(chunks.at(-1), { type: "finished", reason: "stop" });

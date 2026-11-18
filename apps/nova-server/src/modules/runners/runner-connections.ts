@@ -13,6 +13,10 @@ export class RunnerConnections {
     private readonly tokens: RunnerTokenRepository,
     private readonly connections = new Map<string, { owner: string; tokenId: string; session: RunnerSession }>(),
   ) {}
+  platform(id: string, owner: string): string | undefined {
+    const connection = this.connections.get(id);
+    return connection?.owner === owner ? connection.session.identity.platform : undefined;
+  }
   async require(id: string, owner: string) {
     const connection = this.connections.get(id);
     const runner = await this.runners.findOwned(id, owner);

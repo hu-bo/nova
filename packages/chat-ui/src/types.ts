@@ -26,7 +26,7 @@ export type Block = { id?: string | undefined } & (
   | { type: "diff"; path: string; diff: string; added: number; removed: number }
   | { type: "file"; path: string; kind: "file" | "dir"; size?: number | undefined }
   | { type: "tool_call"; callId: string; name: string; args: unknown; status: ToolStatus }
-  | { type: "tool_result"; callId: string; status: "ok" | "error"; blocks: Block[] }
+  | { type: "tool_result"; callId: string; status: Exclude<ToolStatus, "queued" | "running">; blocks: Block[] }
   | { type: "todo"; items: Todo[] }
   | { type: "error"; code: string; message: string }
   | { type: "custom"; name: string; fallback: string }

@@ -2,19 +2,22 @@ import { createLogger } from "@hquant/logger-js";
 import type { FastifyBaseLogger } from "fastify";
 import type { AppConfig } from "../config.js";
 
-function localTimestamp(): string {
-  const now = new Date(Date.now());
-  const offsetMinutes = -now.getTimezoneOffset();
-  const local = new Date(now.getTime() + offsetMinutes * 60_000).toISOString().slice(0, -1);
-  const hours = String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, "0");
-  const minutes = String(Math.abs(offsetMinutes) % 60).padStart(2, "0");
-  return `,"time":"${local}${offsetMinutes >= 0 ? "+" : "-"}${hours}:${minutes}"`;
+// China has no daylight saving, so a fixed +08:00 offset is exact. Production containers run in UTC,
+// so deriving from the host timezone would print the wrong wall-clock time.
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function shanghaiTimestamp(): string {
+  const now = new Date(Date.now() + SHANGHAI_OFFSET_MS);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const date = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}`;
+  const clock = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+  return `,"time":"${date} ${clock}"`;
 }
 
 export function createLoggerOptions(level: AppConfig["LOG_LEVEL"]) {
   return {
     level,
-    timestamp: localTimestamp,
+    timestamp: shanghaiTimestamp,
     redact: [
       "req.headers.authorization",
       "req.headers.cookie",

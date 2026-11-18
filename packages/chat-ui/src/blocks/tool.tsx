@@ -149,7 +149,7 @@ export function ToolBlock({
           )}
         </div>
         <span
-          aria-label={`状态：${call.status}`}
+          aria-label={`状态：${status}`}
           className={`inline-flex shrink-0 items-center gap-1.5 text-[11px] ${color}`}
         >
           <StatusIcon

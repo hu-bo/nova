@@ -1,6 +1,8 @@
 import {
   streamText,
   isStepCount,
+  jsonSchema,
+  zodSchema,
   APICallError,
   StreamProviderError,
   TypeValidationError,
@@ -198,11 +200,18 @@ export function aiSdkModelPlugin(config: AiSdkModelConfig, options: AiSdkModelOp
               request.reasoningEffort,
             );
             const tools: ToolSet = {};
-            for (const tool of request.tools)
+            for (const tool of request.tools) {
+              const wire = zodSchema(z.fromJSONSchema(z.record(z.string(), z.unknown()).parse(tool.inputSchema)));
+              // 入参是否合法只有工具自己说了算（tools/define-tool、shared/dynamic-tool）。
+              // 这里保留 zod 往返，只为沿用既有的 JSON Schema 归一化（$ref 内线、draft 统一）；
+              // validate 放行，避免第二套校验把模型一次不规范的调用升级成整轮 MODEL_PROTOCOL 失败。
               tools[tool.name] = {
                 description: tool.description,
-                inputSchema: z.fromJSONSchema(z.record(z.string(), z.unknown()).parse(tool.inputSchema)),
+                inputSchema: jsonSchema(() => wire.jsonSchema, {
+                  validate: async (value) => ({ success: true, value }),
+                }),
               };
+            }
             let providerError: unknown;
             const response = streamText({
               model: binding.model,
@@ -298,9 +307,22 @@ export function aiSdkModelPlugin(config: AiSdkModelConfig, options: AiSdkModelOp
                   },
                 };
               } else if (chunk.type === "error") throw modelFailure(chunk.error, signal, "MODEL_REQUEST_FAILED");
-              else if (chunk.type === "tool-error")
-                throw new FrameworkError("MODEL_PROTOCOL", "Invalid model tool call.");
-              else if (chunk.type === "abort") throw new FrameworkError("CANCELLED", "Model stream aborted.");
+              else if (chunk.type === "tool-error") {
+                // 入参校验交给工具本身之后，这里只剩两种可能：工具入参不是合法 JSON，或模型调了目录外的工具。
+                // 调用原文已按 tool.call 流出，执行器会回 INVALID_TOOL_INPUT / UNKNOWN_TOOL，模型可自行纠正；
+                // 这里只记录名称、ID、参数字节数和是否越出目录，不记录参数原文。
+                log?.warn(
+                  {
+                    ...diagnostics,
+                    elapsedMs: Date.now() - startedAt,
+                    toolName: chunk.toolName,
+                    toolCallId: chunk.toolCallId,
+                    toolInputBytes: toolInputBytes(chunk.input),
+                    unavailableTool: !Object.hasOwn(tools, chunk.toolName),
+                  },
+                  "Model tool call deferred to tool validation.",
+                );
+              } else if (chunk.type === "abort") throw new FrameworkError("CANCELLED", "Model stream aborted.");
               else if (chunk.type === "file" || chunk.type === "reasoning-file" || chunk.type === "custom")
                 throw new FrameworkError("MODEL_INCOMPATIBLE", "Unsupported provider content.");
             }
@@ -372,6 +394,13 @@ function mergeContinuationMetadata(
     else merged[provider] = options;
   }
   return merged;
+}
+
+/** 参数规模用于判断是否被输出上限截断；参数原文不入日志，与模型诊断日志纪律一致。 */
+function toolInputBytes(input: unknown): number {
+  if (typeof input === "string") return input.length;
+  const text = JSON.stringify(input);
+  return text === undefined ? 0 : text.length;
 }
 
 function tokenCount(value: number | undefined): number | null {

@@ -373,7 +373,11 @@ describe("chat-ui", () => {
     expect(html).toContain("ship");
   });
 
-  it("merges a tool result from its own message into the matching tool block", () => {
+  it.each([
+    { status: "ok", label: "已完成" },
+    { status: "cancelled", label: "已取消" },
+    { status: "unknown", label: "待核实" },
+  ] as const)("merges a $status tool result from its own message into the matching tool block", ({ status, label }) => {
     const messages: ChatMessage[] = [
       {
         id: "assistant-1",
@@ -383,7 +387,13 @@ describe("chat-ui", () => {
         createdAt: 1,
         blocks: [
           { type: "text", text: "搜索完成" },
-          { type: "tool_call", callId: "call-1", name: "grep", args: { pattern: "^name", path: "." }, status: "ok" },
+          {
+            type: "tool_call",
+            callId: "call-1",
+            name: "grep",
+            args: { pattern: "^name", path: "." },
+            status: "queued",
+          },
         ],
       },
       {
@@ -392,12 +402,13 @@ describe("chat-ui", () => {
         role: "tool",
         status: "done",
         createdAt: 2,
-        blocks: [
-          { type: "tool_result", callId: "call-1", status: "ok", blocks: [{ type: "text", text: "Cargo.toml" }] },
-        ],
+        blocks: [{ type: "tool_result", callId: "call-1", status, blocks: [{ type: "text", text: "Cargo.toml" }] }],
       },
     ];
     const html = renderToStaticMarkup(<MessageList messages={messages} />);
+    expect(html).toContain(label);
+    expect(html).toContain(`aria-label="状态：${status}"`);
+    expect(html).not.toContain("等待执行");
     expect(html).toContain('title="^name"');
     expect(html).toContain("Cargo.toml");
     // The result renders inside the tool block's output section, not as a standalone tool message.

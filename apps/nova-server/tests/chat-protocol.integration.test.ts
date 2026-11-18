@@ -33,7 +33,7 @@ import { createCredentialCipher } from "../src/shared/credential-cipher.js";
 import { DEV_LOCAL_USER_ID, DEV_MOCK_ACCESS_TOKEN } from "@nova/agent-ui-contracts/dev-auth";
 import type { RunnerSession } from "@nova/runner-sdk";
 import { Pool } from "pg";
-import { and, asc, eq, sql, getTableName } from "drizzle-orm";
+import { and, asc, eq, gt, sql, getTableName } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../database/schema/index.js";
 import { createCodingHarness } from "@nova/coding-harness";
@@ -93,8 +93,9 @@ import { createConversationRepository } from "../src/modules/conversations/conve
 import type { RunClaim } from "../src/modules/runs/run.repository.js";
 import { createRunService, type RunService as RunRepository } from "../src/modules/runs/run.service.js";
 import { postgresSessionPlugin } from "../src/modules/runs/postgres-session-store.js";
-import { nativeSnapshot, runtimeAdapters, type RuntimeAdapter } from "../src/modules/runs/runtime-adapter.js";
-import { executionEffectState } from "../src/modules/runs/session-checkpoint.js";
+import { nativeSnapshot, runtimeAdapters, type Checkpoint, type RuntimeAdapter } from "../src/modules/runs/runtime-adapter.js";
+import { cancelPendingTools, executionEffectState } from "../src/modules/runs/session-checkpoint.js";
+import { publicOutcome } from "../src/modules/runs/run-dto.js";
 import "../src/modules/runs/nova-runtime.js";
 import { ConversationExecutor } from "../src/modules/runs/conversation-executor.js";
 import { buildApp } from "../src/app.js";
@@ -115,6 +116,73 @@ test("effect isolation ignores unconfirmed reads and retains unconfirmed writes"
   assert.equal(executionEffectState([read, write]), "pending");
   assert.equal(executionEffectState([read, { ...write, result: read.result }]), "unknown");
   assert.equal(executionEffectState([{ ...write, effects: undefined }]), "pending");
+});
+test("cancellation closes pending tool history without losing completed or unconfirmed effects", () => {
+  const execution: import("@nnova/harness").ExecutionRecord = {
+    executionId: "waiting",
+    runId: "run",
+    stepId: "step",
+    callId: "waiting",
+    name: "write",
+    input: {},
+    idempotencyKey: "waiting",
+    dispatch: "intent",
+    effects: "write",
+  };
+  const succeeded = {
+    executionId: "done",
+    callId: "done",
+    name: "write",
+    status: "succeeded" as const,
+    value: { done: true },
+  };
+  const checkpoint: Checkpoint = {
+    backendId: "nova",
+    epoch: 1,
+    configuration: configurationSchema.parse({}),
+    approvals: [],
+    reservedInputs: [],
+    interactions: [],
+    continuation: { continuationId: "approval" },
+    executions: [
+      execution,
+      { ...execution, executionId: "unknown", callId: "unknown", dispatch: "dispatched" },
+      { ...execution, executionId: "done", callId: "done", dispatch: "dispatched", result: succeeded },
+    ],
+    nativeState: {
+      runs: [],
+      messages: [
+        {
+          id: "assistant",
+          role: "assistant",
+          parts: ["waiting", "not-started", "unknown", "done", "closed"].map((callId) => ({
+            type: "tool-call",
+            callId,
+            name: "write",
+            input: {},
+          })),
+        },
+        {
+          id: "closed-result",
+          role: "tool",
+          parts: [{ type: "tool-result", callId: "closed", name: "write", status: "succeeded", value: null }],
+        },
+      ],
+    },
+  };
+  const settled = cancelPendingTools(checkpoint);
+  assert.deepEqual(
+    settled.results.map((result) => publicOutcome(result) ?? result.status),
+    ["cancelled", "cancelled", "unknown", "succeeded"],
+  );
+  assert.equal(settled.results[0]?.executionId, execution.executionId);
+  assert.deepEqual(settled.results[3], succeeded);
+  assert.equal(settled.checkpoint.continuation, undefined);
+  assert.equal(executionEffectState(settled.checkpoint.executions), "unknown");
+  assert.equal(nativeSnapshot(settled.checkpoint, 0).messages.length, 6);
+  assert.deepEqual(cancelPendingTools(settled.checkpoint).results, []);
+  assert.equal(checkpoint.executions[0]?.result, undefined);
+  assert.deepEqual(checkpoint.continuation, { continuationId: "approval" });
 });
 test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => {
   const admin = new Pool({ connectionString: url });
@@ -988,6 +1056,107 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       assert.equal((await repository.cancel(claim.id, owner)).state, "succeeded");
     },
   );
+  await t.test("cancelling approval settles tool state durably and permits the next conversation turn", async () => {
+    const conversation = await newConversation();
+    const prepared = (await repository.prepare(conversation.id, "waiting-worker"))!;
+    const claim = claimOf(prepared);
+    let effects = 0;
+    const tool = defineTool({
+      name: "write",
+      description: "write",
+      effects: "write",
+      inputSchema: z.object({}),
+      async execute() {
+        effects++;
+        return {};
+      },
+    });
+    const first = await harness(repository, claim, tool, {
+      id: "approval",
+      async authorize({ context }) {
+        await repository.requestInteraction(claim, {
+          id: "approval",
+          kind: "approval",
+          callId: context.callId,
+          revision: 1,
+          state: "pending",
+          toolName: "write",
+          args: {},
+          risk: "write",
+          allowedScopes: ["once"],
+        });
+        return { kind: "ask", continuationId: "approval" };
+      },
+    });
+    try {
+      assert.equal(
+        (
+          await first.run(
+            {
+              id: prepared.command.kind === "start" ? prepared.command.messageId : randomUUID(),
+              role: "user",
+              parts: [{ type: "text", text: "Start" }],
+            },
+            { runId: claim.id },
+          )
+        ).kind,
+        "suspended",
+      );
+      await repository.suspend(claim);
+    } finally {
+      await first.close();
+    }
+    let projected = await snapshot(conversation.id);
+    assert.equal(projected.operations[0]?.state, "queued");
+    await repository.cancel(claim.id, owner);
+    const cancelled = (await repository.prepare(conversation.id, "cancellation-worker"))!;
+    await repository.finish(claimOf(cancelled), "cancelled");
+    const after = await snapshot(conversation.id);
+    assert.equal(after.run?.state, "cancelled");
+    assert.equal(after.operations[0]?.state, "cancelled");
+    assert.equal(after.interactions[0]?.state, "cancelled");
+    assert.equal(effects, 0);
+    const results = after.messages.flatMap((message) => message.blocks).filter((block) => block.type === "tool_result");
+    assert.equal(results.length, 1);
+    assert.equal(results[0]?.outcome, "cancelled");
+    const events = await db
+      .select()
+      .from(uiEvents)
+      .where(and(eq(uiEvents.conversationId, conversation.id), gt(uiEvents.sequence, BigInt(projected.cursor))))
+      .orderBy(asc(uiEvents.sequence));
+    for (const row of events)
+      projected = applyEvent(projected, productEventSchema.parse({ ...row, sequence: row.sequence.toString() }));
+    assert.deepEqual(projected.messages, after.messages);
+    assert.deepEqual(projected.operations, after.operations);
+    await conversationRepository.enqueue({
+      conversationId: conversation.id,
+      ownerUserId: owner,
+      mode: "next_run",
+      blocks: [{ id: "text", type: "text", text: "Continue" }],
+    });
+    const next = (await repository.prepare(conversation.id, "next-worker"))!;
+    const nextClaim = claimOf(next);
+    const second = await harness(repository, nextClaim, tool);
+    try {
+      assert.equal(
+        (
+          await second.run(
+            {
+              id: next.command.kind === "start" ? next.command.messageId : randomUUID(),
+              role: "user",
+              parts: [{ type: "text", text: "Continue" }],
+            },
+            { runId: nextClaim.id },
+          )
+        ).status,
+        "succeeded",
+      );
+    } finally {
+      await second.close();
+    }
+    await repository.finish(nextClaim, "succeeded");
+    assert.equal(effects, 0);
+  });
   for (const failAt of ["pre_dispatch", "intent", "result"] as const)
     await t.test("lost " + failAt + " confirmation is recovered without duplicate effects", async () => {
       let armed = true;

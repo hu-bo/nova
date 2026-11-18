@@ -4,6 +4,7 @@ import { FrameworkError } from "../../contracts/errors.js";
 export interface AiSdkModelLogger {
   child(bindings: Record<string, unknown>): AiSdkModelLogger;
   info(bindings: Record<string, unknown>, message: string): void;
+  warn(bindings: Record<string, unknown>, message: string): void;
   error(bindings: Record<string, unknown>, message: string): void;
 }
 

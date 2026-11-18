@@ -24,6 +24,7 @@ import { configuredModelPlugin } from "./configured-model.js";
 import { postgresSessionPlugin } from "./postgres-session-store.js";
 import { executionEffectState } from "./session-checkpoint.js";
 import { sshToolContext } from "./ssh-tool-context.js";
+import { runnerToolContext } from "./runner-tool-context.js";
 import { resolveProjectInstructions } from "./project-instructions.js";
 import type { ConversationRow, RunClaim } from "./run.repository.js";
 import type { RunService } from "./run.service.js";
@@ -115,8 +116,8 @@ export class NovaRuntime implements RuntimeAdapter {
     const hasWorkspace = !chatAgent && Boolean(remoteId || binding?.runnerId);
     let runnerInstructions: string | undefined;
     if (!chatAgent && !remoteId && binding?.runnerId) {
-      const { session } = await this.deps.runners.require(binding.runnerId, conversation.ownerUserId);
-      runnerInstructions = runnerOsInstructions(session.identity.platform);
+      const platform = this.deps.runners.platform(binding.runnerId, conversation.ownerUserId);
+      runnerInstructions = runnerOsInstructions(platform ?? "unknown");
     }
     const tools = [
       ...(hasWorkspace
@@ -131,8 +132,7 @@ export class NovaRuntime implements RuntimeAdapter {
                   input.signal,
                   input.executionId,
                 );
-              const { session } = await this.deps.runners.require(binding!.runnerId!, conversation.ownerUserId);
-              return session.createToolContext({
+              return runnerToolContext(this.deps.runners, binding!.runnerId!, conversation.ownerUserId, {
                 workspaceId: binding!.workspaceId,
                 cwd: workspace,
                 signal: input.signal,
@@ -379,8 +379,20 @@ export class NovaRuntime implements RuntimeAdapter {
           } else if (ref.kind === "runner") {
             if (ref.runnerId !== binding?.runnerId || ref.workspaceId !== binding?.workspaceId)
               throw new DomainError("FORBIDDEN", "Attachment belongs to another Runner");
-            const { session } = await this.deps.runners.require(ref.runnerId, conversation.ownerUserId);
-            const toolContext = session.createToolContext({
+            let connection: Awaited<ReturnType<RunnerConnections["require"]>>;
+            try {
+              connection = await this.deps.runners.require(ref.runnerId, conversation.ownerUserId);
+            } catch (error) {
+              if (!(error instanceof DomainError && error.details?.reason === "RUNNER_OFFLINE")) throw error;
+              parts.push({
+                type: "text",
+                text: "[Attached file " + name + "]\nThe attachment contents have not been loaded or verified. " +
+                  "Use a workspace tool to check access before relying on this attachment. If the tool fails, " +
+                  "explain the tool result to the user and ask them to resend the attachment after restoring access.",
+              });
+              continue;
+            }
+            const toolContext = connection.session.createToolContext({
               workspaceId: ref.workspaceId,
               signal: context.signal,
               executionId: randomUUID(),

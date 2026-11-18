@@ -301,4 +301,54 @@ describe('shared projection in the chat view', () => {
       { id: 'file', path: 'src/a.ts' },
     ]);
   });
+  it.each([
+    ['succeeded', 'ok'],
+    ['failed', 'error'],
+    ['denied', 'error'],
+    ['cancelled', 'cancelled'],
+    ['unknown', 'unknown'],
+  ] as const)(
+    'preserves %s tool results through events, refresh and later runs',
+    (outcome, status) => {
+      const call = messageSchema.parse({
+        ...message,
+        state: 'completed',
+        blocks: [{ id: 'call', type: 'tool_call', callId: 'call', name: 'write', args: {} }],
+      });
+      const result = messageSchema.parse({
+        ...message,
+        id: 'result',
+        sequence: '2',
+        role: 'tool',
+        state: 'completed',
+        blocks: [
+          {
+            id: 'result',
+            type: 'tool_result',
+            callId: 'call',
+            operationId: 'operation',
+            outcome,
+            content: [],
+          },
+        ],
+      });
+      let state = initialProjection(
+        snapshot({
+          messages: [call],
+          operations: [{ id: 'operation', callId: 'call', state: 'queued' }],
+        }),
+      );
+      state = reduceRunEvent(state, event('message.committed', 1, { message: result }));
+      expect(state.messages[1]?.blocks[0]).toMatchObject({ status });
+      state = initialProjection(snapshot({ cursor: '1', messages: [call, result] }));
+      expect(state.messages[0]?.blocks[0]).toMatchObject({ status });
+      expect(state.messages[1]?.blocks[0]).toMatchObject({ status });
+      state = reduceRunEvent(
+        state,
+        event('run.changed', 2, { run: { id: 'next-run', state: 'running' } }),
+      );
+      expect(state.messages[0]?.blocks[0]).toMatchObject({ status });
+      expect(state.messages[1]?.blocks[0]).toMatchObject({ status });
+    },
+  );
 });

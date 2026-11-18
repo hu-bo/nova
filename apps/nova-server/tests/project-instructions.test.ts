@@ -3,6 +3,7 @@ import test from "node:test";
 import type { ToolContext } from "@nova/runner-sdk";
 import { resolveProjectInstructions } from "../src/modules/runs/project-instructions.js";
 import { bindProjectBodySchema } from "../src/modules/projects/project-binding.schema.js";
+import { DomainError } from "../src/shared/domain-error.js";
 
 test("project instructions select only the configured source and preserve legacy prompts", async () => {
   const signal = new AbortController().signal;
@@ -35,6 +36,27 @@ test("project instructions select only the configured source and preserve legacy
       "workspace instructions",
     );
   }
+});
+
+test("offline project instructions defer the read to a model tool call without allowing other workspace operations", async () => {
+  for (const [source, filename] of [["agents", "AGENTS.md"], ["claude", "CLAUDE.md"]] as const) {
+    const instructions = await resolveProjectInstructions(
+      { source },
+      async () => { throw new DomainError("CONFLICT", "Runner unavailable", { reason: "RUNNER_OFFLINE" }); },
+      new AbortController().signal,
+    );
+    assert.ok(instructions.includes(filename));
+    assert.match(instructions, /Before any other workspace operation, use read_file/);
+    assert.match(instructions, /explain the failure to the user and stop workspace operations/);
+  }
+  const otherFailure = new DomainError("FORBIDDEN", "Workspace denied");
+  await assert.rejects(resolveProjectInstructions({ source: "agents" }, async () => { throw otherFailure; },
+    new AbortController().signal), (error) => error === otherFailure);
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(resolveProjectInstructions({ source: "agents" }, async () => {
+    throw new DomainError("CONFLICT", "Runner unavailable", { reason: "RUNNER_OFFLINE" });
+  }, controller.signal), { name: "AbortError" });
 });
 
 test("project instruction read failures, truncation, size limits and cancellation stop the run", async () => {

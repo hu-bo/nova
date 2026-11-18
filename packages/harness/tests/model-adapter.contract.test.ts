@@ -18,6 +18,7 @@ import {
   providerCatalog,
   resolveProviderId,
   type AiSdkModelConfig,
+  type AiSdkModelLogger,
   type AiSdkModelOptions,
   type ProviderId,
 } from "../src/plugins/model-ai-sdk/index.js";
@@ -180,6 +181,97 @@ function chatStream(finish = "stop", reasoning = ""): string {
     })
   );
 }
+function chatToolCall(name: string, args: string, finish = "tool_calls"): string {
+  return (
+    frame({
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: "assistant",
+            tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name, arguments: args } }],
+          },
+          finish_reason: null,
+        },
+      ],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    }) +
+    frame({
+      choices: [{ index: 0, delta: {}, finish_reason: finish }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    }) +
+    "data: [DONE]\n\n"
+  );
+}
+function quoteTool() {
+  let executions = 0;
+  const tool = defineTool({
+    name: "quote",
+    description: "quote",
+    effects: "read",
+    inputSchema: z.object({ quantity: z.number() }).strict(),
+    outputSchema: z.object({ total: z.number() }),
+    async execute(input) {
+      executions++;
+      return { total: input.quantity * 19 };
+    },
+  });
+  return { tool, executions: () => executions };
+}
+/** 模型一轮不规范的工具调用：由工具层判定并回喂模型，整轮不失败。 */
+async function agentForToolCalls(fetch: typeof globalThis.fetch, tool: ReturnType<typeof quoteTool>["tool"]) {
+  const kernel = await createAgentKernel({
+    maxConcurrentRuns: 1,
+    configure: async (ctx) => {
+      await ctx.plugin(
+        aiSdkModelPlugin(
+          {
+            defaultModel: "fixture",
+            models: [
+              {
+                id: "fixture",
+                protocol: "openai-chat",
+                apiKey: "test-only",
+                baseURL: "https://model.invalid/v1",
+                model: "fixture",
+                contextWindow: 10000,
+                maxOutputTokens: 1000,
+              },
+            ],
+          },
+          { fetch },
+        ),
+      );
+      await ctx.plugin(memorySessionPlugin());
+      await ctx.plugin(contextPlugin());
+      await ctx.plugin(toolRuntimePlugin());
+      await ctx.plugin(basicLoopPlugin());
+    },
+  });
+  const agent = await kernel.createAgent({
+    sessionId: "tool-failure",
+    systemPrompt: "Use quote.",
+    tools: [tool],
+    allowedTools: ["quote"],
+  });
+  return { kernel, agent };
+}
+function collectingLogger(
+  entries: Record<string, unknown>[],
+  bindings: Record<string, unknown> = {},
+): AiSdkModelLogger {
+  const record =
+    (level: "info" | "warn" | "error") =>
+    (fields: Record<string, unknown>, message: string): void => {
+      entries.push({ level, msg: message, ...bindings, ...fields });
+    };
+  return {
+    child: (next) => collectingLogger(entries, { ...bindings, ...next }),
+    info: record("info"),
+    warn: record("warn"),
+    error: record("error"),
+  };
+}
 
 function anthropicStream(tool = false): string {
   const events: unknown[] = [
@@ -274,6 +366,120 @@ async function consume(
     chunks.push(chunk);
   return chunks;
 }
+
+test("a tool call the model got wrong is answered by the tool layer and the run continues", async () => {
+  // 回喂模型自行纠正的一批；以及参数被输出上限截断的一批：那是长度问题，不是协议问题。
+  const scenarios: (
+    | { kind: "recovered"; name: string; tool: string; args: string; code: string; reason: string }
+    | { kind: "truncated"; name: string; tool: string; args: string; failure: string }
+  )[] = [
+    {
+      kind: "recovered",
+      name: "wrong argument type",
+      tool: "quote",
+      args: '{"quantity":"3"}',
+      code: "INVALID_TOOL_INPUT",
+      reason: "quantity: expected number, received string",
+    },
+    {
+      kind: "recovered",
+      name: "extra field outside the schema",
+      tool: "quote",
+      args: '{"quantity":3,"note":"x"}',
+      code: "INVALID_TOOL_INPUT",
+      reason: 'Unrecognized key: "note"',
+    },
+    {
+      kind: "recovered",
+      name: "unavailable tool",
+      tool: "calculator",
+      args: "{}",
+      code: "UNKNOWN_TOOL",
+      reason: "Tool is not registered.",
+    },
+    {
+      kind: "recovered",
+      name: "truncated argument JSON",
+      tool: "quote",
+      args: '{"quantity": 1',
+      code: "INVALID_TOOL_INPUT",
+      reason: "$: expected object, received string",
+    },
+    {
+      kind: "truncated",
+      name: "arguments cut off by the output limit",
+      tool: "quote",
+      args: '{"quantity": 1',
+      failure: "MODEL_LENGTH",
+    },
+  ];
+  for (const scenario of scenarios) {
+    const requests: unknown[] = [];
+    const quote = quoteTool();
+    const finish = scenario.kind === "truncated" ? "length" : "tool_calls";
+    const fetch: typeof globalThis.fetch = async (_url, init) => {
+      assert.ok(typeof init?.body === "string");
+      requests.push(JSON.parse(init.body));
+      const body = requests.length === 1 ? chatToolCall(scenario.tool, scenario.args, finish) : chatStream();
+      return new Response(body, { headers: { "content-type": "text/event-stream" } });
+    };
+    const { kernel, agent } = await agentForToolCalls(fetch, quote.tool);
+    try {
+      const result = await agent.send({ text: "Quote three." });
+      assert.equal(quote.executions(), 0, scenario.name);
+      if (scenario.kind === "truncated") {
+        assert.equal(result.status, "failed", scenario.name);
+        assert.equal(result.error?.code, scenario.failure, scenario.name);
+        await agent.dispose();
+        continue;
+      }
+      assert.equal(result.status, "succeeded", scenario.name + ": " + JSON.stringify(result.error));
+      assert.equal(requests.length, 2, scenario.name);
+      // 工具层把不合格的原因回喂模型，模型再作答；参数原文不进日志，只有结构与位置。
+      const messages = z.object({ messages: z.array(z.object({ role: z.string(), content: z.unknown().optional() })) });
+      const toolMessage = messages.parse(requests[1]).messages.find((message) => message.role === "tool");
+      const feedback = z
+        .object({ error: z.object({ code: z.string(), message: z.string() }) })
+        .parse(JSON.parse(String(toolMessage?.content)));
+      assert.equal(feedback.error.code, scenario.code, scenario.name);
+      assert.ok(feedback.error.message.includes(scenario.reason), scenario.name + ": " + feedback.error.message);
+      await agent.dispose();
+    } finally {
+      await kernel.dispose();
+    }
+  }
+});
+
+test("the unusable tool call is logged as shape and size, never as argument text", async (t) => {
+  const entries: Record<string, unknown>[] = [];
+  const secret = "DO-NOT-LOG-ARGUMENTS";
+  const model = await adapter(t, "openai-compatible", {
+    fetch: async () =>
+      new Response(chatToolCall("quote", secret), { headers: { "content-type": "text/event-stream" } }),
+    logger: collectingLogger(entries),
+  });
+  const chunks = await consume(model, {
+    tools: [
+      {
+        name: "quote",
+        description: "quote",
+        inputSchema: { type: "object", properties: { quantity: { type: "number" } }, required: ["quantity"] },
+      },
+    ],
+  });
+  const call = chunks.find((chunk) => chunk.type === "tool.call");
+  assert.ok(call?.type === "tool.call");
+  assert.equal(call.input, secret);
+  assert.equal(chunks.at(-1)?.type, "finished");
+  const warning = entries.find((entry) => entry.level === "warn");
+  assert.ok(warning, JSON.stringify(entries));
+  assert.equal(warning.msg, "Model tool call deferred to tool validation.");
+  assert.equal(warning.toolName, "quote");
+  assert.equal(warning.toolCallId, "call-1");
+  assert.equal(warning.toolInputBytes, secret.length);
+  assert.equal(warning.unavailableTool, false);
+  assert.ok(!JSON.stringify(entries).includes(secret));
+});
 
 test("registered providers map standard reasoning settings and support custom endpoints", async (t) => {
   const scenarios: { provider: ProviderId; effort: "medium" | "max" | "off"; expected: Record<string, unknown> }[] = [
@@ -457,7 +663,7 @@ test("shared stream accepts terminal finish without DONE and rejects truncation,
       detail: true,
     },
     {
-      name: "invalid tool arguments",
+      name: "invalid tool arguments defer to the tool layer",
       body: frame({
         choices: [
           {
@@ -471,7 +677,6 @@ test("shared stream accepts terminal finish without DONE and rejects truncation,
           },
         ],
       }),
-      code: "MODEL_PROTOCOL",
     },
     { name: "transport", body: "", throws: true, code: "MODEL_TRANSPORT" },
   ])

@@ -17,7 +17,7 @@ import { initialRunState, reduceRunState, type RunState } from './run-state';
 export { isActiveRun } from '@nova/agent-ui-contracts';
 
 /** 工具操作状态 → 视图状态：单一映射表，新增操作状态时只需补一行。 */
-const TOOL_STATUS_BY_OPERATION_STATE: Record<ToolOperation['state'], ToolStatus> = {
+const TOOL_STATUS_BY_OPERATION_STATE = {
   queued: 'queued',
   running: 'running',
   succeeded: 'ok',
@@ -25,7 +25,7 @@ const TOOL_STATUS_BY_OPERATION_STATE: Record<ToolOperation['state'], ToolStatus>
   denied: 'error',
   cancelled: 'cancelled',
   unknown: 'unknown',
-};
+} satisfies Record<ToolOperation['state'], ToolStatus>;
 /** 消息持久化状态 → 视图状态。 */
 const MESSAGE_STATUS_BY_STATE: Record<Message['state'], ChatMessage['status']> = {
   streaming: 'streaming',
@@ -84,7 +84,7 @@ function blockView(block: Block, operations: ToolOperation[]): ViewBlock {
         id: block.id,
         type: 'tool_result',
         callId: block.callId,
-        status: block.outcome === 'succeeded' ? 'ok' : 'error',
+        status: TOOL_STATUS_BY_OPERATION_STATE[block.outcome],
         blocks: block.content.map((content) => blockView(content, operations)),
       };
   }

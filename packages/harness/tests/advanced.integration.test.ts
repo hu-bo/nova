@@ -174,8 +174,15 @@ test("defineTool still rejects coercion and unknown fields after dynamic extensi
       return { ok: true };
     },
   });
-  assert.throws(() => tool.prepare({ value: "1" }));
-  assert.throws(() => tool.prepare({ value: 1, extra: true }));
+  // 不合格的原因回喂模型时只给结构与位置，不给参数原文。
+  assert.throws(() => tool.prepare({ value: "1" }), {
+    code: "INVALID_TOOL_INPUT",
+    message: "Tool input does not match its schema: value: expected number, received string",
+  });
+  assert.throws(() => tool.prepare({ value: 1, extra: true }), {
+    code: "INVALID_TOOL_INPUT",
+    message: 'Tool input does not match its schema: $: Unrecognized key: "extra"',
+  });
 });
 
 test("tool budgets reserve a text summary and keep progress for another run", async () => {

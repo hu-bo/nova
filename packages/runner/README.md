@@ -46,11 +46,13 @@ nova-runner --server 'wss://<你的服务域名>/runner/v1/connect' --token '<ru
 | `--workspace`       | `NOVA_RUNNER_WORKSPACE`       | 当前目录 `.`，必须为已有目录                                                              |
 | `--workspace-id`    | `NOVA_RUNNER_WORKSPACE_ID`    | `default`                                                                                 |
 | `--display-name`    | `NOVA_RUNNER_DISPLAY_NAME`    | 与 workspace ID 相同                                                                      |
-| `--runner-id`       | `NOVA_RUNNER_ID`              | `<主机名>:<workspace-id>`；主机名依次取 `COMPUTERNAME`、`HOSTNAME`，均未设置时取 `runner` |
+| `--runner-id`       | `NOVA_RUNNER_ID`              | `<用户名>-<系统>-<8位随机hex>`，如 `hubo9-windows-a3f9c1e2`；首次生成后写入数据目录文件复用，重启保持不变（见下文） |
 | `--max-concurrency` | `NOVA_RUNNER_MAX_CONCURRENCY` | `4`，允许范围为 `1–64`                                                                    |
 | `--read-only`       | `NOVA_RUNNER_READ_ONLY`       | 默认 `false`；CLI 解析结果或 TOML 为 `true` 时启用                                        |
 
 `read_only` 使用合并逻辑：即使环境变量为 `false`，也不能覆盖 TOML 中的 `read_only = true`。TOML 不接受未知字段。
+
+默认 `runner_id` 的生成规则：用户名依次取 `USERNAME`、`USER`、`LOGNAME`，转小写并把非字母数字字符折叠为 `-`，均未设置时为 `unknown`；系统取 Rust `std::env::consts::OS`（如 `windows`、`linux`、`macos`）；末尾为 8 位随机 hex。首次生成后写入数据目录下的 `nova-runner/runner_id` 文件（Windows 为 `%LOCALAPPDATA%`，Linux/macOS 为 `$XDG_DATA_HOME`，未设置时使用 `~/.local/share`），后续启动直接复用，保证同一台机器重启后设备 ID 不变；数据目录无法解析或写入失败时，本次启动使用新生成的 ID。
 
 例如，将以下内容保存为 `runner.toml`：
 

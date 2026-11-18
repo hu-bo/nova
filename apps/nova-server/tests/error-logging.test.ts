@@ -50,13 +50,14 @@ test("Windows launcher fixes a GBK parent shell before starting pnpm", { skip: p
   assert.deepEqual(entry.args, ["--dir", resolve(fileURLToPath(new URL("../", import.meta.url))), "dev:worker"]);
 });
 
-test("server logs preserve UTF-8 Chinese text and use local timestamps with the correct timezone offset", async (t) => {
+test("server logs preserve UTF-8 Chinese text and timestamp records in Shanghai time (UTC+8) regardless of the host timezone", async (t) => {
   const scenarios = [
-    { zone: "Asia/Shanghai", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24T20:34:56.789+08:00" },
-    { zone: "America/New_York", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24T08:34:56.789-04:00" },
-    { zone: "America/New_York", now: "2026-01-24T12:34:56.789Z", expected: "2026-01-24T07:34:56.789-05:00" },
-    { zone: "Asia/Kathmandu", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24T18:19:56.789+05:45" },
-    { zone: "UTC", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24T12:34:56.789+00:00" },
+    { zone: "Asia/Shanghai", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24 20:34:56" },
+    { zone: "America/New_York", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24 20:34:56" },
+    { zone: "America/New_York", now: "2026-01-24T12:34:56.789Z", expected: "2026-01-24 20:34:56" },
+    { zone: "Asia/Kathmandu", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24 20:34:56" },
+    { zone: "Pacific/Kiritimati", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24 20:34:56" },
+    { zone: "UTC", now: "2026-10-24T12:34:56.789Z", expected: "2026-10-24 20:34:56" },
   ];
   for (const scenario of scenarios) {
     await t.test(`${scenario.zone} ${scenario.now}`, () => {
@@ -144,13 +145,20 @@ test("production logger supports Fastify child bindings and retains debug logs i
   assert.equal(diagnostic.env, "production");
   assert.equal(diagnostic.role, "worker");
   assert.ok(diagnostic.reqId);
-  const fileContents = readdirSync(directory)
+  assert.match(diagnostic.time, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  const fileEntries = readdirSync(directory)
     .filter((name) => name.endsWith(".log"))
-    .map((name) => readFileSync(join(directory, name), "utf8"))
-    .join("\n");
-  assert.ok(fileContents.includes("中文诊断"));
-  assert.ok(fileContents.includes(diagnostic.reqId));
-  assert.match(fileContents, /stage:\s+"test"/);
+    .flatMap((name) =>
+      readFileSync(join(directory, name), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line)),
+    );
+  const fileDiagnostic = fileEntries.find((entry) => entry.msg === "中文诊断");
+  assert.ok(fileDiagnostic);
+  assert.equal(fileDiagnostic.reqId, diagnostic.reqId);
+  assert.equal(fileDiagnostic.stage, "test");
+  assert.equal(fileDiagnostic.time, diagnostic.time);
 });
 
 test("SSH test failures log the original diagnostic without exposing credentials or changing responses", async (t) => {

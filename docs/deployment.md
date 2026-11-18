@@ -95,7 +95,7 @@ nova-server 任务：
 
 ## 模型协议错误排查日志
 
-nova-server 已接入 `@hquant/logger-js`。开发环境输出可读日志，生产环境保留 stdout JSON，另写入滚动文件。Compose 把发布目录中宿主机的 `logs` 目录（`/data/app/nova-server/logs`）挂载到 `LOG_DIR` 指向的容器内同名路径，宿主机可直接查看日志。应用目录是只读绑定，可写挂载点无法在其内自动创建，因此发布脚本在解包后先创建 `logs` 目录。切换发布目录时旧日志随备份目录归档，当前目录的日志文件按天或 20 MiB 滚动，保留 30 天。直接运行生产 Node 入口时用 `LOG_DIR` 指定可写目录。
+nova-server 已接入 `@hquant/logger-js`。开发环境输出可读日志，生产环境 stdout 与滚动文件均为每行一条 JSON，时间戳固定为上海时间（UTC+8）`YYYY-MM-DD HH:mm:ss`。Compose 把发布目录中宿主机的 `logs` 目录（`/data/app/nova-server/logs`）挂载到 `LOG_DIR` 指向的容器内同名路径，宿主机可直接查看日志。应用目录是只读绑定，可写挂载点无法在其内自动创建，因此发布脚本在解包后先创建 `logs` 目录。切换发布目录时旧日志随备份目录归档，当前目录的日志文件按天或 20 MiB 滚动，保留 30 天。直接运行生产 Node 入口时用 `LOG_DIR` 指定可写目录。
 
 `LOG_LEVEL=info` 已包含请求开始、HTTP 响应、流完成和失败摘要。临时改为 `debug` 并重启，可额外观察每个 SSE 事件的类型和结束原因。提示词、模型输出、工具参数、凭据和原始响应体不写入这些模型诊断日志。
 
@@ -111,9 +111,12 @@ docker compose -p nova-server exec nova-server sh -c 'ls -lh /var/log/nova-serve
 - `modelId`、`upstreamModel`、`providerOrigin`、`providerPath`、`protocol`、`reasoningFormat`、`reasoningEffort`、`maxOutputTokens`：确认实际模型配置和入口；`requestHash`、`requestBytes` 用于比较序列化请求是否一致，不输出请求原文。
 - `httpStatus`、`contentType`、`contentEncoding`、`upstreamRequestId`、`elapsedMs`：核对上游响应、网关关联 ID 与超时。
 - `errorCode`、`errorMessage`：记录具体协议失败分支；`finishReason`、`stopped` 显示结束标记是否齐全，`reachedEof` 显示是否读到流尾，`frames`、`pendingCharacters` 显示是否有未解析帧，`toolCalls` 只记录 ID/名称是否存在及参数长度。
+- `Model tool call deferred to tool validation.`（WARN）：模型给出的工具调用不能直接使用时才出现。`toolName`、`toolCallId`、`toolInputBytes`、`unavailableTool` 分别记录工具名、调用 ID、参数字节数和调用是否越出本轮工具目录；参数原文仍不写入日志。
 - `Harness run failed`：模型适配器成功后，Harness 仍可能因结束原因与工具调用不匹配而拒绝该步，日志保留具体错误文案。
 
 已用回归测试复现并修复一种网络分包敏感的错误：SSE 的 CRLF 换行在两次读取间被拆开，旧解析器无法识别帧边界并抛出 `MODEL_PROTOCOL`。这只是待核对的原因；已有失败记录仅有错误码，不能据此断定历史线上故障命中了这个分支。
+
+工具入参是否合法只由工具自身判定（`packages/harness/src/plugins/tools/define-tool.ts`、`shared/dynamic-tool.ts`），模型适配器不再用 JSON Schema 反解出的第二份 zod 校验复述一遍。此前 `MODEL_PROTOCOL / Invalid model tool call.` 会终止整轮，用户在会话里只看到"模型返回内容异常，请稍后重试"；现在模型多写字段、把数字写成字符串、调用不可用的工具、或工具参数 JSON 不完整，都会作为 `INVALID_TOOL_INPUT`、`UNKNOWN_TOOL` 的工具结果连同位置和期望类型回喂模型，由模型在同一轮内纠正。参数 JSON 不完整且这一轮以 `length` 结束时，仍按输出上限处理，报 `MODEL_LENGTH`。`Model stream failed` 中剩下的 `MODEL_PROTOCOL` 才对应帧边界、缺失结束标记等真正的协议问题。
 
 ## 本地验证
 

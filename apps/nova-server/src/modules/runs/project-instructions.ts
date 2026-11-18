@@ -12,7 +12,15 @@ export async function resolveProjectInstructions(
   if (source === "none") return "";
   if (source === "custom") return config?.customPrompt ?? "";
   const filename = source === "agents" ? "AGENTS.md" : "CLAUDE.md";
-  const context = await createContext();
+  let context: ToolContext;
+  try {
+    context = await createContext();
+  } catch (error) {
+    signal.throwIfAborted();
+    if (error instanceof DomainError && error.details?.reason === "RUNNER_OFFLINE")
+      return `Project instructions are configured in ${filename}. Before any other workspace operation, use read_file to read this file and follow its instructions. If the tool fails, explain the failure to the user and stop workspace operations.`;
+    throw error;
+  }
   const file = await context.fs.read(filename, { limit: 2000, signal });
   signal.throwIfAborted();
   if (!file.ok) throw new DomainError("CONFLICT", `无法读取工作目录中的 ${filename}，请检查文件或更改项目指令来源。`);
