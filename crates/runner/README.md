@@ -4,6 +4,28 @@
 
 Prebuilt binaries are distributed as [`@nnova/runner`](../../packages/runner/README.md) on npm and through the `runner-release` GitHub workflow. Push a `runner-v<version>` tag to build the four supported platforms, Windows installer, Linux installer, and checksums.
 
+### Triggering a release
+
+The release version comes from the tag name (`runner-v1.0.6` publishes `@nnova/runner@1.0.6`), so tag the commit that carries the version you want to ship, then push it — the push itself starts the workflow:
+
+```powershell
+git tag runner-v1.0.6
+git push origin runner-v1.0.6
+```
+
+Watch the run on the Actions tab, or list local tags to confirm what has been cut so far:
+
+```powershell
+git tag --list "runner-v*" --sort=-v:refname
+```
+
+A mistyped tag can be dropped locally and remotely; if the workflow already ran, also delete the GitHub release it created:
+
+```powershell
+git tag -d runner-v1.0.6
+git push origin --delete runner-v1.0.6
+```
+
 Configure it with command-line options, a TOML file (`--config runner.toml`), or `NOVA_RUNNER_*` environment variables. Command-line options take precedence over TOML values; the workspace must already exist. When no workspace is configured, the Runner uses the directory from which it was started.
 
 ```toml
