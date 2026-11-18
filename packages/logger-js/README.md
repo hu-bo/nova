@@ -3,7 +3,7 @@
 基于 [pino](https://github.com/pinojs/pino) 的轻量日志封装：
 
 - 开发环境：使用 `pino-pretty`，彩色可读输出到 stdout
-- 生产环境：stdout 输出结构化 JSON，同时使用 `pino-transport-rotating-file` 滚动写入可读文件
+- 生产环境：stdout 输出结构化 JSON，同时使用内置的滚动文件 transport 把同样的 JSON 行写入 `LOG_DIR`
 - 测试环境：stdout 输出 JSON；可注入 destination 捕获日志
 
 > 配置在创建 logger 时读取；可通过 options 显式覆盖环境、级别和目录。
@@ -21,7 +21,7 @@ pnpm --filter <consumer> add @hquant/logger-js@workspace:*
 运行时依赖说明：本包内部会按环境加载如下 transport target：
 
 - 开发环境：`pino-pretty`
-- 生产环境：`pino-transport-rotating-file`
+- 生产环境：`pino/file`（stdout）与本包自带的 `rotating-file-transport`（基于 `rotating-file-stream`）
 
 这些 transport 及其 peer dependencies 已声明在本包中，使用方无需重复添加。开发前先构建本包。
 
@@ -46,7 +46,7 @@ apiLogger.info({ path: "/health" }, "request");
 - `service`：创建 logger 时传入的服务名（必填）
 - `scope`：通过 `logger.child({ scope })` 创建的模块/子系统名；也可绑定 runId 等结构化字段
 - `env`：`NODE_ENV`
-- `time`：ISO 时间戳（字符串）
+- `time`：由 `timestamp` 选项决定的时间字符串；nova-server 固定输出上海时间（UTC+8）`YYYY-MM-DD HH:mm:ss`，不随宿主机时区变化
 
 ## 环境变量
 
@@ -64,11 +64,11 @@ export LOG_DIR=/var/log/trader
 
 ## 生产环境日志文件
 
-生产环境使用按天滚动：
+生产环境使用按天滚动，每行一条 JSON：
 
 - 文件名由 transport 生成，前缀为服务名，以 `.log` 结尾
 - 按 `1d` 或单文件 `20M` 滚动
-- 保留天数：`30`（`retentionDays: 30`）
+- 保留天数：`30`（按文件 mtime 清理）
 - 自动创建目录；进程退出时由 Pino transport 刷新并关闭
 
 ## 开发

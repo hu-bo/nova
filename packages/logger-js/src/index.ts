@@ -31,14 +31,15 @@ export function createLogger(service: string, options: LoggerOptions = {}, desti
       }),
     );
   }
-  // Keep container stdout available alongside the persistent rotating file.
+  // Keep container stdout available alongside the persistent rotating file; both are JSON lines.
   return pino(
     settings,
     pino.transport({
       targets: [
         { target: "pino/file", level: settings.level, options: { destination: 1 } },
         {
-          target: "pino-transport-rotating-file",
+          // Resolve as a file URL relative to this module so the worker loads the bundled transport.
+          target: new URL("./rotating-file-transport.js", import.meta.url).href,
           level: settings.level,
           options: {
             dir: path.resolve(directory),
@@ -46,9 +47,6 @@ export function createLogger(service: string, options: LoggerOptions = {}, desti
             size: "20M",
             interval: "1d",
             retentionDays: 30,
-            compress: false,
-            // The transport's raw mode drops line separators between records.
-            skipPretty: false,
           },
         },
       ],
