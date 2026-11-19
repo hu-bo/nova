@@ -138,6 +138,43 @@ describe('shared projection in the chat view', () => {
     expect(state.pendingInputs.map((item) => item.id)).toEqual(['input-2']);
   });
 
+  it('keeps the persisted first message and startup error after input rejection and refresh', () => {
+    const reserved = { ...input, runId: 'run-1', messageId: userMessage.id };
+    let state = initialProjection(
+      snapshot({ run: { id: 'run-1', state: 'running' }, pendingInputs: [reserved] }),
+    );
+    state = reduceRunEvent(state, event('message.committed', 1, { message: userMessage }));
+    state = reduceRunEvent(
+      state,
+      event('input.rejected', 2, {
+        input: { ...reserved, state: 'rejected' },
+        error: { code: 'MODEL_UNAVAILABLE', message: '所选模型不可用' },
+      }),
+    );
+    const failed = {
+      ...message, id: 'startup-error', sequence: '2', state: 'failed' as const,
+      blocks: [{
+        id: 'error', type: 'error' as const,
+        error: { code: 'MODEL_UNAVAILABLE', message: '所选模型不可用' },
+      }],
+    };
+    state = reduceRunEvent(state, event('message.committed', 3, { message: failed }));
+    state = reduceRunEvent(state, event('run.changed', 4, { run: { id: 'run-1', state: 'failed' } }));
+    state = initialProjection(
+      snapshot({ cursor: '4', messages: [userMessage, failed], run: { id: 'run-1', state: 'failed' } }),
+      state,
+    );
+    expect(state.messages).toMatchObject([
+      { id: userMessage.id, role: 'user', blocks: input.input.blocks },
+      {
+        id: failed.id, role: 'assistant', status: 'error',
+        blocks: [{ type: 'error', message: '所选模型不可用' }],
+      },
+    ]);
+    expect(state.pendingInputs).toEqual([]);
+    expect(state.startingInput).toBeNull();
+  });
+
   it('keeps blocked execution visible in the queue', () => {
     const state = initialProjection(
       snapshot({ run: { id: 'run-1', state: 'cancelled_unconfirmed' }, pendingInputs: [input] }),

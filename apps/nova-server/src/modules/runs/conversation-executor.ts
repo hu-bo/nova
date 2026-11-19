@@ -7,6 +7,7 @@ import type { UserModelProfilesService } from "../model-config/index.js";
 import type { RemoteConnectionService } from "../remotes/index.js";
 import type { RunnerConnections } from "../runners/index.js";
 import type { UploadStorage } from "../attachments/index.js";
+import { DomainError } from "../../shared/domain-error.js";
 import type { RunClaim } from "./run.repository.js";
 import { createRunService, type RunService } from "./run.service.js";
 import "./nova-runtime.js";
@@ -150,7 +151,10 @@ export class ConversationExecutor {
       const cancellation = signal.aborted ? await adapter.cancel(claim.id) : "confirmed";
       await this.repository.finish(claim, completionState(signal.aborted, cancellation));
     } catch (error) {
-      const reason = error instanceof Error && "code" in error ? String(error.code) : "EXECUTION_FAILED";
+      const domainReason = error instanceof DomainError ? error.details?.reason : undefined;
+      let reason = "EXECUTION_FAILED";
+      if (typeof domainReason === "string") reason = domainReason;
+      else if (error instanceof Error && "code" in error) reason = String(error.code);
       logger.error(
         { reason, errorName: error instanceof Error ? error.name : "UNKNOWN", aborted: signal.aborted },
         "Conversation execution failed",

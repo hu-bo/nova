@@ -21,45 +21,46 @@ test("project instructions select only the configured source and preserve legacy
     ["agents", "AGENTS.md"],
     ["claude", "CLAUDE.md"],
   ] as const) {
+    let instructionSignal: AbortSignal | undefined;
     const context = {
       fs: {
         read: async (path: string, options: { signal: AbortSignal; limit: number }) => {
           assert.equal(path, filename);
-          assert.equal(options.signal, signal);
+          assert.equal(options.signal, instructionSignal);
           assert.equal(options.limit, 2000);
           return { ok: true, value: { text: "workspace instructions", truncated: false, lineTruncated: false } };
         },
       },
     } as unknown as ToolContext;
     assert.equal(
-      await resolveProjectInstructions({ source, customPrompt: "ignored" }, async () => context, signal),
+      await resolveProjectInstructions({ source, customPrompt: "ignored" }, async (readSignal) => {
+        instructionSignal = readSignal;
+        return context;
+      }, signal),
       "workspace instructions",
     );
   }
 });
 
-test("offline project instructions defer the read to a model tool call without allowing other workspace operations", async () => {
-  for (const [source, filename] of [["agents", "AGENTS.md"], ["claude", "CLAUDE.md"]] as const) {
-    const instructions = await resolveProjectInstructions(
-      { source },
-      async () => { throw new DomainError("CONFLICT", "Runner unavailable", { reason: "RUNNER_OFFLINE" }); },
-      new AbortController().signal,
-    );
-    assert.ok(instructions.includes(filename));
-    assert.match(instructions, /Before any other workspace operation, use read_file/);
-    assert.match(instructions, /explain the failure to the user and stop workspace operations/);
+test("unavailable project instruction contexts are silently skipped", async () => {
+  for (const source of ["agents", "claude"] as const) {
+    for (const error of [
+      new DomainError("CONFLICT", "Runner unavailable", { reason: "RUNNER_OFFLINE" }),
+      new DomainError("FORBIDDEN", "Workspace denied"),
+      new Error("Connection lost"),
+    ]) {
+      assert.equal(await resolveProjectInstructions({ source }, async () => { throw error; },
+        new AbortController().signal), "");
+    }
   }
-  const otherFailure = new DomainError("FORBIDDEN", "Workspace denied");
-  await assert.rejects(resolveProjectInstructions({ source: "agents" }, async () => { throw otherFailure; },
-    new AbortController().signal), (error) => error === otherFailure);
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(resolveProjectInstructions({ source: "agents" }, async () => {
-    throw new DomainError("CONFLICT", "Runner unavailable", { reason: "RUNNER_OFFLINE" });
+    assert.fail("Cancelled runs must not attempt an instruction read");
   }, controller.signal), { name: "AbortError" });
 });
 
-test("project instruction read failures, truncation, size limits and cancellation stop the run", async () => {
+test("project instruction read failures and size limits are skipped while cancellation stops the run", async () => {
   for (const result of [
     { ok: false, error: { code: "NOT_FOUND", message: "sensitive error" } },
     { ok: true, value: { text: "partial", truncated: true } },
@@ -67,16 +68,18 @@ test("project instruction read failures, truncation, size limits and cancellatio
     { ok: true, value: { text: "a".repeat(32001) } },
   ]) {
     const context = { fs: { read: async () => result } } as unknown as ToolContext;
-    await assert.rejects(
-      resolveProjectInstructions({ source: "agents" }, async () => context, new AbortController().signal),
-      { code: "CONFLICT" },
-    );
+    assert.equal(await resolveProjectInstructions({ source: "agents" }, async () => context,
+      new AbortController().signal), "");
   }
+  const failedContext = { fs: { read: async () => { throw new Error("Read failed"); } } } as unknown as ToolContext;
+  assert.equal(await resolveProjectInstructions({ source: "agents" }, async () => failedContext,
+    new AbortController().signal), "");
   const controller = new AbortController();
   const context = {
     fs: {
-      read: async () => {
+      read: async (_path: string, options: { signal: AbortSignal }) => {
         controller.abort();
+        assert.equal(options.signal.aborted, true);
         return { ok: true, value: { text: "content" } };
       },
     },
@@ -85,6 +88,21 @@ test("project instruction read failures, truncation, size limits and cancellatio
     resolveProjectInstructions({ source: "claude" }, async () => context, controller.signal),
     { name: "AbortError" },
   );
+});
+
+test("project instruction timeouts are silently skipped without cancelling the run", async (t) => {
+  const timeout = new AbortController();
+  const signal = new AbortController().signal;
+  t.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
+    assert.equal(milliseconds, 15_000);
+    return timeout.signal;
+  });
+  const context = { fs: { read: async (_path: string, options: { signal: AbortSignal }) => {
+    timeout.abort(new DOMException("Timed out", "TimeoutError"));
+    options.signal.throwIfAborted();
+  } } } as unknown as ToolContext;
+  assert.equal(await resolveProjectInstructions({ source: "agents" }, async () => context, signal), "");
+  assert.equal(signal.aborted, false);
 });
 
 test("binding contract supports all instruction sources and rejects unknown values", () => {

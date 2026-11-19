@@ -1523,6 +1523,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       });
       const headers = { authorization: "Bearer " + DEV_MOCK_ACCESS_TOKEN };
       let host: ReturnType<typeof createJobHost> | undefined;
+      let instructionContext: ReturnType<RunnerSession["createToolContext"]> | undefined;
       try {
         const tokens = createRunnerTokenRepository(db);
         const directory = createRunnerRepository(db);
@@ -1557,6 +1558,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
             connected: true,
             workspaces: identity.workspaces,
             createToolContext() {
+              if (instructionContext) return instructionContext;
               throw new Error("Unexpected Runner tool call");
             },
             onStatus: () => () => undefined,
@@ -1709,6 +1711,85 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
         const limitedError = limitedMessage!.blocks.find((block: { type: string }) => block.type === "error");
         assert.equal(limitedError?.type, "error");
         assert.deepEqual(limitedError!.error, { code: "MODEL_RATE_LIMITED", message: "Do not expose upstream details" });
+        await httpTest.test("Runner projects silently skip unavailable instructions and complete the first message", async () => {
+          const rebound = await app.inject({
+            method: "PUT", url: "/api/projects/" + project.id + "/binding", headers,
+            payload: { runnerId, workspaceId: "workspace", canonicalCwd: ".",
+              instructionSource: "agents", expectedRevision: bound.json().data.revision },
+          });
+          assert.equal(rebound.statusCode, 200, rebound.body);
+          instructionContext = { fs: { read: async (path: string) => {
+            assert.equal(path, "AGENTS.md");
+            return { ok: false, error: { code: "NOT_FOUND", message: "PRIVATE-RUNNER-ERROR", outcome: "known" } };
+          } } } as unknown as ReturnType<RunnerSession["createToolContext"]>;
+          upstreamStatus = 200;
+          try {
+            const created = await app.inject({ method: "POST", url: "/api/conversations/", headers,
+              payload: { mode: "project", projectId: project.id,
+                configuration: { backendId: "nova", modelId: modelEntry!.id, mode: "build" },
+                initialInput: { blocks: [{ id: "text", type: "text", text: "项目首轮消息" }] } } });
+            assert.equal(created.statusCode, 200, created.body);
+            const conversationId: string = created.json().data.id;
+            const { binding: _beforeBinding, ...before } = (await app.inject({ method: "GET", url: "/api/conversations/" + conversationId + "/snapshot", headers })).json().data;
+            const requestCount = requests.length;
+            await executor.handle({ aggregateId: conversationId } as never);
+            const { binding: _finishedBinding, ...finished } = (await app.inject({ method: "GET", url: "/api/conversations/" + conversationId + "/snapshot", headers })).json().data;
+            const view = snapshotSchema.parse(finished);
+            assert.equal(requests.length, requestCount + 2, "the model completes its tool round despite unavailable instructions");
+            assert.ok(!JSON.stringify(requests.slice(requestCount)).includes("AGENTS.md"), "failed reads must not add a mandatory file-read instruction");
+            assert.equal(view.run?.state, "succeeded");
+            assert.equal(view.run?.reason, undefined);
+            assert.deepEqual(view.pendingInputs, []);
+            assert.deepEqual(view.messages.map((message) => message.role), ["user", "assistant", "tool", "assistant"]);
+            assert.deepEqual(view.messages[0]?.blocks, [{ id: "text", type: "text", text: "项目首轮消息" }]);
+            assert.equal(view.messages[1]?.state, "completed");
+            assert.ok(view.messages.every((message) => message.blocks.every((block) => block.type !== "error")));
+            assert.ok(!JSON.stringify(view).includes("PRIVATE-RUNNER-ERROR"));
+            const [input] = await db.select().from(pendingInputs).where(eq(pendingInputs.conversationId, conversationId));
+            assert.equal(input?.status, "consumed");
+            assert.ok(input?.consumedAt);
+            assert.equal(input?.messageId, view.messages[0]?.id);
+            const events = await db.select().from(uiEvents).where(and(eq(uiEvents.conversationId, conversationId), gt(uiEvents.sequence, BigInt(before.cursor)))).orderBy(asc(uiEvents.sequence));
+            let replay = snapshotSchema.parse(before);
+            for (const row of events) replay = applyEvent(replay, productEventSchema.parse({
+              type: row.type, runId: row.runId, payload: row.payload, sequence: row.sequence.toString(),
+            }));
+            assert.deepEqual(replay.messages, view.messages);
+            assert.ok(events.every((event) => event.type !== "input.rejected"));
+          } finally {
+            instructionContext = undefined;
+          }
+        });
+        await httpTest.test("model lookup failures preserve the initial message and an actionable error", async () => {
+          const created = await app.inject({ method: "POST", url: "/api/conversations/", headers,
+            payload: { mode: "project", projectId: project.id,
+              configuration: { backendId: "nova", modelId: modelEntry!.id, mode: "build" },
+              initialInput: { blocks: [{ id: "text", type: "text", text: "模型不可用时保留首轮" }] } } });
+          assert.equal(created.statusCode, 200, created.body);
+          const conversationId: string = created.json().data.id;
+          await db.update(modelConfigs).set({ enabled: false }).where(eq(modelConfigs.id, modelEntry!.id));
+          try {
+            const requestCount = requests.length;
+            await executor.handle({ aggregateId: conversationId } as never);
+            const { binding: _binding, ...core } = (await app.inject({ method: "GET", url: "/api/conversations/" + conversationId + "/snapshot", headers })).json().data;
+            const view = snapshotSchema.parse(core);
+            assert.equal(requests.length, requestCount);
+            assert.equal(view.run?.state, "failed");
+            assert.equal(view.run?.reason, "MODEL_UNAVAILABLE");
+            assert.deepEqual(view.pendingInputs, []);
+            assert.deepEqual(view.messages.map((message) => message.role), ["user", "assistant"]);
+            assert.deepEqual(view.messages[0]?.blocks, [{ id: "text", type: "text", text: "模型不可用时保留首轮" }]);
+            assert.equal(view.messages[1]?.state, "failed");
+            assert.deepEqual(view.messages[1]?.blocks, [{ id: "error", type: "error",
+              error: { code: "MODEL_UNAVAILABLE", message: "所选模型不可用，请检查模型配置或切换模型后重试。" } }]);
+            const [input] = await db.select().from(pendingInputs).where(eq(pendingInputs.conversationId, conversationId));
+            assert.equal(input?.status, "rejected");
+            assert.equal(input?.consumedAt, null);
+            assert.equal(input?.messageId, view.messages[0]?.id);
+          } finally {
+            await db.update(modelConfigs).set({ enabled: true }).where(eq(modelConfigs.id, modelEntry!.id));
+          }
+        });
         await httpTest.test("workspace tasks are not limited to 64 model steps or tool executions", async () => {
           upstreamStatus = 200;
           remainingToolSteps = 65;
@@ -1903,6 +1984,8 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     assert.equal(view.pendingInputs.length, 0);
     const rejected = await db.select().from(pendingInputs).where(eq(pendingInputs.conversationId, conversation.id));
     assert.ok(rejected.every((input) => input.status === "rejected"));
+    assert.deepEqual(view.messages.filter((message) => message.role === "user").map((message) => message.blocks),
+      [[{ id: "text", type: "text", text: "Start" }]], "unapplied steering must not become a user message");
   });
   await t.test("persistence adapters reject missing transactions and weak snapshot contexts", async () => {
     const conversation = await newConversation();

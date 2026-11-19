@@ -1244,11 +1244,15 @@ export class RunRepository {
         await this.journal.append(conversation, { runId: run.id, type: "spec.changed", payload: { specId: spec.id, revision: spec.currentRevision, change: "draft" } });
       }
     }
+    const failureError = {
+      code: reason ?? "EXECUTION_FAILED",
+      message: detail ?? runFailureCopy(reason ?? "EXECUTION_FAILED"),
+    };
     for (const draft of run.projection?.messages.filter((message) => message.state === "streaming") ?? []) {
       const message: Message = { ...draft, state: draftMessageStates[state] };
       // 失败的助手消息自带错误块: 提供商原文优先, 缺失时按错误码给中文兜底文案.
       if (message.state === "failed" && reason)
-        message.blocks = [...message.blocks, { id: "error", type: "error", error: { code: reason, message: detail ?? runFailureCopy(reason) } }];
+        message.blocks = [...message.blocks, { id: "error", type: "error", error: failureError }];
       await insertMessage(tx, conversation.id, { ...message, runId: run.id });
       await this.journal.append(conversation, { runId: run.id, type: "message.committed", payload: { message } });
     }
@@ -1271,15 +1275,56 @@ export class RunRepository {
         ),
       )
       .returning();
-    for (const input of rejected)
+    for (const input of rejected) {
+      // Startup can fail before the native session accepts the reserved first message.
+      // Keep the submitted content durable without marking it as consumed by the model.
+      if (
+        input.mode === "next_run" && input.messageId &&
+        !run.projection?.messages.some((message) => message.id === input.messageId)
+      ) {
+        const message: Message = {
+          id: input.messageId,
+          runId: run.id,
+          sequence: (++conversation.lastMessageSequence).toString(),
+          role: "user",
+          state: "completed",
+          blocks: input.payload.blocks,
+          ...(input.payload.execution?.skill ? { skill: skillView(input.payload.execution.skill) } : {}),
+          createdAt: input.createdAt.toISOString(),
+        };
+        await insertMessage(tx, conversation.id, message);
+        await this.journal.append(conversation, { runId: run.id, type: "message.committed", payload: { message } });
+      }
+      let error = { code: "INPUT_NOT_COMMITTED", message: "本轮已结束，这条调整尚未应用，请重新发送。" };
+      if (input.mode === "next_run") {
+        error = { code: "INPUT_NOT_COMMITTED", message: "本轮已结束，这条消息尚未处理，请重新发送。" };
+        if (reason) error = failureError;
+      }
       await this.journal.append(conversation, {
         runId: run.id,
         type: "input.rejected",
         payload: {
           input: queuedInput(input),
-          error: { code: "INPUT_NOT_COMMITTED", message: "本轮已结束，这条调整尚未应用，请重新发送。" },
+          error,
         },
       });
+    }
+    if (
+      (state === "failed" || state === "timed_out") &&
+      !run.projection?.messages.some((message) => message.role === "assistant")
+    ) {
+      const message: Message = {
+        id: randomUUID(),
+        runId: run.id,
+        sequence: (++conversation.lastMessageSequence).toString(),
+        role: "assistant",
+        state: "failed",
+        blocks: [{ id: "error", type: "error", error: failureError }],
+        createdAt: new Date().toISOString(),
+      };
+      await insertMessage(tx, conversation.id, message);
+      await this.journal.append(conversation, { runId: run.id, type: "message.committed", payload: { message } });
+    }
     if (checkpoint)
       for (const interaction of checkpoint.interactions.filter((item) => item.state === "cancelled"))
         await this.journal.append(conversation, {
@@ -1420,6 +1465,8 @@ function runFailureCopy(reason: string): string {
       STEP_LIMIT: "已达到本轮执行步数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。",
       TOOL_LIMIT: "已达到本轮工具调用次数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。",
       RUN_DEADLINE: "本轮运行超过时限被中止，可以发送消息继续处理或稍后重试。",
+      MODEL_UNAVAILABLE: "所选模型不可用，请检查模型配置或切换模型后重试。",
+      INFERENCE_STRENGTH_UNAVAILABLE: "所选模型不支持当前推理强度，请调整推理强度或切换模型后重试。",
     }[reason] ?? "本轮运行失败，可以发送消息继续处理或稍后重试。"
   );
 }

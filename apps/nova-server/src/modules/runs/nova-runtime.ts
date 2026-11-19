@@ -237,10 +237,9 @@ export class NovaRuntime implements RuntimeAdapter {
       },
     };
     const goal = conversation.metadata.goal;
-    const instructionSignal = AbortSignal.any([context.signal, AbortSignal.timeout(15_000)]);
     const projectInstructions = chatAgent ? "" : await resolveProjectInstructions(
       binding?.instructions,
-      async () => {
+      async (instructionSignal) => {
         if (remoteId)
           return sshToolContext(
             this.deps.remotes,
@@ -260,7 +259,7 @@ export class NovaRuntime implements RuntimeAdapter {
           idempotencyKey: randomUUID(),
         });
       },
-      instructionSignal,
+      context.signal,
     );
     const instructions = execution?.agentProfile?.systemPrompt ?? buildSystemInstructions({
       mode: configuration.mode,
