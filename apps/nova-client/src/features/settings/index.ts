@@ -13,6 +13,11 @@ export const ModelsTab = lazy(() =>
 export const RunnersTab = lazy(() =>
   import('./runner/runners-tab').then((module) => ({ default: module.RunnersTab })),
 );
+export const RunnerManagerDialog = lazy(() =>
+  import('./runner/runner-manager-dialog').then((module) => ({
+    default: module.RunnerManagerDialog,
+  })),
+);
 export const SettingsLayout = lazy(() =>
   import('./settings-layout').then((module) => ({ default: module.SettingsLayout })),
 );

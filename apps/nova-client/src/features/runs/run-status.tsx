@@ -25,19 +25,17 @@ const connections = {
 
 /**
  * 会话标题栏的运行状态指示（与参考实现一致，放在任务详情开关左侧）。
- * 从 `RunPanel` 的状态行抽出：连接状态点、运行状态文字、重连倒计时与停止按钮，
- * 让正文区不再为状态单独占一行。
+ * 从 `RunPanel` 的状态行抽出：连接状态点、运行状态文字与重连倒计时，
+ * 让正文区不再为状态单独占一行；停止操作的入口在输入框的停止按钮与暂停横幅。
  */
 export function RunStatus({
   stream,
   controls,
   onRetry,
-  executionEnabled,
 }: {
   stream: RunStreamSnapshot;
   controls: RunControls;
   onRetry: () => void;
-  executionEnabled: boolean;
 }) {
   const projection = stream.projection;
   const { cancelling, now } = controls;
@@ -80,16 +78,6 @@ export function RunStatus({
           {stream.retryAt && stream.retryAt > now
             ? `${Math.ceil((stream.retryAt - now) / 1000)} 秒后重试`
             : '重新连接'}
-        </Button>
-      )}
-      {projection?.run && isActiveRun(projection.run.state) && (
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={!executionEnabled || cancelling}
-          onPress={() => controls.cancel.mutate()}
-        >
-          停止运行
         </Button>
       )}
     </div>

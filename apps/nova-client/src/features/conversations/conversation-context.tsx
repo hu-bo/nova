@@ -1,5 +1,6 @@
 import { resolveRemotePath } from '@/features/remotes';
 import { Target } from 'lucide-react';
+import { EXECUTION_MODES } from './execution-modes';
 import { type ConversationComposerController } from './use-conversation-composer';
 import { Input } from '@/components/ui/input';
 
@@ -12,7 +13,7 @@ export function ConversationContext({
   let workEnvironment = '普通 Chat';
   if (ctl.selectedRemote) workEnvironment = ctl.selectedRemote.name + ' · SSH';
   else if (ctl.binding?.runnerId) workEnvironment = '项目 Runner';
-  let executionLabel = ctl.executionMode === 'plan' ? 'Plan · 只读分析与规划' : 'Build · 推进实现';
+  let executionLabel = EXECUTION_MODES[ctl.executionMode].contextLabel;
   if (ctl.chatAgent) executionLabel = '文字对话 · 无外部工具';
   return (
     <section className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">

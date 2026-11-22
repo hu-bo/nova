@@ -31,7 +31,9 @@ import { useRunnerTokens } from './use-runner-tokens';
 interface RunnerManagerProps {
   onClose?: () => void;
   selectedRunnerId?: string;
-  onSelect?: (runnerId: string) => void;
+  onSelect?: (runnerId: string) => void | Promise<unknown>;
+  /** 会话页等嵌入式入口的补充说明：解释「选择」影响哪些会话。 */
+  selectionHint?: string;
 }
 
 /** Token 预览文本：有密钥时脱敏展示；旧版活跃凭据按能否启动区分；其余视为已失效。 */
@@ -50,7 +52,12 @@ function copyCommandHint(token: RunnerToken): string {
 }
 
 /** Manage Runner credentials, connection commands and registered devices. */
-export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerManagerProps) {
+export function RunnerManager({
+  onClose,
+  selectedRunnerId,
+  onSelect,
+  selectionHint,
+}: RunnerManagerProps) {
   const { identity } = useIdentity();
   const queryClient = useQueryClient();
   const catalog = useRunnerCatalog();
@@ -59,6 +66,7 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
   const [deletingToken, setDeletingToken] = useState<RunnerToken | null>(null);
   const [rotatingToken, setRotatingToken] = useState<RunnerToken | null>(null);
   const [selecting, setSelecting] = useState<string | null>(null);
+  const [selectError, setSelectError] = useState<unknown>(null);
   const [creating, setCreating] = useState(false);
   const [commandToken, setCommandToken] = useState<RunnerToken | null>(null);
   const [label, setLabel] = useState('');
@@ -106,10 +114,14 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
 
   async function select(runnerId: string) {
     if (!onSelect) return;
+    setSelectError(null);
     setSelecting(runnerId);
     try {
       await onSelect(runnerId);
       onClose?.();
+    } catch (error) {
+      // 绑定失败（如设备没有工作目录、并发修订冲突）留在弹窗内提示，允许换一台再试。
+      setSelectError(error);
     } finally {
       setSelecting(null);
     }
@@ -322,6 +334,14 @@ export function RunnerManager({ onClose, selectedRunnerId, onSelect }: RunnerMan
           <p className="mt-1 text-sm text-slate-500">已连接设备的状态和工作目录。</p>
         </div>
         {renderRunnerList()}
+        {selectionHint && (
+          <p className="mt-3 text-xs leading-5 text-slate-500">{selectionHint}</p>
+        )}
+        {selectError != null && (
+          <div className="mt-3">
+            <ErrorNotice error={selectError} />
+          </div>
+        )}
       </section>
 
       <SettingsDialog

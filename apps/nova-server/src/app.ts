@@ -1,4 +1,5 @@
-import Fastify from "fastify";
+import Fastify, { LogController } from "fastify";
+import type { FastifyRequest } from "fastify";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import type { AppConfig } from "./config.js";
 import { attachmentsModule } from "./modules/attachments/index.js";
@@ -32,9 +33,20 @@ declare module "fastify" {
   }
 }
 
+// 健康探针等基础设施轮询频率高且几乎总是成功，跳过 incoming/completed 生命周期日志避免刷屏。
+// 只影响 Fastify 内置请求日志；探针失败仍会经全局 setErrorHandler 的 request.log 记 error/warn。
+const QUIET_REQUEST_PATHS = new Set(["/health/live", "/health/ready"]);
+
+export function isQuietRequest(request: FastifyRequest): boolean {
+  const queryIndex = request.url.indexOf("?");
+  const pathname = queryIndex === -1 ? request.url : request.url.slice(0, queryIndex);
+  return QUIET_REQUEST_PATHS.has(pathname);
+}
+
 export async function buildApp(config: AppConfig, options: { exportMode?: boolean } = {}) {
   const app = Fastify({
     loggerInstance: createAppLogger(config),
+    logController: new LogController({ disableRequestLogging: isQuietRequest }),
     // 部署固定经 Nginx 单层反代, 且 Nginx 用 proxy_set_header 重写 x-forwarded-* (static-site conf.d),
     // 不存在客户端可注入的伪造链; 开启后 request.protocol 才能把 TLS 终结识别为 https,
     // /api/runner-connection 才会下发 wss:// 连接地址而非明文 ws://.

@@ -44,8 +44,8 @@ function makeClient() {
   });
 }
 // 状态行与面板不再自带 mutation 状态：页面把共享的 useRunControls 实例同时喂给
-// Chat（停止/决策浮层）、标题栏 RunStatus（状态行/停止/重连）与 RunPanel（倒计时摘要），
-// 测试沿用同样的组合方式。
+// Chat（停止/决策浮层）、标题栏 RunStatus（状态行/重连）与 RunPanel（倒计时摘要），
+// 测试沿用同样的组合方式；标题栏不再有停止按钮，停止入口在 Chat 输入框。
 function Panel({
   stream,
   onRetry,
@@ -56,7 +56,9 @@ function Panel({
   const controls = useRunControls(stream);
   return (
     <>
-      <RunStatus stream={stream} controls={controls} onRetry={() => {}} executionEnabled />
+      <RunStatus stream={stream} controls={controls} onRetry={() => {}} />
+      {/* 占位触发器：模拟 Chat 输入框里的停止按钮调用同一个 controls.cancel。 */}
+      <button onClick={() => controls.cancel.mutate()}>触发停止</button>
       <RunPanel stream={stream} controls={controls} onRetry={onRetry} />
     </>
   );
@@ -99,7 +101,6 @@ describe('approval, cancellation and unknown outcomes', () => {
     );
     const view = mount(value);
     expect(screen.getByText('等待运行')).toBeDefined();
-    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
 
     value.projection = initialProjection(snapshot({ run: { id: 'run-1', state: 'running' } }));
     view.rerender(view.ui(value));
@@ -170,11 +171,10 @@ describe('approval, cancellation and unknown outcomes', () => {
     mocks.cancel.mockResolvedValue({});
     const value = stream();
     const view = mount(value);
-    await userEvent.click(screen.getByRole('button', { name: '停止运行' }));
+    // 标题栏不再有停止按钮；停止入口在 Chat 输入框（测试里用占位按钮触发同一 controls.cancel）。
+    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: '触发停止' }));
     await waitFor(() => expect(screen.getByText('正在请求停止，等待设备确认')).toBeDefined());
-    expect((screen.getByRole('button', { name: '停止运行' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
     const settled = {
       ...value,
       projection: {
@@ -184,7 +184,6 @@ describe('approval, cancellation and unknown outcomes', () => {
     };
     view.rerender(view.ui(settled));
     expect(screen.getByText('已停止')).toBeDefined();
-    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
   });
   it('does not render a failure alert: run errors live in the failed message itself', () => {
     const value = stream();
@@ -193,7 +192,6 @@ describe('approval, cancellation and unknown outcomes', () => {
     );
     mount(value);
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
   });
   it('clears the failure state when another run starts', () => {
     const value = stream();
@@ -204,7 +202,6 @@ describe('approval, cancellation and unknown outcomes', () => {
     );
     view.rerender(view.ui(value));
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
 
     value.projection = reduceRunEvent(
       value.projection,
@@ -245,7 +242,6 @@ describe('approval, cancellation and unknown outcomes', () => {
     const view = mount(value);
     expect(screen.getAllByText('预算耗尽，任务未完成').length).toBeGreaterThan(0);
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByRole('button', { name: '停止运行' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: '继续任务' }));
     await waitFor(() => expect(mocks.append).toHaveBeenCalledTimes(1));
     expect(mocks.append.mock.calls[0]?.[1]).toMatchObject({

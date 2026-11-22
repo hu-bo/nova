@@ -1,27 +1,34 @@
 import { ModelPicker } from '@/features/models';
-import { BrainCircuit, ClipboardList, Code2, Layers3 } from 'lucide-react';
+import { BrainCircuit, Layers3 } from 'lucide-react';
 import { ComposerOptionMenu } from './composer-option-menu';
+import {
+  EXECUTION_MODES,
+  EXECUTION_MODE_ORDER,
+  isExecutionMode,
+  type ExecutionMode,
+} from './execution-modes';
 import type { ConversationComposerController } from './use-conversation-composer';
 
-type AgentMode = 'build' | 'plan' | 'spec';
-const agentModes = {
-  build: { label: 'Build', description: '推进实现与执行', icon: Code2 },
-  plan: { label: 'Plan', description: '只读分析与规划', icon: ClipboardList },
-  spec: { label: 'Spec', description: '从首条需求开启规格开发', icon: Layers3 },
-} satisfies Record<AgentMode, { label: string; description: string; icon: typeof Code2 }>;
+const SPEC_MODE = { label: 'Spec', description: '从首条需求开启规格开发', icon: Layers3 };
 
 export function ComposerModelActions({
   controller: ctl,
 }: {
   controller: ConversationComposerController;
 }) {
-  let activeMode: AgentMode = ctl.executionMode;
+  let activeMode: ExecutionMode | 'spec' = ctl.executionMode;
   if (ctl.specSession) activeMode = 'plan';
   else if (ctl.specArmed) activeMode = 'spec';
-  const Icon = agentModes[activeMode].icon;
-  const executionModeOptions = Object.entries(agentModes)
-    .filter(([value]) => value !== 'spec' || ctl.canStartSpec)
-    .map(([value, item]) => ({ value, label: item.label, description: item.description }));
+  const active = activeMode === 'spec' ? SPEC_MODE : EXECUTION_MODES[activeMode];
+  const Icon = active.icon;
+  const executionModeOptions = [
+    ...EXECUTION_MODE_ORDER.map((value) => ({
+      value,
+      label: EXECUTION_MODES[value].label,
+      description: EXECUTION_MODES[value].description,
+    })),
+    ...(ctl.canStartSpec ? [{ value: 'spec', label: SPEC_MODE.label, description: SPEC_MODE.description }] : []),
+  ];
   return (
     <div className="nova-model-controls flex min-w-0 flex-wrap items-center gap-1">
       <ModelPicker
@@ -52,8 +59,9 @@ export function ComposerModelActions({
             if (value === 'spec') {
               ctl.setSpecArmed(true);
               ctl.setGoalArmed(false);
+              return;
             }
-            if (value === 'plan' || value === 'build') {
+            if (isExecutionMode(value)) {
               ctl.setSpecArmed(false);
               ctl.setExecutionMode(value);
             }

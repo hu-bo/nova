@@ -95,7 +95,7 @@ nova-server 任务：
 
 ## 模型协议错误排查日志
 
-nova-server 已接入 `@hquant/logger-js`。开发环境输出可读日志，生产环境 stdout 与滚动文件均为每行一条 JSON，时间戳固定为上海时间（UTC+8）`YYYY-MM-DD HH:mm:ss`。Compose 把发布目录中宿主机的 `logs` 目录（`/data/app/nova-server/logs`）挂载到 `LOG_DIR` 指向的容器内同名路径，宿主机可直接查看日志。应用目录是只读绑定，可写挂载点无法在其内自动创建，因此发布脚本在解包后先创建 `logs` 目录。切换发布目录时旧日志随备份目录归档，当前目录的日志文件按天或 20 MiB 滚动，保留 30 天。直接运行生产 Node 入口时用 `LOG_DIR` 指定可写目录。
+nova-server 已接入 `@hquant/logger-js`。开发环境输出可读日志，生产环境 stdout 为每行一条 JSON（供日志平台按字段检索），滚动文件为可读文本行（`时间 级别 [service] 消息 {附加字段}`，如 `2026-11-22 21:07:45 ERROR [nova-server] ...`），时间戳固定为上海时间（UTC+8）`YYYY-MM-DD HH:mm:ss`。Compose 把发布目录中宿主机的 `logs` 目录（`/data/app/nova-server/logs`）挂载到 `LOG_DIR` 指向的容器内同名路径，宿主机可直接查看日志。应用目录是只读绑定，可写挂载点无法在其内自动创建，因此发布脚本在解包后先创建 `logs` 目录。切换发布目录时旧日志随备份目录归档，当前目录的日志文件按天或 20 MiB 滚动，保留 30 天。直接运行生产 Node 入口时用 `LOG_DIR` 指定可写目录。
 
 `LOG_LEVEL=info` 已包含请求开始、HTTP 响应、流完成和失败摘要。临时改为 `debug` 并重启，可额外观察每个 SSE 事件的类型和结束原因。提示词、模型输出、工具参数、凭据和原始响应体不写入这些模型诊断日志。
 

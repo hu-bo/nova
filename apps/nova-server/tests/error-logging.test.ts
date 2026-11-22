@@ -5,8 +5,12 @@ import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import Fastify from "fastify";
+import Fastify, { LogController } from "fastify";
+import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import { Client, type ConnectConfig, type SFTPWrapper } from "ssh2";
+import { createLogger } from "@hquant/logger-js";
+import { isQuietRequest } from "../src/app.js";
+import { healthRoutes } from "../src/modules/health/health.routes.js";
 import { RemoteConnectionService } from "../src/modules/remotes/remote.service.js";
 import type { RemoteConnectionRow, RemoteRepository } from "../src/modules/remotes/remote.repository.js";
 import { registerErrorHandlers } from "../src/plugins/errors.js";
@@ -146,19 +150,60 @@ test("production logger supports Fastify child bindings and retains debug logs i
   assert.equal(diagnostic.role, "worker");
   assert.ok(diagnostic.reqId);
   assert.match(diagnostic.time, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
-  const fileEntries = readdirSync(directory)
+  const fileText = readdirSync(directory)
     .filter((name) => name.endsWith(".log"))
-    .flatMap((name) =>
-      readFileSync(join(directory, name), "utf8")
-        .trim()
-        .split("\n")
-        .map((line) => JSON.parse(line)),
-    );
-  const fileDiagnostic = fileEntries.find((entry) => entry.msg === "中文诊断");
-  assert.ok(fileDiagnostic);
-  assert.equal(fileDiagnostic.reqId, diagnostic.reqId);
-  assert.equal(fileDiagnostic.stage, "test");
-  assert.equal(fileDiagnostic.time, diagnostic.time);
+    .map((name) => readFileSync(join(directory, name), "utf8"))
+    .join("");
+  const fileDiagnostic = fileText.split("\n").find((line) => line.includes("中文诊断"));
+  assert.ok(fileDiagnostic, `no readable log line in:\n${fileText}`);
+  assert.ok(fileDiagnostic.startsWith(`${diagnostic.time} DEBUG [nova-server] 中文诊断 `), fileDiagnostic);
+  assert.ok(fileDiagnostic.includes(`"reqId":"${diagnostic.reqId}"`), fileDiagnostic);
+  assert.ok(fileDiagnostic.includes('"stage":"test"'), fileDiagnostic);
+  // Base bindings repeat on every record and are filtered out of the readable lines.
+  for (const noise of ['"service"', '"env"', '"role"', '"nodeVersion"', '"platform"', '"pid"']) {
+    assert.ok(!fileDiagnostic.includes(noise), fileDiagnostic);
+  }
+});
+
+test("health probe requests skip lifecycle logs while probe failures still surface", async (t) => {
+  const logs: Record<string, unknown>[] = [];
+  let databaseFails = false;
+  const app = Fastify({
+    loggerInstance: createLogger("nova-server", { environment: "test", level: "info" }, {
+      write: (line: string) => logs.push(JSON.parse(line) as Record<string, unknown>),
+    }),
+    logController: new LogController({ disableRequestLogging: isQuietRequest }),
+  });
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
+  t.after(() => app.close());
+  registerErrorHandlers(app);
+  await healthRoutes(app, {
+    checkDatabase: async () => {
+      if (databaseFails) throw new Error("probe database down");
+    },
+  });
+  app.get("/api/ping", async () => ({ ok: true }));
+
+  assert.equal((await app.inject("/health/live")).statusCode, 200);
+  assert.equal((await app.inject("/health/ready?probe=1")).statusCode, 200);
+  assert.equal((await app.inject("/api/ping")).statusCode, 200);
+  const lifecycle = logs.filter((entry) => entry.msg === "incoming request" || entry.msg === "request completed");
+  assert.equal(lifecycle.length, 2, JSON.stringify(logs));
+  assert.deepEqual(
+    (lifecycle[0] as { req?: { url?: string } }).req?.url,
+    "/api/ping",
+    "only the non-probe route keeps lifecycle logs",
+  );
+
+  // Readiness failing on the database must still leave an error record via the global error handler.
+  databaseFails = true;
+  assert.equal((await app.inject("/health/ready")).statusCode, 500);
+  const failures = logs.filter((entry) => entry.msg === "Request failed");
+  assert.equal(failures.length, 1);
+  // describeError flattens the error onto the record (no nested err object).
+  assert.equal((failures[0] as { message?: string }).message, "probe database down");
+  assert.equal((failures[0] as { url?: string }).url, "/health/ready");
 });
 
 test("SSH test failures log the original diagnostic without exposing credentials or changing responses", async (t) => {

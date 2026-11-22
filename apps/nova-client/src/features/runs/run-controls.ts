@@ -31,7 +31,7 @@ function buildResponsePayload(response: DecisionResponse) {
  * 运行控制（停止 / 决策裁决）的共享状态。
  *
  * 从 `RunPanel` 抽出：对话页把同一个 hook 实例同时喂给 `Chat`（停止按钮、ESC 中断、
- * 决策浮层）、`RunStatus`（标题栏状态行与停止按钮）与 `RunPanel`（倒计时摘要），
+ * 决策浮层）、`RunStatus`（标题栏状态行）与 `RunPanel`（倒计时摘要），
  * 避免各处各自持有 mutation 状态。
  */
 export function useRunControls(stream: RunStreamSnapshot) {

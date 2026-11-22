@@ -961,6 +961,7 @@ export type RenameConversation200ConfigurationMode = typeof RenameConversation20
 export const RenameConversation200ConfigurationMode = {
   build: 'build',
   plan: 'plan',
+  auto: 'auto',
 } as const;
 
 export type RenameConversation200ConfigurationReasoningEffort = typeof RenameConversation200ConfigurationReasoningEffort[keyof typeof RenameConversation200ConfigurationReasoningEffort];
@@ -1101,6 +1102,7 @@ export type ListConversations200ItemsItemConfigurationMode = typeof ListConversa
 export const ListConversations200ItemsItemConfigurationMode = {
   build: 'build',
   plan: 'plan',
+  auto: 'auto',
 } as const;
 
 export type ListConversations200ItemsItemConfigurationReasoningEffort = typeof ListConversations200ItemsItemConfigurationReasoningEffort[keyof typeof ListConversations200ItemsItemConfigurationReasoningEffort];
@@ -1215,6 +1217,7 @@ export type CreateConversationBodyConfigurationMode = typeof CreateConversationB
 export const CreateConversationBodyConfigurationMode = {
   build: 'build',
   plan: 'plan',
+  auto: 'auto',
 } as const;
 
 export type CreateConversationBodyConfigurationReasoningEffort = typeof CreateConversationBodyConfigurationReasoningEffort[keyof typeof CreateConversationBodyConfigurationReasoningEffort];
@@ -1474,6 +1477,7 @@ export type CreateConversation200ConfigurationMode = typeof CreateConversation20
 export const CreateConversation200ConfigurationMode = {
   build: 'build',
   plan: 'plan',
+  auto: 'auto',
 } as const;
 
 export type CreateConversation200ConfigurationReasoningEffort = typeof CreateConversation200ConfigurationReasoningEffort[keyof typeof CreateConversation200ConfigurationReasoningEffort];
@@ -1596,6 +1600,7 @@ export type GetConversationSnapshot200ConversationConfigurationMode = typeof Get
 export const GetConversationSnapshot200ConversationConfigurationMode = {
   build: 'build',
   plan: 'plan',
+  auto: 'auto',
 } as const;
 
 export type GetConversationSnapshot200ConversationConfigurationReasoningEffort = typeof GetConversationSnapshot200ConversationConfigurationReasoningEffort[keyof typeof GetConversationSnapshot200ConversationConfigurationReasoningEffort];
@@ -2537,6 +2542,7 @@ export type GetConversationSnapshot200PendingInputsItemInputConfigurationMode = 
 export const GetConversationSnapshot200PendingInputsItemInputConfigurationMode = {
   build: 'build',
   plan: 'plan',
+  auto: 'auto',
 } as const;
 
 export type GetConversationSnapshot200PendingInputsItemInputConfigurationReasoningEffort = typeof GetConversationSnapshot200PendingInputsItemInputConfigurationReasoningEffort[keyof typeof GetConversationSnapshot200PendingInputsItemInputConfigurationReasoningEffort];
@@ -2947,6 +2953,7 @@ export type AppendConversationInputBodyConfigurationMode = typeof AppendConversa
 export const AppendConversationInputBodyConfigurationMode = {
   build: 'build',
   plan: 'plan',
+  auto: 'auto',
 } as const;
 
 export type AppendConversationInputBodyConfigurationReasoningEffort = typeof AppendConversationInputBodyConfigurationReasoningEffort[keyof typeof AppendConversationInputBodyConfigurationReasoningEffort];

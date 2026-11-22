@@ -31,7 +31,8 @@ export function createLogger(service: string, options: LoggerOptions = {}, desti
       }),
     );
   }
-  // Keep container stdout available alongside the persistent rotating file; both are JSON lines.
+  // Keep container stdout as JSON lines for log platforms; the persistent rotating file renders
+  // readable `TIME LEVEL [service] message {extras}` text lines for operators.
   return pino(
     settings,
     pino.transport({
@@ -47,6 +48,8 @@ export function createLogger(service: string, options: LoggerOptions = {}, desti
             size: "20M",
             interval: "1d",
             retentionDays: 30,
+            // Base bindings repeat on every record; the file name already carries the service.
+            ignore: Object.keys(settings.base ?? {}).filter((key) => key !== "service"),
           },
         },
       ],

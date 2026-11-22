@@ -307,7 +307,10 @@ export function ConversationWorkspace({
           </h1>
           {data.binding?.runnerId && (
             <span className="hidden sm:block">
-              <RunnerBadge runnerId={data.binding.runnerId} />
+              <RunnerBadge
+                runnerId={data.binding.runnerId}
+                projectId={data.conversation.projectId ?? undefined}
+              />
             </span>
           )}
           {todos.length > 0 && (
@@ -338,12 +341,7 @@ export function ConversationWorkspace({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <RunStatus
-            stream={stream}
-            controls={controls}
-            onRetry={stream.retry}
-            executionEnabled={executionEnabled}
-          />
+          <RunStatus stream={stream} controls={controls} onRetry={stream.retry} />
           {!embedded && <ConversationDetailsToggle />}
           {!embedded && (
             <Popover isOpen={menuOpen} onOpenChange={setMenuOpen}>

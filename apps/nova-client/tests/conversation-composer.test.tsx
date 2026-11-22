@@ -354,13 +354,32 @@ describe('SSH filesystem selection', () => {
     expect(result.current.unboundOpen).toBe(false);
     expect(mocks.append.mock.calls[0]![0].configuration.mode).toBe('plan');
     expect(
-      result.current.composer.skills?.some((skill) => ['build', 'goal'].includes(skill.id)),
+      result.current.composer.skills?.some((skill) => ['build', 'goal', 'auto'].includes(skill.id)),
     ).toBe(false);
     mocks.append.mockClear();
     await act(async () => {
       await result.current.submit(submission('/build run'));
     });
     expect(mocks.append).not.toHaveBeenCalled();
+  });
+  it('switches to Auto mode via the /auto command and submits with the auto configuration', async () => {
+    mocks.append.mockResolvedValue({ inputId: 'auto-input' });
+    const { result } = mount({
+      conversationId: 'existing',
+      runtime: { backendId: 'nova', modelId: null, mode: 'build' },
+    });
+    await act(async () => {
+      await result.current.submit(submission('/auto 直接修复这个问题'));
+    });
+    expect(result.current.executionMode).toBe('auto');
+    const payload = mocks.append.mock.calls[0]![0];
+    expect(payload.configuration.mode).toBe('auto');
+    expect(payload.blocks).toEqual([{ id: 'text', type: 'text', text: '直接修复这个问题' }]);
+    mocks.append.mockClear();
+    await act(async () => {
+      await result.current.submit(submission('继续无人值守推进'));
+    });
+    expect(mocks.append.mock.calls[0]![0].configuration.mode).toBe('auto');
   });
   it('ignores the removed SSH selection in old drafts for a new ordinary Chat', async () => {
     localStorage.setItem(

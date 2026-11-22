@@ -2,7 +2,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover } from '@heroui/react';
-import { ClipboardList, Layers3, Settings2, Target, X } from 'lucide-react';
+import { Layers3, Settings2, Target, X } from 'lucide-react';
+import { EXECUTION_MODES } from './execution-modes';
 import type { ConversationComposerController } from './use-conversation-composer';
 
 export function ComposerGoalHeader({
@@ -19,13 +20,22 @@ export function ComposerGoalHeader({
         Spec 模式 · 发送需求后开启规格工作台
       </p>
     );
-  if (!ctl.goalArmed)
-    return ctl.executionMode === 'plan' ? (
-      <p className="flex items-center gap-2 px-2 pb-2 pt-1 text-xs text-slate-500">
-        <ClipboardList size={13} />
-        Plan 模式 · 先分析和规划，不修改文件
+  if (!ctl.goalArmed) {
+    const mode = EXECUTION_MODES[ctl.executionMode];
+    if (!mode.headerHint) return null;
+    const ModeIcon = mode.icon;
+    return (
+      <p
+        className={
+          'flex items-center gap-2 px-2 pb-2 pt-1 text-xs ' +
+          (ctl.executionMode === 'auto' ? 'text-amber-600' : 'text-slate-500')
+        }
+      >
+        <ModeIcon size={13} />
+        {mode.headerHint}
       </p>
-    ) : null;
+    );
+  }
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-xs text-accent-soft-foreground">
       <Target size={14} />

@@ -14,6 +14,13 @@ import {
   executionBudgetSchema,
   type SkillSelection,
 } from '@nova/agent-ui-contracts';
+import {
+  EXECUTION_MODES,
+  MODE_COMMANDS,
+  isExecutionMode,
+  isModeCommand,
+  type ExecutionMode,
+} from './execution-modes';
 import { useListSkills } from '@/api/generated/skills';
 import { summariseRunnerFiles } from '@/api/generated/runners';
 import { summariseRemoteFiles } from '@/api/generated/remotes';
@@ -54,8 +61,10 @@ const REASONING_LABELS: Record<string, string> = {
   high: '高',
   max: '最大',
 };
+// 首词命令入口：goal/spec 是会话开关，plan/build/auto 映射执行模式表.
+const COMPOSER_COMMAND_PATTERN = /^\/(goal|plan|build|spec|auto)(?:\s+|$)/;
 type DraftOptions = {
-  executionMode: 'build' | 'plan';
+  executionMode: ExecutionMode;
   specArmed?: boolean;
   goalArmed: boolean;
   maxIterations: number;
@@ -215,9 +224,11 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   );
   const [storedOptions] = useState(() => optionStore.get());
   const [text, setText] = useState(() => readDraft(accountId, draftId));
-  const [executionMode, setExecutionMode] = useState<'build' | 'plan'>(
-    storedOptions?.executionMode ?? runtime?.mode ?? 'build',
-  );
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>(() => {
+    const stored = storedOptions?.executionMode;
+    if (stored && isExecutionMode(stored)) return stored;
+    return runtime?.mode ?? 'build';
+  });
   const [budgetLimits, setBudgetLimits] = useState({
     maxSteps: runtime?.budget?.maxSteps?.toString() ?? '',
     maxToolCalls: runtime?.budget?.maxToolCalls?.toString() ?? '',
@@ -349,13 +360,14 @@ export function useConversationComposer(options: ConversationComposerOptions) {
           label: '设置目标',
           description: '把下一条消息作为目标，持续推进并记录完成标准',
         },
-        {
-          id: 'plan',
-          command: 'plan',
-          label: '切换 Plan 模式',
-          description: '先分析和制定方案，不修改文件',
-        },
-        { id: 'build', command: 'build', label: '切换 Build 模式', description: '按任务推进实现' },
+        ...Object.keys(MODE_COMMANDS)
+          .filter(isModeCommand)
+          .map((name) => ({
+            id: name,
+            command: name,
+            label: '切换 ' + EXECUTION_MODES[name].label + ' 模式',
+            description: EXECUTION_MODES[name].description,
+          })),
         ...(!conversationId
           ? [
               {
@@ -371,7 +383,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
           : []),
       ].filter(
         (skill) =>
-          (!options.specSession || !['goal', 'build'].includes(skill.id)) &&
+          (!options.specSession || !['goal', 'build', 'auto'].includes(skill.id)) &&
           (!chatAgent || skill.id === 'clear'),
       ),
     [conversationId, isRunning, options.specSession, chatAgent],
@@ -382,17 +394,17 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     let message = submission.text.trim();
     if (
       chatAgent &&
-      (/^\/(goal|plan|build|spec)(?:\s+|$)/.test(message) ||
+      (COMPOSER_COMMAND_PATTERN.test(message) ||
         submission.attachments.length ||
         submission.files.length)
     ) {
       setError(new ApiError(409, 'CHAT_TEXT_ONLY', '求职会话支持文字对话，请粘贴简历和岗位描述。'));
       return false;
     }
-    let nextMode: Configuration['mode'] = options.specSession ? 'plan' : executionMode;
+    let nextMode: ExecutionMode = options.specSession ? 'plan' : executionMode;
     let startsGoal = !chatAgent && goalArmed;
     let startsSpec = !chatAgent && !conversationId && specArmed;
-    const command = /^\/(goal|plan|build|spec)(?:\s+|$)/.exec(message);
+    const command = COMPOSER_COMMAND_PATTERN.exec(message);
     if (command) {
       const name = command[1]!;
       message = message.slice(command[0].length).trim();
@@ -416,10 +428,10 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         setSpecArmed(false);
         startsGoal = true;
         setGoalArmed(true);
-      } else {
+      } else if (isModeCommand(name)) {
         startsSpec = false;
         setSpecArmed(false);
-        nextMode = name === 'plan' ? 'plan' : 'build';
+        nextMode = MODE_COMMANDS[name];
         setExecutionMode(nextMode);
       }
       if (!message) {
@@ -560,6 +572,9 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     } else if (skill.id === 'build') {
       setSpecArmed(false);
       setExecutionMode('build');
+    } else if (skill.id === 'auto') {
+      setSpecArmed(false);
+      setExecutionMode('auto');
     } else if (skill.id === 'clear') onClearContext?.();
   }
   const canSteer = isRunning && options.steeringEnabled === true;
@@ -684,6 +699,8 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     placeholder = '继续补充任务，发送后进入队列…';
   } else if (executionMode === 'plan') {
     placeholder = '先分析和制定计划，' + inputHint;
+  } else if (executionMode === 'auto') {
+    placeholder = 'Auto 模式：写入与命令直接执行，无需确认…';
   } else if (goalArmed) {
     placeholder = '描述一个明确、可验证的目标…';
   }

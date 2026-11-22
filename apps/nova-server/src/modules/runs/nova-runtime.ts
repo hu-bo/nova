@@ -6,6 +6,7 @@ import {
   defineTool,
   sessionStore,
   type AgentMessage,
+  type ToolDefinition,
   type ToolPolicy,
   type PluginDefinition,
 } from "@nnova/harness";
@@ -47,7 +48,20 @@ export const runnerOsInstructions = (platform: string) =>
 const MODE_INSTRUCTIONS = {
   plan: "PLAN MODE: analyze and plan using read-only tools. Do not modify files or execute shell commands.",
   build: "BUILD MODE: implement the task. Writes and commands require approval. Stop when an operation has an unknown outcome.",
+  auto: "AUTO MODE: unattended execution. Writes and commands are pre-approved; keep working through the task without waiting for confirmation. Report any operation you could not verify in the final message.",
 } satisfies Record<Configuration["mode"], string>;
+// 安全白名单单一来源: 声明 effects=read 的工具 (read_file、grep、list_dir 等) 在任何模式下无条件放行.
+// write/external-job 工具: plan 模式拒绝; auto (自由模式) 全部放行、无人值守; 其余 (build 安全模式) 交由用户确认.
+export const toolModeDecision = (
+  mode: Configuration["mode"],
+  effects: ToolDefinition["effects"] | undefined,
+): "allow" | "deny" | "ask" => {
+  if (effects === undefined) return "deny";
+  if (effects === "read") return "allow";
+  if (mode === "plan") return "deny";
+  if (mode === "auto") return "allow";
+  return "ask";
+};
 const goalPrompt = (goal: Goal) =>
   "Goal: " +
   goal.objective +
@@ -142,7 +156,7 @@ export class NovaRuntime implements RuntimeAdapter {
             },
           })
         : []),
-    ].map((original) => (original.name === "git_diff" ? { ...original, effects: "write" as const } : original));
+    ];
     const specExecution = context.checkpoint.specExecution;
     if (!chatAgent && prepared.specRevision && specExecution) {
       tools.push(...createSpecTools({
@@ -204,8 +218,8 @@ export class NovaRuntime implements RuntimeAdapter {
       authorize: async ({ name, input, context: toolContext }) => {
         toolContext.signal.throwIfAborted();
         const tool = tools.find((item) => item.name === name);
-        if (!tool || (configuration.mode === "plan" && tool.effects !== "read")) return "deny";
-        if (tool.effects === "read") return "allow";
+        const decision = toolModeDecision(configuration.mode, tool?.effects);
+        if (decision !== "ask") return decision;
         const { checkpoint } = await repository.load(claim);
         const prior = checkpoint.interactions.find((item) => item.callId === toolContext.callId);
         if (prior) {
@@ -224,7 +238,7 @@ export class NovaRuntime implements RuntimeAdapter {
           kind: "approval",
           toolName: name,
           args: input,
-          risk: name === "bash" || name === "git_diff" ? "exec" : "write",
+          risk: name === "bash" ? "exec" : "write",
           allowedScopes: ["once", "session"],
           ...(name === "edit_file" &&
           typeof args.path === "string" &&
@@ -293,6 +307,8 @@ export class NovaRuntime implements RuntimeAdapter {
         toolLoopDetectionPlugin({
           confirm: async (request) => {
             request.context.signal.throwIfAborted();
+            // 自由模式无人值守: 重复调用不再发起确认, 由预算与运行时限兜底.
+            if (configuration.mode === "auto") return "allow";
             const pending = repetitionConfirmations.get(request.key);
             if (pending) return pending;
             const prior = context.checkpoint.interactions.find((item) => item.callId === request.key);
@@ -302,7 +318,7 @@ export class NovaRuntime implements RuntimeAdapter {
             }
             const tool = tools.find((item) => item.name === request.name);
             let risk: "read" | "write" | "exec" = "read";
-            if (tool?.effects !== "read") risk = request.name === "bash" || request.name === "git_diff" ? "exec" : "write";
+            if (tool?.effects !== "read") risk = request.name === "bash" ? "exec" : "write";
             const confirmation = repository.requestInteraction(claim, {
               id: randomUUID(), revision: 1, state: "pending",
               expiresAt: new Date(Date.now() + 10 * 60000).toISOString(),

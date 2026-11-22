@@ -34,7 +34,7 @@ export const configurationSchema = z
     backendId: z.string().min(1).default("nova"),
     agentProfile: agentProfileSchema.optional(),
     modelId: idSchema.nullable().default(null),
-    mode: z.enum(["build", "plan"]).default("build"),
+    mode: z.enum(["build", "plan", "auto"]).default("build"),
     reasoningEffort: z.enum(["off", "low", "medium", "high", "max"]).optional(),
     remoteConnectionId: idSchema.optional(),
     budget: executionBudgetSchema.optional(),

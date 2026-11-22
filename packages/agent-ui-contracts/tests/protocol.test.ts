@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyEvent,
+  configurationSchema,
   decimalSequenceSchema,
   fileRefSchema,
   inputBlocksSchema,
@@ -27,6 +28,13 @@ test("SSH attachments accept absolute paths while Runner attachments remain work
     assert.equal(fileRefSchema.safeParse({ ...ssh, path }).success, false);
     assert.equal(fileRefSchema.safeParse({ ...runner, path }).success, false);
   }
+});
+
+test("execution mode defaults to safe build and accepts the auto free mode", () => {
+  assert.equal(configurationSchema.parse({}).mode, "build");
+  assert.equal(configurationSchema.parse({ mode: "plan" }).mode, "plan");
+  assert.equal(configurationSchema.parse({ mode: "auto" }).mode, "auto");
+  assert.equal(configurationSchema.safeParse({ mode: "yolo" }).success, false);
 });
 
 const capabilities = {

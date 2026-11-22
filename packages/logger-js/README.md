@@ -3,7 +3,7 @@
 基于 [pino](https://github.com/pinojs/pino) 的轻量日志封装：
 
 - 开发环境：使用 `pino-pretty`，彩色可读输出到 stdout
-- 生产环境：stdout 输出结构化 JSON，同时使用内置的滚动文件 transport 把同样的 JSON 行写入 `LOG_DIR`
+- 生产环境：stdout 输出结构化 JSON；同时使用内置的滚动文件 transport 把每条日志写成可读文本行（`时间 级别 [service] 消息 {附加字段}`）存入 `LOG_DIR`
 - 测试环境：stdout 输出 JSON；可注入 destination 捕获日志
 
 > 配置在创建 logger 时读取；可通过 options 显式覆盖环境、级别和目录。
@@ -64,12 +64,19 @@ export LOG_DIR=/var/log/trader
 
 ## 生产环境日志文件
 
-生产环境使用按天滚动，每行一条 JSON：
+生产环境使用按天滚动，每行一条可读文本记录（`base` 里的固定字段不重复输出，错误堆栈换行跟随在记录之后）：
+
+```text
+2026-11-22 21:07:45 ERROR [nova-server] unexpected error {"scope":"api","reqId":"req-3"}
+Error: boom
+    at handler (/app/dist/index.js:10:11)
+```
 
 - 文件名由 transport 生成，前缀为服务名，以 `.log` 结尾
 - 按 `1d` 或单文件 `20M` 滚动
 - 保留天数：`30`（按文件 mtime 清理）
 - 自动创建目录；进程退出时由 Pino transport 刷新并关闭
+- 容器 stdout 仍为每行一条 JSON，供日志平台按字段检索
 
 ## 开发
 

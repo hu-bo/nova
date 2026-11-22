@@ -4007,7 +4007,8 @@
                               "type": "string",
                               "enum": [
                                 "build",
-                                "plan"
+                                "plan",
+                                "auto"
                               ]
                             },
                             "reasoningEffort": {
@@ -4648,7 +4649,8 @@
                                     "type": "string",
                                     "enum": [
                                       "build",
-                                      "plan"
+                                      "plan",
+                                      "auto"
                                     ]
                                   },
                                   "reasoningEffort": {
@@ -4925,7 +4927,8 @@
                         "type": "string",
                         "enum": [
                           "build",
-                          "plan"
+                          "plan",
+                          "auto"
                         ]
                       },
                       "reasoningEffort": {
@@ -5433,7 +5436,8 @@
                               "type": "string",
                               "enum": [
                                 "build",
-                                "plan"
+                                "plan",
+                                "auto"
                               ]
                             },
                             "reasoningEffort": {
@@ -5837,7 +5841,8 @@
                                   "type": "string",
                                   "enum": [
                                     "build",
-                                    "plan"
+                                    "plan",
+                                    "auto"
                                   ]
                                 },
                                 "reasoningEffort": {
@@ -7922,7 +7927,8 @@
                                         "type": "string",
                                         "enum": [
                                           "build",
-                                          "plan"
+                                          "plan",
+                                          "auto"
                                         ]
                                       },
                                       "reasoningEffort": {
@@ -8768,7 +8774,8 @@
                         "type": "string",
                         "enum": [
                           "build",
-                          "plan"
+                          "plan",
+                          "auto"
                         ]
                       },
                       "reasoningEffort": {
