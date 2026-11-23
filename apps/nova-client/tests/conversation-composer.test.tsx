@@ -480,6 +480,13 @@ describe('SSH filesystem selection', () => {
   });
 });
 describe('conversation commands', () => {
+  it('keeps image paste enabled without the uploads capability and disabled for remote workspaces', () => {
+    // 能力门控只应体现在上传失败提示上，不再静默禁用输入框的粘贴入口。
+    expect(mount().result.current.composer.allowFiles).toBe(true);
+    expect(
+      mount({ mode: 'project', projectId: 'project-1' }).result.current.composer.allowFiles,
+    ).toBe(false);
+  });
   it('creates a conversation only after the first accepted message and keeps failed text available', async () => {
     mocks.create
       .mockRejectedValueOnce(new Error('network'))

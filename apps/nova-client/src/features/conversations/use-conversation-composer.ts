@@ -715,7 +715,9 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     ...(!usesRemoteFiles ? { onFilesSelected: (files: File[]) => uploads.add(files) } : {}),
     disabled: sending,
     submitDisabled: blocked || (chatAgent && skillCatalog.isPending),
-    allowFiles: !chatAgent && !usesRemoteFiles && Boolean(config.data?.capabilities.uploads),
+    // 粘贴/选择文件默认开启，不随 capabilities.uploads（服务端 MINIO .env 配置）静默禁用；
+    // 存储未就绪时由上传队列把服务端 503 明确展示为单条失败，可重试。
+    allowFiles: !chatAgent && !usesRemoteFiles,
     accept: IMAGE_ACCEPT,
     attachments,
     onAttachmentsChange: (next) => {

@@ -12,8 +12,10 @@ import {
   RemoteExplorer,
   TodoPanel,
   UploadCover,
+  collectClipboardImages,
   contextUsagePercent,
   matchComposerSkills,
+  readClipboardImages,
 } from "./index.js";
 import type { ChatMessage } from "./types.js";
 
@@ -638,6 +640,44 @@ describe("chat-ui", () => {
     );
     expect(html).toContain('type="file"');
     expect(html).toContain('aria-label="添加文件"');
+  });
+
+  it("collects pasted clipboard images from items with a files fallback", () => {
+    const shot = new File([new Uint8Array([0x89])], "image.png", { type: "image/png" });
+    const notes = new File([new Uint8Array([0x01])], "note.txt", { type: "text/plain" });
+    expect(
+      collectClipboardImages({
+        items: [
+          { kind: "file", type: "image/png", getAsFile: () => shot },
+          { kind: "string", type: "text/html", getAsFile: () => null },
+        ],
+        files: [],
+      }),
+    ).toEqual([shot]);
+    expect(collectClipboardImages({ items: [], files: [notes, shot] })).toEqual([shot]);
+    expect(
+      collectClipboardImages({
+        items: [{ kind: "file", type: "application/pdf", getAsFile: () => null }],
+        files: [notes],
+      }),
+    ).toEqual([]);
+  });
+
+  it("reads clipboard images through the async fallback and tolerates a missing or denied clipboard", async () => {
+    const png = new Blob([new Uint8Array([0x89])], { type: "image/png" });
+    const files = await readClipboardImages({
+      read: async () => [
+        { types: ["text/plain"], getType: async () => new Blob(["x"]) },
+        { types: ["image/png"], getType: async () => png },
+      ],
+    });
+    expect(files).toHaveLength(1);
+    expect(files[0]?.type).toBe("image/png");
+    expect(files[0]?.name).toMatch(/^pasted-\d+\.png$/);
+    await expect(readClipboardImages(undefined)).resolves.toEqual([]);
+    await expect(readClipboardImages({ read: () => Promise.reject(new Error("NotAllowedError")) })).resolves.toEqual(
+      [],
+    );
   });
 
   it("exports the remote explorer dialog contract", () => {

@@ -23,6 +23,7 @@ const productSkills = [
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 describe('composer acceptance and accessible input', () => {
   it('selects a skill with the keyboard without submitting the message', async () => {
@@ -162,6 +163,42 @@ describe('composer acceptance and accessible input', () => {
     await userEvent.keyboard('{Enter}');
     expect(submit).not.toHaveBeenCalled();
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('still editing');
+  });
+  it('attaches clipboard images pasted into the input by default', () => {
+    const onFilesSelected = vi.fn();
+    render(<Composer onFilesSelected={onFilesSelected} onSubmit={() => undefined} />);
+    const image = new File(['png'], 'image.png', { type: 'image/png' });
+    fireEvent.paste(screen.getByRole('textbox'), {
+      clipboardData: {
+        items: [{ kind: 'file', type: 'image/png', getAsFile: () => image }],
+        files: [],
+        types: ['Files'],
+      },
+    });
+    expect(onFilesSelected).toHaveBeenCalledWith([image]);
+  });
+  it('leaves a plain text paste to the browser', () => {
+    const onFilesSelected = vi.fn();
+    render(<Composer onFilesSelected={onFilesSelected} onSubmit={() => undefined} />);
+    fireEvent.paste(screen.getByRole('textbox'), {
+      clipboardData: { items: [], files: [], types: ['text/plain'] },
+    });
+    expect(onFilesSelected).not.toHaveBeenCalled();
+  });
+  it('falls back to the async clipboard when the paste event carries no image', async () => {
+    const png = new Blob(['bitmap'], { type: 'image/png' });
+    const read = vi.fn().mockResolvedValue([{ types: ['image/png'], getType: async () => png }]);
+    vi.stubGlobal('navigator', { clipboard: { read } });
+    const onFilesSelected = vi.fn();
+    render(<Composer onFilesSelected={onFilesSelected} onSubmit={() => undefined} />);
+    fireEvent.paste(screen.getByRole('textbox'), {
+      clipboardData: { items: [], files: [], types: ['Files'] },
+    });
+    await waitFor(() => expect(onFilesSelected).toHaveBeenCalledOnce());
+    const attached = onFilesSelected.mock.calls[0]?.[0]?.[0];
+    expect(attached?.type).toBe('image/png');
+    expect(attached?.name).toMatch(/^pasted-\d+\.png$/);
+    expect(attached?.size).toBe(6);
   });
   it('isolates persisted draft text by identity and conversation', () => {
     saveDraft('alice', 'conversation-1', 'private draft');

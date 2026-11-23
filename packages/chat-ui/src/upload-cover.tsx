@@ -10,6 +10,52 @@ export interface UploadAttachment<TMetadata = unknown> {
   description?: string | undefined;
 }
 
+/** paste 事件里同步可读的剪贴板数据；`DataTransfer` 结构上满足此形状。 */
+export interface ClipboardDataFiles {
+  items: ArrayLike<{ kind: string; type: string; getAsFile: () => File | null }>;
+  files: ArrayLike<File>;
+}
+
+/** Async Clipboard API 的可读图片来源（仅 HTTPS / localhost 暴露）；只声明用到的成员。 */
+export interface ReadableClipboardImages {
+  read?: () => Promise<readonly { types: readonly string[]; getType: (type: string) => Promise<Blob> }[]>;
+}
+
+/** 同步提取剪贴板携带的图片文件：优先 `items`，取不到时退回 `files`（部分应用的复制行为只填后者）。 */
+export function collectClipboardImages(clipboard: ClipboardDataFiles): File[] {
+  const fromItems = Array.from(clipboard.items)
+    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .flatMap((item) => {
+      const file = item.getAsFile();
+      return file ? [file] : [];
+    });
+  if (fromItems.length) return fromItems;
+  return Array.from(clipboard.files).filter((file) => file.type.startsWith("image/"));
+}
+
+/**
+ * 经 Async Clipboard API 读取剪贴板图片，覆盖不进入 paste 事件的图片来源。
+ * 不支持、无权限或被拒绝时返回空数组，调用方按普通粘贴处理。
+ */
+export async function readClipboardImages(clipboard: ReadableClipboardImages | undefined): Promise<File[]> {
+  if (!clipboard?.read) return [];
+  let entries: Awaited<ReturnType<NonNullable<ReadableClipboardImages["read"]>>>;
+  try {
+    entries = await clipboard.read();
+  } catch {
+    return [];
+  }
+  const files: File[] = [];
+  for (const entry of entries) {
+    const type = entry.types.find((candidate) => candidate.startsWith("image/"));
+    if (!type) continue;
+    const blob = await entry.getType(type);
+    const extension = type.slice("image/".length).split("+")[0];
+    files.push(new File([blob], `pasted-${Date.now()}.${extension}`, { type }));
+  }
+  return files;
+}
+
 export interface UploadCoverControls {
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   trigger: ReactNode;
@@ -89,18 +135,21 @@ export function UploadCover<TMetadata = unknown>({
   }
 
   function paste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const itemImages = Array.from(event.clipboardData.items)
-      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-      .flatMap((item) => {
-        const file = item.getAsFile();
-        return file ? [file] : [];
-      });
-    const images = itemImages.length
-      ? itemImages
-      : Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
-    if (!images.length) return;
+    if (disabled || !allowFiles) return;
+    const images = collectClipboardImages(event.clipboardData);
+    if (images.length) {
+      event.preventDefault();
+      addFiles(images);
+      return;
+    }
+    // 剪贴板里有文本（含富文本）时不拦截，让默认粘贴把内容插入输入框。
+    if (Array.from(event.clipboardData.types).some((type) => type.startsWith("text/"))) return;
+    // 某些应用复制的图片不出现在 paste 事件里；默认粘贴本来插不进内容，
+    // 拦下事件改走 Async Clipboard API（HTTPS / localhost 可用，其余环境返回空即无操作）。
     event.preventDefault();
-    addFiles(images);
+    void readClipboardImages(globalThis.navigator?.clipboard).then((files) => {
+      if (files.length) addFiles(files);
+    });
   }
 
   const trigger =
