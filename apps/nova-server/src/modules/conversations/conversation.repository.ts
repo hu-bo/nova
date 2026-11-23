@@ -18,6 +18,7 @@ import {
   type Database,
   type ConversationMetadata,
 } from "../../../database/index.js";
+import { bindingSchema } from "../projects/index.js";
 import {
   runJournal,
   conversationView,
@@ -371,6 +372,33 @@ export const conversationRepository = defineRepository(
           .returning();
         if (!row) throw new DomainError("NOT_FOUND", "Conversation not found");
         return row;
+      },
+      /**
+       * 直接切换本会话绑定的 Runner：仅当原绑定设备离线时允许（在线检查在 Service 层，
+       * 那里才有实时连接注册表）。保留会话原有的工作目录与指令，只换 runner + workspaceId。
+       */
+      async updateBinding(
+        id: string,
+        owner: string,
+        target: { runnerId: string; workspaceId: string },
+      ) {
+        const tx = requireTransaction();
+
+        const conversation = await lockOwned(tx, id, owner);
+        const current = conversation.metadata.binding;
+        if (conversation.mode !== "project" || !current?.runnerId)
+          throw new DomainError("CONFLICT", "Only conversations bound to a Runner can switch it", {
+            reason: "RUNNER_BINDING_REQUIRED",
+          });
+        if (current.runnerId === target.runnerId && current.workspaceId === target.workspaceId)
+          return bindingSchema.parse(current);
+        const next = { ...current, runnerId: target.runnerId, workspaceId: target.workspaceId };
+        conversation.metadata = { ...conversation.metadata, binding: next };
+        await tx
+          .update(conversations)
+          .set({ metadata: conversation.metadata, updatedAt: new Date() })
+          .where(eq(conversations.id, id));
+        return bindingSchema.parse(next);
       },
       async updateGoal(
         id: string,

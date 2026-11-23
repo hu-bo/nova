@@ -17,6 +17,11 @@ export class RunnerConnections {
     const connection = this.connections.get(id);
     return connection?.owner === owner ? connection.session.identity.platform : undefined;
   }
+  /** 权威在线判定：仅当存在属于该用户且仍然连着的会话；断开的残留会话不算在线。 */
+  isOnline(id: string, owner: string): boolean {
+    const connection = this.connections.get(id);
+    return Boolean(connection && connection.owner === owner && connection.session.connected);
+  }
   async require(id: string, owner: string) {
     const connection = this.connections.get(id);
     const runner = await this.runners.findOwned(id, owner);

@@ -7,6 +7,7 @@ interface RunnerManagerDialogProps {
   title?: string;
   selectedRunnerId?: string;
   onSelect?: (runnerId: string) => void | Promise<unknown>;
+  onSelectRequest?: (runnerId: string) => void;
   selectionHint?: string;
 }
 
@@ -16,6 +17,7 @@ export function RunnerManagerDialog({
   title = 'Runner 与连接令牌',
   selectedRunnerId,
   onSelect,
+  onSelectRequest,
   selectionHint,
 }: RunnerManagerDialogProps) {
   return (
@@ -24,6 +26,7 @@ export function RunnerManagerDialog({
         onClose={onClose}
         {...(selectedRunnerId ? { selectedRunnerId } : {})}
         {...(onSelect ? { onSelect } : {})}
+        {...(onSelectRequest ? { onSelectRequest } : {})}
         {...(selectionHint ? { selectionHint } : {})}
       />
     </SettingsDialog>

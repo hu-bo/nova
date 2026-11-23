@@ -1,6 +1,7 @@
 import { configurationSchema, type InputBlock, type Configuration } from "@nova/agent-ui-contracts";
 import { DomainError } from "../../shared/domain-error.js";
 import type { ProjectBindingService } from "../projects/index.js";
+import type { RunnerConnections, RunnerReader } from "../runners/index.js";
 import type { ConversationRow, ConversationRepository } from "./conversation.repository.js";
 import type { ServiceTransaction } from "../../shared/scope.js";
 import type { UserModelProfilesService } from "../model-config/index.js";
@@ -13,6 +14,8 @@ type ConversationDependencies = {
   bindings: Pick<ProjectBindingService, "get">;
   models: Pick<UserModelProfilesService, "validateSelection">;
   remotes: Pick<RemoteConnectionService, "getEnvironment">;
+  runnerConnections: Pick<RunnerConnections, "isOnline">;
+  runnerReader: Pick<RunnerReader, "readWorkspace">;
 };
 export class ConversationService {
   constructor(
@@ -106,6 +109,36 @@ export class ConversationService {
   updateGoal(id: string, owner: string, action: "pause" | "resume" | "complete" | "remove", revision: number) {
     return this.transaction(async ({ repository }) => {
       return repository.updateGoal(id, owner, action, revision);
+    });
+  }
+  /**
+   * 直接切换本会话绑定的 Runner：仅当原绑定设备离线时允许（在线以实时连接注册表为准）。
+   * 目标设备必须已注册且上报过工作目录；目录与指令保持会话原值。
+   */
+  async updateBinding(id: string, owner: string, runnerId: string) {
+    return this.transaction(async ({ repository, runnerConnections, runnerReader }) => {
+      const conversation = await repository.findById({ id, ownerUserId: owner });
+      const current = conversation?.mode === "project" ? conversation.metadata.binding : null;
+      if (!conversation || !current?.runnerId)
+        throw new DomainError("CONFLICT", "Only conversations bound to a Runner can switch it", {
+          reason: "RUNNER_BINDING_REQUIRED",
+        });
+      if (current.runnerId === runnerId)
+        return repository.updateBinding(id, owner, {
+          runnerId,
+          workspaceId: current.workspaceId,
+        });
+      if (runnerConnections.isOnline(current.runnerId, owner))
+        throw new DomainError("CONFLICT", "The bound Runner is online; switch only offline devices", {
+          reason: "RUNNER_ONLINE",
+        });
+      const target = await runnerReader.readWorkspace({ id: runnerId, ownerUserId: owner });
+      if (!target) throw new DomainError("NOT_FOUND", "Runner not found");
+      if (!target.workspaceId)
+        throw new DomainError("CONFLICT", "Target Runner has not reported a workspace", {
+          reason: "WORKSPACE_MISSING",
+        });
+      return repository.updateBinding(id, owner, { runnerId, workspaceId: target.workspaceId });
     });
   }
   private async validateConfiguration(

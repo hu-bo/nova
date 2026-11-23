@@ -43,6 +43,8 @@ import type {
   RenameConversationBody,
   SteerConversationInput200,
   SteerConversationInputBody,
+  UpdateConversationBinding200,
+  UpdateConversationBindingBody,
   UpdateConversationGoal200,
   UpdateConversationGoalBody
 } from './projectsAPI.schemas';
@@ -735,6 +737,121 @@ export function useClearConversationContext<TData = Awaited<ReturnType<typeof cl
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getClearConversationContextQueryOptions(id,clearConversationContextBody,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getUpdateConversationBindingUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/binding`
+}
+
+export const updateConversationBinding = async (id: string,
+    updateConversationBindingBody: UpdateConversationBindingBody, options?: Parameters<typeof apiFetch>[1]): Promise<UpdateConversationBinding200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<UpdateConversationBinding200>(getUpdateConversationBindingUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateConversationBindingBody)
+  }
+);}
+
+
+
+
+
+export const getUpdateConversationBindingQueryKey = (id: string,
+    updateConversationBindingBody?: BodyType<UpdateConversationBindingBody>,) => {
+    return [
+    'PUT', `/api/conversations/${id}/binding`, updateConversationBindingBody
+    ] as const;
+    }
+
+
+export const getUpdateConversationBindingQueryOptions = <TData = Awaited<ReturnType<typeof updateConversationBinding>>, TError = ErrorType<void>>(id: string,
+    updateConversationBindingBody: BodyType<UpdateConversationBindingBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationBinding>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getUpdateConversationBindingQueryKey(id,updateConversationBindingBody);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof updateConversationBinding>>> = ({ signal }) => updateConversationBinding(id,updateConversationBindingBody, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof updateConversationBinding>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type UpdateConversationBindingQueryResult = NonNullable<Awaited<ReturnType<typeof updateConversationBinding>>>
+export type UpdateConversationBindingQueryError = ErrorType<void>
+
+
+export function useUpdateConversationBinding<TData = Awaited<ReturnType<typeof updateConversationBinding>>, TError = ErrorType<void>>(
+ id: string,
+    updateConversationBindingBody: BodyType<UpdateConversationBindingBody>, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationBinding>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof updateConversationBinding>>,
+          TError,
+          Awaited<ReturnType<typeof updateConversationBinding>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUpdateConversationBinding<TData = Awaited<ReturnType<typeof updateConversationBinding>>, TError = ErrorType<void>>(
+ id: string,
+    updateConversationBindingBody: BodyType<UpdateConversationBindingBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationBinding>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof updateConversationBinding>>,
+          TError,
+          Awaited<ReturnType<typeof updateConversationBinding>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUpdateConversationBinding<TData = Awaited<ReturnType<typeof updateConversationBinding>>, TError = ErrorType<void>>(
+ id: string,
+    updateConversationBindingBody: BodyType<UpdateConversationBindingBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationBinding>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useUpdateConversationBinding<TData = Awaited<ReturnType<typeof updateConversationBinding>>, TError = ErrorType<void>>(
+ id: string,
+    updateConversationBindingBody: BodyType<UpdateConversationBindingBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationBinding>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getUpdateConversationBindingQueryOptions(id,updateConversationBindingBody,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

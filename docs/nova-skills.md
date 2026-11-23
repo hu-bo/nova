@@ -1,12 +1,14 @@
 # Nova 产品 Skills 与产物设计
 
-本文设计供 Nova 用户选择、由 Agent 使用的产品 Skills。以下新增表、工具、接口和界面均为设计目标，尚未实现。现状以当前源码为依据；本文不新增 Codex 开发技能，也不改变现有运行权限。
+本文设计供 Nova 用户选择、由 Agent 使用的产品 Skills，以及 Runner 本地技能和 Agent 配置的发现。已有能力见 §2；本地发现、内置创建助手、通用版本管理和文件产物等增量均为设计目标。本方案不新增 Codex 开发技能，也不改变现有运行权限。
 
 ## 1. 核心决策
 
 Skill 是一份有版本的任务方法和资源，指导同一个 Agent 完成工作。执行继续使用现有会话、输入队列、Run、Coding Harness 和工具策略。
 
-- **技能定义**：内置技能随 `packages/tools/skills/` 发布；用户技能由服务端管理，正文与版本元数据进入 PostgreSQL，后续资源包进入 MinIO。
+- **技能定义**：内置技能随 `packages/tools/skills/` 发布；平台技能由服务端管理。Runner 启动时扫描其用户主目录的 `~/.nova/skills/` 和项目目录的 `.nova/skills/`，本地文件为可编辑源，服务端保存被接受版本的不可变快照。
+- **本地 Agent**：发现 `~/.nova/agents/*.md`，并支持对应的项目级 `.nova/agents/*.md`，作为可选择的 Agent 配置，与技能目录分开。
+- **创建助手**：内置 `nova.skills-creater`，帮助生成、校验和安装技能，默认写入项目级技能目录，按用户明确选择支持全局安装。
 - **代码改动**：写入项目绑定的真实工作区，通过现有 diff 和工具记录查看。
 - **可下载文件**：在绑定工作区生成，经显式发布进入 MinIO；PostgreSQL 保存产物索引，会话展示预览和下载入口。
 - **Spec**：需求、设计和任务继续以 `spec_revisions` 为事实源。导出文件只是指定版本的快照。
@@ -19,8 +21,8 @@ Skill 是一份有版本的任务方法和资源，指导同一个 Agent 完成�
 | 能力             | 已核对的源码                                                                    | 设计含义                                                                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 技能上下文注入   | `packages/harness/src/plugins/skills/index.ts`                                  | `SkillResource` 已有 `id/version/content/description`；`skillsPlugin` 按显式 ID 注入，默认正文总量上限 40,000 字符。它不扫描目录、安装资源或执行脚本 |
-| 一个内置产品技能 | `packages/tools/src/spec-skill.ts`、`packages/tools/skills/spec/SKILL.md`       | `nova.spec@1.0.0` 已由 `nova-runtime.ts` 按 Spec 场景安装，可作为接入范例                                                                            |
-| 输入框命令菜单   | `apps/nova-client/src/features/conversations/use-conversation-composer.ts`      | 当前 `ComposerSkill` 对应 `/goal`、`/plan`、`/build`、`/spec`、`/clear` 等宿主动作，尚无可选技能目录                                                 |
+| 内置产品技能     | `packages/tools/src/spec-skill.ts`、`packages/tools/src/career-coach-skill.ts`  | `nova.spec` 按 Spec 场景安装，`nova.career-coach` 通过现有产品技能目录选择                                                                           |
+| 输入框命令与技能 | `apps/nova-client/src/features/conversations/use-conversation-composer.ts`      | 已区分 `/` 宿主命令与 `@` 产品技能选择；当前产品技能主要用于无工具聊天，需扩展到 Runner 工作区场景                                                   |
 | 会话执行与恢复   | `modules/conversations`、`modules/runs`，均位于 `apps/nova-server/src/`         | 已有输入幂等、队列、checkpoint、Worker fence、审批、取消和未知结果处理，应在这里接入                                                                 |
 | 工作区文件操作   | `packages/tools/src/tools.ts`、`packages/runner-sdk/src/session.ts`             | Runner SDK 已有 `fs.readBytes`，带校验和且限制 20 MiB；Agent 的 `read_file` 仍是文本工具                                                             |
 | SSH 工作区       | `apps/nova-server/src/modules/runs/ssh-tool-context.ts`                         | 当前 `readBytes` 通过 `readText` 转换；底层文本读取上限 256 KiB，不能作为通用二进制产物读取实现                                                      |
@@ -28,16 +30,20 @@ Skill 是一份有版本的任务方法和资源，指导同一个 Agent 完成�
 | 文件展示契约     | `packages/agent-ui-contracts/src/messages.ts`                                   | 已有 `file/image` Block 与 `object/runner/ssh` 引用；当前图片签名接口只识别附件对象键，新增产物不能直接套用该接口                                    |
 | 规格持久化       | `apps/nova-server/src/modules/specs/`、`database/schema/spec-revision.table.ts` | 保留版本化领域数据，不改为靠工作区 Markdown 驱动状态                                                                                                 |
 
-以上模块路径描述当前事实，不代表所有连接能力已经打通。尤其需要新增通用文件存储、产物发布与下载授权。
+当前另有 `nova.career-coach` 内置技能及 `GET /api/skills` 目录，定义位于 `packages/tools/skills/career-coach/` 和 `apps/nova-server/src/modules/skills/index.ts`。输入契约已有单项 `skill: { id, version }`，接受输入时把完整资源固定到执行快照。`modules/runs/agent-profile.ts` 目前只接受无工具的 `chat` profile；`packages/agent-ui-contracts/src/skills.ts` 的技能来源也仅允许 `builtin`。因此本地发现需扩展现有目录和接受流程，不能另建一条独立技能执行链路。
+
+Runner 当前在 `crates/runner/src/main.rs` 初始化 `App` 并建立连接，`config.rs` 将 `--workspace`（默认 `.`）规范化为注册工作区；握手尚无 skills/agents 目录。全局资源位于工作区之外，现有文件 RPC 无法直接读取。尤其需要新增受限的本地资源协议、通用文件存储、产物发布与下载授权。
 
 ## 3. 产品交互
 
 1. 输入框保留现有快捷命令，增加「选择技能」入口，区分命令和技能的类型与回调。`/plan` 等继续执行宿主动作。
 2. 技能列表展示名称、用途、来源和是否适用于当前环境。选择后在输入框显示可移除的技能标签；发送时携带精确版本。
 3. 没有工作区时可选择纯分析类技能；需要执行程序或生成文件的技能说明「需要绑定工作区」。存储未配置时说明「文件产出暂不可用」。
-4. 选择技能不切换 Plan/Build。要求写文件或执行命令的技能在 Plan 下不可执行，界面提示用户选择 Build。服务端也必须校验。
+4. 选择技能不切换执行模式。要求写文件或执行命令的技能在 Plan 下不可执行，界面提示使用已有 Build/Auto 模式，并继续遵守所选模式的授权规则。服务端也必须校验。
 5. 消息记录显示这次采用的技能与版本。产物卡片显示文件名、大小、来源 Run、下载入口和运行结果；文本或图片可预览。
 6. 提供「我的技能」管理页面，支持新建 Markdown 技能、编辑草稿、发布版本、停用以及查看发布历史。首版不开放公共市场和组织共享。
+
+目录合并内置、平台和当前 Runner 的本地技能，显示「内置 / 平台 / 本机全局 / 项目」来源及不适用原因。本地技能由文件编辑，平台技能由服务端草稿编辑，不能对同一份本地源同时维护一个可独立修改的网页草稿。用户可选择「使用技能创建助手」，要求它创建新技能。Agent 选择独立展示，不与技能标签或 `/plan`、`/build` 命令混为一类。
 
 首版采用每次发送单独选择的语义：未传技能表示本次没有用户技能；不会从上一条消息或浏览器缓存静默继承。输入框可保留本地选择便于连续发送，但每条请求都明确提交并展示选择。清除上下文也清除该本地选择。
 
@@ -48,6 +54,8 @@ Goal 在没有新输入的自动迭代中沿用触发目标时固定的技能版
 ### 4.1 首版格式
 
 每份用户技能从一个 `SKILL.md` 开始，必需的 YAML 字段只有 `name` 和 `description`。正文写适用任务、工作方法、需要读取的信息以及结果要求。发布 API 接收正文与本版执行要求，验证后形成不可变版本。
+
+本地技能可在 frontmatter 的可选 `nova` 字段中声明执行配置，字段内容复用平台发布配置的 schema；省略时应用同一默认值。服务端从文件派生配置和展示元数据，不为本地源另存可独立修改的配置。平台发布若同时接收显式配置与正文中的 `nova`，两者必须一致，否则拒绝，避免执行要求出现两个来源。
 
 ```markdown
 ---
@@ -67,7 +75,7 @@ description: 根据项目现有测试结果生成报告，区分通过、失败�
 
 | 配置               | 作用                                                    | 阶段  |
 | ------------------ | ------------------------------------------------------- | ----- |
-| `allowedModes`     | 声明允许的 Plan/Build 模式，不替用户切换模式            | P0    |
+| `allowedModes`     | 声明允许的 Plan/Build/Auto 模式，不替用户切换模式       | P0    |
 | `requiredTools`    | 校验当前宿主是否提供所需工具，不注册或授权新工具        | P0    |
 | 是否需要工作区     | 区分消息分析与工作区操作                                | P0    |
 | 是否要求发布文件   | 校验产物存储可用性与最终交付                            | P0/P1 |
@@ -93,11 +101,11 @@ test-report/
 
 内置包继续随 `@nova/tools` 分发。用户包上传后校验相对路径、文件数、解压大小、软链接和摘要，存到不可变对象键。`SKILL.md` 的正文与解析元数据以发布版本为准；资源清单只记录其他文件的路径、大小和摘要，不复制正文事实。原始压缩包如保留，只用于审计或下载，不作为另一个运行时读取源。
 
-资源实际需要在工作区执行时，按摘要缓存到 `.nova/skills/<skillId>/<version>/<bundleSha256>/`。现有 Runner 写文件 API 只有文本写入，二进制模板同步需要补充能力；不能因为 SDK 能读二进制，就假设完整包同步已具备。未完成同步前，首版用户技能仅支持 Markdown。
+资源实际需要在工作区执行时，按摘要缓存到 `.nova/cache/skills/<skillId>/<version>/<bundleSha256>/`。`.nova/skills/` 留给用户编辑的源目录，扫描器不扫描 `.nova/cache/`，避免把缓存重新当成技能。现有 Runner 写文件 API 只有文本写入，二进制模板同步需要补充能力；不能因为 SDK 能读二进制，就假设完整包同步已具备。未完成同步前，首版用户技能仅支持 Markdown。
 
-缓存放在工作区内，是因为现有 Runner 文件 RPC 只接受注册工作区内的相对路径，命令的 `cwd` 也经工作区路径解析。`.nova/skills/` 是本设计选定的具体目录；不能据此推断进程只可访问该目录。Runner 直接启动的程序具有其操作系统账户的权限，程序参数指向的其他路径不会因为 `cwd` 在工作区内而自动受限。
+缓存放在工作区内，是因为现有 Runner 文件 RPC 只接受注册工作区内的相对路径，命令的 `cwd` 也经工作区路径解析。全局源通过 §4.3 的受限资源协议读取，再物化固定版本到该缓存。不能据此推断进程只可访问缓存目录：Runner 直接启动的程序具有其操作系统账户的权限，程序参数指向的其他路径不会因为 `cwd` 在工作区内而自动受限。
 
-从项目目录导入也走发布流程，形成不可变版本。运行中的技能不会跟随 `.agents/skills/` 或远端工作区文件的实时变化。
+本地技能经发现、选择后形成不可变执行快照，无需用户手动发布到平台才能使用；显式复制到平台才创建平台草稿。运行中的技能不会跟随远端源文件的实时变化。
 
 #### 脚本执行契约（P2）
 
@@ -118,7 +126,7 @@ requires:
 
 `identity.platform` 只能用于 OS 匹配；当前握手没有解释器和依赖清单。解释器是否存在、解析到的程序路径及实际版本需要在**目标 Runner** 上探测，不能检查 Worker 本机，也不能把 `capabilities: [exec]` 当成解释器已安装。版本探测使用宿主支持的固定探测方式，不直接执行技能包提供的任意探测命令。解释器之外的项目依赖也应在脚本产生业务副作用前检查；缺失时报告具体原因，不因选择技能自动安装软件或提权。
 
-环境适用性区分「满足」「不满足」「待验证」：未探测、Runner 离线、探测被拒或超时不能算满足，也不能谎报为未安装。选择菜单可以展示待验证；入队先做静态检查，Build Run 在脚本执行前通过已授权的命令通道完成探测。不满足或仍待验证时不派发脚本。Plan 不为探测临时开放命令执行。探测结果记录环境标识和时间，重连、进程重启、绑定变更或依赖变化后复查，缓存只辅助展示。
+环境适用性区分「满足」「不满足」「待验证」：未探测、Runner 离线、探测被拒或超时不能算满足，也不能谎报为未安装。选择菜单可以展示待验证；入队先做静态检查，Build/Auto Run 在脚本执行前通过已授权的命令通道完成探测。不满足或仍待验证时不派发脚本。Plan 不为探测临时开放命令执行。探测结果记录环境标识和时间，重连、进程重启、绑定变更或依赖变化后复查，缓存只辅助展示。
 
 **启动方式与编写要求。** 当前 `bash` 工具的实际含义是「直接启动单个程序」，Rust Runner 使用 `Command::new(executable)`，不会根据脚本扩展名启动 shell。源脚本一律显式传入解释器及参数，例如 `node <script>`、`python3 <script>`、`sh <script>`，PowerShell 脚本使用已探测到的 PowerShell 程序并传 `-NoProfile -File <script>`。不依赖 shebang、文件关联或 POSIX 可执行位，不要求先执行 `chmod +x`。
 
@@ -128,7 +136,7 @@ requires:
 {
   "command": "node",
   "args": [
-    ".nova/skills/<skillId>/<version>/<bundleSha256>/scripts/report.mjs",
+    ".nova/cache/skills/<skillId>/<version>/<bundleSha256>/scripts/report.mjs",
     "--output-dir",
     ".nova/runs/<runId>/outputs/"
   ],
@@ -154,6 +162,56 @@ requires:
 **预算与结果。** 当前 `bash` 单命令默认 120 秒，可显式设置且最多 900 秒；Nova Run 的持久化截止时间为创建后 30 分钟。探测、物化、模型步骤、命令和产物发布共用剩余时间。脚本编写指南要求为长测试选择合理超时，优先使用项目已有的测试分组/分片，按可单独核验的步骤拆分，为发布预留时间；拆分不会延长 Run 总预算。需要超过预算的任务应明确报告限制，不能通过后台启动进程规避取消和超时。
 
 退出码非零、已知超时或取消均如实记录，已生成文件与整体成功分别判断；断线后的未知结果沿原操作核实，不自动重试整个脚本。具体源码入口为 `packages/tools/src/tools.ts`、`packages/runner-sdk/src/session.ts`、`crates/runner/src/engine.rs`、`crates/runner/src/workspace.rs` 及 `apps/nova-server/src/modules/runs/conversation-executor.ts`。
+
+### 4.3 Runner 本地发现与目录同步
+
+借鉴 OpenCode 的全局/项目来源、确定的同名覆盖顺序与按需加载；Nova 采用自己的 `.nova` 目录和远程同步协议。OpenCode 还支持向项目根回溯等来源，本阶段不照搬这些扩展。[OpenCode Skills](https://opencode.ai/docs/skills/) · [OpenCode Agents](https://opencode.ai/docs/agents/)
+
+**扫描根与格式。** `~` 指 Runner 进程所属操作系统用户的主目录，不是 API/Worker 或浏览器用户的主目录；Windows 对应该进程用户目录。项目根默认是 Runner 启动目录；显式配置 `--workspace` 时，以其规范化后的注册工作区作为有效项目目录。会话的 `canonicalCwd` 指向工作区子目录时，按该目录单独发现项目层；不得把整个 workspace 的项目技能混给所有子项目。
+
+```text
+~/.nova/
+  skills/<name>/SKILL.md       # 本机全局技能及同目录资源
+  agents/<name>.md            # 本机全局 Agent 配置
+
+<projectRoot>/.nova/
+  skills/<name>/SKILL.md       # 项目技能源
+  agents/<name>.md            # 项目 Agent 配置
+  cache/skills/...            # 固定版本的执行缓存，不参与发现
+  runs/<runId>/outputs/...    # 交付文件，不参与发现
+```
+
+首期 skills 只认源目录直接子目录中的 `SKILL.md`，agents 只认源目录直接子文件 `*.md`，不递归到脚本和引用资源里发现更多技能。名称使用与目录/文件名一致的小写 kebab-case，最长 64 字符；`name`、`description` 和正文在扫描边界校验。不自动搜索 `.agents/`、`.claude/`、祖先目录或任意额外路径。固定扫描根先规范化，包内路径和符号链接解析后不得逃出该源根。
+
+**时机与诊断。** Runner 启动时发起全局和默认项目层扫描；认证接入完成后同步首个完整目录，不把全部正文塞进限时握手。目录未创建视为空；无主目录、权限不足、无效 frontmatter、过大文件及同源重复名称分别记录诊断，不导致整个 Runner 无法连接。只读扫描不执行脚本、不创建目录。限制扫描条目数、入口大小、资源清单大小和总耗时，扫描被截断或失败时明确标为不完整，不能用空结果冒充成功。
+
+重连后重新发布目录版本；用户点击刷新、创建助手成功落盘、或首次访问新的 `canonicalCwd` 时定向重扫。首版不依赖文件监听。普通文本编辑会在下一次刷新形成新快照；已入队和运行中的版本保持不变。失败的刷新保留上次成功目录并标记过期，过期/不完整目录里的新选择须重新核实后才能接受。
+
+**身份与覆盖。** 每条记录包含 `kind: skill|agent`、`scope: global|project`、Runner/workspace/项目相对目录标识、名称、说明、入口摘要和目录版本。来源身份参与稳定资源 ID，两个 Runner 的同名全局技能不是同一资源。同一项目的默认名称解析顺序为「项目 > 当前 Runner 全局 > 普通内置」；平台版本通过独立来源显式选择，不由磁盘同名文件覆盖。目录保留被遮蔽项的来源供用户查看，不依赖文件枚举顺序。内置 `nova.*` 的确切 ID 保留，调用 `nova.spec` 或 `nova.skills-creater` 不会被同名文件替换。
+
+**受限协议。** 从 `proto/runner/v1/` 定义发现能力、目录发布、定向刷新及资源快照读取，再生成 TS/Rust 协议。目录只传摘要和必要元数据；按需通过资源 ID、预期摘要和包内相对路径读取正文/资源，不能接收模型提供的任意全局绝对路径。服务端在已认证 Runner session 下校验 owner、scope、workspace 和 `canonicalCwd`，不信任上报的用户或项目 ID。全局资源不作为另一个通用 workspace 注册，也不修改普通文件 RPC 的工作区边界。
+
+入队前在事务外取得匹配目录摘要的内容快照，再在现有 Service 事务中校验归属、幂等并固定该快照。原文件已变化则刷新后重新选择，不以新内容替代旧摘要。无语义版本号的本地文件按来源身份及内容摘要映射到服务端递增的 `0.0.<revision>`，同摘要复用版本，保持现有 `id/version` 契约和 Harness 的版本格式；未来带资源的快照须同时固定资源清单与真实字节。PostgreSQL 保存执行版本和来源索引，磁盘文件保持唯一可编辑源；MinIO 用于后续资源包和交付物。
+
+本地全局资源的发现只在对应 Runner 环境中生效。换绑时使用目标 Runner 的可见目录，不能把旧设备全局目录假装成本机已安装；历史执行仍沿原快照和 P2 恢复约束处理。旧 Runner 未声明发现能力时仍可使用内置和平台技能，UI 说明本地发现不可用，不伪造空目录或要求扩大主目录访问。
+
+**Agent 配置。** `~/.nova/agents/reviewer.md` 和 `.nova/agents/reviewer.md` 使用 YAML frontmatter 加 Markdown 正文：名称取文件名，`description` 必填，正文为该角色的提示内容；可选 `modelId`、工具限制和技能名称引用须通过 Nova 对应 schema 校验。工具限制只缩小宿主能力，模型须在用户已有模型配置中可用；Agent 不能覆盖模式、审批或平台基础指令。实际提交的技能引用按同一项目的目录顺序解析，并与 Agent 内容一起固定到已接受执行快照。
+
+首期把这些文件作为可选主 Agent profile，独立于技能选择。Agent 的技能引用只作为界面可见的预选建议，用户发送时仍显式提交至多一个用户技能，未传技能不隐式加载配置中的列表。现有 `agentProfileSchema` 只允许 `chat`，需要扩展为有来源和版本的配置引用，并保留旧聊天行为。导入 OpenCode 的 `mode: subagent/all` 等当前未支持字段时报告不兼容，不能当作可执行子 Agent 静默加载；本地目录发现本身不意味着已经实现子 Agent 调度。
+
+### 4.4 内置技能创建助手
+
+内置名称沿用 `skills-creater`，运行时 ID 为 `nova.skills-creater`，展示名为「技能创建助手」。技能源码规划在 `packages/tools/skills/skills-creater/SKILL.md`，通过 `@nova/tools/harness` 导出并接入现有 Skills 目录；与 `nova.spec` 合并到单个 `skillsPlugin` 使用，不另建执行循环，也不把它安装到 Codex 的开发技能目录。
+
+触发范围是用户要求创建、改写或整理供 Nova 使用的技能。助手先理解要复用的任务和输入/输出，再检查目标目录和相近技能，确定名称、触发说明与最小工作方法。仅在需要时添加 `references/`、`assets/` 或 `scripts/`；脚本声明及校验遵守 §4.2，不生成空目录或依赖尚不存在的工具。
+
+默认生成 `<projectRoot>/.nova/skills/<name>/SKILL.md`；用户明确要求全局可用时生成 Runner 用户的 `~/.nova/skills/<name>/SKILL.md`。未绑定 Runner 时可以在消息中给出完整技能草稿，但不能宣称已安装；Plan 只生成可审阅内容，写入遵守当前 Build/Auto 模式和既有授权。当前无工具的 chat profile 只能辅助起草，需扩展项目技能准入和工具提供后，才能开放落盘能力。
+
+项目写入使用既有工作区工具。全局安装使用新增的受限本地资源写入能力：由 Runner 从 `scope`、合法技能名、包内相对文件路径和预期摘要解析目标，只允许写入已知技能源根，不提供任意 home 文件写入接口。该操作按实际写副作用授权，不使用只读发现权限进行安装。更新先读取现有内容，并用预期摘要防止覆盖并发编辑；不默认覆盖同名全局或项目技能，也不自动修改 Agent 配置。
+
+创建结果须包含有效的 `name/description`、明确使用场景、必要输入和步骤、真实输出位置、失败处理与验证方法。完成后读取实际文件，校验 frontmatter、名称匹配、引用路径与资源完整性，再刷新对应目录，返回新目录版本和技能引用。至少用一个应触发和一个不应触发的请求检查描述边界；如创建了脚本，只有在实际执行并核对回执后才声称已验证。刷新失败时如实区分「文件已写入」与「已被目录发现」。
+
+助手更新自身时只能生成新的用户技能或待发布源码，不覆盖产品内置版本；安装到本地不自动复制或发布到平台。创建技能的文件属于技能源，不进入 `.nova/runs/.../outputs/`，只有用户另行要求导出技能包时才按产物发布。
 
 ## 5. 产物放在哪里
 
@@ -225,11 +283,11 @@ sequenceDiagram
   S-->>U: 授权后返回短期 URL
 ```
 
-公开输入契约增加 `skills?: [{ skillId, version }]`，与本次 `SubmitInput` 绑定，不放进持续继承的模型/模式 `Configuration`。空列表和省略统一规范化为空列表；重复选择或超过首版数量上限返回校验错误。
+公开输入契约沿用当前 `skill?: { id, version }`，与本次 `SubmitInput` 绑定，不另增平行的 `skills[]`，也不放进持续继承的模型/模式 `Configuration`。省略表示本次没有用户技能。本地目录项先映射为确切版本，再提交该引用；Agent 配置也由服务端解析版本，不能由客户端传任意 system prompt。
 
 服务端在入队前通过 Skills 模块校验所有权、项目范围、版本可用性、模式与所需工具。把精确的已发布版本引用写入 `pending_inputs` 的服务端元数据；规范化后的技能选择参与请求 fingerprint，同幂等键更换技能返回冲突。排队后技能更新不替换引用。
 
-创建 Run 时把固定引用写入 `Checkpoint.skillExecution`，包括来源、技能版本 ID、运行时 ID、版本号与内容摘要。恢复使用同一版本，禁止重新读取「最新版本」。目标自动迭代按第 3 节继承；新普通输入重新计算，不能从上一份 checkpoint 意外保留已取消的技能。
+创建 Run 时扩展现有 `Checkpoint.execution` / `AcceptedExecution`，保存来源、技能版本 ID、运行时 ID、版本号、内容摘要及已接受的 Agent 内容，不另建 `skillExecution`。恢复使用同一版本，禁止重新读取「最新版本」或当前磁盘文件。目标自动迭代按第 3 节继承；新普通输入重新计算，不能从上一份 checkpoint 意外保留已取消的技能。
 
 内置技能也需要保留可恢复的内容：部署时按 ID、版本和内容摘要登记不可变内置版本，再由 Run 引用。否则只固定版本字符串仍可能在应用升级后丢失旧正文。同版本不同摘要拒绝覆盖。
 
@@ -273,15 +331,17 @@ sequenceDiagram
 
 ### 8.1 数据结构
 
-| 对象                        | 关键字段与约束                                                                                                                                              | 事实源                                                             |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `skills`                    | UUID、来源 `builtin/user`、owner、可空 projectId、草稿正文及执行配置、可空 currentPublishedVersionId、停用标记、编辑 revision                               | 管理身份和可编辑草稿；项目技能校验项目归属，个人技能允许无项目会话 |
-| `skill_versions`            | UUID、skillId、语义 version、发布正文、解析元数据、执行配置、内容摘要、可空资源清单、createdAt；`UNIQUE(skillId, version)`                                  | 不可变执行版本。资源功能上线后才加入对象引用                       |
-| `run_artifacts`             | UUID、runId、toolExecutionId、可空 skillVersionId、name、mimeType、size、sha256、objectKey、state、恢复元数据、错误、时间；`UNIQUE(runId, toolExecutionId)` | 文件索引；归属由 Run/会话确定，避免另外维护可漂移的权限关系        |
-| `pending_inputs.payload`    | 请求技能选择 + 经服务端验证的内部版本引用                                                                                                                   | 排队期间的版本固定与幂等依据                                       |
-| `Checkpoint.skillExecution` | 本 Run 的固定版本引用                                                                                                                                       | 执行、审批挂起和恢复使用同一选择                                   |
+| 对象                     | 关键字段与约束                                                                                                                                                                              | 事实源                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `skills`                 | UUID、来源 `builtin/platform/runner-global/runner-project`、owner、可空 projectId、来源定位（Runner/workspace/cwd/name）、平台草稿、可空 currentPublishedVersionId、停用标记、编辑 revision | 管理身份；平台草稿可编辑，本地仅保存来源索引，不复制一份可编辑草稿 |
+| `skill_versions`         | UUID、skillId、语义 version、发布正文、解析元数据、执行配置、内容摘要、可空资源清单、createdAt；`UNIQUE(skillId, version)`                                                                  | 不可变执行版本。资源功能上线后才加入对象引用                       |
+| `run_artifacts`          | UUID、runId、toolExecutionId、可空 skillVersionId、name、mimeType、size、sha256、objectKey、state、恢复元数据、错误、时间；`UNIQUE(runId, toolExecutionId)`                                 | 文件索引；归属由 Run/会话确定，避免另外维护可漂移的权限关系        |
+| `pending_inputs.payload` | 请求技能选择 + 经服务端验证的内部版本引用                                                                                                                                                   | 排队期间的版本固定与幂等依据                                       |
+| `Checkpoint.execution`   | 扩展现有已接受执行快照，记录固定技能及 Agent 来源、版本、摘要和正文                                                                                                                         | 执行、审批挂起和恢复使用同一选择，不新增平行快照字段               |
 
 `skill_versions` 到技能、`run_artifacts` 到 Run 及可选版本设置外键。版本引用进入 JSONB 的队列与 checkpoint，由服务端校验；已发布版本采用保留策略，不提供直接物理删除入口。草稿保存携带编辑 revision，防止并发覆盖。
+
+本地来源按 `(owner, runnerId, scope, workspaceId/cwd, name)` 标识，按内容摘要复用不可变版本。Agent 目录首期由认证 session 持有，已选择的内容进入现有执行快照，暂不为仅有本地来源的 Agent 增加独立管理表。进程重连或目录刷新只更新可选目录，不改写历史快照。
 
 首版最多一个用户技能，所以产物可归属本次用户技能；只有内置技能或普通会话时按实际来源记录或留空。以后多用户技能协作时，再增加能被宿主验证的产物来源绑定。
 
@@ -289,52 +349,64 @@ sequenceDiagram
 
 下列路径均位于 `/api`，沿用现有成功/错误信封、鉴权和不可见资源返回 404 的约定。
 
-| 接口                                          | 用途                                                                                      |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `GET /skills?projectId=...&cursor=...`        | 查询可用技能与可选版本摘要，返回当前环境的不适用原因                                      |
-| `POST /skills`                                | 创建个人或项目技能草稿                                                                    |
-| `GET /skills/:id`                             | 读取有权限的草稿和发布状态                                                                |
-| `PATCH /skills/:id/draft`                     | 带 `expectedRevision` 更新正文和执行配置                                                  |
-| `POST /skills/:id/versions`                   | 带 `expectedRevision`、version 发布不可变版本；相同版本同内容返回原版本，内容不同返回冲突 |
-| `GET /skills/:id/versions`                    | 分页读取发布历史                                                                          |
-| `GET /skills/:id/versions/:version`           | 读取确切版本的正文和执行要求                                                              |
-| `POST /skills/:id/disable`                    | 停止新的选择，保留已接受运行和历史记录                                                    |
-| 现有会话创建/提交输入接口                     | 增加 `skills`，不新增技能专用 Run API；Goal 的触发入口同样传递选择                        |
-| `GET /conversations/:id/artifacts?cursor=...` | 读取产物摘要，支持恢复页面和 SSE 断线后刷新                                               |
-| `GET /artifacts/:id/download`                 | 验证访问权后返回短期下载 URL 和过期时间                                                   |
-| `GET /artifacts/:id/preview`                  | 返回受限文本内容或允许图片的短期 URL，不返回任意可执行 HTML                               |
+| 接口                                                      | 用途                                                                                         |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `GET /skills?conversationId=...&projectId=...&cursor=...` | 扩展现有目录，按已授权会话绑定合并来源；无绑定时只列内置与平台来源，返回当前环境的不适用原因 |
+| `GET /agents?conversationId=...&projectId=...`            | 查询当前 Runner/项目可见的主 Agent 配置与兼容性                                              |
+| `POST /runners/:id/resources/refresh`                     | 校验归属及 workspace/cwd 后定向刷新本地目录，返回目录版本和诊断                              |
+| `POST /skills`                                            | 创建个人或项目技能草稿                                                                       |
+| `GET /skills/:id`                                         | 读取有权限的草稿和发布状态                                                                   |
+| `PATCH /skills/:id/draft`                                 | 带 `expectedRevision` 更新正文和执行配置                                                     |
+| `POST /skills/:id/versions`                               | 带 `expectedRevision`、version 发布不可变版本；相同版本同内容返回原版本，内容不同返回冲突    |
+| `GET /skills/:id/versions`                                | 分页读取发布历史                                                                             |
+| `GET /skills/:id/versions/:version`                       | 读取确切版本的正文和执行要求                                                                 |
+| `POST /skills/:id/disable`                                | 停止新的选择，保留已接受运行和历史记录                                                       |
+| 现有会话创建/提交输入接口                                 | 增加 `skills`，不新增技能专用 Run API；Goal 的触发入口同样传递选择                           |
+| `GET /conversations/:id/artifacts?cursor=...`             | 读取产物摘要，支持恢复页面和 SSE 断线后刷新                                                  |
+| `GET /artifacts/:id/download`                             | 验证访问权后返回短期下载 URL 和过期时间                                                      |
+| `GET /artifacts/:id/preview`                              | 返回受限文本内容或允许图片的短期 URL，不返回任意可执行 HTML                                  |
 
-草稿和版本写入只允许所有者，内置技能只读。发布版本先做正文、frontmatter、上下文长度和执行配置校验。版本不存在、不可选或与当前模式不符，入队前返回明确原因；执行环境变化时在 Run 准入处重新验证。
+平台草稿和版本写入只允许所有者，内置技能只读；本地编辑或安装走受限 Runner 资源写入，不能用平台草稿 API 覆盖源文件。发布和快照接受先做正文、frontmatter、上下文长度和执行配置校验。版本不存在、不可选或与当前模式不符，入队前返回明确原因；执行环境变化时在 Run 准入处重新验证。
 
 新增 `artifact.changed` 仅携带 `{ artifactId, runId, state }`，索引变化和事件同事务提交；客户端刷新对应会话的产物查询。技能选择摘要进入输入/运行读模型，刷新和历史查看不依赖临时的 Composer 状态。事件、快照和投影在 `@nova/agent-ui-contracts` 中定义；HTTP 管理 schema 在服务端定义并导出 OpenAPI，客户端继续生成，不平行手写类型。
 
 ## 9. 代码落点
 
-| 位置                                                                   | 责任                                                                                             |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `apps/nova-server/src/modules/skills/`（新增）                         | 草稿、发布、可见性、版本解析及向运行入口提供固定版本；通过公开 `index.ts` 暴露服务               |
-| `apps/nova-server/src/modules/artifacts/`（新增）                      | 文件读取与发布协调、产物索引、预览/下载授权、清理 Job；通用存储放在该模块已有需要的边界内        |
-| `apps/nova-server/src/modules/conversations/`                          | 输入选择校验、幂等规范化、服务端元数据入队                                                       |
-| `apps/nova-server/src/modules/runs/`                                   | 版本引用进入 checkpoint、恢复、工具安装、claim/fence 校验与交付结算；沿用现有 Service 事务作用域 |
-| `apps/nova-server/database/schema/`                                    | 三张新增表及索引；通过新迁移更新数据库                                                           |
-| `packages/tools/skills/`                                               | 保持内置技能源码；先保留 `spec/` 的路径与已有加载方式，再接入版本登记                            |
-| `packages/tools/src/`                                                  | 可复用的技能相关工具定义；依赖宿主传入的窄接口，不导入数据库或 MinIO                             |
-| `packages/harness/src/plugins/skills/`                                 | 继续只负责有界上下文贡献；首版不承担技能管理、权限或文件存储                                     |
-| `packages/agent-ui-contracts/`                                         | 本次技能选择、运行摘要和产物通知的共享事件/展示契约                                              |
-| `apps/nova-client/src/features/skills/`、`features/artifacts/`（新增） | 技能管理/选择、查询缓存、产物预览与下载                                                          |
-| `packages/chat-ui/`                                                    | 通过 props/callbacks 展示菜单、标签和文件卡片；请求及持久化留给宿主                              |
+| 位置                                                                                              | 责任                                                                                                   |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `apps/nova-server/src/modules/skills/`（扩展）                                                    | 合并内置/平台/本地目录、平台草稿发布、版本解析与快照接受；复用现有公开 `index.ts`                      |
+| `crates/runner/src/`、`proto/runner/v1/`、`packages/runner-sdk/`                                  | 本地源扫描、受限资源读写、目录同步和刷新；从 proto 生成协议，不放宽通用文件 RPC 边界                   |
+| `apps/nova-server/src/modules/runs/agent-profile.ts`、`packages/agent-ui-contracts/src/skills.ts` | 扩展来源与 Agent profile，保留 `chat` 兼容，移除所有产品技能必须无工具聊天的限制，按实际要求准入       |
+| `apps/nova-server/src/modules/artifacts/`（新增）                                                 | 文件读取与发布协调、产物索引、预览/下载授权、清理 Job；通用存储放在该模块已有需要的边界内              |
+| `apps/nova-server/src/modules/conversations/`                                                     | 输入选择校验、幂等规范化、服务端元数据入队                                                             |
+| `apps/nova-server/src/modules/runs/`                                                              | 版本引用进入 checkpoint、恢复、工具安装、claim/fence 校验与交付结算；沿用现有 Service 事务作用域       |
+| `apps/nova-server/database/schema/`                                                               | 三张新增表及索引；通过新迁移更新数据库                                                                 |
+| `packages/tools/skills/`                                                                          | 保留 `spec/`、`career-coach/`，新增 `skills-creater/` 内置源码及对应资源导出；按同一目录和版本规则接入 |
+| `packages/tools/src/`                                                                             | 可复用的技能相关工具定义；依赖宿主传入的窄接口，不导入数据库或 MinIO                                   |
+| `packages/harness/src/plugins/skills/`                                                            | 继续只负责有界上下文贡献；首版不承担技能管理、权限或文件存储                                           |
+| `packages/agent-ui-contracts/`                                                                    | 本次技能选择、运行摘要和产物通知的共享事件/展示契约                                                    |
+| `apps/nova-client/src/features/skills/`、`features/artifacts/`（新增）                            | 技能管理/选择、查询缓存、产物预览与下载                                                                |
+| `packages/chat-ui/`                                                                               | 通过 props/callbacks 展示菜单、标签和文件卡片；请求及持久化留给宿主                                    |
 
 暂不新增 `packages/skills`、独立技能执行服务或专门的工作流编排器。后续只有出现其他宿主需要复用的包解析/校验逻辑时，再提取公共包。
 
 ## 10. 实施顺序与验收
 
-| 阶段                 | 交付范围                                                                                   | 关键验收                                                                                                                                                            |
-| -------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P0：可选择并固定版本 | Markdown 技能管理、两张技能表、输入契约、队列/checkpoint、单插件注入、选择摘要             | 发布 v2 后排队/恢复仍用 v1；同幂等键换技能冲突；新输入不意外继承旧技能；跨用户/项目不能选择；Spec 功能继续工作                                                      |
-| P1：文件产物闭环     | `run_artifacts`、Runner 发布工具、通用 MinIO 文件存储、卡片、下载/预览与清理               | Markdown/CSV 生成后刷新可下载；同名不同 Run 不覆盖；20 MiB 超限明确失败；路径与符号链接逃逸被拒；上传后崩溃恢复不重复；旧 fence 无法提交；无存储/SSH 能力时提前提示 |
-| P2：资源和丰富格式   | 包导入、资源按需读取、模板与脚本同步、§4.2 脚本执行契约、真实 SSH 二进制读取、按需隔离预览 | 包路径/解压限制生效；停用不破坏历史恢复；环境验证与脚本审批生效；PDF/Office 摘要与字节一致；不支持的环境可解释                                                      |
+| 阶段                 | 交付范围                                                                                                                           | 关键验收                                                                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0：可选择并固定版本 | 扩展现有内置目录；Runner 本地 skills/agents 发现与同步、平台 Markdown 管理、来源索引与版本、已有输入/checkpoint 扩展、内置创建助手 | 本地发现有界且不执行脚本；项目覆盖全局、确切内置 ID 不被替换；正文固定后编辑不影响恢复；创建助手能按模式起草或安装；既有 chat/Spec 兼容                             |
+| P1：文件产物闭环     | `run_artifacts`、Runner 发布工具、通用 MinIO 文件存储、卡片、下载/预览与清理                                                       | Markdown/CSV 生成后刷新可下载；同名不同 Run 不覆盖；20 MiB 超限明确失败；路径与符号链接逃逸被拒；上传后崩溃恢复不重复；旧 fence 无法提交；无存储/SSH 能力时提前提示 |
+| P2：资源和丰富格式   | 包导入、资源按需读取、模板与脚本同步、§4.2 脚本执行契约、真实 SSH 二进制读取、按需隔离预览                                         | 包路径/解压限制生效；停用不破坏历史恢复；环境验证与脚本审批生效；PDF/Office 摘要与字节一致；不支持的环境可解释                                                      |
 
-P2 脚本验收另覆盖以下行为，P0/P1 的范围和准入规则不变：
+P0 本地发现和创建助手另验证：
+
+- 默认启动目录与显式 `--workspace` 均按约定扫描；`canonicalCwd` 子项目相互隔离；全局目录属于 Runner 用户，Worker 主目录不参与发现。
+- 缺目录、不可读、错误 frontmatter、同源重名、截断和越界链接有明确结果；认证前不向服务端发送资源正文，扫描不会执行脚本或阻塞 Runner 接入。
+- 项目同名覆盖全局，另一台 Runner 的资源不串用；断线、刷新失败和能力不支持时 UI 正确显示状态，已接受版本不被热替换。
+- `skills-creater` 默认创建项目技能，明确全局请求才写全局根；Plan 或无工具聊天只起草；已有修改由预期摘要保护；写入后刷新并可选，刷新失败不假报已安装可用。
+- 本地 Agent 可选择且按版本固定，无法授予宿主未提供的工具；未实现的子 Agent 模式显示不兼容；原有 `nova.career-coach` 和 `nova.spec` 继续工作。
+
+P2 脚本验收另覆盖以下行为，P1 文件发布及已有脚本准入规则保持不变：
 
 - 在声明支持的 Windows/Linux/macOS Runner 上通过显式解释器启动；缺少解释器、版本不符、依赖缺失及拒绝探测均有明确结果，待验证不显示为可执行。
 - 无可执行位的脚本仍可通过解释器运行；CRLF shell 脚本在发布前被检查，物化后的每个文件与最终发布摘要一致；缓存损坏会阻止启动并触发重建。
@@ -344,9 +416,9 @@ P2 脚本验收另覆盖以下行为，P0/P1 的范围和准入规则不变：
 
 优先扩展已有 `apps/nova-server/tests/chat-protocol.integration.test.ts`、`specs.integration.test.ts`，验证技能加入后的排队、恢复与 Spec 行为；参照 `attachments.test.ts` 的存储替身模式验证产物服务。Harness 的技能版本校验和预算边界按需补充测试，不假设已有专门用例覆盖。产物模块增加必要的协议与崩溃窗口用例，真实数据库集成测试使用 `TEST_DATABASE_URL`。文件发布的真实端到端验收应在绑定 Runner 的工作区完成，包含断线、取消和上传状态未知场景。
 
-首版示范先接入两个简单技能：`test-report` 产出 Markdown 测试报告，`repo-review` 产出消息形式的审查结论。既有 `nova.spec` 继续作为场景内置能力。前两者应在执行链路完成后再发布，不提前建立一批无法运行的技能目录。
+首版优先内置 `nova.skills-creater`，保留既有 `nova.career-coach` 和场景内置 `nova.spec`。`test-report`、`repo-review` 可作为创建助手的后续示范：前者产出 Markdown 报告，后者产出消息形式的审查结论。它们在对应执行链路完成后发布，不提前建立一批无法运行的技能目录。
 
-本次仅新增设计文档，没有迁移数据库、创建运行资源、修改产品代码或安装新技能。
+本文更新仅修改设计文档；Runner 扫描、资源协议、Agent 目录及 `skills-creater` 的代码实现和安装不在本次文档交付中。
 
 ## 参考
 

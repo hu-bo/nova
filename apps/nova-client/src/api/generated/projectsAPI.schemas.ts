@@ -1067,6 +1067,49 @@ export type ClearConversationContext200 = {
   epoch: number;
 } | null;
 
+export type UpdateConversationBindingBody = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  runnerId: string;
+};
+
+export type UpdateConversationBinding200InstructionsSource = typeof UpdateConversationBinding200InstructionsSource[keyof typeof UpdateConversationBinding200InstructionsSource];
+
+
+export const UpdateConversationBinding200InstructionsSource = {
+  agents: 'agents',
+  claude: 'claude',
+  custom: 'custom',
+  none: 'none',
+} as const;
+
+export type UpdateConversationBinding200Instructions = {
+  source?: UpdateConversationBinding200InstructionsSource;
+  customPrompt?: string;
+};
+
+export type UpdateConversationBinding200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  runnerId: string | null;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  remoteConnectionId?: string | null;
+  workspaceId: string;
+  canonicalCwd: string;
+  instructions: UpdateConversationBinding200Instructions;
+};
+
 export type ListConversationsParams = {
 /**
  * @maximum 100

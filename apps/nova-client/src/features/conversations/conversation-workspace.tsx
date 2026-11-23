@@ -310,6 +310,7 @@ export function ConversationWorkspace({
               <RunnerBadge
                 runnerId={data.binding.runnerId}
                 projectId={data.conversation.projectId ?? undefined}
+                conversationId={id}
               />
             </span>
           )}

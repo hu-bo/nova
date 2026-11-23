@@ -17,7 +17,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useIdentity } from '@/features/auth';
-import { runnerTokenCanStart, useRunnerConnection, type RunnerToken } from '@/features/runners';
+import {
+  runnerStatus,
+  runnerTokenCanStart,
+  useRunnerConnection,
+  type Runner,
+  type RunnerToken,
+} from '@/features/runners';
 import { displayWorkspacePath } from '@/lib/workspace-path';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Clipboard, KeyRound, Plus, RefreshCw, Server, Trash2 } from 'lucide-react';
@@ -32,6 +38,8 @@ interface RunnerManagerProps {
   onClose?: () => void;
   selectedRunnerId?: string;
   onSelect?: (runnerId: string) => void | Promise<unknown>;
+  /** 会话页入口：选择后由宿主接管（确认旧/新环境、直接切换会话绑定）。 */
+  onSelectRequest?: (runnerId: string) => void;
   /** 会话页等嵌入式入口的补充说明：解释「选择」影响哪些会话。 */
   selectionHint?: string;
 }
@@ -56,6 +64,7 @@ export function RunnerManager({
   onClose,
   selectedRunnerId,
   onSelect,
+  onSelectRequest,
   selectionHint,
 }: RunnerManagerProps) {
   const { identity } = useIdentity();
@@ -111,6 +120,18 @@ export function RunnerManager({
   });
 
   const tokenItems = tokens.data;
+  // 设备行「复制启动命令」：设备身份由 Runner 本机持久化，任意可用凭据都能让原设备重连。
+  const usableCommandToken =
+    tokenItems.find((token) => runnerTokenCanStart(token) && token.token) ?? null;
+
+  /** 设备行复制命令按钮提示：先看有没有可用凭据，再区分读取中/需轮换/无有效凭据。 */
+  function deviceCommandHint(): string {
+    if (tokens.isLoading) return '正在读取凭据…';
+    if (usableCommandToken) return '用有效凭据生成启动命令；在该设备上重跑 Runner 会以同一设备身份重连';
+    if (tokenItems.some((token) => runnerTokenCanStart(token)))
+      return '现有活跃凭据是旧版记录，先轮换一次以生成可复制的 Token';
+    return '暂无有效凭据，先「新增 Token」再复制启动命令';
+  }
 
   async function select(runnerId: string) {
     if (!onSelect) return;
@@ -214,6 +235,69 @@ export function RunnerManager({
     );
   }
 
+  // 会话切换门禁：当前绑定设备在线时不允许切走（与服务端 PUT /conversations/:id/binding 同规则）。
+  const boundRunner = selectedRunnerId
+    ? catalog.runners.find((item) => item.id === selectedRunnerId)
+    : undefined;
+  const canSwitchConversation = !boundRunner || runnerStatus(boundRunner) !== 'online';
+
+  /** 操作列：复制启动命令让该设备上线；选择入口按会话（宿主接管）或设置（直接）两种契约。 */
+  function renderRunnerAction(runner: Runner) {
+    const commandButton = (
+      <Button
+        size="sm"
+        variant={selectedRunnerId === runner.id ? 'default' : 'outline'}
+        icon={<Clipboard />}
+        disabled={!usableCommandToken}
+        title={deviceCommandHint()}
+        onPress={() => {
+          if (usableCommandToken) setCommandToken(usableCommandToken);
+        }}
+      >
+        复制启动命令
+      </Button>
+    );
+    if (selectedRunnerId === runner.id)
+      return (
+        <>
+          {commandButton}
+          <Badge variant="primary" className="shrink-0 gap-1 whitespace-nowrap px-2 py-0.5">
+            <Check className="size-3 shrink-0" />
+            当前
+          </Badge>
+        </>
+      );
+    if (!onSelect && !onSelectRequest) return commandButton;
+    if (onSelectRequest)
+      return (
+        <>
+          {commandButton}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!canSwitchConversation}
+            title={canSwitchConversation ? '切换本会话与项目到该设备' : '当前绑定设备在线，离线后才能切换'}
+            onPress={() => onSelectRequest(runner.id)}
+          >
+            选择
+          </Button>
+        </>
+      );
+    return (
+      <>
+        {commandButton}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={selecting !== null}
+          onPress={() => void select(runner.id)}
+        >
+          {selecting === runner.id ? '切换中…' : '选择'}
+        </Button>
+      </>
+    );
+  }
+
   /** Runner 区块状态：加载中 → 读取失败 → 空态引导 → 设备表格。 */
   function renderRunnerList() {
     if (catalog.isLoading) return <LoadingState label="正在加载 Runner" />;
@@ -261,27 +345,7 @@ export function RunnerManager({
                   </span>
                 </TableCell>
                 <TableCell className="w-px whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-1.5">
-                    {onSelect &&
-                      (selectedRunnerId === runner.id ? (
-                        <Badge
-                          variant="primary"
-                          className="shrink-0 gap-1 whitespace-nowrap px-2 py-0.5"
-                        >
-                          <Check className="size-3 shrink-0" />
-                          当前
-                        </Badge>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={selecting !== null}
-                          onPress={() => void select(runner.id)}
-                        >
-                          {selecting === runner.id ? '切换中…' : '选择'}
-                        </Button>
-                      ))}
-                  </div>
+                  <div className="flex items-center justify-end gap-1.5">{renderRunnerAction(runner)}</div>
                 </TableCell>
               </TableRow>
             ))}

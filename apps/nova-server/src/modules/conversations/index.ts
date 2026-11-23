@@ -6,6 +6,7 @@ import { createConversationRepository } from "./conversation.repository.js";
 import { conversationRoutes } from "./conversation.routes.js";
 import { createRemoteService } from "../remotes/index.js";
 import { createUserModelProfilesService } from "../model-config/index.js";
+import { createRunnerReader } from "../runners/index.js";
 
 export async function conversationsModule(app: FastifyInstance): Promise<void> {
   const conversationRepo = createConversationRepository(app.db);
@@ -17,6 +18,8 @@ export async function conversationsModule(app: FastifyInstance): Promise<void> {
         bindings: createProjectBindingService(app),
         models: createUserModelProfilesService(app),
         remotes,
+        runnerConnections: app.runnerConnections,
+        runnerReader: createRunnerReader(app.db),
       },
       ({ repository, transaction }) => new ConversationService(repository, transaction, app.executionEnabled),
     ),

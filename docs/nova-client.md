@@ -317,7 +317,7 @@ sequenceDiagram
 
 目录浏览器复用 `@nova/chat-ui` 的 `RemoteExplorer`，数据源由 `runners` 调用 Server。只提交 Runner ID、workspace ID 和规范化相对 cwd，不根据浏览器平台拼接绝对路径。
 
-Server 校验设备归属、当前连接代次、目录存在与边界，并保存完整 binding revision。项目重绑前展示”新会话采用新环境，已有会话保留原环境”；确需迁移已有会话时使用独立迁移入口，仅在无活动/未知执行时允许，显示完整旧/新环境。
+Server 校验设备归属、当前连接代次、目录存在与边界，并保存完整 binding revision。项目重绑前展示”新会话采用新环境，已有会话保留原环境”；已有会话需要换设备时从会话入口直接切换绑定（PUT /api/conversations/:id/binding），仅当原绑定设备离线时允许、在线时拒绝切走，确认界面显示完整旧/新环境。
 
 普通 chat 模式会话不强制绑定 Runner；附件入口走 §9.2 的浏览器本地文件上传，与项目模式的 RemoteExplorer 是两套互不影响的入口。
 
@@ -646,7 +646,7 @@ Runner 是用户资源执行的执行者；客户端不与 Runner 直接通信�
 | --------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Runner 暂时不可达                 | `runs.state=paused`，`pauseReason=RUNNER_OFFLINE`                                     | 状态条文案”设备离线”；不自动取消；保留草稿与 `pending_inputs`；可允许用户继续编辑              |
 | Runner 重新连接                   | Server 推送 `run.state.changed` 事件                                                  | 状态条回到正常；不触发连接重连（连接是浏览器↔Server）；不假装已自动恢复副作用                   |
-| Runner 替换（用户手动）           | 列表展示新设备；旧会话不自动迁移                                                       | 展示”新会话采用新环境”；旧会话保留原 binding；迁移走独立入口                                     |
+| Runner 替换（用户手动）           | 列表展示新设备；旧会话不自动跟进                                                       | 展示”新会话采用新环境”；旧会话在原设备离线时从会话入口直接切换到新设备；在线设备不允许切走                                     |
 | Runner 永久下线                   | `runs.state=cancelled_unconfirmed`（参考 [nova-server.md](nova-server.md) §7.1）         | 切换到”需要核实”面板；区分 `cancelled` 与 `cancelled_unconfirmed`，不显示”已停止”              |
 
 `cancelled_unconfirmed` 是终态但效果未确认：UI 必须区分 `cancelled`（已确认停止）与 `cancelled_unconfirmed`（宽限结束但设备未确认），前者显示”已停止”，后者显示”需要核实”并提供日志/Diff/手动核实入口。客户端不自动重试原命令，也不允许静默回退到上一稳定状态。

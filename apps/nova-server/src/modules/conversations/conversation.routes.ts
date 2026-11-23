@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { requirePrincipal } from "../../shared/authorization.js";
 import { errorResponses } from "../../shared/error.schema.js";
+import { bindingSchema } from "../projects/index.js";
 import { okEnvelope, success } from "./conversation.schema.js";
 import {
   conversationListSchema,
@@ -147,6 +148,26 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
     },
     async (request) =>
       success(await service.maintain(request.params.id, requirePrincipal(request).localUserId, "clear")),
+  );
+  typed.put(
+    "/:id/binding",
+    {
+      schema: {
+        operationId: "updateConversationBinding",
+        tags: ["conversations"],
+        params: conversationParamsSchema,
+        body: z.object({ runnerId: z.uuid() }).strict(),
+        response: { 200: okEnvelope(bindingSchema), ...errorResponses(404, 409) },
+      },
+    },
+    async (request) =>
+      success(
+        await service.updateBinding(
+          request.params.id,
+          requirePrincipal(request).localUserId,
+          request.body.runnerId,
+        ),
+      ),
   );
   typed.get(
     "/",
