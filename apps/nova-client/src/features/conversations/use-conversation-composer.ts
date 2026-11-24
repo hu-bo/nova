@@ -2,17 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ChatComposerConfig,
   ChatQueuedMessage,
+  ComposerAgentSelection,
   ComposerAttachment,
   ComposerSkill,
   ComposerSubmission,
   RemoteExplorerProps,
 } from '@nova/chat-ui';
 import { z } from 'zod';
-import type { Attachment, Configuration, InputBlock, QueuedInput } from '@nova/agent-ui-contracts';
+import type { Attachment, AgentProfile, Configuration, InputBlock, QueuedInput, SkillSelection } from '@nova/agent-ui-contracts';
 import {
   CHAT_AGENT_PROFILE,
   executionBudgetSchema,
-  type SkillSelection,
 } from '@nova/agent-ui-contracts';
 import {
   EXECUTION_MODES,
@@ -21,7 +21,11 @@ import {
   isModeCommand,
   type ExecutionMode,
 } from './execution-modes';
-import { useListSkills } from '@/api/generated/skills';
+import {
+  useAgentCatalogQuery,
+  useSkillCatalogQuery,
+  type SkillEnvironmentFilters,
+} from '@/features/skills';
 import { summariseRunnerFiles } from '@/api/generated/runners';
 import { summariseRemoteFiles } from '@/api/generated/remotes';
 import type {
@@ -149,7 +153,7 @@ export interface ConversationComposerOptions {
   specSession?: boolean;
   initialSpecMode?: boolean;
   careerCoach?: boolean;
-  initialSkill?: SkillSelection;
+  initialSkill?: SkillSelection | undefined;
   contextEpoch?: number;
   startingSpec?: boolean;
   onStartSpec?: (input: { message: string; configuration: Configuration }) => Promise<void>;
@@ -181,22 +185,39 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const [selectedSkill, setSelectedSkill] = useState<SkillSelection | null>(
     options.initialSkill ?? null,
   );
-  const supportsSkills = !options.specSession && mode === 'chat';
+  const [selectedAgent, setSelectedAgent] = useState<ComposerAgentSelection | null>(null);
+  // 技能目录不再只在 chatAgent 会话开放：每条输入可显式携带至多一个用户技能（§3 末段）。
+  const supportsSkills = !options.specSession;
+  // chatAgent = 求职聊天兼容分支（文本-only）；引用分支 Agent 按普通会话处理，工具面由服务端解析。
   const chatAgent =
-    supportsSkills && Boolean(options.careerCoach || runtime?.agentProfile || selectedSkill);
-  const startsSkillConversation = chatAgent && Boolean(conversationId) && !runtime?.agentProfile;
-  const skillCatalog = useListSkills({ query: { enabled: supportsSkills } });
+    supportsSkills &&
+    (Boolean(options.careerCoach) ||
+      (runtime?.agentProfile !== undefined && !('refId' in runtime.agentProfile)));
   const initializedSkill = useRef(Boolean(options.initialSkill));
   const previousEpoch = useRef(options.contextEpoch);
+  const catalogFilters = useMemo<SkillEnvironmentFilters>(() => {
+    if (conversationId) return { conversationId };
+    if (projectId) return { projectId };
+    return {};
+  }, [conversationId, projectId]);
+  const skillCatalog = useSkillCatalogQuery(catalogFilters, { enabled: supportsSkills });
+  const agentCatalog = useAgentCatalogQuery(catalogFilters, { enabled: supportsSkills });
+  const skillItems = useMemo(
+    () => skillCatalog.data?.pages.flatMap((page) => page.items) ?? [],
+    [skillCatalog.data],
+  );
   useEffect(() => {
     if (!initializedSkill.current && options.careerCoach && skillCatalog.data) {
       initializedSkill.current = true;
-      const skill = skillCatalog.data.items.find((item) => item.id === 'nova.career-coach');
+      const skill = skillItems.find((item) => item.id === 'nova.career-coach');
       if (skill) setSelectedSkill({ id: skill.id, version: skill.version });
     }
-  }, [options.careerCoach, skillCatalog.data]);
+  }, [options.careerCoach, skillCatalog.data, skillItems]);
   useEffect(() => {
-    if (previousEpoch.current !== options.contextEpoch) setSelectedSkill(null);
+    if (previousEpoch.current !== options.contextEpoch) {
+      setSelectedSkill(null);
+      setSelectedAgent(null);
+    }
     previousEpoch.current = options.contextEpoch;
   }, [options.contextEpoch]);
   const config = useClientConfig();
@@ -351,6 +372,14 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     setStoredReasoning(value);
   }
 
+  /** 本次提交携带的 Agent profile：本地选择优先；其次延续会话已有 profile；求职草稿兜底 chat 常量。 */
+  function resolveAgentProfile(): AgentProfile | null {
+    if (selectedAgent) return selectedAgent;
+    if (runtime?.agentProfile) return runtime.agentProfile;
+    if (options.careerCoach) return CHAT_AGENT_PROFILE;
+    return null;
+  }
+
   const skills = useMemo<ComposerSkill[]>(
     () =>
       [
@@ -494,10 +523,11 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       const requestedEffort = submission.reasoningEffort ?? reasoningEffort;
       if (!parsedBudget.success)
         throw new ApiError(400, 400, '执行预算需要填写正整数，留空表示不限制。');
+      const agentProfileConfig = resolveAgentProfile();
       const runConfig: Configuration = {
         backendId: runtime?.backendId ?? 'nova',
         ...(executionBudget ? { budget: executionBudget } : {}),
-        ...(chatAgent ? { agentProfile: runtime?.agentProfile ?? CHAT_AGENT_PROFILE } : {}),
+        ...(agentProfileConfig ? { agentProfile: agentProfileConfig } : {}),
         modelId: await modelSettings.resolveModelId(profileId),
         reasoningEffort: profile?.thinkingLevels.includes(requestedEffort as ModelThinkingLevel)
           ? (requestedEffort as ModelThinkingLevel)
@@ -527,12 +557,13 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         setText('');
         setSpecArmed(false);
         optionStore.set(null);
-      } else if (conversationId && !startsSkillConversation) {
+      } else if (conversationId) {
+        // 每条输入显式提交本次选择的技能；不从上条或缓存静默继承（§3 末段），服务端负责准入。
         await append.mutateAsync({
           blocks,
           mode: 'next_run',
           configuration: runConfig,
-          ...(chatAgent && selectedSkill ? { skill: selectedSkill } : {}),
+          ...(selectedSkill ? { skill: selectedSkill } : {}),
           ...(goal ? { goal } : {}),
         });
       } else {
@@ -541,7 +572,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
           ...(mode === 'project' && projectId ? { projectId } : {}),
           configuration: runConfig,
           ...(goal ? { goal } : {}),
-          initialInput: { blocks, ...(chatAgent && selectedSkill ? { skill: selectedSkill } : {}) },
+          initialInput: { blocks, ...(selectedSkill ? { skill: selectedSkill } : {}) },
         });
         saveDraft(accountId, draftId, '');
         setText('');
@@ -704,10 +735,27 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   } else if (goalArmed) {
     placeholder = '描述一个明确、可验证的目标…';
   }
-  if (chatAgent) {
-    placeholder = '粘贴简历和岗位描述，或输入 @ 选择技能…';
-    if (startsSkillConversation) placeholder = '输入内容，发送后开启独立的技能会话…';
+  if (chatAgent) placeholder = '粘贴简历和岗位描述，或输入 @ 选择技能…';
+
+  const selectedCatalogSkill = useMemo(
+    () =>
+      skillItems.find(
+        (item) => item.id === selectedSkill?.id && item.version === selectedSkill.version,
+      ) ?? null,
+    [skillItems, selectedSkill],
+  );
+  /** Plan 与技能允许模式的冲突提示：优先展示服务端 mode_not_allowed 文案，再按 allowedModes 提示切换；准入仍由服务端二次校验。 */
+  function resolveSkillModeNotice(): string | null {
+    if (!selectedSkill || !selectedCatalogSkill || executionMode !== 'plan') return null;
+    const modeReason = selectedCatalogSkill.applicability.reasons.find(
+      (reason) => reason.code === 'mode_not_allowed',
+    );
+    if (modeReason) return modeReason.message + '；请切换到 Build 或 Auto 模式后再发送。';
+    if (!selectedCatalogSkill.requirements.allowedModes.includes('plan'))
+      return '该技能需要写入或执行能力，Plan 模式不可用；请切换到 Build 或 Auto 模式后再发送。';
+    return null;
   }
+  const skillModeNotice = resolveSkillModeNotice();
 
   const composer: ChatComposerConfig<Attachment> = {
     value: text,
@@ -737,7 +785,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     onReasoningEffortChange: changeReasoning,
     skills,
     onSkillInvoke: invokeSkill,
-    productSkills: supportsSkills ? skillCatalog.data?.items : undefined,
+    productSkills: supportsSkills ? skillItems : undefined,
     selectedProductSkill: selectedSkill,
     onProductSkillChange: (skill) => {
       setSelectedSkill(skill);
@@ -746,6 +794,17 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         setGoalArmed(false);
       }
     },
+    agents: supportsSkills ? (agentCatalog.data?.items ?? []) : [],
+    selectedAgent,
+    onAgentChange: supportsSkills
+      ? (agent) => {
+          setSelectedAgent(agent);
+          if (agent) {
+            setSpecArmed(false);
+            setGoalArmed(false);
+          }
+        }
+      : undefined,
     contextUsage,
     placeholder,
   };
@@ -753,7 +812,11 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     chatAgent,
     selectedSkill,
     setSelectedSkill,
+    selectedAgent,
+    setSelectedAgent,
+    skillModeNotice,
     skillCatalogError: skillCatalog.error,
+    agentCatalogError: agentCatalog.error,
     specSession: Boolean(options.specSession),
     canStartSpec: !conversationId,
     specArmed,

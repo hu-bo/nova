@@ -8,6 +8,7 @@ const persistenceImports = {
 };
 const tableOwners = {
   attachments: [],
+  artifacts: ["runArtifacts"],
   "client-config": [],
   conversations: ["conversations", "messages", "pendingInputs", "runs"],
   events: ["uiEvents"],
@@ -19,6 +20,7 @@ const tableOwners = {
   runners: ["runners", "runnerTokens"],
   // Run execution and conversation commands share an aggregate transaction.
   runs: ["runs", "conversations", "messages", "pendingInputs", "runnerOperations", "sessionCommits"],
+  skills: ["skills", "skillVersions"],
 };
 const novaModules = Object.keys(tableOwners);
 const allTables = [...new Set(Object.values(tableOwners).flat())];

@@ -35,6 +35,33 @@ export interface RemoteOperation {
         env?: Readonly<Record<string, string>>;
         timeoutMs?: number;
         stdin?: Uint8Array;
+      }
+    | {
+        kind: "readResourceSnapshot";
+        /** wire 的 `kind`（ResourceKind 枚举名）；避免与判别字段同名，发送前在 wire 层改名。 */
+        resourceKind: "RESOURCE_KIND_SKILL" | "RESOURCE_KIND_AGENT";
+        scope?: "RESOURCE_SCOPE_GLOBAL" | "RESOURCE_SCOPE_PROJECT";
+        workspaceId?: string;
+        relativeDir?: string;
+        name?: string;
+        relativePath?: string;
+        expectedSha256?: string;
+      }
+    | {
+        kind: "writeResourceFile";
+        resourceKind: "RESOURCE_KIND_SKILL" | "RESOURCE_KIND_AGENT";
+        scope?: "RESOURCE_SCOPE_GLOBAL" | "RESOURCE_SCOPE_PROJECT";
+        workspaceId?: string;
+        relativeDir?: string;
+        name?: string;
+        relativePath?: string;
+        contents?: Uint8Array;
+        expectedSha256?: string;
+      }
+    | {
+        kind: "deleteWorkspacePaths";
+        /** 工作区根相对路径（`.nova/runs/<runId>/tmp` 形态）；边界由 Runner 再校验。 */
+        relativePaths?: readonly string[];
       };
 }
 export interface RunnerFailure {
@@ -157,6 +184,35 @@ function canonicalParams(kind: string, params: Record<string, unknown>): unknown
       );
       return [kind, params.executable, params.args, params.cwd, entries, params.timeoutMs, bytes(params.stdin)];
     }
+    case "readResourceSnapshot":
+      // 元组与 crates/runner/src/digest.rs 的 ReadResourceSnapshot 分支逐项一致；
+      // enums: String 归一化后 params.kind/params.scope 为枚举名。
+      return [
+        kind,
+        params.kind,
+        params.scope,
+        params.workspaceId,
+        params.relativeDir,
+        params.name,
+        params.relativePath,
+        params.expectedSha256,
+      ];
+    case "writeResourceFile":
+      return [
+        kind,
+        params.kind,
+        params.scope,
+        params.workspaceId,
+        params.relativeDir,
+        params.name,
+        params.relativePath,
+        bytes(params.contents),
+        params.expectedSha256,
+      ];
+    case "deleteWorkspacePaths":
+      // 元组与 crates/runner/src/digest.rs 的 DeleteWorkspacePaths 分支逐项一致；
+      // repeated string 经 protobufjs `arrays: true` 归一化后总是数组。
+      return [kind, params.relativePaths];
     default:
       throw new TypeError("Invalid Operation: unknown params");
   }

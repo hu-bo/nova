@@ -19,6 +19,9 @@ export {
   specs,
   specRevisions,
   specTaskAttempts,
+  skills,
+  skillVersions,
+  runArtifacts,
 } from "./schema/index.js";
 export { sql } from "drizzle-orm";
 export type { RunState } from "./schema/run.table.js";

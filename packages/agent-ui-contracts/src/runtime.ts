@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { idSchema, publicErrorSchema } from "./messages.js";
-import { agentProfileSchema } from "./skills.js";
+import { agentProfileSchema, productSkillSchema } from "./skills.js";
 export const runStateSchema = z.enum([
   "queued",
   "running",
@@ -21,6 +21,8 @@ export const runViewSchema = z
     reason: z.string().optional(),
     waiting: z.enum(["interaction", "external"]).optional(),
     error: publicErrorSchema.optional(),
+    /** 本次 Run 采用的技能引用（§3 第 5 条）：刷新与历史查看不依赖临时 Composer 状态。 */
+    skill: productSkillSchema.optional(),
   })
   .strict();
 export const executionBudgetSchema = z

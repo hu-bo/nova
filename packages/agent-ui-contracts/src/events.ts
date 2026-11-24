@@ -3,6 +3,7 @@ import { blockSchema, decimalSequenceSchema, idSchema, messageSchema, publicErro
 import { goalSchema, queuedInputSchema, todoSchema } from "./conversation.js";
 import { interactionSchema } from "./interactions.js";
 import { capabilitiesSchema, configurationSchema, runViewSchema, toolOperationSchema, usageSchema } from "./runtime.js";
+import { artifactStateSchema } from "./artifacts.js";
 const base = z.object({ sequence: decimalSequenceSchema, runId: idSchema.nullable() });
 const event = <T extends string, S extends z.ZodType>(type: T, payload: S) =>
   base.extend({ type: z.literal(type), payload }).strict();
@@ -50,6 +51,16 @@ export const productEventSchema = z.discriminatedUnion("type", [
   event("plan.changed", z.object({ plan: z.array(todoSchema) }).strict()),
   event("goal.changed", z.object({ goal: goalSchema.nullable() }).strict()),
   event("spec.changed", z.object({ specId: idSchema, revision: z.number().int().positive(), change: z.enum(["created", "draft", "review", "evidence", "acceptance", "deleted"]) }).strict()),
+  event(
+    "artifact.changed",
+    z
+      .object({
+        artifactId: idSchema,
+        runId: idSchema,
+        state: artifactStateSchema,
+      })
+      .strict(),
+  ),
   event("usage.changed", z.object({ usage: usageSchema }).strict()),
 ]);
 export type ProductEvent = z.infer<typeof productEventSchema>;

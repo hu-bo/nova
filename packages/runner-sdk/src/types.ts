@@ -1,4 +1,26 @@
 import type { RunnerFailure } from "@nova/runner-protocol";
+import type {
+  ResourceCatalogPublished,
+  ResourceRefreshRequest,
+  ResourceSnapshot,
+  ResourceSnapshotRequest,
+  ResourceWriteRequest,
+  ResourceWriteResult,
+} from "./resources.js";
+
+export type {
+  LocalResourceKind,
+  LocalResourceScope,
+  ResourceCatalogDiagnostic,
+  ResourceCatalogDiagnosticCode,
+  ResourceCatalogEntry,
+  ResourceCatalogPublished,
+  ResourceRefreshRequest,
+  ResourceSnapshot,
+  ResourceSnapshotRequest,
+  ResourceWriteRequest,
+  ResourceWriteResult,
+} from "./resources.js";
 
 export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: RunnerFailure };
 
@@ -51,6 +73,14 @@ export interface RunnerSession {
   onStatus(listener: () => void): () => void;
   cancel(operationId: string): Promise<Result<void>>;
   query(operationId: string): Promise<Result<unknown>>;
+  /** 本地受限资源（§4.3）：能力位、目录接收、定向刷新、快照读取与受限写入。 */
+  supportsLocalResources(): boolean;
+  supportsLocalResourceWrites(): boolean;
+  onResourceCatalog(listener: (catalog: ResourceCatalogPublished) => void): () => void;
+  refreshResources(request: ResourceRefreshRequest): Promise<Result<void>>;
+  readResourceSnapshot(request: ResourceSnapshotRequest): Promise<Result<ResourceSnapshot>>;
+  writeResourceFile(request: ResourceWriteRequest): Promise<Result<ResourceWriteResult>>;
+  deleteWorkspacePaths(options: WorkspacePathDeletionOptions): Promise<Result<WorkspacePathDeletionResult>>;
   close(): Promise<void>;
 }
 
@@ -135,6 +165,20 @@ export interface ToolContextOptions {
   readonly signal: AbortSignal;
   readonly executionId: string;
   readonly idempotencyKey: string;
+}
+
+/** 工作区路径批量删除（P1 tmp 清理）：仅 `.nova/runs/<runId>/tmp` 形态的目标。 */
+export interface WorkspacePathDeletionOptions {
+  readonly workspaceId: string;
+  readonly relativePaths: readonly string[];
+  readonly idempotencyKey?: string;
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
+}
+
+/** `removed` 按顶层目标计数；不存在的路径幂等成功且不计数。 */
+export interface WorkspacePathDeletionResult {
+  readonly removed: number;
 }
 
 export type { RunnerFailure };

@@ -12,7 +12,7 @@ import type { Database } from "../../database/index.js";
  * 留作后续 worker entry 接入).
  */
 export type JobKind =
-  "run.wake" | "conversation.context-compact" | "conversation.context-clear" | "attachment.gc" | "outbox";
+  "run.wake" | "conversation.context-compact" | "conversation.context-clear" | "attachment.gc" | "artifact.purge" | "run.tmp-cleanup" | "outbox";
 
 export type JobRecord = {
   jobId: string;

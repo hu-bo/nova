@@ -15,3 +15,10 @@ export {
 } from './conversation.queries';
 
 export const ConversationView = lazy(() => import('./conversation-view').then((module) => ({ default: module.ConversationView })));
+export {
+  EXECUTION_MODES,
+  MODE_COMMANDS,
+  isExecutionMode,
+  isModeCommand,
+  type ExecutionMode,
+} from './execution-modes';

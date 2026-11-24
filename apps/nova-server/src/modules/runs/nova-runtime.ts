@@ -14,13 +14,16 @@ import type { Configuration, Goal } from "@nova/agent-ui-contracts";
 import { createCodingHarness, type CodingHarness } from "@nova/coding-harness";
 import { sessionCheckpointPolicyPlugin } from "@nnova/harness/plugins/session-checkpoint-policy";
 import { toolLoopDetectionPlugin } from "@nnova/harness/plugins/tool-loop-detection";
-import { createRemoteTools, createSpecTools, specSkill } from "@nova/tools/harness";
+import { createRemoteTools, createSpecTools, createArtifactPublishTool, specSkill } from "@nova/tools/harness";
 import { skillsPlugin } from "@nnova/harness/plugins/skills";
 import { z } from "zod";
 import { DomainError } from "../../shared/domain-error.js";
 import type { UserModelProfilesService } from "../model-config/index.js";
 import type { RemoteConnectionService } from "../remotes/index.js";
 import type { RunnerConnections } from "../runners/index.js";
+import type { RunnerLocalResources } from "../runners/index.js";
+import { createSkillResourceTools } from "@nova/tools/harness";
+import type { ArtifactService } from "../artifacts/index.js";
 import { configuredModelPlugin } from "./configured-model.js";
 import { postgresSessionPlugin } from "./postgres-session-store.js";
 import { executionEffectState } from "./session-checkpoint.js";
@@ -29,6 +32,7 @@ import { runnerToolContext } from "./runner-tool-context.js";
 import { resolveProjectInstructions } from "./project-instructions.js";
 import type { ConversationRow, RunClaim } from "./run.repository.js";
 import type { RunService } from "./run.service.js";
+import type { AcceptedExecution } from "./agent-profile.js";
 import type { Checkpoint, RuntimeAdapter, RuntimeCommand, RuntimeContext, RuntimeOutcome } from "./runtime-adapter.js";
 import { runtimeAdapters } from "./runtime-adapter.js";
 import type { UploadStorage } from "../attachments/index.js";
@@ -95,6 +99,16 @@ export const buildSystemInstructions = (sections: {
     ...(sections.goal?.status === "active" ? [goalPrompt(sections.goal)] : []),
     sections.hasWorkspace ? "Workspace: " + sections.workspace : NO_WORKSPACE_INSTRUCTION,
   ].join("\n\n");
+/** 已固定技能 → Harness SkillResource：运行时 ID 只在快照字段体现（`nova.*` / `skill.<uuid>`），转换集中在装配处（P0-F3）。 */
+function toSkillResource(skill: NonNullable<AcceptedExecution["skill"]>) {
+  return {
+    id: skill.runtimeId ?? skill.id,
+    version: skill.version,
+    content: skill.content,
+    description: skill.description,
+  };
+}
+
 export class NovaRuntime implements RuntimeAdapter {
   private harness?: CodingHarness;
   constructor(
@@ -105,6 +119,9 @@ export class NovaRuntime implements RuntimeAdapter {
       models: UserModelProfilesService;
       remotes: RemoteConnectionService;
       runners: RunnerConnections;
+      localResources: RunnerLocalResources;
+      /** 产物发布服务（P1-D1）；未配置存储时不注入，Plan 模式不安装工具。 */
+      artifacts?: ArtifactService;
       uploads: UploadStorage;
       logger: FastifyBaseLogger;
     },
@@ -116,12 +133,17 @@ export class NovaRuntime implements RuntimeAdapter {
     const execution = context.checkpoint.execution;
     if (chatAgent && !execution?.agentProfile)
       throw new DomainError("CONFLICT", "Pinned agent profile is unavailable");
+    // 本地 Agent 快照的 modelId 覆盖配置默认（须在用户已有模型内，pinAgent 已校验）；
+    // 内置 chat profile 不覆盖模型。恢复沿用固定值，不重读磁盘（红线 4）。
+    const pinnedProfile = execution?.agentProfile;
+    const effectiveModelId =
+      pinnedProfile && "source" in pinnedProfile ? pinnedProfile.modelId ?? configuration.modelId : configuration.modelId;
     const route = await this.deps.models.resolve(
-      configuration.modelId,
+      effectiveModelId,
       conversation.ownerUserId,
       configuration.reasoningEffort ?? null,
     );
-    if (configuration.modelId === null) {
+    if (configuration.modelId === null && effectiveModelId === null) {
       await repository.pinModel(claim, route.model.id);
       configuration.modelId = route.model.id;
     }
@@ -213,6 +235,104 @@ export class NovaRuntime implements RuntimeAdapter {
         },
       }),
     );
+    // 本地 Agent 快照的工具限制只缩小宿主能力（红线 1）；从实际工具集中移除被禁工具。
+    if (pinnedProfile && "source" in pinnedProfile && pinnedProfile.disallowTools?.length) {
+      const disallowed = new Set(pinnedProfile.disallowTools);
+      for (let index = tools.length - 1; index >= 0; index -= 1) if (disallowed.has(tools[index]!.name)) tools.splice(index, 1);
+    }
+    // 受限本地技能源写入（§4.4、P0-G2）：仅 Runner 绑定环境提供；按实际写副作用走模式与审批。
+    if (!chatAgent && !remoteId && binding?.runnerId) {
+      const runnerRowId = binding.runnerId;
+      const workspaceId = binding.workspaceId;
+      const relativeDir = workspace;
+      tools.push(
+        ...createSkillResourceTools({
+          write: async (input) => {
+            const ownerUserId = conversation.ownerUserId;
+            if (input.scope === "project")
+              return this.deps.localResources.writeResourceFile({
+                ownerUserId,
+                runnerRowId,
+                kind: "skill",
+                scope: "project",
+                workspaceId,
+                relativeDir,
+                name: input.name,
+                relativePath: input.path,
+                contents: input.contents,
+                ...(input.expectedSha256 !== undefined ? { expectedSha256: input.expectedSha256 } : {}),
+                idempotencyKey: randomUUID(),
+              });
+            return this.deps.localResources.writeResourceFile({
+              ownerUserId,
+              runnerRowId,
+              kind: "skill",
+              scope: "global",
+              name: input.name,
+              relativePath: input.path,
+              contents: input.contents,
+              ...(input.expectedSha256 !== undefined ? { expectedSha256: input.expectedSha256 } : {}),
+              idempotencyKey: randomUUID(),
+            });
+          },
+          refresh: async (scope) => {
+            const view =
+              scope === "project"
+                ? await this.deps.localResources.refresh({
+                    ownerUserId: conversation.ownerUserId,
+                    runnerRowId,
+                    scope: "project",
+                    workspaceId,
+                    relativeDir,
+                  })
+                : await this.deps.localResources.refresh({ ownerUserId: conversation.ownerUserId, runnerRowId, scope: "global" });
+            return { status: view.status, revision: view.revision, complete: view.complete };
+          },
+        }),
+      );
+    }
+    // 产物发布（P1-D1）：仅 Runner 工作区环境且存储已配置时安装；SSH 暂不开二进制发布（§5.3）。
+    // Plan 不安装该工具（effects=write 不进入只读工具面；服务端仍二次校验）。
+    if (this.deps.artifacts && hasWorkspace && !remoteId && binding?.runnerId && configuration.mode !== "plan") {
+      const artifactRunnerId = binding.runnerId;
+      const artifactWorkspaceId = binding.workspaceId;
+      const artifactOutputDir = `.nova/runs/${claim.id}/outputs`;
+      tools.push(
+        ...createArtifactPublishTool({
+          publish: async (request) => {
+            const context = await runnerToolContext(this.deps.runners, artifactRunnerId, conversation.ownerUserId, {
+              workspaceId: artifactWorkspaceId,
+              cwd: workspace,
+              signal: request.signal,
+              executionId: request.toolExecutionId,
+              idempotencyKey: "artifact-publish:" + request.toolExecutionId,
+            });
+            const relative = request.path.replaceAll("\\", "/").replace(/^\.\/+/, "");
+            const target = `${artifactOutputDir}/${relative}`;
+            const leaf = target.slice(target.lastIndexOf("/") + 1);
+            const parent = target.slice(0, target.lastIndexOf("/")) || ".";
+            // 本 Run outputs 目录边界：拒绝目录、越界与符号链接目标（§7 步骤 2）。
+            const listing = await context.fs.list(parent, { signal: request.signal });
+            if (!listing.ok)
+              throw new DomainError("CONFLICT", `Artifact source lookup failed: ${listing.error.message}`);
+            const found = listing.value.find(
+              (item) => item.path === leaf || item.path === target || item.path.endsWith("/" + leaf),
+            );
+            if (!found || found.kind !== "file")
+              throw new DomainError("CONFLICT", "Artifact must be a regular file inside this Run's outputs directory");
+            const read = await context.fs.readBytes(target, { signal: request.signal });
+            if (!read.ok) throw new DomainError("CONFLICT", `Artifact source read failed: ${read.error.message}`);
+            return this.deps.artifacts!.publish({
+              claim,
+              toolExecutionId: request.toolExecutionId,
+              skillVersionId: execution?.skill?.versionId ?? null,
+              display: request.name ?? leaf,
+              readBytes: async () => read.value,
+            });
+          },
+        }),
+      );
+    }
     const policy: ToolPolicy = {
       id: "nova.mode-and-approval",
       authorize: async ({ name, input, context: toolContext }) => {
@@ -275,18 +395,29 @@ export class NovaRuntime implements RuntimeAdapter {
       },
       context.signal,
     );
-    const instructions = execution?.agentProfile?.systemPrompt ?? buildSystemInstructions({
-      mode: configuration.mode,
-      runnerInstructions,
-      projectInstructions,
-      specExecution,
-      goal,
-      hasWorkspace,
-      workspace,
-    });
+    const agentPersona = pinnedProfile && "source" in pinnedProfile ? pinnedProfile.systemPrompt : undefined;
+    const baseInstructions =
+      pinnedProfile && "id" in pinnedProfile
+        ? pinnedProfile.systemPrompt
+        : buildSystemInstructions({
+            mode: configuration.mode,
+            runnerInstructions,
+            projectInstructions,
+            specExecution,
+            goal,
+            hasWorkspace,
+            workspace,
+          });
+    // 本地 Agent 的角色提示只追加在平台基础指令之后：模式、审批与基础指令不可被覆盖（§4.3）。
+    const instructions = agentPersona ? baseInstructions + "\n\n# Agent persona (pinned)\n\n" + agentPersona : baseInstructions;
+    // Run 产物目录约定注入上下文（P1-D3）：交付文件写 outputs、临时文件写 tmp，恢复复用同目录。
+    const artifactContext =
+      this.deps.artifacts && hasWorkspace && !remoteId && configuration.mode !== "plan"
+        ? "\n\nDeliverable files: write them under \".nova/runs/" + claim.id + "/outputs/\" (scratch files in \".nova/runs/" + claim.id + "/tmp/\"), then publish each deliverable with artifact_publish using the path relative to that outputs directory. Reference published artifacts by their artifact IDs in the final reply; do not present local paths as downloadable results."
+        : "";
     const selectedSkills = [
       ...(!chatAgent && specExecution ? [specSkill] : []),
-      ...(execution?.skill ? [execution.skill] : []),
+      ...(execution?.skill ? [toSkillResource(execution.skill)] : []),
     ];
     const repetitionConfirmations = new Map<string, ReturnType<ToolPolicy["authorize"]>>();
     this.harness = await createCodingHarness({
@@ -295,7 +426,7 @@ export class NovaRuntime implements RuntimeAdapter {
         modelId: route.model.id,
       },
       sessionId: conversation.id,
-      profile: { systemPrompt: instructions },
+      profile: { systemPrompt: instructions + artifactContext },
       tools,
       allowedTools: tools
         .filter((tool) => configuration.mode !== "plan" || tool.effects === "read")

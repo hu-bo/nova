@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { SettingsDialog } from '@/components/ui/settings-dialog';
 import { AttachmentImage } from '@/features/attachments';
+import { ArtifactsPanel, useConversationArtifactsQuery } from '@/features/artifacts';
 import { useIdentity } from '@/features/auth';
 import { useClientConfig } from '@/features/models';
 import {
@@ -54,6 +55,7 @@ import {
   ClipboardList,
   Download,
   Ellipsis,
+  FileArchive,
   FolderKanban,
   MessageCircle,
   Pencil,
@@ -191,6 +193,7 @@ export function ConversationWorkspace({
       if (dialog === 'clear') {
         setClearNotice('上下文已清除；历史消息仍保留在当前会话中。');
         ctl.setSelectedSkill(null);
+        ctl.setSelectedAgent(null);
         if (!embedded)
           void navigate({ to: '/conversations/$id', params: { id }, search: {}, replace: true });
       }
@@ -243,6 +246,14 @@ export function ConversationWorkspace({
     () => [...olderMessages, ...(projection?.data.messages ?? savedMessages)],
     [olderMessages, projection?.data.messages, savedMessages],
   );
+  // 产物列表（P1-G1）：查询在工作区挂载，SSE artifact.changed 与重连兜底都失效该键。
+  const artifacts = useConversationArtifactsQuery(id);
+  const artifactItems = useMemo(
+    () => artifacts.data?.pages.flatMap((page) => page.items) ?? [],
+    [artifacts.data],
+  );
+  // 来源 Run 徽标只对当前运行生效（快照/projection 里的 run）。
+  const artifactRun = projection?.run ?? data.run ?? null;
   const historicalOperations = useMemo(
     () => operationsFromMessages(rawMessages, projection?.data.operations ?? data.operations),
     [rawMessages, projection?.data.operations, data.operations],
@@ -291,6 +302,8 @@ export function ConversationWorkspace({
   const feedback: ChatFeedback[] = [];
   if (ctl.error && !(ctl.error instanceof ApiError && ctl.error.notified))
     feedback.push({ id: 'composer', message: errorMessage(ctl.error), tone: 'error' });
+  if (ctl.skillModeNotice)
+    feedback.push({ id: 'skill-mode', message: ctl.skillModeNotice, tone: 'warning' });
   if (clearNotice)
     feedback.push({ id: 'clear-notice', message: clearNotice, tone: 'info', dismissible: true });
   const connection = CHAT_CONNECTION_BY_STREAM_STATE[stream.state];
@@ -318,6 +331,12 @@ export function ConversationWorkspace({
             <Button variant="ghost" size="xs" onPress={() => update({ contextPanelOpen: true })}>
               <ClipboardList size={13} />
               计划 {todos.filter((item) => item.status === 'completed').length}/{todos.length}
+            </Button>
+          )}
+          {artifactItems.length > 0 && (
+            <Button variant="ghost" size="xs" onPress={() => update({ contextPanelOpen: true })}>
+              <FileArchive size={13} />
+              产物 {artifactItems.length}
             </Button>
           )}
           {exportHistory.count !== null && (
@@ -447,6 +466,7 @@ export function ConversationWorkspace({
       <ComposerUploads controller={ctl} />
       {ctl.chatAgent && <CareerCoachTasks onSelect={(text) => ctl.composer.onTextChange?.(text)} />}
       {ctl.skillCatalogError && <ErrorNotice error={ctl.skillCatalogError} />}
+      {ctl.agentCatalogError && <ErrorNotice error={ctl.agentCatalogError} />}
       <Chat<Attachment>
         showToolCalls={preferences.showToolCalls}
         sidebarOpen={!embedded && preferences.contextPanelOpen}
@@ -472,6 +492,14 @@ export function ConversationWorkspace({
         sidebar={
           <div className="space-y-3">
             <ConversationContext controller={ctl} />
+            <ArtifactsPanel
+              artifacts={artifactItems}
+              isPending={artifacts.isPending}
+              error={artifacts.error}
+              onRetry={() => void artifacts.refetch()}
+              storageConfigured={config.data?.capabilities.uploads}
+              run={artifactRun}
+            />
             {data.goal && <GoalPanel conversationId={id} goal={data.goal} running={active} />}
           </div>
         }

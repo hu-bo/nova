@@ -535,6 +535,239 @@
                     }
                   }
                 },
+                "ResourceKind": {
+                  "values": {
+                    "RESOURCE_KIND_UNSPECIFIED": 0,
+                    "RESOURCE_KIND_SKILL": 1,
+                    "RESOURCE_KIND_AGENT": 2
+                  }
+                },
+                "ResourceScope": {
+                  "values": {
+                    "RESOURCE_SCOPE_UNSPECIFIED": 0,
+                    "RESOURCE_SCOPE_GLOBAL": 1,
+                    "RESOURCE_SCOPE_PROJECT": 2
+                  }
+                },
+                "LocalResourceEntry": {
+                  "fields": {
+                    "kind": {
+                      "type": "ResourceKind",
+                      "id": 1
+                    },
+                    "scope": {
+                      "type": "ResourceScope",
+                      "id": 2
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "id": 3
+                    },
+                    "relativeDir": {
+                      "type": "string",
+                      "id": 4
+                    },
+                    "name": {
+                      "type": "string",
+                      "id": 5
+                    },
+                    "description": {
+                      "type": "string",
+                      "id": 6
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "id": 7
+                    },
+                    "sizeBytes": {
+                      "type": "uint64",
+                      "id": 8
+                    }
+                  }
+                },
+                "LocalResourceDiagnostic": {
+                  "fields": {
+                    "code": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "name": {
+                      "type": "string",
+                      "id": 3
+                    },
+                    "path": {
+                      "type": "string",
+                      "id": 4
+                    }
+                  }
+                },
+                "ResourceCatalogPublished": {
+                  "fields": {
+                    "catalogRevision": {
+                      "type": "uint64",
+                      "id": 1
+                    },
+                    "refreshId": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "complete": {
+                      "type": "bool",
+                      "id": 3
+                    },
+                    "entries": {
+                      "rule": "repeated",
+                      "type": "LocalResourceEntry",
+                      "id": 4
+                    },
+                    "diagnostics": {
+                      "rule": "repeated",
+                      "type": "LocalResourceDiagnostic",
+                      "id": 5
+                    }
+                  }
+                },
+                "RefreshResourceCatalog": {
+                  "fields": {
+                    "refreshId": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "scope": {
+                      "type": "ResourceScope",
+                      "id": 2
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "id": 3
+                    },
+                    "relativeDir": {
+                      "type": "string",
+                      "id": 4
+                    }
+                  }
+                },
+                "ReadResourceSnapshotRequest": {
+                  "fields": {
+                    "kind": {
+                      "type": "ResourceKind",
+                      "id": 1
+                    },
+                    "scope": {
+                      "type": "ResourceScope",
+                      "id": 2
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "id": 3
+                    },
+                    "relativeDir": {
+                      "type": "string",
+                      "id": 4
+                    },
+                    "name": {
+                      "type": "string",
+                      "id": 5
+                    },
+                    "relativePath": {
+                      "type": "string",
+                      "id": 6
+                    },
+                    "expectedSha256": {
+                      "type": "string",
+                      "id": 7
+                    }
+                  }
+                },
+                "ReadResourceSnapshotResult": {
+                  "fields": {
+                    "contents": {
+                      "type": "bytes",
+                      "id": 1
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "id": 2
+                    },
+                    "sizeBytes": {
+                      "type": "uint64",
+                      "id": 3
+                    }
+                  }
+                },
+                "WriteResourceFileRequest": {
+                  "fields": {
+                    "kind": {
+                      "type": "ResourceKind",
+                      "id": 1
+                    },
+                    "scope": {
+                      "type": "ResourceScope",
+                      "id": 2
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "id": 3
+                    },
+                    "relativeDir": {
+                      "type": "string",
+                      "id": 4
+                    },
+                    "name": {
+                      "type": "string",
+                      "id": 5
+                    },
+                    "relativePath": {
+                      "type": "string",
+                      "id": 6
+                    },
+                    "contents": {
+                      "type": "bytes",
+                      "id": 7
+                    },
+                    "expectedSha256": {
+                      "type": "string",
+                      "id": 8
+                    }
+                  }
+                },
+                "WriteResourceFileResult": {
+                  "fields": {
+                    "sha256": {
+                      "type": "string",
+                      "id": 1
+                    },
+                    "sizeBytes": {
+                      "type": "uint64",
+                      "id": 2
+                    },
+                    "created": {
+                      "type": "bool",
+                      "id": 3
+                    }
+                  }
+                },
+                "DeleteWorkspacePathsRequest": {
+                  "fields": {
+                    "relativePaths": {
+                      "rule": "repeated",
+                      "type": "string",
+                      "id": 1
+                    }
+                  }
+                },
+                "DeleteWorkspacePathsResult": {
+                  "fields": {
+                    "removed": {
+                      "type": "uint32",
+                      "id": 1
+                    }
+                  }
+                },
                 "Operation": {
                   "oneofs": {
                     "params": {
@@ -545,7 +778,10 @@
                         "writeFile",
                         "executeCommand",
                         "applyPatch",
-                        "readText"
+                        "readText",
+                        "readResourceSnapshot",
+                        "writeResourceFile",
+                        "deleteWorkspacePaths"
                       ]
                     }
                   },
@@ -605,6 +841,18 @@
                     "readText": {
                       "type": "ReadTextRequest",
                       "id": 16
+                    },
+                    "readResourceSnapshot": {
+                      "type": "ReadResourceSnapshotRequest",
+                      "id": 17
+                    },
+                    "writeResourceFile": {
+                      "type": "WriteResourceFileRequest",
+                      "id": 18
+                    },
+                    "deleteWorkspacePaths": {
+                      "type": "DeleteWorkspacePathsRequest",
+                      "id": 19
                     }
                   }
                 },
@@ -878,7 +1126,10 @@
                         "writeFile",
                         "executeCommand",
                         "applyPatch",
-                        "readText"
+                        "readText",
+                        "readResourceSnapshot",
+                        "writeResourceFile",
+                        "deleteWorkspacePaths"
                       ]
                     }
                   },
@@ -934,6 +1185,18 @@
                     "readText": {
                       "type": "ReadTextFileResult",
                       "id": 16
+                    },
+                    "readResourceSnapshot": {
+                      "type": "ReadResourceSnapshotResult",
+                      "id": 17
+                    },
+                    "writeResourceFile": {
+                      "type": "WriteResourceFileResult",
+                      "id": 18
+                    },
+                    "deleteWorkspacePaths": {
+                      "type": "DeleteWorkspacePathsResult",
+                      "id": 19
                     }
                   }
                 },
@@ -988,7 +1251,8 @@
                         "accepted",
                         "result",
                         "reconcile",
-                        "output"
+                        "output",
+                        "resourceCatalogPublished"
                       ]
                     }
                   },
@@ -1020,6 +1284,10 @@
                     "output": {
                       "type": "OperationOutput",
                       "id": 15
+                    },
+                    "resourceCatalogPublished": {
+                      "type": "ResourceCatalogPublished",
+                      "id": 17
                     }
                   }
                 },
@@ -1033,7 +1301,8 @@
                         "cancel",
                         "query",
                         "acknowledge",
-                        "acknowledgeOutput"
+                        "acknowledgeOutput",
+                        "refreshResourceCatalog"
                       ]
                     }
                   },
@@ -1069,6 +1338,10 @@
                     "acknowledgeOutput": {
                       "type": "AcknowledgeOutput",
                       "id": 16
+                    },
+                    "refreshResourceCatalog": {
+                      "type": "RefreshResourceCatalog",
+                      "id": 17
                     }
                   }
                 }

@@ -11,6 +11,23 @@ import {
   type RunnerEnvelope,
 } from "@nova/runner-protocol";
 import { asUnsigned, failure, messageBytes, safeMessage } from "./errors.js";
+import {
+  CAPABILITY_UNSUPPORTED,
+  MAX_RESOURCE_ENTRY_BYTES,
+  parseResourceCatalog,
+  supportsLocalResourceWrites as hasWriteCapability,
+  supportsLocalResources as hasDiscoveryCapability,
+  toWireKind,
+  toWireScope,
+  validateDeletablePaths,
+  validateLocator,
+  type ResourceCatalogPublished,
+  type ResourceRefreshRequest,
+  type ResourceSnapshot,
+  type ResourceSnapshotRequest,
+  type ResourceWriteRequest,
+  type ResourceWriteResult,
+} from "./resources.js";
 import type {
   DirectoryEntry,
   ExecOptions,
@@ -24,6 +41,8 @@ import type {
   TextFile,
   ToolContext,
   ToolContextOptions,
+  WorkspacePathDeletionOptions,
+  WorkspacePathDeletionResult,
 } from "./types.js";
 
 const MAX_PENDING_OPERATIONS = 1_024;
@@ -35,6 +54,7 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const DEFAULT_FILE_TIMEOUT_MS = 30_000;
 const CANCEL_GRACE_MS = 2_000;
 const MAX_COMMAND_TIMEOUT_MS = 15 * 60_000;
+const SHA256_HEXD = /^[a-f0-9]{64}$/i;
 
 interface PendingOperation {
   readonly id: string;
@@ -120,6 +140,8 @@ export class RunnerSessionImpl implements RunnerSession {
   readonly #operationDigests = new Map<string, string>();
   readonly #operationDeadlines = new Map<string, { expiresAtUnixMs: string; timeoutMs: number }>();
   readonly #cancelWhenReconnected = new Set<string>();
+  readonly #resourceCatalogListeners = new Set<(catalog: ResourceCatalogPublished) => void>();
+  #resourceOrdinal = 0;
   #transport: Transport | null = null;
   #closed = false;
 
@@ -235,6 +257,180 @@ export class RunnerSessionImpl implements RunnerSession {
   onStatus(listener: () => void): () => void {
     this.#statusListeners.add(listener);
     return () => this.#statusListeners.delete(listener);
+  }
+
+  supportsLocalResources(): boolean {
+    return hasDiscoveryCapability(this.identity);
+  }
+
+  supportsLocalResourceWrites(): boolean {
+    return hasWriteCapability(this.identity);
+  }
+
+  onResourceCatalog(listener: (catalog: ResourceCatalogPublished) => void): () => void {
+    this.#resourceCatalogListeners.add(listener);
+    return () => this.#resourceCatalogListeners.delete(listener);
+  }
+
+  /**
+   * 定向刷新：发送 RefreshResourceCatalog。返回仅表示请求已送达传输层；
+   * 目录应答（成功与失败均回带 refreshId）经 onResourceCatalog 投递。
+   * 刷新失败时调用方应保留上一个已发布目录并标过期，不得伪造空目录。
+   */
+  async refreshResources(request: ResourceRefreshRequest): Promise<Result<void>> {
+    if (!this.supportsLocalResources())
+      return failure(CAPABILITY_UNSUPPORTED, "Runner does not advertise local resource discovery.", "known");
+    const locator = validateLocator({
+      scope: request.scope,
+      workspaceId: request.workspaceId,
+      relativeDir: request.relativeDir,
+      // refresh 不带条目名；用占位名复用 workspace/relativeDir 段校验。
+      name: "refresh",
+    });
+    if (locator) return failure("INVALID", locator, "known");
+    const payload: Record<string, unknown> = {
+      refreshId: request.refreshId ?? randomUUID(),
+      scope: toWireScope(request.scope),
+      workspaceId: request.scope === "project" ? request.workspaceId : "",
+      relativeDir: request.scope === "project" ? request.relativeDir ?? "." : "",
+    };
+    try {
+      await this.#send({ requestId: payload.refreshId as string, refreshResourceCatalog: payload }, "control");
+      return { ok: true, value: undefined };
+    } catch {
+      return failure("OFFLINE", "Refresh request could not be delivered to the Runner.", "unknown", payload.refreshId as string);
+    }
+  }
+
+  async readResourceSnapshot(request: ResourceSnapshotRequest): Promise<Result<ResourceSnapshot>> {
+    if (!this.supportsLocalResources())
+      return failure(CAPABILITY_UNSUPPORTED, "Runner does not advertise local resource discovery; do not fabricate an empty catalog.", "known");
+    if (!SHA256_HEXD.test(request.expectedSha256))
+      return failure("INVALID", "A 64-hex-digit expected digest is required for snapshot reads.", "known");
+    const locatorError = validateLocator(request);
+    if (locatorError) return failure("INVALID", locatorError, "known");
+    const result = await this.#submitResource("readResourceSnapshot", {
+      resourceKind: toWireKind(request.kind),
+      scope: toWireScope(request.scope),
+      workspaceId: request.scope === "project" ? request.workspaceId ?? "" : "",
+      relativeDir: request.scope === "project" ? request.relativeDir ?? "." : "",
+      name: request.name,
+      relativePath: request.relativePath ?? "",
+      expectedSha256: request.expectedSha256.toLowerCase(),
+    }, request);
+    if (!result.ok) return result as Result<ResourceSnapshot>;
+    if (!record(result.value)) return failure("IO", "Runner returned an invalid snapshot result.", "unknown");
+    const value = this.#selectedOr(result.value, "readResourceSnapshot");
+    if (!value) return failure("IO", "Runner returned a snapshot result with the wrong type.", "unknown");
+    const contents = getBytes(value.contents);
+    const sha256 = string(value.sha256) ? value.sha256.toLowerCase() : "";
+    const sizeBytes = asUnsigned(value.sizeBytes, "size_bytes");
+    if (!SHA256_HEXD.test(sha256) || createHash("sha256").update(contents).digest("hex") !== sha256)
+      return failure("IO", "Snapshot integrity check failed.", "unknown");
+    if (sizeBytes !== contents.byteLength)
+      return failure("IO", "Snapshot size does not match its contents.", "unknown");
+    return { ok: true, value: { contents, sha256, sizeBytes } };
+  }
+
+  async writeResourceFile(request: ResourceWriteRequest): Promise<Result<ResourceWriteResult>> {
+    if (!this.supportsLocalResourceWrites())
+      return failure(CAPABILITY_UNSUPPORTED, "Runner does not advertise local resource writes.", "known");
+    if (request.contents.byteLength > MAX_RESOURCE_ENTRY_BYTES)
+      return failure("TOO_LARGE", `Resource entries are limited to ${MAX_RESOURCE_ENTRY_BYTES / 1024} KiB.`, "known");
+    if (request.expectedSha256 && !SHA256_HEXD.test(request.expectedSha256))
+      return failure("INVALID", "expectedSha256 must be a 64-hex-digit digest when provided.", "known");
+    const locatorError = validateLocator(request);
+    if (locatorError) return failure("INVALID", locatorError, "known");
+    const result = await this.#submitResource("writeResourceFile", {
+      resourceKind: toWireKind(request.kind),
+      scope: toWireScope(request.scope),
+      workspaceId: request.scope === "project" ? request.workspaceId ?? "" : "",
+      relativeDir: request.scope === "project" ? request.relativeDir ?? "." : "",
+      name: request.name,
+      relativePath: request.relativePath ?? "",
+      contents: request.contents,
+      expectedSha256: request.expectedSha256 ?? "",
+    }, request);
+    if (!result.ok) return result as Result<ResourceWriteResult>;
+    if (!record(result.value)) return failure("IO", "Runner returned an invalid write result.", "unknown");
+    const value = this.#selectedOr(result.value, "writeResourceFile");
+    if (!value) return failure("IO", "Runner returned a write result with the wrong type.", "unknown");
+    const sha256 = string(value.sha256) ? value.sha256.toLowerCase() : "";
+    if (!SHA256_HEXD.test(sha256)) return failure("IO", "Runner omitted the written entry digest.", "unknown");
+    return {
+      ok: true,
+      value: {
+        sha256,
+        sizeBytes: asUnsigned(value.sizeBytes, "size_bytes"),
+        created: value.created === true,
+      },
+    };
+  }
+
+  async deleteWorkspacePaths(
+    options: WorkspacePathDeletionOptions,
+  ): Promise<Result<WorkspacePathDeletionResult>> {
+    // 能力位复用 local_resources.write；未声明时与 IO 错误区分，不伪造成功。
+    if (!this.supportsLocalResourceWrites())
+      return failure(CAPABILITY_UNSUPPORTED, "Runner does not advertise local resource writes; workspace path deletion is unavailable.", "known");
+    const workspace = this.identity.workspaces.find((item) => item.workspaceId === options.workspaceId);
+    if (!workspace) return failure("INVALID", "Workspace is not registered on this Runner.", "known");
+    if (workspace.permission !== "READ_WRITE")
+      return failure("DENIED", "Workspace is registered read-only.", "known");
+    const invalid = validateDeletablePaths(options.relativePaths);
+    if (invalid) return failure("INVALID", invalid, "known");
+    const result = await this.#submitResource(
+      "deleteWorkspacePaths",
+      { relativePaths: [...options.relativePaths] },
+      options,
+      options.workspaceId,
+    );
+    if (!result.ok) return result as Result<WorkspacePathDeletionResult>;
+    if (!record(result.value)) return failure("IO", "Runner returned an invalid delete result.", "unknown");
+    const value = this.#selectedOr(result.value, "deleteWorkspacePaths");
+    if (!value) return failure("IO", "Runner returned a delete result with the wrong type.", "unknown");
+    return { ok: true, value: { removed: asUnsigned(value.removed, "removed") } };
+  }
+
+  #deliverResourceCatalog(catalog: ResourceCatalogPublished): void {
+    for (const listener of [...this.#resourceCatalogListeners]) {
+      try {
+        listener(catalog);
+      } catch {
+        this.report({ code: "RESOURCE_CATALOG_OBSERVER_FAILED" });
+      }
+    }
+  }
+
+  #selectedOr(value: Record<string, unknown>, kind: string): Record<string, unknown> | null {
+    if (value.result !== kind) return null;
+    const payload = value[kind];
+    return record(payload) ? payload : null;
+  }
+
+  async #submitResource(
+    kind: "readResourceSnapshot" | "writeResourceFile" | "deleteWorkspacePaths",
+    params: Record<string, unknown>,
+    request: { idempotencyKey?: string; signal?: AbortSignal; timeoutMs?: number },
+    targetWorkspaceId?: string,
+  ): Promise<Result<unknown>> {
+    const workspaceId =
+      targetWorkspaceId ?? this.identity.workspaces[0]?.workspaceId;
+    if (!workspaceId) return failure("OFFLINE", "Runner has no registered workspace to address.", "known");
+    const timeoutMs = request.timeoutMs ?? DEFAULT_FILE_TIMEOUT_MS;
+    const operationId = createHash("sha256")
+      .update(JSON.stringify([this.principalId, request.idempotencyKey ?? randomUUID(), kind, this.#resourceOrdinal++]), "utf8")
+      .digest("hex");
+    const operation: RemoteOperation = {
+      operationId,
+      targetBootId: this.bootId,
+      workspaceId,
+      protocolVersion: RUNNER_PROTOCOL_VERSION,
+      expiresAtUnixMs: String(Date.now() + Math.min(timeoutMs + 60_000, 16 * 60_000)),
+      timeoutMs,
+      params: { kind, ...params } as RemoteOperation["params"],
+    };
+    return this.#submit(operation, request.signal ?? new AbortController().signal);
   }
 
   async close(): Promise<void> {
@@ -554,7 +750,7 @@ export class RunnerSessionImpl implements RunnerSession {
   ): Promise<Result<unknown>> {
     const operationId = operation.operationId;
     const paramsKind = operation.params.kind;
-    const paramsField = { listFiles: "listFiles", readFile: "readFile", readText: "readText", search: "search", writeFile: "writeFile", applyPatch: "applyPatch", executeCommand: "executeCommand" }[paramsKind];
+    const paramsField = { listFiles: "listFiles", readFile: "readFile", readText: "readText", search: "search", writeFile: "writeFile", applyPatch: "applyPatch", executeCommand: "executeCommand", readResourceSnapshot: "readResourceSnapshot", writeResourceFile: "writeResourceFile", deleteWorkspacePaths: "deleteWorkspacePaths" }[paramsKind];
     if (!paramsField) return Promise.resolve(failure("UNSUPPORTED", "Unsupported Runner operation.", "known", operationId));
     const wireOperation: Record<string, unknown> = {
       operationId,
@@ -745,6 +941,19 @@ export class RunnerSessionImpl implements RunnerSession {
         this.report({ code: "RUNNER_REJECTED_CONNECTION" });
         this.#transport?.socket.close(1008, "Runner connection rejected");
         return;
+      case "resourceCatalogPublished": {
+        if (!record(envelope.resourceCatalogPublished)) return;
+        let catalog: ResourceCatalogPublished;
+        try {
+          catalog = parseResourceCatalog(envelope.resourceCatalogPublished);
+        } catch {
+          // 目录帧结构非法：只报诊断并丢弃该帧，不断连、不影响其它 RPC。
+          this.report({ code: "RUNNER_RESOURCE_CATALOG_INVALID" });
+          return;
+        }
+        this.#deliverResourceCatalog(catalog);
+        return;
+      }
       default:
         this.report({ code: "UNEXPECTED_RUNNER_MESSAGE" });
     }
@@ -919,6 +1128,12 @@ function selected(value: Record<string, unknown>, kind: string): Record<string, 
 }
 
 function wireParams(params: RemoteOperation["params"]): Record<string, unknown> {
+  if (params.kind === "readResourceSnapshot" || params.kind === "writeResourceFile") {
+    // TS 判别字段占用 `kind`；wire 层的 `kind` 是 ResourceKind 枚举（resourceKind）。
+    const wire: Record<string, unknown> = { ...params, kind: params.resourceKind };
+    delete wire.resourceKind;
+    return wire;
+  }
   const { kind, ...value } = params;
   return value;
 }

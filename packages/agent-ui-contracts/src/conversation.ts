@@ -3,6 +3,7 @@ import { decimalSequenceSchema, idSchema, inputBlocksSchema, messageSchema } fro
 import { capabilitiesSchema, configurationSchema, runViewSchema, toolOperationSchema, usageSchema } from "./runtime.js";
 import { interactionSchema } from "./interactions.js";
 import { skillSelectionSchema } from "./skills.js";
+import { artifactSummarySchema } from "./artifacts.js";
 export const submitInputSchema = z
   .object({
     blocks: inputBlocksSchema,
@@ -61,6 +62,8 @@ export const snapshotSchema = z
     plan: z.array(todoSchema).optional(),
     goal: goalSchema.nullable().optional(),
     usage: usageSchema.optional(),
+    /** 会话产物摘要（P1-A1）：断线重连后可由快照恢复；事件只带定位三元组。 */
+    artifacts: z.array(artifactSummarySchema).optional(),
     capabilities: capabilitiesSchema,
   })
   .strict();

@@ -15,3 +15,6 @@ export { sessionCommits } from "./session-commit.table.js";
 export { specs } from "./spec.table.js";
 export { specRevisions } from "./spec-revision.table.js";
 export { specTaskAttempts } from "./spec-task-attempt.table.js";
+export { skills } from "./skill.table.js";
+export { skillVersions } from "./skill-version.table.js";
+export { runArtifacts } from "./run-artifact.table.js";

@@ -3,6 +3,7 @@ export { RunRuntimeHost } from './run-runtime';
 export { useConversationStream } from './run-runtime.context';
 export { useRunControls, type RunControls } from './run-controls';
 export { RunStatus } from './run-status';
+export { runPresentation } from './run-presentation';
 export const RunPanel = lazy(() =>
   import('./run-panel').then((module) => ({ default: module.RunPanel })),
 );

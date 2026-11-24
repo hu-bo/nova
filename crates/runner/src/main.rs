@@ -1,6 +1,7 @@
 mod config;
 mod digest;
 mod engine;
+mod local_resources;
 mod workspace;
 
 mod proto {
@@ -58,6 +59,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load(Cli::parse())?;
     info!(runner_id = %config.runner_id, workspace_id = %config.workspace_id, "Runner starting");
     let app = App::new(&config)?;
+    // §5.2：`.gitignore` 排除 `.nova/` 由工作区初始化流程统一处理，技能不自行修改。
+    // 位置选在注册工作区之后且不阻塞接入：spawn_blocking 幂等维护，IO/符号链接
+    // 失败只记诊断日志（warn），绝不阻断连接与其它 RPC。
+    // read_only 工作区与普通写 RPC 同一语义（不写任何文件），跳过维护。
+    if !config.read_only {
+        let root = config.workspace.clone();
+        let workspace_id = config.workspace_id.clone();
+        tokio::task::spawn_blocking(move || {
+            if let Err(reason) = crate::workspace::ensure_nova_gitignored(&root) {
+                warn!(
+                    workspace_id = %workspace_id,
+                    reason = %reason,
+                    "workspace .gitignore maintenance was skipped"
+                );
+            }
+        });
+    }
     run_reconnecting(app, config).await?;
     Ok(())
 }
@@ -107,6 +125,9 @@ async fn connect_once(app: Arc<App>, config: &Config) -> Result<(), Box<dyn std:
                 "search".into(),
                 "exec".into(),
                 "reconcile".into(),
+                // 本地受限资源：发现+快照读取位 / 写入位（不改 proto 字段结构）。
+                local_resources::CAPABILITY_LOCAL_RESOURCES.into(),
+                local_resources::CAPABILITY_LOCAL_RESOURCES_WRITE.into(),
             ],
             max_concurrency: config.max_concurrency as u32,
         })),
@@ -141,6 +162,13 @@ async fn connect_once(app: Arc<App>, config: &Config) -> Result<(), Box<dyn std:
     };
     app.set_events(events.clone()).await;
     app.send_reconcile(&control_tx).await;
+    // P0-D3：认证接入完成（ServerWelcome）后才发布首个完整目录；重连（新的
+    // connect_once 即新 connection epoch）同样重新发布。扫描错误只进诊断，不中断连接。
+    let publisher = app.clone();
+    let publish_control = control_tx.clone();
+    tokio::spawn(async move {
+        publisher.publish_resources(None, &publish_control).await;
+    });
     let mut heartbeat = tokio::time::interval(Duration::from_millis(u64::from(
         welcome.heartbeat_interval_ms.max(1_000),
     )));
@@ -165,6 +193,14 @@ async fn connect_once(app: Arc<App>, config: &Config) -> Result<(), Box<dyn std:
                             Some(ServerPayload::Query(query)) => app.query(envelope.request_id, &query.operation_id, &control_tx).await,
                             Some(ServerPayload::Acknowledge(ack)) => app.ack_result(&ack.operation_id, &ack.boot_id).await,
                             Some(ServerPayload::AcknowledgeOutput(ack)) => app.ack_output(&ack.operation_id, &ack.boot_id, ack.sequence).await,
+                            Some(ServerPayload::RefreshResourceCatalog(refresh)) => {
+                                // 定向重扫并应答（成功/失败都回带 refresh_id）；扫描不阻塞读循环。
+                                let publisher = app.clone();
+                                let publish_control = control_tx.clone();
+                                tokio::spawn(async move {
+                                    publisher.publish_resources(Some(refresh), &publish_control).await;
+                                });
+                            }
                             Some(ServerPayload::Rejection(error)) => return Err(format!("SDK rejected connection: {}", error.message).into()),
                             Some(ServerPayload::Welcome(_)) | None => return Err("Unexpected SDK message".into()),
                         }

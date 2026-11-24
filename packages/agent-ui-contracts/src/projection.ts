@@ -168,6 +168,16 @@ export function applyEvent(state: Snapshot, event: ProductEvent): Snapshot {
       break;
     case "spec.changed":
       break;
+    case "artifact.changed": {
+      if (!next.artifacts) break;
+      const artifact = next.artifacts.find((item) => item.id === event.payload.artifactId);
+      // 事件只带状态：已加载的条目原地更新；未加载由客户端刷新列表接口兜底。
+      if (artifact)
+        next.artifacts = next.artifacts.map((item) =>
+          item.id === event.payload.artifactId ? { ...item, state: event.payload.state } : item,
+        );
+      break;
+    }
     case "usage.changed":
       next.usage = event.payload.usage;
       break;

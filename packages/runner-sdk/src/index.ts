@@ -1,12 +1,34 @@
 export { createRunnerSdk } from "./server.js";
 export { toToolContext, parseIdentity, RunnerSessionImpl } from "./session.js";
+export {
+  CAPABILITY_UNSUPPORTED,
+  LOCAL_RESOURCES_CAPABILITY,
+  LOCAL_RESOURCES_WRITE_CAPABILITY,
+  MAX_DELETE_PATHS,
+  MAX_RESOURCE_ENTRY_BYTES,
+  parseResourceCatalog,
+  supportsLocalResources,
+  supportsLocalResourceWrites,
+  validateDeletablePaths,
+} from "./resources.js";
 export type {
   DirectoryEntry,
   ExecOptions,
   ExecOutput,
   FileSystem,
+  LocalResourceKind,
+  LocalResourceScope,
   OutputChunk,
   Result,
+  ResourceCatalogDiagnostic,
+  ResourceCatalogDiagnosticCode,
+  ResourceCatalogEntry,
+  ResourceCatalogPublished,
+  ResourceRefreshRequest,
+  ResourceSnapshot,
+  ResourceSnapshotRequest,
+  ResourceWriteRequest,
+  ResourceWriteResult,
   RunnerFailure,
   RunnerIdentity,
   RunnerSdk,
@@ -17,4 +39,6 @@ export type {
   TextFile,
   ToolContext,
   ToolContextOptions,
+  WorkspacePathDeletionOptions,
+  WorkspacePathDeletionResult,
 } from "./types.js";

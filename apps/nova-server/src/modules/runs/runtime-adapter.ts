@@ -62,6 +62,7 @@ export interface RuntimeDependencies {
   models: import("../model-config/index.js").UserModelProfilesService;
   remotes: import("../remotes/index.js").RemoteConnectionService;
   runners: import("../runners/index.js").RunnerConnections;
+  localResources: import("../runners/index.js").RunnerLocalResources;
   uploads: UploadStorage;
   logger: FastifyBaseLogger;
 }

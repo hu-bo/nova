@@ -1,6 +1,6 @@
 import { createScope, defineRepository } from "../../shared/scope.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import type { Block } from "@nova/agent-ui-contracts";
+import type { Block, Configuration } from "@nova/agent-ui-contracts";
 import { conversations, messages, runs, type Database } from "../../../database/index.js";
 
 export type MessageReference = { ownerUserId: string; conversationId: string; messageId: string; blockId: string };
@@ -10,6 +10,11 @@ export interface ConversationReader {
     ownerUserId: string;
   }): Promise<{ eventFloorSequence: bigint; lastEventSequence: bigint } | undefined>;
   readMessageBlock(input: MessageReference): Promise<Block | undefined>;
+  /** 技能目录/准入用：会话的持续配置与原绑定（只读，不进入聚合事务）。 */
+  readEnvironment(input: {
+    conversationId: string;
+    ownerUserId: string;
+  }): Promise<{ mode: "chat" | "project"; projectId: string | null; specId: string | null; configuration: Configuration | null; binding: unknown } | undefined>;
 }
 
 export const conversationReader = defineRepository(({ db }): ConversationReader => {
@@ -39,6 +44,25 @@ export const conversationReader = defineRepository(({ db }): ConversationReader 
         )
         .limit(1);
       return row?.blocks.find((block) => block.id === input.blockId);
+    },
+    async readEnvironment(input) {
+      const [row] = await db
+        .select({
+          mode: conversations.mode,
+          projectId: conversations.projectId,
+          metadata: conversations.metadata,
+        })
+        .from(conversations)
+        .where(and(eq(conversations.id, input.conversationId), eq(conversations.ownerUserId, input.ownerUserId)))
+        .limit(1);
+      if (!row) return undefined;
+      return {
+        mode: row.mode,
+        projectId: row.projectId,
+        specId: row.metadata.specId ?? null,
+        configuration: row.metadata.configuration ?? null,
+        binding: row.metadata.binding ?? null,
+      };
     },
   };
 });

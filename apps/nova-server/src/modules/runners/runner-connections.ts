@@ -59,7 +59,11 @@ declare module "fastify" {
     executionEnabled: boolean;
   }
 }
-export async function registerRunnerConnections(app: FastifyInstance, exportMode: boolean) {
+export async function registerRunnerConnections(
+  app: FastifyInstance,
+  exportMode: boolean,
+  onAccepted?: (info: { runnerRowId: string; ownerUserId: string; session: RunnerSession }) => void,
+) {
   const runners = createRunnerRepository(app.db);
   const tokens = createRunnerTokenRepository(app.db);
   const scope = createScope(app.db);
@@ -91,6 +95,7 @@ export async function registerRunnerConnections(app: FastifyInstance, exportMode
     }
     const session = await candidate.accept({ principalId: registered.ownerUserId });
     connections.add(registered.runner.id, registered.ownerUserId, registered.tokenId, session);
+    onAccepted?.({ runnerRowId: registered.runner.id, ownerUserId: registered.ownerUserId, session });
   });
   const timer = setInterval(() => {
     void connections.refresh().catch(() => app.log.warn("Runner status refresh failed"));

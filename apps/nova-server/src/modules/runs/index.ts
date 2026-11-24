@@ -10,6 +10,10 @@ export async function runsModule(app: FastifyInstance): Promise<void> {
 // Conversation commands participate in the same aggregate transaction as runs.
 export {
   runJournal,
+  artifactSettlement,
+  createArtifactSettlement,
+  type ArtifactSettlement,
+  type RunClaim,
   type RunJournal,
 } from "./run.repository.js";
 export {
@@ -23,5 +27,5 @@ export {
   queuedInput,
 } from "./run-dto.js";
 export { runtimeAdapters } from "./runtime-adapter.js";
-export { validateAgentProfile, acceptExecution } from "./agent-profile.js";
+export { validateAgentProfile, acceptExecution, type AcceptedExecution, type PinnedExecution } from "./agent-profile.js";
 export { runProjectionReader } from "./run-projection.repository.js";

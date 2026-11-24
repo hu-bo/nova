@@ -6,9 +6,12 @@ import type { ConversationRow, ConversationRepository } from "./conversation.rep
 import type { ServiceTransaction } from "../../shared/scope.js";
 import type { UserModelProfilesService } from "../model-config/index.js";
 import type { RemoteConnectionService } from "../remotes/index.js";
+import type { SkillService, AgentProfileReference } from "../skills/index.js";
+import type { PinnedExecution } from "../runs/index.js";
 import { conversationSnapshotSchema, type CreateConversationInput } from "./conversation.schema.js";
 import { conversationView } from "../runs/index.js";
 import { runtimeAdapters, validateAgentProfile } from "../runs/index.js";
+import type { ArtifactService } from "../artifacts/index.js";
 type ConversationDependencies = {
   repository: ConversationRepository;
   bindings: Pick<ProjectBindingService, "get">;
@@ -16,15 +19,18 @@ type ConversationDependencies = {
   remotes: Pick<RemoteConnectionService, "getEnvironment">;
   runnerConnections: Pick<RunnerConnections, "isOnline">;
   runnerReader: Pick<RunnerReader, "readWorkspace">;
+  skills: SkillService;
 };
 export class ConversationService {
   constructor(
     private readonly conversations: ConversationRepository,
     private readonly transaction: ServiceTransaction<ConversationDependencies>,
     private readonly executionEnabled = true,
+    /** 产物摘要进入会话读模型（P1-A1）；未接存储时省略该字段。 */
+    private readonly artifacts?: Pick<ArtifactService, "list">,
   ) {}
   async create(input: CreateConversationInput, owner: string, key?: string) {
-    return this.transaction(async ({ repository, bindings, models, remotes }) => {
+    return this.transaction(async ({ repository, bindings, models, remotes, skills }) => {
       const configuration = configurationSchema.parse(input.configuration ?? {});
       validateAgentProfile(configuration, input.mode, Boolean(input.goal));
       await this.validateConfiguration(configuration, owner, models, remotes);
@@ -35,6 +41,15 @@ export class ConversationService {
         });
       if (input.initialInput)
         await this.validateBlocks(input.initialInput.blocks, configuration, binding, owner, remotes);
+      // 技能与 Agent 内容在入队事务内按已登记版本固定；不重读磁盘或“最新”。
+      const pinned = await this.pinExecution(skills, {
+        ownerUserId: owner,
+        configuration,
+        binding,
+        projectId: input.projectId ?? null,
+        specSession: false,
+        skill: input.initialInput?.skill,
+      });
       return toDTO(
         await repository.create({
           ownerUserId: owner,
@@ -54,6 +69,7 @@ export class ConversationService {
           },
           ...(input.initialInput ? { initialInput: input.initialInput } : {}),
           ...(key ? { idempotencyKey: key } : {}),
+          pinned,
         }),
       );
     });
@@ -62,11 +78,11 @@ export class ConversationService {
     return (await this.conversations.list(input)).map(toDTO);
   }
   async snapshot(id: string, owner: string) {
-    return this.transaction(
+    const snapshot = await this.transaction(
       async ({ repository }) => {
-        const snapshot = await repository.snapshot(id, owner);
+        const next = await repository.snapshot(id, owner);
         if (!this.executionEnabled)
-          snapshot.capabilities = {
+          next.capabilities = {
             tools: false,
             approval: false,
             question: false,
@@ -76,16 +92,19 @@ export class ConversationService {
             images: false,
             files: false,
           };
-        return conversationSnapshotSchema.parse(snapshot);
+        return conversationSnapshotSchema.parse(next);
       },
       { isolationLevel: "repeatable read", accessMode: "read only" },
     );
+    // 产物摘要进入会话读模型（P1-A1）：快照级最新状态；实时顺序仍以 artifact.changed 事件 + 列表接口为准。
+    if (this.artifacts) snapshot.artifacts = (await this.artifacts.list({ conversationId: id, ownerUserId: owner, limit: 50 })).items;
+    return snapshot;
   }
   messages(id: string, owner: string, before?: string) {
     return this.conversations.messages(id, owner, before);
   }
   async appendPendingInput(input: Parameters<ConversationRepository["enqueue"]>[0]) {
-    return this.transaction(async ({ repository, bindings, models, remotes }) => {
+    return this.transaction(async ({ repository, bindings, models, remotes, skills }) => {
       const conversation = await repository.findById({
         id: input.conversationId,
         ownerUserId: input.ownerUserId,
@@ -103,8 +122,51 @@ export class ConversationService {
         input.ownerUserId,
         remotes,
       );
-      return repository.enqueue(input);
+      const pinned = await this.pinExecution(skills, {
+        ownerUserId: input.ownerUserId,
+        configuration,
+        binding: conversation.metadata.binding ?? null,
+        projectId: conversation.projectId,
+        specSession: Boolean(conversation.metadata.specId),
+        skill: input.skill,
+      });
+      return repository.enqueue(input, pinned);
     });
+  }
+  /**
+   * 入队前固定技能/Agent 引用（docs/nova-skills.md §6）。校验归属、项目范围、版本、模式与工具，
+   * 并把已发布版本的完整内容返回给上层写入 `pending_inputs.payload.execution`。
+   */
+  private async pinExecution(
+    skills: SkillService,
+    input: {
+      ownerUserId: string;
+      configuration: Configuration;
+      binding: { runnerId: string | null; workspaceId: string; canonicalCwd: string } | null | undefined;
+      projectId: string | null;
+      specSession: boolean;
+      skill?: { id: string; version: string } | undefined;
+    },
+  ): Promise<PinnedExecution> {
+    const environment = skills.conversationEnvironment({
+      ownerUserId: input.ownerUserId,
+      specSession: input.specSession,
+      projectId: input.projectId,
+      configuration: input.configuration,
+      binding: input.binding
+        ? { runnerId: input.binding.runnerId, workspaceId: input.binding.workspaceId, canonicalCwd: input.binding.canonicalCwd }
+        : null,
+    });
+    const pinned: PinnedExecution = {};
+    const profile = input.configuration.agentProfile;
+    if (profile && "source" in profile) {
+      if (profile.source === "platform")
+        throw new DomainError("VALIDATION_ERROR", "Platform agent profiles are not available yet");
+      const reference: AgentProfileReference = { source: profile.source, refId: profile.refId, version: profile.version };
+      pinned.agent = await skills.pinAgent(reference, environment);
+    }
+    if (input.skill) pinned.skill = await skills.pinForQueueing(input.skill, environment);
+    return pinned;
   }
   updateGoal(id: string, owner: string, action: "pause" | "resume" | "complete" | "remove", revision: number) {
     return this.transaction(async ({ repository }) => {

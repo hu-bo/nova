@@ -8,6 +8,7 @@ import {
   MessageCircle,
   PanelLeftClose,
   Plus,
+  Puzzle,
   Search,
   Settings,
   Sparkles,
@@ -304,6 +305,9 @@ export function SidebarContent({
               )}
             </div>
           )}
+        </section>
+        <section aria-label="技能">
+          <NavItem to="/skills" icon={<Puzzle size={14} />} label="我的技能" onClick={onNavigate} />
         </section>
       </nav>
       <div className="shrink-0 border-t border-slate-200 px-3 py-2">

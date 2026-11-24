@@ -7,10 +7,15 @@ import type { FastifyInstance } from "fastify";
 import { runnerRoutes } from "./runner.routes.js";
 import { RunnerService } from "./runner.service.js";
 import { RunnerTokenService } from "./runner-token.service.js";
+import { resourceRoutes } from "./resource.routes.js";
+import type { RunnerLocalResources } from "./local-resources.js";
 export { registerRunnerConnections, RunnerConnections } from "./runner-connections.js";
+export { RunnerLocalResources } from "./local-resources.js";
+export type { CatalogAcceptor, CatalogAcceptInput } from "./local-resources.js";
 export { fileListingQuerySchema, remoteFileListingSchema, fileSummaryResponseSchema } from "./runner.schema.js";
+export { resourceCatalogViewSchema, resourceRefreshBodySchema } from "./resource.routes.js";
 
-export async function runnersModule(app: FastifyInstance): Promise<void> {
+export async function runnersModule(app: FastifyInstance, localResources: RunnerLocalResources): Promise<void> {
   const scope = createScope(app.db);
   const tokenService = scope.get(
     defineService(
@@ -24,8 +29,11 @@ export async function runnersModule(app: FastifyInstance): Promise<void> {
       ({ repository, connections }) => new RunnerService(repository, connections),
     ),
   );
-  // 实际路径 /api/runner-tokens, /api/runners; 由 app.ts 在 /api 前缀下挂载.
-  await app.register(async (scope) => runnerRoutes(scope, tokenService, runnerService), { prefix: "" });
+  // 实际路径 /api/runner-tokens, /api/runners, /api/runners/:id/resources/refresh; 由 app.ts 在 /api 前缀下挂载.
+  await app.register(async (scope) => {
+    await runnerRoutes(scope, tokenService, runnerService);
+    await resourceRoutes(scope, localResources);
+  }, { prefix: "" });
 }
 
 export { type RunnerReader } from "./runner.repository.js";

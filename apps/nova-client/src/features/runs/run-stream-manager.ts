@@ -50,6 +50,8 @@ class Session {
   pollTimer: ReturnType<typeof setInterval> | null = null;
   resync: { controller: AbortController; promise: Promise<string> } | null = null;
   resyncFailures = 0;
+  /** 掉线标记：重连成功后触发一次产物列表兜底刷新（P1-G1）。 */
+  artifactsFallback = false;
   retryTimer: ReturnType<typeof setTimeout> | null = null;
   constructor(readonly id: string) {}
   subscribe = (listener: () => void) => {
@@ -189,6 +191,15 @@ export class RunStreamManager {
         if (!this.owns(session)) return;
         if (import.meta.env.DEV)
           console.debug('[runs] 连接 → %s（恢复游标 %s）', state, session.projected?.cursor ?? '-');
+        // 断线重连后事件可能缺段，产物列表用服务端接口兜底刷新（P1-G1）。
+        if (state === 'offline' || state === 'reconnecting') session.artifactsFallback = true;
+        if (state === 'live' && session.artifactsFallback) {
+          session.artifactsFallback = false;
+          void this.queryClient.invalidateQueries({
+            queryKey: queryKeys.artifacts.list(this.identityId, session.id),
+            refetchType: 'active',
+          });
+        }
         session.publish(state === 'live' ? { state, error: null, retryAt: null } : { state });
       },
       onError: ({ status, retryAfterSeconds }) => {
@@ -249,6 +260,12 @@ export class RunStreamManager {
         if (parsed.data.type === 'spec.changed')
           void this.queryClient.invalidateQueries({
             queryKey: queryKeys.specs.detailRoot(this.identityId, parsed.data.payload.specId),
+            refetchType: 'active',
+          });
+        // 事件只带定位三元组（P1-A1）：状态明细以列表接口重取为准。
+        if (parsed.data.type === 'artifact.changed')
+          void this.queryClient.invalidateQueries({
+            queryKey: queryKeys.artifacts.list(this.identityId, session.id),
             refetchType: 'active',
           });
         if (!session.refs && !isActiveRun(session.projected.run?.state)) {

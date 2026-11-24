@@ -64,20 +64,32 @@ test("chat agent admission isolates skills, permissions and immutable input snap
   const input = { blocks: [{ id: "text", type: "text" as const, text: "修改简历" }], mode: "next_run" as const,
     skill: { id: careerCoachSkill.id, version: careerCoachSkill.version } };
   validateAgentProfile(configuration, "chat", false);
-  const accepted = acceptExecution(configuration, input);
+  // 技能内容由 skills 模块在入队时固定为快照引用；acceptExecution 只消费已固定内容（§6、P0-F2）。
+  const pinnedSkill = {
+    id: careerCoachSkill.id,
+    version: careerCoachSkill.version,
+    content: careerCoachSkill.content,
+    description: careerCoachSkill.description ?? "",
+    name: "求职教练",
+    source: "builtin" as const,
+    runtimeId: careerCoachSkill.id,
+  };
+  const accepted = acceptExecution(configuration, input, { skill: pinnedSkill });
   assert.equal(accepted.skill?.content, careerCoachSkill.content);
   assert.match(accepted.agentProfile!.systemPrompt, /Read-only permissions do not restrict rewriting text/);
   assert.doesNotMatch(accepted.agentProfile!.systemPrompt, /PLAN MODE|BUILD MODE|workspace|finish_goal|spec_read/);
-  assert.equal(acceptExecution(configuration, { ...input, skill: undefined }).skill, undefined);
+  assert.equal(acceptExecution(configuration, { ...input, skill: undefined }, {}).skill, undefined);
   for (const invalid of [
     { ...configuration, mode: "build" as const }, { ...configuration, remoteConnectionId: "remote" },
     { ...configuration, backendId: "other" }, { ...configuration, agentProfile: { id: "chat" as const, version: "2.0.0" } },
   ]) assert.throws(() => validateAgentProfile(invalid, "chat", false));
   assert.throws(() => validateAgentProfile(configuration, "project", false));
   assert.throws(() => validateAgentProfile(configuration, "chat", true));
-  assert.throws(() => acceptExecution(configurationSchema.parse({}), input));
-  assert.throws(() => acceptExecution(configuration, { ...input, mode: "steer" }));
-  assert.throws(() => acceptExecution(configuration, { ...input, skill: { id: careerCoachSkill.id, version: "2.0.0" } }));
+  // 产品技能不再要求无工具聊天：项目模式（无 agentProfile）也可携带已固定技能（§9）。
+  assert.equal(acceptExecution(configurationSchema.parse({}), input, { skill: pinnedSkill }).skill?.content, careerCoachSkill.content);
+  // 未固定的技能引用必须拒绝：运行期禁止回退重读“最新”内容（红线 4）。
+  assert.throws(() => acceptExecution(configuration, input));
+  assert.throws(() => acceptExecution(configuration, { ...input, mode: "steer" }, { skill: pinnedSkill }));
 });
 import {
   createDatabase,

@@ -4,7 +4,14 @@ export * from "./composer.js";
 export * from "./composer-option-menu.js";
 export type * from "./composer-types.js";
 export { contextUsagePercent } from "./composer-context-usage.js";
-export { matchComposerSkills } from "./composer-skill-menu.js";
+export {
+  matchComposerSkills,
+  ComposerSkillMenu,
+  SKILL_SOURCE_LABELS,
+  SKILL_APPLICABILITY_LABELS,
+  describeProductSkill,
+  describeAgentEntry,
+} from "./composer-skill-menu.js";
 export * from "./decision-prompt.js";
 export * from "./message-list.js";
 export * from "./remote-explorer.js";

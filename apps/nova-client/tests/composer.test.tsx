@@ -135,6 +135,81 @@ describe('composer acceptance and accessible input', () => {
     expect(select).not.toHaveBeenCalled();
   });
 
+  it('shows skill source and server reasons and refuses unavailable skills', async () => {
+    const select = vi.fn();
+    const entries = [
+      ...productSkills,
+      {
+        id: '00000000-0000-4000-8000-0000000000a2',
+        version: '0.0.1',
+        name: '仓库巡检',
+        description: '需要工作区',
+        source: 'runner-global' as const,
+        applicability: {
+          status: 'unavailable' as const,
+          reasons: [{ code: 'workspace_required' as const, message: '技能需要绑定工作区' }],
+        },
+      },
+    ];
+    render(<Composer productSkills={entries} onProductSkillChange={select} onSubmit={() => undefined} />);
+    await userEvent.click(screen.getByRole('button', { name: '选择技能' }));
+    const option = screen.getByRole('option', { name: /仓库巡检/ });
+    expect((option as HTMLButtonElement).disabled).toBe(true);
+    expect(document.body.textContent).toContain('技能需要绑定工作区');
+    expect(document.body.textContent).toContain('本机全局');
+    await userEvent.click(option);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it('selects agents from a separate picker and removes the agent tag', async () => {
+    const selectAgent = vi.fn();
+    const agents = [
+      {
+        refId: '00000000-0000-4000-8000-0000000000b1',
+        name: '代码评审员',
+        description: '本地评审 Agent',
+        source: 'runner-project' as const,
+        version: '0.0.1',
+        incompatibilities: [],
+      },
+      {
+        refId: '00000000-0000-4000-8000-0000000000b2',
+        name: '旧版助手',
+        description: '含未支持字段',
+        source: 'platform' as const,
+        version: '0.0.2',
+        incompatibilities: [
+          { code: 'mode_not_allowed' as const, message: '包含未支持字段 mode: subagent' },
+        ],
+      },
+    ];
+    render(
+      <Composer
+        productSkills={productSkills}
+        onProductSkillChange={() => undefined}
+        agents={agents}
+        selectedAgent={{ source: 'runner-project', refId: agents[0]!.refId, version: '0.0.1' }}
+        onAgentChange={selectAgent}
+        onSubmit={() => undefined}
+      />,
+    );
+    // Agent 标签独立于技能标签展示，可移除。
+    expect(screen.getByRole('button', { name: '移除 Agent' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: '移除 Agent' }));
+    expect(selectAgent).toHaveBeenCalledWith(null);
+    await userEvent.click(screen.getByRole('button', { name: '选择 Agent' }));
+    expect(screen.getByRole('listbox', { name: '选择 Agent' })).toBeTruthy();
+    const blockedOption = screen.getByRole('option', { name: /旧版助手/ });
+    expect((blockedOption as HTMLButtonElement).disabled).toBe(true);
+    expect(document.body.textContent).toContain('包含未支持字段 mode: subagent');
+    await userEvent.click(screen.getByRole('option', { name: /代码评审员/ }));
+    expect(selectAgent).toHaveBeenCalledWith({
+      source: 'runner-project',
+      refId: agents[0]!.refId,
+      version: '0.0.1',
+    });
+  });
+
   it('retains text after a rejected submission and clears only after acceptance', async () => {
     const submit = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     render(<Composer onSubmit={submit} />);

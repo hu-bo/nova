@@ -20,6 +20,7 @@ import { Route as SettingsChatRouteImport } from './routes/settings/chat';
 import { Route as SettingsModelsRouteImport } from './routes/settings/models';
 import { Route as SettingsRemotesRouteImport } from './routes/settings/remotes';
 import { Route as SettingsRunnersRouteImport } from './routes/settings/runners';
+import { Route as SkillsIndexRouteImport } from './routes/skills/index';
 import { Route as SpecsIndexRouteImport } from './routes/specs/index';
 import { Route as SpecsIdRouteImport } from './routes/specs/$id';
 
@@ -78,6 +79,11 @@ const SettingsRunnersRoute = SettingsRunnersRouteImport.update({
   path: '/runners',
   getParentRoute: () => SettingsRoute,
 } as any);
+const SkillsIndexRoute = SkillsIndexRouteImport.update({
+  id: '/skills/',
+  path: '/skills/',
+  getParentRoute: () => rootRouteImport,
+} as any);
 const SpecsIndexRoute = SpecsIndexRouteImport.update({
   id: '/specs/',
   path: '/specs/',
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/specs/$id': typeof SpecsIdRoute;
   '/conversations/': typeof ConversationsIndexRoute;
   '/projects/': typeof ProjectsIndexRoute;
+  '/skills/': typeof SkillsIndexRoute;
   '/specs/': typeof SpecsIndexRoute;
 }
 export interface FileRoutesByTo {
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/specs/$id': typeof SpecsIdRoute;
   '/conversations': typeof ConversationsIndexRoute;
   '/projects': typeof ProjectsIndexRoute;
+  '/skills': typeof SkillsIndexRoute;
   '/specs': typeof SpecsIndexRoute;
 }
 export interface FileRoutesById {
@@ -133,6 +141,7 @@ export interface FileRoutesById {
   '/specs/$id': typeof SpecsIdRoute;
   '/conversations/': typeof ConversationsIndexRoute;
   '/projects/': typeof ProjectsIndexRoute;
+  '/skills/': typeof SkillsIndexRoute;
   '/specs/': typeof SpecsIndexRoute;
 }
 export interface FileRouteTypes {
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
     | '/specs/$id'
     | '/conversations/'
     | '/projects/'
+    | '/skills/'
     | '/specs/';
   fileRoutesByTo: FileRoutesByTo;
   to:
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
     | '/specs/$id'
     | '/conversations'
     | '/projects'
+    | '/skills'
     | '/specs';
   id:
     | '__root__'
@@ -180,6 +191,7 @@ export interface FileRouteTypes {
     | '/specs/$id'
     | '/conversations/'
     | '/projects/'
+    | '/skills/'
     | '/specs/';
   fileRoutesById: FileRoutesById;
 }
@@ -192,6 +204,7 @@ export interface RootRouteChildren {
   SpecsIdRoute: typeof SpecsIdRoute;
   ConversationsIndexRoute: typeof ConversationsIndexRoute;
   ProjectsIndexRoute: typeof ProjectsIndexRoute;
+  SkillsIndexRoute: typeof SkillsIndexRoute;
   SpecsIndexRoute: typeof SpecsIndexRoute;
 }
 
@@ -274,6 +287,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRunnersRouteImport;
       parentRoute: typeof SettingsRoute;
     };
+    '/skills/': {
+      id: '/skills/';
+      path: '/skills';
+      fullPath: '/skills/';
+      preLoaderRoute: typeof SkillsIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/specs/': {
       id: '/specs/';
       path: '/specs';
@@ -318,6 +338,7 @@ const rootRouteChildren: RootRouteChildren = {
   SpecsIdRoute: SpecsIdRoute,
   ConversationsIndexRoute: ConversationsIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
+  SkillsIndexRoute: SkillsIndexRoute,
   SpecsIndexRoute: SpecsIndexRoute,
 };
 export const routeTree = rootRouteImport

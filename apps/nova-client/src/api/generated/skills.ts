@@ -21,11 +21,25 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
-  ListSkills200
+  CreateSkill201,
+  CreateSkillBody,
+  DisableSkill200,
+  GetSkill200,
+  GetSkillVersion200,
+  ListAgents200,
+  ListAgentsParams,
+  ListSkillVersions200,
+  ListSkillVersionsParams,
+  ListSkills200,
+  ListSkillsParams,
+  PublishSkillVersion200,
+  PublishSkillVersionBody,
+  UpdateSkillDraft200,
+  UpdateSkillDraftBody
 } from './projectsAPI.schemas';
 
 import { apiFetch } from '../transport';
-import type { ErrorType } from '../transport';
+import type { ErrorType , BodyType } from '../transport';
 
 
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -52,17 +66,24 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getListSkillsUrl = () => {
+export const getListSkillsUrl = (params?: ListSkillsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/skills`
+  return stringifiedParams.length > 0 ? `/api/skills?${stringifiedParams}` : `/api/skills`
 }
 
-export const listSkills = async ( options?: Parameters<typeof apiFetch>[1]): Promise<ListSkills200> => {
+export const listSkills = async (params?: ListSkillsParams, options?: Parameters<typeof apiFetch>[1]): Promise<ListSkills200> => {
 
-  return apiFetch<ListSkills200>(getListSkillsUrl(),
+  return apiFetch<ListSkills200>(getListSkillsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -75,23 +96,23 @@ export const listSkills = async ( options?: Parameters<typeof apiFetch>[1]): Pro
 
 
 
-export const getListSkillsQueryKey = () => {
+export const getListSkillsQueryKey = (params?: ListSkillsParams,) => {
     return [
-    `/api/skills`
+    `/api/skills`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListSkillsQueryOptions = <TData = Awaited<ReturnType<typeof listSkills>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getListSkillsQueryOptions = <TData = Awaited<ReturnType<typeof listSkills>>, TError = ErrorType<void>>(params?: ListSkillsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListSkillsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListSkillsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSkills>>> = ({ signal }) => listSkills({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSkills>>> = ({ signal }) => listSkills(params, { signal, ...requestOptions });
 
 
 
@@ -105,7 +126,7 @@ export type ListSkillsQueryError = ErrorType<void>
 
 
 export function useListSkills<TData = Awaited<ReturnType<typeof listSkills>>, TError = ErrorType<void>>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>> & Pick<
+ params: undefined |  ListSkillsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listSkills>>,
           TError,
@@ -115,7 +136,7 @@ export function useListSkills<TData = Awaited<ReturnType<typeof listSkills>>, TE
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListSkills<TData = Awaited<ReturnType<typeof listSkills>>, TError = ErrorType<void>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>> & Pick<
+ params?: ListSkillsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listSkills>>,
           TError,
@@ -125,16 +146,854 @@ export function useListSkills<TData = Awaited<ReturnType<typeof listSkills>>, TE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListSkills<TData = Awaited<ReturnType<typeof listSkills>>, TError = ErrorType<void>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ params?: ListSkillsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
 export function useListSkills<TData = Awaited<ReturnType<typeof listSkills>>, TError = ErrorType<void>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ params?: ListSkillsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkills>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getListSkillsQueryOptions(options)
+  const queryOptions = getListSkillsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getCreateSkillUrl = () => {
+
+
+
+
+  return `/api/skills`
+}
+
+export const createSkill = async (createSkillBody: CreateSkillBody, options?: Parameters<typeof apiFetch>[1]): Promise<CreateSkill201> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<CreateSkill201>(getCreateSkillUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createSkillBody)
+  }
+);}
+
+
+
+
+
+export const getCreateSkillQueryKey = (createSkillBody?: BodyType<CreateSkillBody>,) => {
+    return [
+    'POST', `/api/skills`, createSkillBody
+    ] as const;
+    }
+
+
+export const getCreateSkillQueryOptions = <TData = Awaited<ReturnType<typeof createSkill>>, TError = ErrorType<void>>(createSkillBody: BodyType<CreateSkillBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof createSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCreateSkillQueryKey(createSkillBody);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof createSkill>>> = ({ signal }) => createSkill(createSkillBody, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof createSkill>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type CreateSkillQueryResult = NonNullable<Awaited<ReturnType<typeof createSkill>>>
+export type CreateSkillQueryError = ErrorType<void>
+
+
+export function useCreateSkill<TData = Awaited<ReturnType<typeof createSkill>>, TError = ErrorType<void>>(
+ createSkillBody: BodyType<CreateSkillBody>, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof createSkill>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof createSkill>>,
+          TError,
+          Awaited<ReturnType<typeof createSkill>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCreateSkill<TData = Awaited<ReturnType<typeof createSkill>>, TError = ErrorType<void>>(
+ createSkillBody: BodyType<CreateSkillBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof createSkill>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof createSkill>>,
+          TError,
+          Awaited<ReturnType<typeof createSkill>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCreateSkill<TData = Awaited<ReturnType<typeof createSkill>>, TError = ErrorType<void>>(
+ createSkillBody: BodyType<CreateSkillBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof createSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useCreateSkill<TData = Awaited<ReturnType<typeof createSkill>>, TError = ErrorType<void>>(
+ createSkillBody: BodyType<CreateSkillBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof createSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getCreateSkillQueryOptions(createSkillBody,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetSkillUrl = (skillId: string,) => {
+
+
+
+
+  return `/api/skills/${skillId}`
+}
+
+export const getSkill = async (skillId: string, options?: Parameters<typeof apiFetch>[1]): Promise<GetSkill200> => {
+
+  return apiFetch<GetSkill200>(getGetSkillUrl(skillId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSkillQueryKey = (skillId: string,) => {
+    return [
+    `/api/skills/${skillId}`
+    ] as const;
+    }
+
+
+export const getGetSkillQueryOptions = <TData = Awaited<ReturnType<typeof getSkill>>, TError = ErrorType<void>>(skillId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSkillQueryKey(skillId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSkill>>> = ({ signal }) => getSkill(skillId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: skillId !== null && skillId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSkill>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSkillQueryResult = NonNullable<Awaited<ReturnType<typeof getSkill>>>
+export type GetSkillQueryError = ErrorType<void>
+
+
+export function useGetSkill<TData = Awaited<ReturnType<typeof getSkill>>, TError = ErrorType<void>>(
+ skillId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkill>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSkill>>,
+          TError,
+          Awaited<ReturnType<typeof getSkill>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSkill<TData = Awaited<ReturnType<typeof getSkill>>, TError = ErrorType<void>>(
+ skillId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkill>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSkill>>,
+          TError,
+          Awaited<ReturnType<typeof getSkill>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSkill<TData = Awaited<ReturnType<typeof getSkill>>, TError = ErrorType<void>>(
+ skillId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetSkill<TData = Awaited<ReturnType<typeof getSkill>>, TError = ErrorType<void>>(
+ skillId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSkillQueryOptions(skillId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getUpdateSkillDraftUrl = (skillId: string,) => {
+
+
+
+
+  return `/api/skills/${skillId}/draft`
+}
+
+export const updateSkillDraft = async (skillId: string,
+    updateSkillDraftBody: UpdateSkillDraftBody, options?: Parameters<typeof apiFetch>[1]): Promise<UpdateSkillDraft200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<UpdateSkillDraft200>(getUpdateSkillDraftUrl(skillId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateSkillDraftBody)
+  }
+);}
+
+
+
+
+
+export const getUpdateSkillDraftQueryKey = (skillId: string,
+    updateSkillDraftBody?: BodyType<UpdateSkillDraftBody>,) => {
+    return [
+    'PATCH', `/api/skills/${skillId}/draft`, updateSkillDraftBody
+    ] as const;
+    }
+
+
+export const getUpdateSkillDraftQueryOptions = <TData = Awaited<ReturnType<typeof updateSkillDraft>>, TError = ErrorType<void>>(skillId: string,
+    updateSkillDraftBody: BodyType<UpdateSkillDraftBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateSkillDraft>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getUpdateSkillDraftQueryKey(skillId,updateSkillDraftBody);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof updateSkillDraft>>> = ({ signal }) => updateSkillDraft(skillId,updateSkillDraftBody, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: skillId !== null && skillId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof updateSkillDraft>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type UpdateSkillDraftQueryResult = NonNullable<Awaited<ReturnType<typeof updateSkillDraft>>>
+export type UpdateSkillDraftQueryError = ErrorType<void>
+
+
+export function useUpdateSkillDraft<TData = Awaited<ReturnType<typeof updateSkillDraft>>, TError = ErrorType<void>>(
+ skillId: string,
+    updateSkillDraftBody: BodyType<UpdateSkillDraftBody>, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateSkillDraft>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof updateSkillDraft>>,
+          TError,
+          Awaited<ReturnType<typeof updateSkillDraft>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUpdateSkillDraft<TData = Awaited<ReturnType<typeof updateSkillDraft>>, TError = ErrorType<void>>(
+ skillId: string,
+    updateSkillDraftBody: BodyType<UpdateSkillDraftBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateSkillDraft>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof updateSkillDraft>>,
+          TError,
+          Awaited<ReturnType<typeof updateSkillDraft>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUpdateSkillDraft<TData = Awaited<ReturnType<typeof updateSkillDraft>>, TError = ErrorType<void>>(
+ skillId: string,
+    updateSkillDraftBody: BodyType<UpdateSkillDraftBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateSkillDraft>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useUpdateSkillDraft<TData = Awaited<ReturnType<typeof updateSkillDraft>>, TError = ErrorType<void>>(
+ skillId: string,
+    updateSkillDraftBody: BodyType<UpdateSkillDraftBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateSkillDraft>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getUpdateSkillDraftQueryOptions(skillId,updateSkillDraftBody,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getPublishSkillVersionUrl = (skillId: string,) => {
+
+
+
+
+  return `/api/skills/${skillId}/versions`
+}
+
+export const publishSkillVersion = async (skillId: string,
+    publishSkillVersionBody: PublishSkillVersionBody, options?: Parameters<typeof apiFetch>[1]): Promise<PublishSkillVersion200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<PublishSkillVersion200>(getPublishSkillVersionUrl(skillId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(publishSkillVersionBody)
+  }
+);}
+
+
+
+
+
+export const getPublishSkillVersionQueryKey = (skillId: string,
+    publishSkillVersionBody?: BodyType<PublishSkillVersionBody>,) => {
+    return [
+    'POST', `/api/skills/${skillId}/versions`, publishSkillVersionBody
+    ] as const;
+    }
+
+
+export const getPublishSkillVersionQueryOptions = <TData = Awaited<ReturnType<typeof publishSkillVersion>>, TError = ErrorType<void>>(skillId: string,
+    publishSkillVersionBody: BodyType<PublishSkillVersionBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publishSkillVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPublishSkillVersionQueryKey(skillId,publishSkillVersionBody);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof publishSkillVersion>>> = ({ signal }) => publishSkillVersion(skillId,publishSkillVersionBody, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: skillId !== null && skillId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof publishSkillVersion>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PublishSkillVersionQueryResult = NonNullable<Awaited<ReturnType<typeof publishSkillVersion>>>
+export type PublishSkillVersionQueryError = ErrorType<void>
+
+
+export function usePublishSkillVersion<TData = Awaited<ReturnType<typeof publishSkillVersion>>, TError = ErrorType<void>>(
+ skillId: string,
+    publishSkillVersionBody: BodyType<PublishSkillVersionBody>, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof publishSkillVersion>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof publishSkillVersion>>,
+          TError,
+          Awaited<ReturnType<typeof publishSkillVersion>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePublishSkillVersion<TData = Awaited<ReturnType<typeof publishSkillVersion>>, TError = ErrorType<void>>(
+ skillId: string,
+    publishSkillVersionBody: BodyType<PublishSkillVersionBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publishSkillVersion>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof publishSkillVersion>>,
+          TError,
+          Awaited<ReturnType<typeof publishSkillVersion>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePublishSkillVersion<TData = Awaited<ReturnType<typeof publishSkillVersion>>, TError = ErrorType<void>>(
+ skillId: string,
+    publishSkillVersionBody: BodyType<PublishSkillVersionBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publishSkillVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function usePublishSkillVersion<TData = Awaited<ReturnType<typeof publishSkillVersion>>, TError = ErrorType<void>>(
+ skillId: string,
+    publishSkillVersionBody: BodyType<PublishSkillVersionBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof publishSkillVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPublishSkillVersionQueryOptions(skillId,publishSkillVersionBody,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListSkillVersionsUrl = (skillId: string,
+    params?: ListSkillVersionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/skills/${skillId}/versions?${stringifiedParams}` : `/api/skills/${skillId}/versions`
+}
+
+export const listSkillVersions = async (skillId: string,
+    params?: ListSkillVersionsParams, options?: Parameters<typeof apiFetch>[1]): Promise<ListSkillVersions200> => {
+
+  return apiFetch<ListSkillVersions200>(getListSkillVersionsUrl(skillId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSkillVersionsQueryKey = (skillId: string,
+    params?: ListSkillVersionsParams,) => {
+    return [
+    `/api/skills/${skillId}/versions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListSkillVersionsQueryOptions = <TData = Awaited<ReturnType<typeof listSkillVersions>>, TError = ErrorType<void>>(skillId: string,
+    params?: ListSkillVersionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkillVersions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSkillVersionsQueryKey(skillId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSkillVersions>>> = ({ signal }) => listSkillVersions(skillId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: skillId !== null && skillId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSkillVersions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListSkillVersionsQueryResult = NonNullable<Awaited<ReturnType<typeof listSkillVersions>>>
+export type ListSkillVersionsQueryError = ErrorType<void>
+
+
+export function useListSkillVersions<TData = Awaited<ReturnType<typeof listSkillVersions>>, TError = ErrorType<void>>(
+ skillId: string,
+    params: undefined |  ListSkillVersionsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkillVersions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSkillVersions>>,
+          TError,
+          Awaited<ReturnType<typeof listSkillVersions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSkillVersions<TData = Awaited<ReturnType<typeof listSkillVersions>>, TError = ErrorType<void>>(
+ skillId: string,
+    params?: ListSkillVersionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkillVersions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSkillVersions>>,
+          TError,
+          Awaited<ReturnType<typeof listSkillVersions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSkillVersions<TData = Awaited<ReturnType<typeof listSkillVersions>>, TError = ErrorType<void>>(
+ skillId: string,
+    params?: ListSkillVersionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkillVersions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListSkillVersions<TData = Awaited<ReturnType<typeof listSkillVersions>>, TError = ErrorType<void>>(
+ skillId: string,
+    params?: ListSkillVersionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSkillVersions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListSkillVersionsQueryOptions(skillId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetSkillVersionUrl = (skillId: string,
+    version: string,) => {
+
+
+
+
+  return `/api/skills/${skillId}/versions/${version}`
+}
+
+export const getSkillVersion = async (skillId: string,
+    version: string, options?: Parameters<typeof apiFetch>[1]): Promise<GetSkillVersion200> => {
+
+  return apiFetch<GetSkillVersion200>(getGetSkillVersionUrl(skillId,version),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSkillVersionQueryKey = (skillId: string,
+    version: string,) => {
+    return [
+    `/api/skills/${skillId}/versions/${version}`
+    ] as const;
+    }
+
+
+export const getGetSkillVersionQueryOptions = <TData = Awaited<ReturnType<typeof getSkillVersion>>, TError = ErrorType<void>>(skillId: string,
+    version: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkillVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSkillVersionQueryKey(skillId,version);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSkillVersion>>> = ({ signal }) => getSkillVersion(skillId,version, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: skillId !== null && skillId !== undefined && version !== null && version !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSkillVersion>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSkillVersionQueryResult = NonNullable<Awaited<ReturnType<typeof getSkillVersion>>>
+export type GetSkillVersionQueryError = ErrorType<void>
+
+
+export function useGetSkillVersion<TData = Awaited<ReturnType<typeof getSkillVersion>>, TError = ErrorType<void>>(
+ skillId: string,
+    version: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkillVersion>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSkillVersion>>,
+          TError,
+          Awaited<ReturnType<typeof getSkillVersion>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSkillVersion<TData = Awaited<ReturnType<typeof getSkillVersion>>, TError = ErrorType<void>>(
+ skillId: string,
+    version: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkillVersion>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSkillVersion>>,
+          TError,
+          Awaited<ReturnType<typeof getSkillVersion>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSkillVersion<TData = Awaited<ReturnType<typeof getSkillVersion>>, TError = ErrorType<void>>(
+ skillId: string,
+    version: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkillVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetSkillVersion<TData = Awaited<ReturnType<typeof getSkillVersion>>, TError = ErrorType<void>>(
+ skillId: string,
+    version: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSkillVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSkillVersionQueryOptions(skillId,version,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getDisableSkillUrl = (skillId: string,) => {
+
+
+
+
+  return `/api/skills/${skillId}/disable`
+}
+
+export const disableSkill = async (skillId: string, options?: Parameters<typeof apiFetch>[1]): Promise<DisableSkill200> => {
+
+  return apiFetch<DisableSkill200>(getDisableSkillUrl(skillId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDisableSkillQueryKey = (skillId: string,) => {
+    return [
+    'POST', `/api/skills/${skillId}/disable`
+    ] as const;
+    }
+
+
+export const getDisableSkillQueryOptions = <TData = Awaited<ReturnType<typeof disableSkill>>, TError = ErrorType<void>>(skillId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof disableSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDisableSkillQueryKey(skillId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof disableSkill>>> = ({ signal }) => disableSkill(skillId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: skillId !== null && skillId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof disableSkill>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DisableSkillQueryResult = NonNullable<Awaited<ReturnType<typeof disableSkill>>>
+export type DisableSkillQueryError = ErrorType<void>
+
+
+export function useDisableSkill<TData = Awaited<ReturnType<typeof disableSkill>>, TError = ErrorType<void>>(
+ skillId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof disableSkill>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof disableSkill>>,
+          TError,
+          Awaited<ReturnType<typeof disableSkill>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDisableSkill<TData = Awaited<ReturnType<typeof disableSkill>>, TError = ErrorType<void>>(
+ skillId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof disableSkill>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof disableSkill>>,
+          TError,
+          Awaited<ReturnType<typeof disableSkill>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDisableSkill<TData = Awaited<ReturnType<typeof disableSkill>>, TError = ErrorType<void>>(
+ skillId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof disableSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useDisableSkill<TData = Awaited<ReturnType<typeof disableSkill>>, TError = ErrorType<void>>(
+ skillId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof disableSkill>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDisableSkillQueryOptions(skillId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListAgentsUrl = (params?: ListAgentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/agents?${stringifiedParams}` : `/api/agents`
+}
+
+export const listAgents = async (params?: ListAgentsParams, options?: Parameters<typeof apiFetch>[1]): Promise<ListAgents200> => {
+
+  return apiFetch<ListAgents200>(getListAgentsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentsQueryKey = (params?: ListAgentsParams,) => {
+    return [
+    `/api/agents`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAgentsQueryOptions = <TData = Awaited<ReturnType<typeof listAgents>>, TError = ErrorType<void>>(params?: ListAgentsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgents>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgents>>> = ({ signal }) => listAgents(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAgentsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgents>>>
+export type ListAgentsQueryError = ErrorType<void>
+
+
+export function useListAgents<TData = Awaited<ReturnType<typeof listAgents>>, TError = ErrorType<void>>(
+ params: undefined |  ListAgentsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgents>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAgents>>,
+          TError,
+          Awaited<ReturnType<typeof listAgents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAgents<TData = Awaited<ReturnType<typeof listAgents>>, TError = ErrorType<void>>(
+ params?: ListAgentsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgents>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAgents>>,
+          TError,
+          Awaited<ReturnType<typeof listAgents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAgents<TData = Awaited<ReturnType<typeof listAgents>>, TError = ErrorType<void>>(
+ params?: ListAgentsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgents>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListAgents<TData = Awaited<ReturnType<typeof listAgents>>, TError = ErrorType<void>>(
+ params?: ListAgentsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgents>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAgentsQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

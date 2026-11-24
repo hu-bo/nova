@@ -6,7 +6,7 @@ import { okEnvelope, success } from "../../shared/response.schema.js";
 import { availableModelSchema, createUserModelProfilesService } from "../model-config/index.js";
 
 // Advertise only adapters that are wired. The client must not infer readiness from a route's existence.
-export async function clientConfigModule(app: FastifyInstance, uploadsEnabled = false): Promise<void> {
+export async function clientConfigModule(app: FastifyInstance, uploadsEnabled = false, artifactsEnabled = uploadsEnabled): Promise<void> {
   const modelProfiles = createUserModelProfilesService(app);
   app.withTypeProvider<ZodTypeProvider>().get(
     "/config",
@@ -20,6 +20,8 @@ export async function clientConfigModule(app: FastifyInstance, uploadsEnabled = 
               capabilities: z.object({
                 execution: z.boolean(),
                 uploads: z.boolean(),
+                // 产物存储能力位（P1-G1 缺口 1）：与 uploads 同桶但独立字段，解耦未来配置差异。
+                artifacts: z.boolean(),
                 remoteFiles: z.boolean(),
                 compression: z.boolean(),
                 models: z.boolean(),
@@ -36,6 +38,7 @@ export async function clientConfigModule(app: FastifyInstance, uploadsEnabled = 
         capabilities: {
           execution: app.executionEnabled,
           uploads: uploadsEnabled,
+          artifacts: artifactsEnabled,
           remoteFiles: true,
           compression: false,
           models: true,

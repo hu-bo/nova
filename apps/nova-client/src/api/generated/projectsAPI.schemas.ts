@@ -785,6 +785,9 @@ export type ListConversationMessages200ItemsItemSkillSource = typeof ListConvers
 
 export const ListConversationMessages200ItemsItemSkillSource = {
   builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
 } as const;
 
 export type ListConversationMessages200ItemsItemSkill = {
@@ -942,15 +945,17 @@ export const RenameConversation200Mode = {
   project: 'project',
 } as const;
 
-export type RenameConversation200ConfigurationAgentProfileId = typeof RenameConversation200ConfigurationAgentProfileId[keyof typeof RenameConversation200ConfigurationAgentProfileId];
-
-
-export const RenameConversation200ConfigurationAgentProfileId = {
-  chat: 'chat',
-} as const;
-
 export type RenameConversation200ConfigurationAgentProfile = {
-  id: RenameConversation200ConfigurationAgentProfileId;
+  id: 'chat';
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+} | {
+  source: 'platform' | 'runner-global' | 'runner-project';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  refId: string;
   /** @pattern ^\d+\.\d+\.\d+$ */
   version: string;
 };
@@ -1126,15 +1131,17 @@ export const ListConversations200ItemsItemMode = {
   project: 'project',
 } as const;
 
-export type ListConversations200ItemsItemConfigurationAgentProfileId = typeof ListConversations200ItemsItemConfigurationAgentProfileId[keyof typeof ListConversations200ItemsItemConfigurationAgentProfileId];
-
-
-export const ListConversations200ItemsItemConfigurationAgentProfileId = {
-  chat: 'chat',
-} as const;
-
 export type ListConversations200ItemsItemConfigurationAgentProfile = {
-  id: ListConversations200ItemsItemConfigurationAgentProfileId;
+  id: 'chat';
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+} | {
+  source: 'platform' | 'runner-global' | 'runner-project';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  refId: string;
   /** @pattern ^\d+\.\d+\.\d+$ */
   version: string;
 };
@@ -1241,15 +1248,17 @@ export const CreateConversationBodyMode = {
   project: 'project',
 } as const;
 
-export type CreateConversationBodyConfigurationAgentProfileId = typeof CreateConversationBodyConfigurationAgentProfileId[keyof typeof CreateConversationBodyConfigurationAgentProfileId];
-
-
-export const CreateConversationBodyConfigurationAgentProfileId = {
-  chat: 'chat',
-} as const;
-
 export type CreateConversationBodyConfigurationAgentProfile = {
-  id: CreateConversationBodyConfigurationAgentProfileId;
+  id: 'chat';
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+} | {
+  source: 'platform' | 'runner-global' | 'runner-project';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  refId: string;
   /** @pattern ^\d+\.\d+\.\d+$ */
   version: string;
 };
@@ -1501,15 +1510,17 @@ export const CreateConversation200Mode = {
   project: 'project',
 } as const;
 
-export type CreateConversation200ConfigurationAgentProfileId = typeof CreateConversation200ConfigurationAgentProfileId[keyof typeof CreateConversation200ConfigurationAgentProfileId];
-
-
-export const CreateConversation200ConfigurationAgentProfileId = {
-  chat: 'chat',
-} as const;
-
 export type CreateConversation200ConfigurationAgentProfile = {
-  id: CreateConversation200ConfigurationAgentProfileId;
+  id: 'chat';
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+} | {
+  source: 'platform' | 'runner-global' | 'runner-project';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  refId: string;
   /** @pattern ^\d+\.\d+\.\d+$ */
   version: string;
 };
@@ -1624,15 +1635,17 @@ export const GetConversationSnapshot200ConversationMode = {
   project: 'project',
 } as const;
 
-export type GetConversationSnapshot200ConversationConfigurationAgentProfileId = typeof GetConversationSnapshot200ConversationConfigurationAgentProfileId[keyof typeof GetConversationSnapshot200ConversationConfigurationAgentProfileId];
-
-
-export const GetConversationSnapshot200ConversationConfigurationAgentProfileId = {
-  chat: 'chat',
-} as const;
-
 export type GetConversationSnapshot200ConversationConfigurationAgentProfile = {
-  id: GetConversationSnapshot200ConversationConfigurationAgentProfileId;
+  id: 'chat';
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+} | {
+  source: 'platform' | 'runner-global' | 'runner-project';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  refId: string;
   /** @pattern ^\d+\.\d+\.\d+$ */
   version: string;
 };
@@ -2152,6 +2165,9 @@ export type GetConversationSnapshot200MessagesItemSkillSource = typeof GetConver
 
 export const GetConversationSnapshot200MessagesItemSkillSource = {
   builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
 } as const;
 
 export type GetConversationSnapshot200MessagesItemSkill = {
@@ -2245,6 +2261,29 @@ export type GetConversationSnapshot200RunError = {
   recovery?: GetConversationSnapshot200RunErrorRecovery;
 };
 
+export type GetConversationSnapshot200RunSkillSource = typeof GetConversationSnapshot200RunSkillSource[keyof typeof GetConversationSnapshot200RunSkillSource];
+
+
+export const GetConversationSnapshot200RunSkillSource = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type GetConversationSnapshot200RunSkill = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  name: string;
+  description: string;
+  source: GetConversationSnapshot200RunSkillSource;
+};
+
 /**
  * @nullable
  */
@@ -2258,6 +2297,7 @@ export type GetConversationSnapshot200Run = {
   reason?: string;
   waiting?: GetConversationSnapshot200RunWaiting;
   error?: GetConversationSnapshot200RunError;
+  skill?: GetConversationSnapshot200RunSkill;
 } | null;
 
 export type GetConversationSnapshot200OperationsItemState = typeof GetConversationSnapshot200OperationsItemState[keyof typeof GetConversationSnapshot200OperationsItemState];
@@ -2566,15 +2606,17 @@ export const GetConversationSnapshot200PendingInputsItemInputMode = {
   steer: 'steer',
 } as const;
 
-export type GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId = typeof GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId[keyof typeof GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId];
-
-
-export const GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId = {
-  chat: 'chat',
-} as const;
-
 export type GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfile = {
-  id: GetConversationSnapshot200PendingInputsItemInputConfigurationAgentProfileId;
+  id: 'chat';
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+} | {
+  source: 'platform' | 'runner-global' | 'runner-project';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  refId: string;
   /** @pattern ^\d+\.\d+\.\d+$ */
   version: string;
 };
@@ -2755,6 +2797,106 @@ export type GetConversationSnapshot200Usage = {
   contextLimit?: number;
 };
 
+export type GetConversationSnapshot200ArtifactsItemState = typeof GetConversationSnapshot200ArtifactsItemState[keyof typeof GetConversationSnapshot200ArtifactsItemState];
+
+
+export const GetConversationSnapshot200ArtifactsItemState = {
+  publishing: 'publishing',
+  ready: 'ready',
+  failed: 'failed',
+} as const;
+
+export type GetConversationSnapshot200ArtifactsItemPreview = typeof GetConversationSnapshot200ArtifactsItemPreview[keyof typeof GetConversationSnapshot200ArtifactsItemPreview];
+
+
+export const GetConversationSnapshot200ArtifactsItemPreview = {
+  markdown: 'markdown',
+  text: 'text',
+  image: 'image',
+  download: 'download',
+} as const;
+
+export type GetConversationSnapshot200ArtifactsItemRunState = typeof GetConversationSnapshot200ArtifactsItemRunState[keyof typeof GetConversationSnapshot200ArtifactsItemRunState];
+
+
+export const GetConversationSnapshot200ArtifactsItemRunState = {
+  queued: 'queued',
+  running: 'running',
+  waiting: 'waiting',
+  paused: 'paused',
+  cancelling: 'cancelling',
+  succeeded: 'succeeded',
+  budget_exhausted: 'budget_exhausted',
+  failed: 'failed',
+  timed_out: 'timed_out',
+  cancelled: 'cancelled',
+  cancelled_unconfirmed: 'cancelled_unconfirmed',
+} as const;
+
+export type GetConversationSnapshot200ArtifactsItemErrorRecovery = typeof GetConversationSnapshot200ArtifactsItemErrorRecovery[keyof typeof GetConversationSnapshot200ArtifactsItemErrorRecovery];
+
+
+export const GetConversationSnapshot200ArtifactsItemErrorRecovery = {
+  retry: 'retry',
+  reconfigure: 'reconfigure',
+  inspect: 'inspect',
+} as const;
+
+export type GetConversationSnapshot200ArtifactsItemError = {
+  /** @minLength 1 */
+  code: string;
+  /** @minLength 1 */
+  message: string;
+  recovery?: GetConversationSnapshot200ArtifactsItemErrorRecovery;
+};
+
+export type GetConversationSnapshot200ArtifactsItem = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  runId: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  skillVersionId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  mimeType: string;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  size: number;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256: string | null;
+  state: GetConversationSnapshot200ArtifactsItemState;
+  preview: GetConversationSnapshot200ArtifactsItemPreview;
+  runState: GetConversationSnapshot200ArtifactsItemRunState;
+  error?: GetConversationSnapshot200ArtifactsItemError;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  updatedAt: string;
+};
+
 export type GetConversationSnapshot200Capabilities = {
   tools: boolean;
   approval: boolean;
@@ -2826,6 +2968,7 @@ export type GetConversationSnapshot200 = {
   /** @nullable */
   goal?: GetConversationSnapshot200Goal;
   usage?: GetConversationSnapshot200Usage;
+  artifacts?: GetConversationSnapshot200ArtifactsItem[];
   capabilities: GetConversationSnapshot200Capabilities;
   /** @nullable */
   binding: GetConversationSnapshot200Binding;
@@ -2977,15 +3120,17 @@ export const AppendConversationInputBodyMode = {
   steer: 'steer',
 } as const;
 
-export type AppendConversationInputBodyConfigurationAgentProfileId = typeof AppendConversationInputBodyConfigurationAgentProfileId[keyof typeof AppendConversationInputBodyConfigurationAgentProfileId];
-
-
-export const AppendConversationInputBodyConfigurationAgentProfileId = {
-  chat: 'chat',
-} as const;
-
 export type AppendConversationInputBodyConfigurationAgentProfile = {
-  id: AppendConversationInputBodyConfigurationAgentProfileId;
+  id: 'chat';
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+} | {
+  source: 'platform' | 'runner-global' | 'runner-project';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  refId: string;
   /** @pattern ^\d+\.\d+\.\d+$ */
   version: string;
 };
@@ -3118,12 +3263,141 @@ export type RemoveConversationInput200 = typeof RemoveConversationInput200[keyof
 export const RemoveConversationInput200 = {
 } as const;
 
+export type ListSkillsParams = {
+/**
+ * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ */
+conversationId?: string;
+/**
+ * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ */
+projectId?: string;
+/**
+ * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ */
+runnerId?: string;
+source?: ListSkillsSource;
+/**
+ * @minLength 1
+ * @maxLength 128
+ */
+q?: string;
+/**
+ * @maxLength 256
+ */
+cursor?: string;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListSkillsSource = typeof ListSkillsSource[keyof typeof ListSkillsSource];
+
+
+export const ListSkillsSource = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
 export type ListSkills200ItemsItemSource = typeof ListSkills200ItemsItemSource[keyof typeof ListSkills200ItemsItemSource];
 
 
 export const ListSkills200ItemsItemSource = {
   builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
 } as const;
+
+export type ListSkills200ItemsItemRequirementsAllowedModesItem = typeof ListSkills200ItemsItemRequirementsAllowedModesItem[keyof typeof ListSkills200ItemsItemRequirementsAllowedModesItem];
+
+
+export const ListSkills200ItemsItemRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type ListSkills200ItemsItemRequirements = {
+  /** @minItems 1 */
+  allowedModes: ListSkills200ItemsItemRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+export type ListSkills200ItemsItemApplicabilityStatus = typeof ListSkills200ItemsItemApplicabilityStatus[keyof typeof ListSkills200ItemsItemApplicabilityStatus];
+
+
+export const ListSkills200ItemsItemApplicabilityStatus = {
+  available: 'available',
+  unavailable: 'unavailable',
+  unverified: 'unverified',
+} as const;
+
+export type ListSkills200ItemsItemApplicabilityReasonsItemCode = typeof ListSkills200ItemsItemApplicabilityReasonsItemCode[keyof typeof ListSkills200ItemsItemApplicabilityReasonsItemCode];
+
+
+export const ListSkills200ItemsItemApplicabilityReasonsItemCode = {
+  disabled: 'disabled',
+  version_unavailable: 'version_unavailable',
+  mode_not_allowed: 'mode_not_allowed',
+  tools_unavailable: 'tools_unavailable',
+  workspace_required: 'workspace_required',
+  storage_unavailable: 'storage_unavailable',
+  runner_offline: 'runner_offline',
+  runner_unsupported: 'runner_unsupported',
+  catalog_incomplete: 'catalog_incomplete',
+  budget_exceeded: 'budget_exceeded',
+  platform_not_supported: 'platform_not_supported',
+  out_of_scope: 'out_of_scope',
+} as const;
+
+export type ListSkills200ItemsItemApplicabilityReasonsItem = {
+  code: ListSkills200ItemsItemApplicabilityReasonsItemCode;
+  /** @minLength 1 */
+  message: string;
+};
+
+export type ListSkills200ItemsItemApplicability = {
+  status: ListSkills200ItemsItemApplicabilityStatus;
+  reasons: ListSkills200ItemsItemApplicabilityReasonsItem[];
+};
+
+export type ListSkills200ItemsItemShadowedBySource = typeof ListSkills200ItemsItemShadowedBySource[keyof typeof ListSkills200ItemsItemShadowedBySource];
+
+
+export const ListSkills200ItemsItemShadowedBySource = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type ListSkills200ItemsItemShadowedBy = {
+  name: string;
+  source: ListSkills200ItemsItemShadowedBySource;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  runnerId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  projectId: string | null;
+};
 
 export type ListSkills200ItemsItem = {
   /**
@@ -3136,10 +3410,1182 @@ export type ListSkills200ItemsItem = {
   name: string;
   description: string;
   source: ListSkills200ItemsItemSource;
+  requirements: ListSkills200ItemsItemRequirements;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  runnerId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  workspaceId: string | null;
+  /**
+     * @maxLength 1024
+     * @nullable
+     */
+  cwd: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256: string | null;
+  applicability: ListSkills200ItemsItemApplicability;
+  disabled: boolean;
+  shadowedBy?: ListSkills200ItemsItemShadowedBy;
 };
+
+export type ListSkills200CatalogStatus = typeof ListSkills200CatalogStatus[keyof typeof ListSkills200CatalogStatus];
+
+
+export const ListSkills200CatalogStatus = {
+  ready: 'ready',
+  scanning: 'scanning',
+  incomplete: 'incomplete',
+  stale: 'stale',
+  offline: 'offline',
+  unsupported: 'unsupported',
+} as const;
+
+export type ListSkills200CatalogDiagnosticsItemCode = typeof ListSkills200CatalogDiagnosticsItemCode[keyof typeof ListSkills200CatalogDiagnosticsItemCode];
+
+
+export const ListSkills200CatalogDiagnosticsItemCode = {
+  missing_home: 'missing_home',
+  permission_denied: 'permission_denied',
+  invalid_frontmatter: 'invalid_frontmatter',
+  file_too_large: 'file_too_large',
+  duplicate_name: 'duplicate_name',
+  path_escape: 'path_escape',
+  truncated: 'truncated',
+  scan_timeout: 'scan_timeout',
+  scan_error: 'scan_error',
+} as const;
+
+export type ListSkills200CatalogDiagnosticsItem = {
+  code: ListSkills200CatalogDiagnosticsItemCode;
+  /** @minLength 1 */
+  message: string;
+  name?: string;
+  path?: string;
+};
+
+/**
+ * @nullable
+ */
+export type ListSkills200Catalog = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  runnerId: string;
+  status: ListSkills200CatalogStatus;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  revision: number;
+  complete: boolean;
+  diagnostics: ListSkills200CatalogDiagnosticsItem[];
+} | null;
 
 export type ListSkills200 = {
   items: ListSkills200ItemsItem[];
+  /** @nullable */
+  nextCursor: string | null;
+  /** @nullable */
+  catalog: ListSkills200Catalog;
+};
+
+export type CreateSkillBodyRequirementsAllowedModesItem = typeof CreateSkillBodyRequirementsAllowedModesItem[keyof typeof CreateSkillBodyRequirementsAllowedModesItem];
+
+
+export const CreateSkillBodyRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type CreateSkillBodyRequirements = {
+  /** @minItems 1 */
+  allowedModes?: CreateSkillBodyRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools?: string[];
+  requiresWorkspace?: boolean;
+  requiresPublishing?: boolean;
+};
+
+export type CreateSkillBody = {
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  projectId?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 262144
+     */
+  body: string;
+  requirements?: CreateSkillBodyRequirements;
+};
+
+export type CreateSkill201Source = typeof CreateSkill201Source[keyof typeof CreateSkill201Source];
+
+
+export const CreateSkill201Source = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type CreateSkill201CurrentPublishedRequirementsAllowedModesItem = typeof CreateSkill201CurrentPublishedRequirementsAllowedModesItem[keyof typeof CreateSkill201CurrentPublishedRequirementsAllowedModesItem];
+
+
+export const CreateSkill201CurrentPublishedRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type CreateSkill201CurrentPublishedRequirements = {
+  /** @minItems 1 */
+  allowedModes: CreateSkill201CurrentPublishedRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+/**
+ * @nullable
+ */
+export type CreateSkill201CurrentPublished = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  slug: string;
+  description: string;
+  /** @nullable */
+  displayName: string | null;
+  requirements: CreateSkill201CurrentPublishedRequirements;
+  sha256: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+} | null;
+
+export type CreateSkill201DraftRequirementsAllowedModesItem = typeof CreateSkill201DraftRequirementsAllowedModesItem[keyof typeof CreateSkill201DraftRequirementsAllowedModesItem];
+
+
+export const CreateSkill201DraftRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type CreateSkill201DraftRequirements = {
+  /** @minItems 1 */
+  allowedModes: CreateSkill201DraftRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+/**
+ * @nullable
+ */
+export type CreateSkill201Draft = {
+  body: string;
+  requirements: CreateSkill201DraftRequirements;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+} | null;
+
+export type CreateSkill201 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  slug: string;
+  /** @nullable */
+  displayName: string | null;
+  description: string;
+  source: CreateSkill201Source;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  projectId: string | null;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  draftRevision: number;
+  disabled: boolean;
+  /** @nullable */
+  currentPublished: CreateSkill201CurrentPublished;
+  /** @nullable */
+  draft: CreateSkill201Draft;
+};
+
+export type GetSkill200Source = typeof GetSkill200Source[keyof typeof GetSkill200Source];
+
+
+export const GetSkill200Source = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type GetSkill200CurrentPublishedRequirementsAllowedModesItem = typeof GetSkill200CurrentPublishedRequirementsAllowedModesItem[keyof typeof GetSkill200CurrentPublishedRequirementsAllowedModesItem];
+
+
+export const GetSkill200CurrentPublishedRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type GetSkill200CurrentPublishedRequirements = {
+  /** @minItems 1 */
+  allowedModes: GetSkill200CurrentPublishedRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+/**
+ * @nullable
+ */
+export type GetSkill200CurrentPublished = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  slug: string;
+  description: string;
+  /** @nullable */
+  displayName: string | null;
+  requirements: GetSkill200CurrentPublishedRequirements;
+  sha256: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+} | null;
+
+export type GetSkill200DraftRequirementsAllowedModesItem = typeof GetSkill200DraftRequirementsAllowedModesItem[keyof typeof GetSkill200DraftRequirementsAllowedModesItem];
+
+
+export const GetSkill200DraftRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type GetSkill200DraftRequirements = {
+  /** @minItems 1 */
+  allowedModes: GetSkill200DraftRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+/**
+ * @nullable
+ */
+export type GetSkill200Draft = {
+  body: string;
+  requirements: GetSkill200DraftRequirements;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+} | null;
+
+export type GetSkill200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  slug: string;
+  /** @nullable */
+  displayName: string | null;
+  description: string;
+  source: GetSkill200Source;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  projectId: string | null;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  draftRevision: number;
+  disabled: boolean;
+  /** @nullable */
+  currentPublished: GetSkill200CurrentPublished;
+  /** @nullable */
+  draft: GetSkill200Draft;
+};
+
+export type UpdateSkillDraftBodyRequirementsAllowedModesItem = typeof UpdateSkillDraftBodyRequirementsAllowedModesItem[keyof typeof UpdateSkillDraftBodyRequirementsAllowedModesItem];
+
+
+export const UpdateSkillDraftBodyRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type UpdateSkillDraftBodyRequirements = {
+  /** @minItems 1 */
+  allowedModes?: UpdateSkillDraftBodyRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools?: string[];
+  requiresWorkspace?: boolean;
+  requiresPublishing?: boolean;
+};
+
+export type UpdateSkillDraftBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+  /**
+     * @minLength 1
+     * @maxLength 262144
+     */
+  body: string;
+  requirements?: UpdateSkillDraftBodyRequirements;
+};
+
+export type UpdateSkillDraft200Source = typeof UpdateSkillDraft200Source[keyof typeof UpdateSkillDraft200Source];
+
+
+export const UpdateSkillDraft200Source = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type UpdateSkillDraft200CurrentPublishedRequirementsAllowedModesItem = typeof UpdateSkillDraft200CurrentPublishedRequirementsAllowedModesItem[keyof typeof UpdateSkillDraft200CurrentPublishedRequirementsAllowedModesItem];
+
+
+export const UpdateSkillDraft200CurrentPublishedRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type UpdateSkillDraft200CurrentPublishedRequirements = {
+  /** @minItems 1 */
+  allowedModes: UpdateSkillDraft200CurrentPublishedRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+/**
+ * @nullable
+ */
+export type UpdateSkillDraft200CurrentPublished = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  slug: string;
+  description: string;
+  /** @nullable */
+  displayName: string | null;
+  requirements: UpdateSkillDraft200CurrentPublishedRequirements;
+  sha256: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+} | null;
+
+export type UpdateSkillDraft200DraftRequirementsAllowedModesItem = typeof UpdateSkillDraft200DraftRequirementsAllowedModesItem[keyof typeof UpdateSkillDraft200DraftRequirementsAllowedModesItem];
+
+
+export const UpdateSkillDraft200DraftRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type UpdateSkillDraft200DraftRequirements = {
+  /** @minItems 1 */
+  allowedModes: UpdateSkillDraft200DraftRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+/**
+ * @nullable
+ */
+export type UpdateSkillDraft200Draft = {
+  body: string;
+  requirements: UpdateSkillDraft200DraftRequirements;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+} | null;
+
+export type UpdateSkillDraft200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  slug: string;
+  /** @nullable */
+  displayName: string | null;
+  description: string;
+  source: UpdateSkillDraft200Source;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  projectId: string | null;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  draftRevision: number;
+  disabled: boolean;
+  /** @nullable */
+  currentPublished: UpdateSkillDraft200CurrentPublished;
+  /** @nullable */
+  draft: UpdateSkillDraft200Draft;
+};
+
+export type PublishSkillVersionBody = {
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  expectedRevision: number;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+};
+
+export type PublishSkillVersion200RequirementsAllowedModesItem = typeof PublishSkillVersion200RequirementsAllowedModesItem[keyof typeof PublishSkillVersion200RequirementsAllowedModesItem];
+
+
+export const PublishSkillVersion200RequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type PublishSkillVersion200Requirements = {
+  /** @minItems 1 */
+  allowedModes: PublishSkillVersion200RequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+export type PublishSkillVersion200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  slug: string;
+  description: string;
+  /** @nullable */
+  displayName: string | null;
+  requirements: PublishSkillVersion200Requirements;
+  sha256: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+};
+
+export type ListSkillVersionsParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * @maxLength 256
+ */
+cursor?: string;
+};
+
+export type ListSkillVersions200ItemsItemRequirementsAllowedModesItem = typeof ListSkillVersions200ItemsItemRequirementsAllowedModesItem[keyof typeof ListSkillVersions200ItemsItemRequirementsAllowedModesItem];
+
+
+export const ListSkillVersions200ItemsItemRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type ListSkillVersions200ItemsItemRequirements = {
+  /** @minItems 1 */
+  allowedModes: ListSkillVersions200ItemsItemRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+export type ListSkillVersions200ItemsItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  slug: string;
+  description: string;
+  /** @nullable */
+  displayName: string | null;
+  requirements: ListSkillVersions200ItemsItemRequirements;
+  sha256: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+};
+
+export type ListSkillVersions200 = {
+  items: ListSkillVersions200ItemsItem[];
+  /** @nullable */
+  nextCursor: string | null;
+};
+
+export type GetSkillVersion200Source = typeof GetSkillVersion200Source[keyof typeof GetSkillVersion200Source];
+
+
+export const GetSkillVersion200Source = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type GetSkillVersion200RequirementsAllowedModesItem = typeof GetSkillVersion200RequirementsAllowedModesItem[keyof typeof GetSkillVersion200RequirementsAllowedModesItem];
+
+
+export const GetSkillVersion200RequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type GetSkillVersion200Requirements = {
+  /** @minItems 1 */
+  allowedModes: GetSkillVersion200RequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+export type GetSkillVersion200ApplicabilityStatus = typeof GetSkillVersion200ApplicabilityStatus[keyof typeof GetSkillVersion200ApplicabilityStatus];
+
+
+export const GetSkillVersion200ApplicabilityStatus = {
+  available: 'available',
+  unavailable: 'unavailable',
+  unverified: 'unverified',
+} as const;
+
+export type GetSkillVersion200ApplicabilityReasonsItemCode = typeof GetSkillVersion200ApplicabilityReasonsItemCode[keyof typeof GetSkillVersion200ApplicabilityReasonsItemCode];
+
+
+export const GetSkillVersion200ApplicabilityReasonsItemCode = {
+  disabled: 'disabled',
+  version_unavailable: 'version_unavailable',
+  mode_not_allowed: 'mode_not_allowed',
+  tools_unavailable: 'tools_unavailable',
+  workspace_required: 'workspace_required',
+  storage_unavailable: 'storage_unavailable',
+  runner_offline: 'runner_offline',
+  runner_unsupported: 'runner_unsupported',
+  catalog_incomplete: 'catalog_incomplete',
+  budget_exceeded: 'budget_exceeded',
+  platform_not_supported: 'platform_not_supported',
+  out_of_scope: 'out_of_scope',
+} as const;
+
+export type GetSkillVersion200ApplicabilityReasonsItem = {
+  code: GetSkillVersion200ApplicabilityReasonsItemCode;
+  /** @minLength 1 */
+  message: string;
+};
+
+export type GetSkillVersion200Applicability = {
+  status: GetSkillVersion200ApplicabilityStatus;
+  reasons: GetSkillVersion200ApplicabilityReasonsItem[];
+};
+
+export type GetSkillVersion200ShadowedBySource = typeof GetSkillVersion200ShadowedBySource[keyof typeof GetSkillVersion200ShadowedBySource];
+
+
+export const GetSkillVersion200ShadowedBySource = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type GetSkillVersion200ShadowedBy = {
+  name: string;
+  source: GetSkillVersion200ShadowedBySource;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  runnerId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  projectId: string | null;
+};
+
+export type GetSkillVersion200ResourcesItem = {
+  /**
+     * @minLength 1
+     * @maxLength 512
+     */
+  path: string;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  size: number;
+  /** @pattern ^[a-f0-9]{64}$ */
+  sha256: string;
+};
+
+export type GetSkillVersion200DiagnosticsItemCode = typeof GetSkillVersion200DiagnosticsItemCode[keyof typeof GetSkillVersion200DiagnosticsItemCode];
+
+
+export const GetSkillVersion200DiagnosticsItemCode = {
+  missing_home: 'missing_home',
+  permission_denied: 'permission_denied',
+  invalid_frontmatter: 'invalid_frontmatter',
+  file_too_large: 'file_too_large',
+  duplicate_name: 'duplicate_name',
+  path_escape: 'path_escape',
+  truncated: 'truncated',
+  scan_timeout: 'scan_timeout',
+  scan_error: 'scan_error',
+} as const;
+
+export type GetSkillVersion200DiagnosticsItem = {
+  code: GetSkillVersion200DiagnosticsItemCode;
+  /** @minLength 1 */
+  message: string;
+  name?: string;
+  path?: string;
+};
+
+export type GetSkillVersion200 = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  name: string;
+  description: string;
+  source: GetSkillVersion200Source;
+  requirements: GetSkillVersion200Requirements;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  runnerId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  workspaceId: string | null;
+  /**
+     * @maxLength 1024
+     * @nullable
+     */
+  cwd: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256: string | null;
+  applicability: GetSkillVersion200Applicability;
+  disabled: boolean;
+  shadowedBy?: GetSkillVersion200ShadowedBy;
+  body: string;
+  resources: GetSkillVersion200ResourcesItem[];
+  diagnostics: GetSkillVersion200DiagnosticsItem[];
+};
+
+export type DisableSkill200Source = typeof DisableSkill200Source[keyof typeof DisableSkill200Source];
+
+
+export const DisableSkill200Source = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type DisableSkill200CurrentPublishedRequirementsAllowedModesItem = typeof DisableSkill200CurrentPublishedRequirementsAllowedModesItem[keyof typeof DisableSkill200CurrentPublishedRequirementsAllowedModesItem];
+
+
+export const DisableSkill200CurrentPublishedRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type DisableSkill200CurrentPublishedRequirements = {
+  /** @minItems 1 */
+  allowedModes: DisableSkill200CurrentPublishedRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+/**
+ * @nullable
+ */
+export type DisableSkill200CurrentPublished = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  slug: string;
+  description: string;
+  /** @nullable */
+  displayName: string | null;
+  requirements: DisableSkill200CurrentPublishedRequirements;
+  sha256: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+} | null;
+
+export type DisableSkill200DraftRequirementsAllowedModesItem = typeof DisableSkill200DraftRequirementsAllowedModesItem[keyof typeof DisableSkill200DraftRequirementsAllowedModesItem];
+
+
+export const DisableSkill200DraftRequirementsAllowedModesItem = {
+  plan: 'plan',
+  build: 'build',
+  auto: 'auto',
+} as const;
+
+export type DisableSkill200DraftRequirements = {
+  /** @minItems 1 */
+  allowedModes: DisableSkill200DraftRequirementsAllowedModesItem[];
+  /**
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  requiredTools: string[];
+  requiresWorkspace: boolean;
+  requiresPublishing: boolean;
+};
+
+/**
+ * @nullable
+ */
+export type DisableSkill200Draft = {
+  body: string;
+  requirements: DisableSkill200DraftRequirements;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  revision: number;
+} | null;
+
+export type DisableSkill200 = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  id: string;
+  slug: string;
+  /** @nullable */
+  displayName: string | null;
+  description: string;
+  source: DisableSkill200Source;
+  /**
+     * @nullable
+     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     */
+  projectId: string | null;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  draftRevision: number;
+  disabled: boolean;
+  /** @nullable */
+  currentPublished: DisableSkill200CurrentPublished;
+  /** @nullable */
+  draft: DisableSkill200Draft;
+};
+
+export type ListAgentsParams = {
+/**
+ * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ */
+conversationId?: string;
+/**
+ * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ */
+projectId?: string;
+};
+
+export type ListAgents200ItemsItemSource = typeof ListAgents200ItemsItemSource[keyof typeof ListAgents200ItemsItemSource];
+
+
+export const ListAgents200ItemsItemSource = {
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type ListAgents200ItemsItemIncompatibilitiesItemCode = typeof ListAgents200ItemsItemIncompatibilitiesItemCode[keyof typeof ListAgents200ItemsItemIncompatibilitiesItemCode];
+
+
+export const ListAgents200ItemsItemIncompatibilitiesItemCode = {
+  disabled: 'disabled',
+  version_unavailable: 'version_unavailable',
+  mode_not_allowed: 'mode_not_allowed',
+  tools_unavailable: 'tools_unavailable',
+  workspace_required: 'workspace_required',
+  storage_unavailable: 'storage_unavailable',
+  runner_offline: 'runner_offline',
+  runner_unsupported: 'runner_unsupported',
+  catalog_incomplete: 'catalog_incomplete',
+  budget_exceeded: 'budget_exceeded',
+  platform_not_supported: 'platform_not_supported',
+  out_of_scope: 'out_of_scope',
+} as const;
+
+export type ListAgents200ItemsItemIncompatibilitiesItem = {
+  code: ListAgents200ItemsItemIncompatibilitiesItemCode;
+  /** @minLength 1 */
+  message: string;
+};
+
+export type ListAgents200ItemsItem = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  refId: string;
+  name: string;
+  description: string;
+  source: ListAgents200ItemsItemSource;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  suggestedSkill?: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  modelId?: string;
+  incompatibilities: ListAgents200ItemsItemIncompatibilitiesItem[];
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  runnerId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  workspaceId: string | null;
+  /**
+     * @maxLength 1024
+     * @nullable
+     */
+  cwd: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256: string | null;
+};
+
+export type ListAgents200CatalogStatus = typeof ListAgents200CatalogStatus[keyof typeof ListAgents200CatalogStatus];
+
+
+export const ListAgents200CatalogStatus = {
+  ready: 'ready',
+  scanning: 'scanning',
+  incomplete: 'incomplete',
+  stale: 'stale',
+  offline: 'offline',
+  unsupported: 'unsupported',
+} as const;
+
+export type ListAgents200CatalogDiagnosticsItemCode = typeof ListAgents200CatalogDiagnosticsItemCode[keyof typeof ListAgents200CatalogDiagnosticsItemCode];
+
+
+export const ListAgents200CatalogDiagnosticsItemCode = {
+  missing_home: 'missing_home',
+  permission_denied: 'permission_denied',
+  invalid_frontmatter: 'invalid_frontmatter',
+  file_too_large: 'file_too_large',
+  duplicate_name: 'duplicate_name',
+  path_escape: 'path_escape',
+  truncated: 'truncated',
+  scan_timeout: 'scan_timeout',
+  scan_error: 'scan_error',
+} as const;
+
+export type ListAgents200CatalogDiagnosticsItem = {
+  code: ListAgents200CatalogDiagnosticsItemCode;
+  /** @minLength 1 */
+  message: string;
+  name?: string;
+  path?: string;
+};
+
+/**
+ * @nullable
+ */
+export type ListAgents200Catalog = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  runnerId: string;
+  status: ListAgents200CatalogStatus;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  revision: number;
+  complete: boolean;
+  diagnostics: ListAgents200CatalogDiagnosticsItem[];
+} | null;
+
+export type ListAgents200 = {
+  items: ListAgents200ItemsItem[];
+  /** @nullable */
+  catalog: ListAgents200Catalog;
+};
+
+export type ListConversationArtifactsParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * @maxLength 256
+ */
+cursor?: string;
+};
+
+export type ListConversationArtifacts200ItemsItemState = typeof ListConversationArtifacts200ItemsItemState[keyof typeof ListConversationArtifacts200ItemsItemState];
+
+
+export const ListConversationArtifacts200ItemsItemState = {
+  publishing: 'publishing',
+  ready: 'ready',
+  failed: 'failed',
+} as const;
+
+export type ListConversationArtifacts200ItemsItemPreview = typeof ListConversationArtifacts200ItemsItemPreview[keyof typeof ListConversationArtifacts200ItemsItemPreview];
+
+
+export const ListConversationArtifacts200ItemsItemPreview = {
+  markdown: 'markdown',
+  text: 'text',
+  image: 'image',
+  download: 'download',
+} as const;
+
+export type ListConversationArtifacts200ItemsItemRunState = typeof ListConversationArtifacts200ItemsItemRunState[keyof typeof ListConversationArtifacts200ItemsItemRunState];
+
+
+export const ListConversationArtifacts200ItemsItemRunState = {
+  queued: 'queued',
+  running: 'running',
+  waiting: 'waiting',
+  paused: 'paused',
+  cancelling: 'cancelling',
+  succeeded: 'succeeded',
+  budget_exhausted: 'budget_exhausted',
+  failed: 'failed',
+  timed_out: 'timed_out',
+  cancelled: 'cancelled',
+  cancelled_unconfirmed: 'cancelled_unconfirmed',
+} as const;
+
+export type ListConversationArtifacts200ItemsItemErrorRecovery = typeof ListConversationArtifacts200ItemsItemErrorRecovery[keyof typeof ListConversationArtifacts200ItemsItemErrorRecovery];
+
+
+export const ListConversationArtifacts200ItemsItemErrorRecovery = {
+  retry: 'retry',
+  reconfigure: 'reconfigure',
+  inspect: 'inspect',
+} as const;
+
+export type ListConversationArtifacts200ItemsItemError = {
+  /** @minLength 1 */
+  code: string;
+  /** @minLength 1 */
+  message: string;
+  recovery?: ListConversationArtifacts200ItemsItemErrorRecovery;
+};
+
+export type ListConversationArtifacts200ItemsItem = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  runId: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @nullable
+     */
+  skillVersionId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  mimeType: string;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  size: number;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256: string | null;
+  state: ListConversationArtifacts200ItemsItemState;
+  preview: ListConversationArtifacts200ItemsItemPreview;
+  runState: ListConversationArtifacts200ItemsItemRunState;
+  error?: ListConversationArtifacts200ItemsItemError;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  updatedAt: string;
+};
+
+export type ListConversationArtifacts200 = {
+  items: ListConversationArtifacts200ItemsItem[];
+  /** @nullable */
+  nextCursor: string | null;
+};
+
+export type DownloadArtifact200State = typeof DownloadArtifact200State[keyof typeof DownloadArtifact200State];
+
+
+export const DownloadArtifact200State = {
+  ready: 'ready',
+} as const;
+
+export type DownloadArtifact200 = {
+  name: string;
+  mimeType: string;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  size: number;
+  state: DownloadArtifact200State;
+  url: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  expiresAt: string;
+};
+
+export type PreviewArtifact200 = {
+  kind: 'markdown' | 'text';
+  name: string;
+  mimeType: string;
+  text: string;
+  truncated: boolean;
+} | {
+  kind: 'image';
+  name: string;
+  mimeType: string;
+  url: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  expiresAt: string;
+} | {
+  kind: 'download';
+  name: string;
+  mimeType: string;
 };
 
 export type ListSpecsParams = {
@@ -4855,6 +6301,73 @@ export type SummariseRunnerFiles200 = {
   items: SummariseRunnerFiles200ItemsItem[];
 };
 
+export type RefreshRunnerResourcesBodyScope = typeof RefreshRunnerResourcesBodyScope[keyof typeof RefreshRunnerResourcesBodyScope];
+
+
+export const RefreshRunnerResourcesBodyScope = {
+  global: 'global',
+  project: 'project',
+} as const;
+
+export type RefreshRunnerResourcesBody = {
+  scope: RefreshRunnerResourcesBodyScope;
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  workspaceId?: string;
+  /** @maxLength 1024 */
+  relativeDir?: string;
+};
+
+export type RefreshRunnerResources200Status = typeof RefreshRunnerResources200Status[keyof typeof RefreshRunnerResources200Status];
+
+
+export const RefreshRunnerResources200Status = {
+  ready: 'ready',
+  scanning: 'scanning',
+  incomplete: 'incomplete',
+  stale: 'stale',
+  offline: 'offline',
+  unsupported: 'unsupported',
+} as const;
+
+export type RefreshRunnerResources200DiagnosticsItemCode = typeof RefreshRunnerResources200DiagnosticsItemCode[keyof typeof RefreshRunnerResources200DiagnosticsItemCode];
+
+
+export const RefreshRunnerResources200DiagnosticsItemCode = {
+  missing_home: 'missing_home',
+  permission_denied: 'permission_denied',
+  invalid_frontmatter: 'invalid_frontmatter',
+  file_too_large: 'file_too_large',
+  duplicate_name: 'duplicate_name',
+  path_escape: 'path_escape',
+  truncated: 'truncated',
+  scan_timeout: 'scan_timeout',
+  scan_error: 'scan_error',
+} as const;
+
+export type RefreshRunnerResources200DiagnosticsItem = {
+  code: RefreshRunnerResources200DiagnosticsItemCode;
+  /** @minLength 1 */
+  message: string;
+  name?: string;
+  path?: string;
+};
+
+export type RefreshRunnerResources200 = {
+  status: RefreshRunnerResources200Status;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  revision: number;
+  complete: boolean;
+  online: boolean;
+  writable: boolean;
+  diagnostics: RefreshRunnerResources200DiagnosticsItem[];
+};
+
 export type ListRemoteConnections200ItemsItemAuthMethod = typeof ListRemoteConnections200ItemsItemAuthMethod[keyof typeof ListRemoteConnections200ItemsItemAuthMethod];
 
 
@@ -5298,6 +6811,29 @@ export type CancelRun200Error = {
   recovery?: CancelRun200ErrorRecovery;
 };
 
+export type CancelRun200SkillSource = typeof CancelRun200SkillSource[keyof typeof CancelRun200SkillSource];
+
+
+export const CancelRun200SkillSource = {
+  builtin: 'builtin',
+  platform: 'platform',
+  'runner-global': 'runner-global',
+  'runner-project': 'runner-project',
+} as const;
+
+export type CancelRun200Skill = {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  id: string;
+  /** @pattern ^\d+\.\d+\.\d+$ */
+  version: string;
+  name: string;
+  description: string;
+  source: CancelRun200SkillSource;
+};
+
 export type CancelRun200 = {
   /**
      * @minLength 1
@@ -5308,6 +6844,7 @@ export type CancelRun200 = {
   reason?: string;
   waiting?: CancelRun200Waiting;
   error?: CancelRun200Error;
+  skill?: CancelRun200Skill;
 };
 
 export type RespondInteractionBodyResponse = {
@@ -5411,6 +6948,7 @@ export type RespondInteraction200 = {
 export type GetClientConfig200Capabilities = {
   execution: boolean;
   uploads: boolean;
+  artifacts: boolean;
   remoteFiles: boolean;
   compression: boolean;
   models: boolean;

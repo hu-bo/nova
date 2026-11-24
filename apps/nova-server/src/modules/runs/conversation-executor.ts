@@ -6,7 +6,9 @@ import type { JobRecord } from "../../jobs/postgres-job-store.js";
 import type { UserModelProfilesService } from "../model-config/index.js";
 import type { RemoteConnectionService } from "../remotes/index.js";
 import type { RunnerConnections } from "../runners/index.js";
+import type { RunnerLocalResources } from "../runners/index.js";
 import type { UploadStorage } from "../attachments/index.js";
+import type { ArtifactService } from "../artifacts/index.js";
 import { DomainError } from "../../shared/domain-error.js";
 import type { RunClaim } from "./run.repository.js";
 import { createRunService, type RunService } from "./run.service.js";
@@ -25,11 +27,21 @@ export class ConversationExecutor {
       models: UserModelProfilesService;
       remotes: RemoteConnectionService;
       runners: RunnerConnections;
+      localResources: RunnerLocalResources;
+      /** 产物服务（P1）：交付结算判定；未配置存储时不注入。 */
+      artifacts?: ArtifactService | undefined;
       uploads: UploadStorage;
       logger: FastifyBaseLogger;
     },
   ) {
     this.repository = createRunService(deps.db);
+  }
+  /** 技能要求必须交付而本次 Run 没有 ready 产物时返回 true（§7 交付结算）。 */
+  private async deliveryShortfall(claim: RunClaim): Promise<boolean> {
+    if (!this.deps.artifacts) return false;
+    const { checkpoint } = await this.repository.load(claim);
+    if (!checkpoint.execution?.skill?.requirements?.requiresPublishing) return false;
+    return !(await this.deps.artifacts.hasReadyArtifacts(claim.id));
   }
   async close() {
     this.closing.abort();
@@ -149,6 +161,14 @@ export class ConversationExecutor {
         };
       } while (!signal.aborted);
       const cancellation = signal.aborted ? await adapter.cancel(claim.id) : "confirmed";
+      // §7 窗口表末行：技能声明必须交付文件但 Run 结束前没有 ready 产物 → 宿主结算为交付失败，
+      // 不能只根据模型「已生成」的文字判定成功。
+      const delivery = await this.deliveryShortfall(claim);
+      if (delivery && !signal.aborted) {
+        logger.warn({ reason: "DELIVERY_UNFULFILLED" }, "Skill requires deliverables but no ready artifact exists");
+        await this.repository.finish(claim, "failed", "DELIVERY_UNFULFILLED");
+        return;
+      }
       await this.repository.finish(claim, completionState(signal.aborted, cancellation));
     } catch (error) {
       const domainReason = error instanceof DomainError ? error.details?.reason : undefined;

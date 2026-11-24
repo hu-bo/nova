@@ -51,6 +51,31 @@ pub fn operation_digest(operation: &Operation) -> Result<[u8; 32], String> {
                 bytes_value(&p.stdin)
             ])
         }
+        // 与 packages/runner-protocol/src/index.ts 的 canonicalParams 逐项一致；
+        // 枚举在 TS 侧经 `enums: String` 归一化为 proto 枚举名，这里做同样的映射。
+        Params::ReadResourceSnapshot(p) => json!([
+            "readResourceSnapshot",
+            resource_kind_name(p.kind),
+            resource_scope_name(p.scope),
+            p.workspace_id,
+            p.relative_dir,
+            p.name,
+            p.relative_path,
+            p.expected_sha256
+        ]),
+        Params::WriteResourceFile(p) => json!([
+            "writeResourceFile",
+            resource_kind_name(p.kind),
+            resource_scope_name(p.scope),
+            p.workspace_id,
+            p.relative_dir,
+            p.name,
+            p.relative_path,
+            bytes_value(&p.contents),
+            p.expected_sha256
+        ]),
+        // 与 packages/runner-protocol/src/index.ts 的 deleteWorkspacePaths 分支一致。
+        Params::DeleteWorkspacePaths(p) => json!(["deleteWorkspacePaths", p.relative_paths]),
     };
     let canonical = json!([
         operation.operation_id,
@@ -67,6 +92,21 @@ pub fn operation_digest(operation: &Operation) -> Result<[u8; 32], String> {
 
 fn bytes_value(bytes: &[u8]) -> Value {
     Value::Array(bytes.iter().map(|byte| json!(*byte)).collect())
+}
+
+// protobufjs `enums: String` 会把已知枚举值渲染为名称；未知值渲染为原始数字。
+// Rust 侧必须产生同样的 JSON，否则 params_sha256 校验会误判；名称直接取 prost
+// 生成枚举的 `as_str_name()`（与 proto 单一事实源一致）。
+fn resource_kind_name(value: i32) -> Value {
+    crate::proto::nova::runner::v1::ResourceKind::try_from(value)
+        .map(|kind| json!(kind.as_str_name()))
+        .unwrap_or_else(|_| json!(value))
+}
+
+fn resource_scope_name(value: i32) -> Value {
+    crate::proto::nova::runner::v1::ResourceScope::try_from(value)
+        .map(|scope| json!(scope.as_str_name()))
+        .unwrap_or_else(|_| json!(value))
 }
 
 #[allow(dead_code)]

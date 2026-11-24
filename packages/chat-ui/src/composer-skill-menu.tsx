@@ -1,5 +1,42 @@
 import { Sparkles } from "lucide-react";
-import type { ComposerSkill } from "./composer-types.js";
+import type { SkillApplicability, SkillSource } from "@nova/agent-ui-contracts";
+import type { ComposerAgentEntry, ComposerProductSkill, ComposerSkill } from "./composer-types.js";
+
+/** 来源展示名表：会话技能菜单与 /skills 页面共用同一来源标识（§3.1）。 */
+export const SKILL_SOURCE_LABELS = {
+  builtin: "内置",
+  platform: "平台",
+  "runner-global": "本机全局",
+  "runner-project": "项目",
+} satisfies Record<SkillSource, string>;
+
+/** 适用性三态标签（机器状态名，不是原因文案）；不适用原因只展示服务端 message。 */
+export const SKILL_APPLICABILITY_LABELS = {
+  available: "可用",
+  unavailable: "暂不可用",
+  unverified: "待验证",
+} satisfies Record<SkillApplicability["status"], string>;
+
+/** 技能条目是否可选与说明行：unavailable 不可选；unverified 保持可选并等待服务端复核。 */
+export function describeProductSkill(skill: ComposerProductSkill): {
+  selectable: boolean;
+  statusLabel: string;
+  notes: string[];
+} {
+  const status = skill.applicability?.status ?? "available";
+  const notes = (skill.applicability?.reasons ?? []).map((reason) => reason.message);
+  return {
+    selectable: status !== "unavailable" && !skill.disabled,
+    statusLabel: SKILL_APPLICABILITY_LABELS[status],
+    notes,
+  };
+}
+
+/** Agent 条目：不兼容项非空则不可选择（§4.3），原因文案由服务端给出。 */
+export function describeAgentEntry(agent: ComposerAgentEntry): { selectable: boolean; notes: string[] } {
+  const notes = (agent.incompatibilities ?? []).map((item) => item.message);
+  return { selectable: notes.length === 0, notes };
+}
 
 export function findSkillMention(text: string, cursor: number) {
   const match = /(?:^|\s)@([^\s@]*)$/.exec(text.slice(0, cursor));
@@ -25,19 +62,22 @@ export function ComposerSkillMenu({
   selected,
   onSelect,
   trigger = "/",
+  ariaLabel,
 }: {
   listId: string;
   skills: readonly ComposerSkill[];
   selected: ComposerSkill | undefined;
   onSelect?: ((skill: ComposerSkill) => void) | undefined;
   trigger?: "/" | "@";
+  ariaLabel?: string | undefined;
 }) {
   if (skills.length === 0 && trigger === "/") return null;
+  const label = ariaLabel ?? (trigger === "@" ? "选择技能" : "可用命令");
   return (
     <div
       id={listId}
       role="listbox"
-      aria-label={trigger === "@" ? "选择技能" : "可用命令"}
+      aria-label={label}
       className="nova-scrollbar absolute bottom-[calc(100%+0.5rem)] left-0 z-30 max-h-64 w-80 max-w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-950/10 dark:border-slate-700 dark:bg-slate-900"
     >
       {skills.length === 0 && <p className="px-3 py-4 text-sm text-slate-500">没有匹配的技能</p>}
@@ -69,6 +109,20 @@ export function ComposerSkillMenu({
                   {skill.description && (
                     <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
                       {skill.description}
+                    </span>
+                  )}
+                  {(skill.meta || skill.notes?.length) && (
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-4">
+                      {skill.meta && (
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                          {skill.meta}
+                        </span>
+                      )}
+                      {skill.notes?.map((note) => (
+                        <span key={note} className="text-amber-600 dark:text-amber-400">
+                          {note}
+                        </span>
+                      ))}
                     </span>
                   )}
                 </>

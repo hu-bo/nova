@@ -5,7 +5,7 @@ import { useProjectBinding, useProjectQuery, useProjectsQuery } from '@/features
 import { useStartSpecMutation } from '@/features/specs';
 import { useState } from 'react';
 import { usePreferences } from '@/features/settings';
-import { type Attachment } from '@nova/agent-ui-contracts';
+import { type Attachment, type SkillSelection } from '@nova/agent-ui-contracts';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   AlertTriangle,
@@ -35,11 +35,13 @@ export function DraftWorkspace({
   projectId: initialProjectId,
   initialSpecMode = false,
   careerCoach = false,
+  initialSkill,
 }: {
   mode: 'chat' | 'project';
   projectId?: string | undefined;
   initialSpecMode?: boolean;
   careerCoach?: boolean;
+  initialSkill?: SkillSelection | undefined;
 }) {
   const navigate = useNavigate();
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -58,6 +60,7 @@ export function DraftWorkspace({
     isRunning: false,
     initialSpecMode,
     careerCoach,
+    initialSkill,
     startingSpec: startSpec.isPending,
     onStartSpec: async (input) => {
       if (!projectId) throw new Error('请选择项目。');
@@ -208,6 +211,19 @@ export function DraftWorkspace({
             </div>
           )}
           {ctl.skillCatalogError && <ErrorNotice error={ctl.skillCatalogError} />}
+          {ctl.agentCatalogError && (
+            <p role="status" className="mt-3 text-center text-[11px] text-slate-500">
+              Agent 目录暂时无法读取，技能选择不受影响。
+            </p>
+          )}
+          {ctl.skillModeNotice && (
+            <p
+              role="status"
+              className="mt-3 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200"
+            >
+              {ctl.skillModeNotice}
+            </p>
+          )}
           {ctl.chatAgent && <CareerCoachTasks onSelect={start} includeFinish={false} />}
           {!ctl.chatAgent && (
             <>

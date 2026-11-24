@@ -32,6 +32,8 @@ import type {
   ListRunnerFilesParams,
   ListRunnerTokens200,
   ListRunners200,
+  RefreshRunnerResources200,
+  RefreshRunnerResourcesBody,
   RevokeRunnerToken200,
   RotateRunnerToken200,
   RotateRunnerTokenBody,
@@ -792,6 +794,121 @@ export function useSummariseRunnerFiles<TData = Awaited<ReturnType<typeof summar
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getSummariseRunnerFilesQueryOptions(id,summariseRunnerFilesBody,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getRefreshRunnerResourcesUrl = (id: string,) => {
+
+
+
+
+  return `/api/runners/${id}/resources/refresh`
+}
+
+export const refreshRunnerResources = async (id: string,
+    refreshRunnerResourcesBody: RefreshRunnerResourcesBody, options?: Parameters<typeof apiFetch>[1]): Promise<RefreshRunnerResources200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<RefreshRunnerResources200>(getRefreshRunnerResourcesUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(refreshRunnerResourcesBody)
+  }
+);}
+
+
+
+
+
+export const getRefreshRunnerResourcesQueryKey = (id: string,
+    refreshRunnerResourcesBody?: BodyType<RefreshRunnerResourcesBody>,) => {
+    return [
+    'POST', `/api/runners/${id}/resources/refresh`, refreshRunnerResourcesBody
+    ] as const;
+    }
+
+
+export const getRefreshRunnerResourcesQueryOptions = <TData = Awaited<ReturnType<typeof refreshRunnerResources>>, TError = ErrorType<void>>(id: string,
+    refreshRunnerResourcesBody: BodyType<RefreshRunnerResourcesBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof refreshRunnerResources>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getRefreshRunnerResourcesQueryKey(id,refreshRunnerResourcesBody);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof refreshRunnerResources>>> = ({ signal }) => refreshRunnerResources(id,refreshRunnerResourcesBody, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof refreshRunnerResources>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type RefreshRunnerResourcesQueryResult = NonNullable<Awaited<ReturnType<typeof refreshRunnerResources>>>
+export type RefreshRunnerResourcesQueryError = ErrorType<void>
+
+
+export function useRefreshRunnerResources<TData = Awaited<ReturnType<typeof refreshRunnerResources>>, TError = ErrorType<void>>(
+ id: string,
+    refreshRunnerResourcesBody: BodyType<RefreshRunnerResourcesBody>, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof refreshRunnerResources>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof refreshRunnerResources>>,
+          TError,
+          Awaited<ReturnType<typeof refreshRunnerResources>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useRefreshRunnerResources<TData = Awaited<ReturnType<typeof refreshRunnerResources>>, TError = ErrorType<void>>(
+ id: string,
+    refreshRunnerResourcesBody: BodyType<RefreshRunnerResourcesBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof refreshRunnerResources>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof refreshRunnerResources>>,
+          TError,
+          Awaited<ReturnType<typeof refreshRunnerResources>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useRefreshRunnerResources<TData = Awaited<ReturnType<typeof refreshRunnerResources>>, TError = ErrorType<void>>(
+ id: string,
+    refreshRunnerResourcesBody: BodyType<RefreshRunnerResourcesBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof refreshRunnerResources>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useRefreshRunnerResources<TData = Awaited<ReturnType<typeof refreshRunnerResources>>, TError = ErrorType<void>>(
+ id: string,
+    refreshRunnerResourcesBody: BodyType<RefreshRunnerResourcesBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof refreshRunnerResources>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getRefreshRunnerResourcesQueryOptions(id,refreshRunnerResourcesBody,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
     "prepack": "pnpm build",
+    "test": "pnpm build && node --test test/*.test.mjs",
     "lint": "eslint src"
   },
   "engines": {

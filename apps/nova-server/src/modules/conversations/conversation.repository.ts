@@ -31,9 +31,11 @@ import {
   queuedInput,
   validateAgentProfile,
   acceptExecution,
+  type PinnedExecution,
   runProjectionReader,
 } from "../runs/index.js";
 import { DomainError } from "../../shared/domain-error.js";
+import { artifactCleanup } from "../artifacts/index.js";
 import type { RunJournal } from "../runs/index.js";
 import type { GoalInput } from "./conversation.schema.js";
 export type ConversationRow = typeof conversations.$inferSelect;
@@ -64,6 +66,7 @@ async function enqueue(
   input: SubmitInput & { goal?: GoalInput },
   journal: RunJournal,
   key?: string,
+  pinned: PinnedExecution = {},
 ) {
   if (conversation.metadata.specId && (input.mode !== "next_run" || input.goal))
     throw new DomainError("CONFLICT", "Specification sessions accept Plan messages only", { reason: "SPEC_SESSION_RESTRICTED" });
@@ -76,8 +79,10 @@ async function enqueue(
   if (fingerprint(normalized.configuration.agentProfile) !== fingerprint(currentProfile))
     throw new DomainError("CONFLICT", "Agent profiles cannot change within a conversation");
   validateAgentProfile(normalized.configuration, conversation.mode, Boolean(input.goal || conversation.metadata.goal));
-  const execution = acceptExecution(normalized.configuration, normalized);
-  const signature = fingerprint(input);
+  if (input.mode === "steer" && input.skill)
+    throw new DomainError("CONFLICT", "Steering cannot change the skill selection", { reason: "SKILL_CHANGE_REQUIRES_NEW_INPUT" });
+  const execution = acceptExecution(normalized.configuration, normalized, pinned);
+  const signature = fingerprint(normalized);
   if (key) {
     const [previous] = await tx
       .select()
@@ -158,8 +163,8 @@ async function enqueue(
   return inputReceipt(inputRow);
 }
 export const conversationRepository = defineRepository(
-  { journal: runJournal, projectionReader: runProjectionReader, events: eventWriter },
-  ({ db, requireTransaction, journal, projectionReader, events }) => {
+  { journal: runJournal, projectionReader: runProjectionReader, events: eventWriter, cleanup: artifactCleanup },
+  ({ db, requireTransaction, journal, projectionReader, events, cleanup }) => {
     return {
       async create(input: {
         ownerUserId: string;
@@ -169,6 +174,7 @@ export const conversationRepository = defineRepository(
         metadata: ConversationMetadata;
         initialInput?: { blocks: InputBlock[]; skill?: SubmitInput["skill"] };
         idempotencyKey?: string;
+        pinned?: PinnedExecution;
       }) {
         const tx = requireTransaction();
 
@@ -216,6 +222,7 @@ export const conversationRepository = defineRepository(
             { ...input.initialInput, mode: "next_run", configuration: input.metadata.configuration },
             journal,
             "initial:" + row.id,
+            input.pinned,
           );
         return row;
       },
@@ -284,6 +291,7 @@ export const conversationRepository = defineRepository(
       },
       async enqueue(
         input: SubmitInput & { conversationId: string; ownerUserId: string; goal?: GoalInput; idempotencyKey?: string },
+        pinned?: PinnedExecution,
       ) {
         const tx = requireTransaction();
 
@@ -300,6 +308,7 @@ export const conversationRepository = defineRepository(
           },
           journal,
           input.idempotencyKey,
+          pinned,
         );
       },
       async removePendingInput(input: { conversationId: string; inputId: string; ownerUserId: string }) {
@@ -457,6 +466,9 @@ export const conversationRepository = defineRepository(
           await tx.delete(pendingInputs).where(eq(pendingInputs.conversationId, id));
           await tx.delete(messages).where(eq(messages.conversationId, id));
           await events.deleteConversation(id);
+          // 删除 Run 事务内收集产物对象键并入队删除 Job（对象删除在事务外，§7 清理段）。
+          const runRows = await tx.select({ id: runs.id }).from(runs).where(eq(runs.conversationId, id));
+          await cleanup.schedulePurgeForRuns(runRows.map((row) => row.id), id);
           await tx.delete(runs).where(eq(runs.conversationId, id));
           await tx.delete(conversations).where(owned(id, owner));
           return null;

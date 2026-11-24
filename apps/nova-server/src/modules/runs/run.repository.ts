@@ -1374,6 +1374,30 @@ export class RunRepository {
         type: "spec.changed",
         payload: { specId: specExecution.specId, revision: specExecution.revision, change: "evidence" },
       });
+    // 运行临时目录清理（§7 清理段、P1-D3/F1）：Run 已知终态后入队；
+    // unknown 结果（cancelled_unconfirmed）不清理，发布未结算由 handler 延后重试。
+    if (state !== "cancelled_unconfirmed") {
+      const binding = conversation.metadata.binding ? bindingSchema.parse(conversation.metadata.binding) : null;
+      const relativeCwd = (binding?.canonicalCwd ?? "").replaceAll("\\", "/").replace(/\/+$/, "");
+      if (binding?.runnerId && binding.workspaceId) {
+        const cwdPrefix = relativeCwd === "" || relativeCwd === "." ? "" : relativeCwd + "/";
+        await enqueue({
+          db: tx,
+          job: {
+            kind: "run.tmp-cleanup",
+            aggregateId: run.id,
+            dedupeKey: run.id,
+            payload: {
+              runId: run.id,
+              ownerUserId: conversation.ownerUserId,
+              runnerRowId: binding.runnerId,
+              workspaceId: binding.workspaceId,
+              relativePath: `${cwdPrefix}.nova/runs/${run.id}/tmp`,
+            },
+          },
+        });
+      }
+    }
     if (!unknown) await this.journal.wake(conversation.id, "finished:" + run.id);
   }
   async goalIteration(claim: RunClaim, complete = false) {
@@ -1536,3 +1560,93 @@ export const runRepository = defineRepository(
 export function createRunRepository(db: Database) {
   return createScope(db).get(runRepository);
 }
+
+/**
+ * 产物结算与归属通道（P1-D2，docs/nova-skills.md §7）。
+ * run/conversation 属 runs 域聚合：fence 校验与 `artifact.changed` 同事务提交都经本端口，
+ * artifacts 模块不直接读外域表；旧 Worker 即使上传完成也不能提交可见记录。
+ */
+export const artifactSettlement = defineRepository(
+  { journal: runJournal },
+  ({ db, requireTransaction, journal }) => {
+    const assertFence = async (tx: Transaction, claim: RunClaim) => {
+      const [run] = await tx
+        .select({ id: runs.id, state: runs.state, workerId: runs.workerId, fence: runs.fence })
+        .from(runs)
+        .where(and(eq(runs.id, claim.id), eq(runs.conversationId, claim.conversationId)))
+        .for("update");
+      if (
+        !run ||
+        run.workerId !== claim.workerId ||
+        run.fence !== claim.fence ||
+        !isActiveRun(run.state) ||
+        run.state === "cancelling"
+      )
+        throw new DomainError("CONFLICT", "Run lease or fence changed");
+      return run;
+    };
+    return {
+      /** 预留发布键前的轻量校验：claim 仍可写（不产生事件）。 */
+      async assertWritable(claim: RunClaim): Promise<void> {
+        await assertFence(requireTransaction(), claim);
+      },
+      /**
+       * 在同一事务内校验有效 Worker fence、执行产物写入（mutate），并提交 `artifact.changed`。
+       * 网络上传不在此事务内进行；旧 fence 会在此抛错，产物停在 publishing，由后续恢复协调。
+       */
+      async settle(
+        claim: RunClaim,
+        input: { artifactId: string; state: "ready" | "failed" },
+        mutate: () => Promise<void>,
+      ): Promise<void> {
+        const tx = requireTransaction();
+        const run = await assertFence(tx, claim);
+        const [conversation] = await tx
+          .select()
+          .from(conversations)
+          .where(eq(conversations.id, claim.conversationId))
+          .for("update");
+        if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
+        await mutate();
+        await journal.append(conversation, {
+          runId: run.id,
+          type: "artifact.changed",
+          payload: { artifactId: input.artifactId, runId: run.id, state: input.state },
+        });
+      },
+      /** 授权链：产物 → Run → 会话 → 用户；只读，不锁。 */
+      async resolveRunOwnership(runId: string) {
+        const [row] = await db
+          .select({
+            runId: runs.id,
+            conversationId: runs.conversationId,
+            projectId: conversations.projectId,
+            ownerUserId: conversations.ownerUserId,
+          })
+          .from(runs)
+          .innerJoin(conversations, eq(conversations.id, runs.conversationId))
+          .where(eq(runs.id, runId));
+        return row;
+      },
+      /** 列表附带来源 Run 状态（执行结果唯一来源仍是 runs.state，卡片据此展示"产物保留但任务失败"）。 */
+      async runStatesForIds(runIds: readonly string[]) {
+        if (runIds.length === 0) return [];
+        return db.select({ id: runs.id, state: runs.state }).from(runs).where(inArray(runs.id, [...runIds]));
+      },
+      /** 会话列表：先验归属再返回该会话的 run 集合（分页在 artifacts 仓储完成）。 */
+      async runIdsForConversation(conversationId: string, ownerUserId: string) {
+        const [conversation] = await db
+          .select({ id: conversations.id })
+          .from(conversations)
+          .where(and(eq(conversations.id, conversationId), eq(conversations.ownerUserId, ownerUserId)));
+        if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
+        const rows = await db.select({ id: runs.id }).from(runs).where(eq(runs.conversationId, conversationId));
+        return rows.map((row) => row.id);
+      },
+    };
+  },
+);
+export function createArtifactSettlement(db: Database) {
+  return createScope(db).get(artifactSettlement);
+}
+export type ArtifactSettlement = ReturnType<typeof createArtifactSettlement>;

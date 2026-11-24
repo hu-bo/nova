@@ -5,3 +5,4 @@ export * from "./conversation.js";
 export * from "./events.js";
 export * from "./projection.js";
 export * from "./skills.js";
+export * from "./artifacts.js";

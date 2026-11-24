@@ -4,6 +4,12 @@ import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod
 import type { AppConfig } from "./config.js";
 import { attachmentsModule } from "./modules/attachments/index.js";
 import { createMinioUploadStorage, disabledUploadStorage } from "./modules/attachments/upload-storage.js";
+import {
+  artifactsModule,
+  createArtifactService,
+  createMinioArtifactStorage,
+  disabledArtifactStorage,
+} from "./modules/artifacts/index.js";
 import { clientConfigModule } from "./modules/client-config/index.js";
 import {
   conversationsModule,
@@ -13,13 +19,18 @@ import {
 import { eventsModule, createEventRetentionService } from "./modules/events/index.js";
 import { healthModule } from "./modules/health/index.js";
 import { identityPlugin } from "./modules/identity/index.js";
-import { projectsModule } from "./modules/projects/index.js";
-import { registerRunnerConnections, runnersModule } from "./modules/runners/index.js";
+import { createProjectBindingService, projectsModule } from "./modules/projects/index.js";
+import {
+  createRunnerReader,
+  registerRunnerConnections,
+  runnersModule,
+  RunnerLocalResources,
+} from "./modules/runners/index.js";
 import { startConversationExecution, runsModule } from "./modules/runs/index.js";
-import { modelConfigAdminModule, userModelProfilesModule } from "./modules/model-config/index.js";
+import { createUserModelProfilesService, modelConfigAdminModule, userModelProfilesModule } from "./modules/model-config/index.js";
 import { remotesModule } from "./modules/remotes/index.js";
 import { specsModule } from "./modules/specs/index.js";
-import { skillsModule } from "./modules/skills/index.js";
+import { skillsModule, SkillService, createSkillRepository } from "./modules/skills/index.js";
 import { databasePlugin } from "./plugins/database.js";
 import { registerErrorHandlers } from "./plugins/errors.js";
 import { registerOpenApi } from "./plugins/openapi.js";
@@ -88,8 +99,24 @@ export async function buildApp(config: AppConfig, options: { exportMode?: boolea
       AUTH_SERVICE_TOKEN_TRANSPORT: config.AUTH_SERVICE_TOKEN_TRANSPORT,
       AUTH_SERVICE_TIMEOUT_MS: config.AUTH_SERVICE_TIMEOUT_MS,
     });
-    await registerRunnerConnections(app, Boolean(options.exportMode));
+    // 本地目录视图与 skills 服务在此组装：Runner 接受回调、目录路由与会话入队共用同一实例。
+    const localResources = new RunnerLocalResources((message, error) => app.log.warn({ err: error }, message));
+    app.decorate("localResources", localResources);
     const uploadsEnabled = Boolean(config.MINIO_ENDPOINT && config.MINIO_ACCESS_KEY && config.MINIO_SECRET_KEY);
+    const skillRepository = createSkillRepository(app.db);
+    const skillService = new SkillService(
+      skillRepository,
+      localResources.port(),
+      { storageConfigured: uploadsEnabled },
+      createUserModelProfilesService(app),
+    );
+    localResources.setCatalogAcceptor((input) => skillService.accept(input));
+    app.decorate("skillService", skillService);
+    // 内置技能按 ID/版本/摘要登记为不可变版本（§6）；导出模式不启动连接也不登记。
+    if (!options.exportMode) await skillService.registerBuiltins();
+    await registerRunnerConnections(app, Boolean(options.exportMode), (info) =>
+      localResources.attach(info.runnerRowId, info.ownerUserId, info.session),
+    );
     const uploadStorage = uploadsEnabled
       ? createMinioUploadStorage(
           {
@@ -104,21 +131,51 @@ export async function buildApp(config: AppConfig, options: { exportMode?: boolea
             app.log.error({ err: error, component: "attachment-storage", operation }, "MinIO operation failed"),
         )
       : disabledUploadStorage();
+    // 产物存储与图片附件存储分离（红线：产物不套用图片专用接口），共用同一私有 bucket 前缀。
+    const artifactStorage = uploadsEnabled
+      ? createMinioArtifactStorage(
+          {
+            endPoint: config.MINIO_ENDPOINT!,
+            port: config.MINIO_PORT,
+            useSSL: config.MINIO_USE_SSL,
+            accessKey: config.MINIO_ACCESS_KEY!,
+            secretKey: config.MINIO_SECRET_KEY!,
+            bucket: config.MINIO_BUCKET,
+          },
+          (error, operation) => app.log.error({ err: error, component: "artifact-storage", operation }, "MinIO artifact operation failed"),
+        )
+      : disabledArtifactStorage();
+    const artifactService = createArtifactService(app.db, artifactStorage);
     if (!options.exportMode && (config.ROLE === "all" || config.ROLE === "worker"))
       startConversationExecution(
         app,
         config,
         createEventRetentionService(app.db, createConversationEventHeads(app.db)),
         uploadStorage,
+        artifactService,
       );
     if (config.ROLE !== "worker") {
       await app.register(healthModule);
       await app.register(projectsModule, { prefix: "/api" });
-      await app.register(conversationsModule, { prefix: "/api" });
-      await app.register(skillsModule, { prefix: "/api" });
+      await app.register(async (scope) => conversationsModule(scope, artifactService), { prefix: "/api" });
+      await app.register(async (scope) =>
+        skillsModule(scope, {
+          service: skillService,
+          repository: skillRepository,
+          directory: localResources.port(),
+          environment: {
+            conversations: createConversationReader(app.db),
+            bindings: createProjectBindingService(app),
+            runnerReader: createRunnerReader(app.db),
+            storageConfigured: uploadsEnabled,
+          },
+        }),
+        { prefix: "/api" },
+      );
+      await app.register(async (scope) => artifactsModule(scope, artifactService), { prefix: "/api" });
       await app.register(specsModule, { prefix: "/api" });
       await app.register(async (scope) => attachmentsModule(scope, uploadStorage), { prefix: "/api" });
-      await app.register(runnersModule, { prefix: "/api" });
+      await app.register(async (scope) => runnersModule(scope, localResources), { prefix: "/api" });
       await app.register(remotesModule, { prefix: "/api" });
       await app.register(eventsModule, { prefix: "/api", conversations: createConversationReader(app.db) });
       await app.register(runsModule, { prefix: "/api" });

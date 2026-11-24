@@ -67,4 +67,32 @@ export const queryKeys = {
     files: (identityId: string, runnerId: string, path: string) =>
       ['nova', identityId, 'runners', 'files', runnerId, path] as const,
   },
+  /** 产物查询键：按账号 + 会话隔离（P1-G1），artifact.changed 只失效所属会话的列表。 */
+  artifacts: {
+    root: (identityId: string) => ['nova', identityId, 'artifacts'] as const,
+    list: (identityId: string, conversationId: string) =>
+      ['nova', identityId, 'artifacts', 'list', conversationId] as const,
+    preview: (identityId: string, artifactId: string) =>
+      ['nova', identityId, 'artifacts', 'preview', artifactId] as const,
+  },
+  /** Skills 目录查询键：按账号 + 会话/项目/Runner/来源/关键词隔离（§3.1 分页与筛选走服务端）。 */
+  skills: {
+    root: (identityId: string) => ['nova', identityId, 'skills'] as const,
+    catalog: (
+      identityId: string,
+      filters: {
+        conversationId?: string | undefined;
+        projectId?: string | undefined;
+        runnerId?: string | undefined;
+        source?: string | undefined;
+        q?: string | undefined;
+      },
+    ) => ['nova', identityId, 'skills', 'catalog', filters] as const,
+    agents: (
+      identityId: string,
+      filters: { conversationId?: string | undefined; projectId?: string | undefined },
+    ) => ['nova', identityId, 'skills', 'agents', filters] as const,
+    version: (identityId: string, skillId: string, version: string) =>
+      ['nova', identityId, 'skills', 'version', skillId, version] as const,
+  },
 };

@@ -2,7 +2,13 @@ import { PassThrough } from "node:stream";
 import type { ReactNode } from "react";
 import { renderToPipeableStream, renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ComposerSkillMenu } from "./composer-skill-menu.js";
+import {
+  ComposerSkillMenu,
+  SKILL_APPLICABILITY_LABELS,
+  SKILL_SOURCE_LABELS,
+  describeAgentEntry,
+  describeProductSkill,
+} from "./composer-skill-menu.js";
 import {
   BlockView,
   Chat,
@@ -76,6 +82,95 @@ describe("chat-ui", () => {
       />,
     );
     expect(messages).toContain("求职教练 · 1.0.0");
+  });
+
+  it("describes catalog entries from server status without inventing reasons", () => {
+    const blocked = {
+      id: "00000000-0000-4000-8000-0000000000a2",
+      version: "0.0.1",
+      name: "仓库巡检",
+      description: "需要工作区",
+      source: "runner-global" as const,
+      applicability: {
+        status: "unavailable" as const,
+        reasons: [{ code: "workspace_required" as const, message: "技能需要绑定工作区" }],
+      },
+    };
+    const unverified = {
+      ...blocked,
+      source: "platform" as const,
+      applicability: {
+        status: "unverified" as const,
+        reasons: [{ code: "catalog_incomplete" as const, message: "本地技能尚未完成快照登记" }],
+      },
+    };
+    expect(describeProductSkill(blocked).selectable).toBe(false);
+    expect(describeProductSkill(blocked).notes).toEqual(["技能需要绑定工作区"]);
+    expect(describeProductSkill(unverified).selectable).toBe(true);
+    expect(describeProductSkill(unverified).statusLabel).toBe(SKILL_APPLICABILITY_LABELS.unverified);
+    expect(SKILL_SOURCE_LABELS["runner-global"]).toBe("本机全局");
+    const incompatibleAgent = {
+      refId: "agent-2",
+      name: "旧版助手",
+      description: "含未支持字段",
+      source: "runner-project" as const,
+      version: "0.0.2",
+      incompatibilities: [
+        { code: "mode_not_allowed" as const, message: "包含未支持字段 mode: subagent" },
+      ],
+    };
+    expect(describeAgentEntry(incompatibleAgent).selectable).toBe(false);
+    expect(describeAgentEntry(incompatibleAgent).notes).toEqual(["包含未支持字段 mode: subagent"]);
+  });
+
+  it("renders catalog menu lines with source badge and server reason text", () => {
+    const entry = {
+      id: "repo-scan@0.0.1",
+      command: "repo-scan",
+      label: "仓库巡检",
+      description: "需要工作区",
+      meta: SKILL_SOURCE_LABELS["runner-project"],
+      notes: [SKILL_APPLICABILITY_LABELS.unavailable, "技能需要绑定工作区"],
+      disabled: true,
+    };
+    const html = renderToStaticMarkup(
+      <ComposerSkillMenu
+        listId="skills"
+        skills={[entry]}
+        selected={undefined}
+        trigger="@"
+        ariaLabel="选择 Agent"
+        onSelect={() => undefined}
+      />,
+    );
+    expect(html).toContain('aria-label="选择 Agent"');
+    expect(html).toContain("项目");
+    expect(html).toContain("技能需要绑定工作区");
+    expect(html).toContain("disabled");
+  });
+
+  it("keeps the agent picker surface separate from the skill tag", () => {
+    const composerWithAgents = renderToStaticMarkup(
+      <Composer
+        agents={[
+          {
+            refId: "agent-1",
+            name: "代码评审员",
+            description: "本地评审 Agent",
+            source: "runner-project",
+            version: "0.0.1",
+            incompatibilities: [],
+          },
+        ]}
+        selectedAgent={{ source: "runner-project", refId: "agent-1", version: "0.0.1" }}
+        onAgentChange={() => undefined}
+        onSubmit={() => undefined}
+      />,
+    );
+    expect(composerWithAgents).toContain('aria-label="选择 Agent"');
+    expect(composerWithAgents).toContain('aria-label="移除 Agent"');
+    expect(composerWithAgents).toContain("代码评审员");
+    expect(composerWithAgents).not.toContain('aria-label="选择技能"');
   });
   it("renders image attachments with an accessible preview and an unavailable fallback", () => {
     const block = { type: "image" as const, key: "upload", name: "截图.png", mimeType: "image/png" };

@@ -1,10 +1,27 @@
-import { BrainCircuit, ChevronDown, CircleStop, Cpu, LoaderCircle, Puzzle, Send, X } from "lucide-react";
+import {
+  Bot,
+  BrainCircuit,
+  ChevronDown,
+  CircleStop,
+  Cpu,
+  LoaderCircle,
+  Puzzle,
+  Send,
+  X,
+} from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "./components/ui/button.js";
 import { Card } from "./components/ui/card.js";
 import { ComposerContextUsageIndicator } from "./composer-context-usage.js";
 import { ComposerOptionMenu } from "./composer-option-menu.js";
-import { ComposerSkillMenu, findSkillMention, matchComposerSkills } from "./composer-skill-menu.js";
+import {
+  ComposerSkillMenu,
+  SKILL_SOURCE_LABELS,
+  describeAgentEntry,
+  describeProductSkill,
+  findSkillMention,
+  matchComposerSkills,
+} from "./composer-skill-menu.js";
 import type { ComposerProps, ComposerSkill, ComposerSubmission } from "./composer-types.js";
 import { Textarea } from "./components/ui/textarea.js";
 import { UploadCover } from "./upload-cover.js";
@@ -41,6 +58,9 @@ export function Composer<TMetadata = unknown>({
   productSkills = [],
   selectedProductSkill,
   onProductSkillChange,
+  agents = [],
+  selectedAgent,
+  onAgentChange,
   contextUsage,
   accept,
   attachments = [],
@@ -63,6 +83,7 @@ export function Composer<TMetadata = unknown>({
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
   const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
   const [productSkillMenuOpen, setProductSkillMenuOpen] = useState(false);
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const [cursor, setCursor] = useState(text.length);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const maxHeightRef = useRef<number | null>(null);
@@ -79,6 +100,9 @@ export function Composer<TMetadata = unknown>({
     Boolean(onProductSkillChange) &&
     productSkills.length > 0 &&
     (productSkillMenuOpen || mention !== null);
+  // Agent 选择独立于技能与 `/命令`：只在工具栏按钮打开时显示，不参与 @ 联想。
+  const showAgentMenu =
+    !locked && !skillMenuDismissed && Boolean(onAgentChange) && agents.length > 0 && agentMenuOpen;
   const matchingSkills = skillMenuDismissed || locked ? [] : matchComposerSkills(text, skills);
   const matchingProductSkills: ComposerSkill[] = productSkills
     .filter(
@@ -87,19 +111,49 @@ export function Composer<TMetadata = unknown>({
         productSkillMenuOpen ||
         [skill.name, skill.description, skill.id].some((value) => value.toLocaleLowerCase().includes(mention.query)),
     )
-    .map((skill) => ({
-      id: `${skill.id}@${skill.version}`,
-      command: skill.id,
-      label: skill.name,
-      description: skill.description,
-    }));
-  const menuSkills = showProductSkills ? matchingProductSkills : matchingSkills;
+    .map((skill) => {
+      const availability = describeProductSkill(skill);
+      return {
+        id: `${skill.id}@${skill.version}`,
+        command: skill.id,
+        label: skill.name,
+        description: skill.description,
+        meta: SKILL_SOURCE_LABELS[skill.source],
+        notes: [availability.statusLabel, ...availability.notes],
+        disabled: !availability.selectable,
+      };
+    });
+  const agentSkills: ComposerSkill[] = agents.map((agent) => {
+    const availability = describeAgentEntry(agent);
+    return {
+      id: `agent:${agent.source}:${agent.refId}@${agent.version}`,
+      command: agent.refId,
+      label: agent.name,
+      description: agent.description,
+      meta: SKILL_SOURCE_LABELS[agent.source],
+      notes: availability.notes,
+      disabled: !availability.selectable,
+    };
+  });
+  // 三分菜单（技能联想 / Agent / 斜杠命令）按优先级用 guard clause 选择，避免嵌套三元。
+  function visibleMenuSkills(): ComposerSkill[] {
+    if (showProductSkills) return matchingProductSkills;
+    if (showAgentMenu) return agentSkills;
+    return matchingSkills;
+  }
+  const menuSkills = visibleMenuSkills();
   const selectedSkill = menuSkills[Math.min(selectedSkillIndex, Math.max(0, menuSkills.length - 1))];
-  const menuOpen = showProductSkills || matchingSkills.length > 0;
+  const menuOpen = showProductSkills || showAgentMenu || matchingSkills.length > 0;
   const hasDraft = Boolean(text.trim() || files.length || attachments.length);
   const canSubmit = !locked && !submitDisabled && hasDraft;
   const activeProductSkill = productSkills.find(
     (skill) => skill.id === selectedProductSkill?.id && skill.version === selectedProductSkill.version,
+  );
+  const activeAgent = agents.find(
+    (agent) =>
+      agent.refId === selectedAgent?.refId &&
+      agent.version === selectedAgent?.version &&
+      agent.source === selectedAgent?.source,
   );
 
   // Grow the field in the layout engine wherever the stylesheet managed to apply
@@ -185,7 +239,7 @@ export function Composer<TMetadata = unknown>({
 
   function selectProductSkill(item: ComposerSkill) {
     const skill = productSkills.find((candidate) => `${candidate.id}@${candidate.version}` === item.id);
-    if (locked || !skill || !onProductSkillChange) return;
+    if (locked || item.disabled || !skill || !onProductSkillChange) return;
     if (mention) {
       setText(text.slice(0, mention.start) + text.slice(mention.end));
       setCursor(mention.start);
@@ -197,6 +251,28 @@ export function Composer<TMetadata = unknown>({
     if (mention) {
       requestAnimationFrame(() => textareaRef.current?.setSelectionRange(mention.start, mention.start));
     }
+  }
+
+  function selectAgentEntry(item: ComposerSkill) {
+    const agent = agents.find((candidate) => `agent:${candidate.source}:${candidate.refId}@${candidate.version}` === item.id);
+    if (locked || item.disabled || !agent || !onAgentChange) return;
+    onAgentChange({ source: agent.source, refId: agent.refId, version: agent.version });
+    setAgentMenuOpen(false);
+    setSkillMenuDismissed(true);
+    textareaRef.current?.focus();
+  }
+
+  /** 当前打开的菜单对应哪个回调：命令、技能、Agent 三类分类型分回调，互不混类。 */
+  function selectMenuEntry(item: ComposerSkill) {
+    if (showProductSkills) {
+      selectProductSkill(item);
+      return;
+    }
+    if (showAgentMenu) {
+      selectAgentEntry(item);
+      return;
+    }
+    invokeSkill(item);
   }
 
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -213,14 +289,12 @@ export function Composer<TMetadata = unknown>({
         event.preventDefault();
         setSkillMenuDismissed(true);
         setProductSkillMenuOpen(false);
+        setAgentMenuOpen(false);
         return;
       }
       if (!event.shiftKey && (event.key === "Enter" || (event.key === "Tab" && selectedSkill))) {
         event.preventDefault();
-        if (selectedSkill) {
-          if (showProductSkills) selectProductSkill(selectedSkill);
-          else invokeSkill(selectedSkill);
-        }
+        if (selectedSkill) selectMenuEntry(selectedSkill);
         return;
       }
     }
@@ -242,6 +316,7 @@ export function Composer<TMetadata = unknown>({
         if (!event.currentTarget.contains(event.relatedTarget)) {
           setSkillMenuDismissed(true);
           setProductSkillMenuOpen(false);
+          setAgentMenuOpen(false);
         }
       }}
     >
@@ -279,6 +354,27 @@ export function Composer<TMetadata = unknown>({
                 </button>
               </div>
             )}
+            {selectedAgent && (
+              <div className="px-2 pt-1.5">
+                <button
+                  type="button"
+                  disabled={locked}
+                  aria-label="移除 Agent"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200"
+                  onClick={() => {
+                    onAgentChange?.(null);
+                    textareaRef.current?.focus();
+                  }}
+                >
+                  <Bot className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{activeAgent?.name ?? selectedAgent.refId}</span>
+                  {activeAgent && (
+                    <span className="shrink-0 text-emerald-600/80">{SKILL_SOURCE_LABELS[activeAgent.source]}</span>
+                  )}
+                  <X className="size-3 shrink-0" aria-hidden="true" />
+                </button>
+              </div>
+            )}
             <label className="block px-2">
               <span className="sr-only">消息</span>
               <Textarea
@@ -291,6 +387,7 @@ export function Composer<TMetadata = unknown>({
                   setSelectedSkillIndex(0);
                   setSkillMenuDismissed(false);
                   setProductSkillMenuOpen(false);
+                  setAgentMenuOpen(false);
                 }}
                 onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
                 onKeyDown={keyDown}
@@ -309,8 +406,9 @@ export function Composer<TMetadata = unknown>({
                 listId={skillListId}
                 skills={menuSkills}
                 selected={selectedSkill}
-                trigger={showProductSkills ? "@" : "/"}
-                onSelect={showProductSkills ? selectProductSkill : onSkillInvoke && invokeSkill}
+                trigger={showProductSkills || showAgentMenu ? "@" : "/"}
+                ariaLabel={showAgentMenu ? "选择 Agent" : undefined}
+                onSelect={showProductSkills || showAgentMenu || onSkillInvoke ? selectMenuEntry : undefined}
               />
             )}
 
@@ -329,12 +427,35 @@ export function Composer<TMetadata = unknown>({
                     onClick={() => {
                       setProductSkillMenuOpen(!showProductSkills);
                       setSkillMenuDismissed(showProductSkills);
+                      setAgentMenuOpen(false);
                       setSelectedSkillIndex(0);
                       textareaRef.current?.focus();
                     }}
                   >
                     <Puzzle className="size-3.5 shrink-0" aria-hidden="true" />
                     <span>技能</span>
+                    <ChevronDown className="size-3 shrink-0" aria-hidden="true" />
+                  </button>
+                )}
+                {agents.length > 0 && onAgentChange && (
+                  <button
+                    type="button"
+                    disabled={locked}
+                    aria-label="选择 Agent"
+                    aria-haspopup="listbox"
+                    aria-expanded={showAgentMenu}
+                    aria-controls={showAgentMenu ? skillListId : undefined}
+                    className="nova-composer-option-trigger"
+                    onClick={() => {
+                      setAgentMenuOpen(!showAgentMenu);
+                      setSkillMenuDismissed(showAgentMenu);
+                      setProductSkillMenuOpen(false);
+                      setSelectedSkillIndex(0);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    <Bot className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span>Agent</span>
                     <ChevronDown className="size-3 shrink-0" aria-hidden="true" />
                   </button>
                 )}

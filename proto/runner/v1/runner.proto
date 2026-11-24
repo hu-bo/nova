@@ -97,6 +97,122 @@ message ExecuteCommandRequest {
   bytes stdin = 6;
 }
 
+// 本地受限资源协议（docs/nova-skills.md §4.3）：技能与 Agent 源文件的发现、
+// 目录发布与按摘要读取。协议字段只携带相对定位（源根/工作区根之内），
+// 不接受任何绝对路径；全局资源不作为通用 workspace 注册。
+
+enum ResourceKind {
+  RESOURCE_KIND_UNSPECIFIED = 0;
+  RESOURCE_KIND_SKILL = 1;
+  RESOURCE_KIND_AGENT = 2;
+}
+
+enum ResourceScope {
+  RESOURCE_SCOPE_UNSPECIFIED = 0;
+  RESOURCE_SCOPE_GLOBAL = 1;
+  RESOURCE_SCOPE_PROJECT = 2;
+}
+
+message LocalResourceEntry {
+  ResourceKind kind = 1;
+  ResourceScope scope = 2;
+  // global 时为空；project 时为 Runner 注册工作区 ID。
+  string workspace_id = 3;
+  // project：相对注册工作区根的 canonicalCwd 目录标识（根目录用 "."）；global 为空。
+  string relative_dir = 4;
+  // 经小写 kebab-case 校验的条目名（目录名/文件名）。
+  string name = 5;
+  string description = 6;
+  // 入口文件（SKILL.md 或 <name>.md）当前内容摘要。
+  string sha256 = 7;
+  uint64 size_bytes = 8;
+}
+
+message LocalResourceDiagnostic {
+  // 与 @nova/agent-ui-contracts skillCatalogDiagnosticSchema 的 code 枚举一致：
+  // missing_home | permission_denied | invalid_frontmatter | file_too_large |
+  // duplicate_name | path_escape | truncated | scan_timeout | scan_error
+  string code = 1;
+  string message = 2;
+  string name = 3;
+  // 只允许相对源根的路径，绝不携带绝对路径。
+  string path = 4;
+}
+
+message ResourceCatalogPublished {
+  // 每次成功发布递增；重连（新 connection epoch）后重新发布完整目录。
+  uint64 catalog_revision = 1;
+  // 对定向刷新（RefreshResourceCatalog）的应答回带其 refresh_id；自发发布为空。
+  string refresh_id = 2;
+  // 扫描被截断或部分失败时为 false，不以空结果冒充成功。
+  bool complete = 3;
+  repeated LocalResourceEntry entries = 4;
+  repeated LocalResourceDiagnostic diagnostics = 5;
+}
+
+message RefreshResourceCatalog {
+  // 服务端关联 ID；Runner 在成功与失败的 ResourceCatalogPublished 应答中原样回带。
+  string refresh_id = 1;
+  ResourceScope scope = 2;
+  // scope=project 时必填（注册工作区 ID）；scope=global 时为空。
+  string workspace_id = 3;
+  // scope=project 时为要单独发现的项目层目录标识（"." 表示工作区根）；global 为空。
+  string relative_dir = 4;
+}
+
+message ReadResourceSnapshotRequest {
+  ResourceKind kind = 1;
+  ResourceScope scope = 2;
+  string workspace_id = 3;
+  string relative_dir = 4;
+  string name = 5;
+  // P0 只允许入口路径（skill: "SKILL.md"；agent: "<name>.md"）。
+  // 留空时由 Runner 按 kind+name 推导；非空则必须与推导结果一致。
+  string relative_path = 6;
+  // 必填：目录发布时的入口摘要。当前内容摘要不一致时返回 CONFLICT（消息含当前摘要），
+  // 不返回新内容（§4.3「不以新内容替代旧摘要」）。
+  string expected_sha256 = 7;
+}
+
+message ReadResourceSnapshotResult {
+  bytes contents = 1;
+  string sha256 = 2;
+  uint64 size_bytes = 3;
+}
+
+// P0-G2 预留的 Runner 侧全局/项目资源写入：目标一律由 scope + 合法条目名 +
+// 包内相对路径在已知资源源根内解析，不接收绝对路径；符号链接逃逸拒绝。
+message WriteResourceFileRequest {
+  ResourceKind kind = 1;
+  ResourceScope scope = 2;
+  string workspace_id = 3;
+  string relative_dir = 4;
+  string name = 5;
+  // P0 只允许入口路径，规则同 ReadResourceSnapshotRequest。
+  string relative_path = 6;
+  bytes contents = 7;
+  // 空 = 仅创建且目标必须不存在（否则 EXISTS）；非空 = CAS，与当前摘要不符返回 CONFLICT。
+  string expected_sha256 = 8;
+}
+
+message WriteResourceFileResult {
+  string sha256 = 1;
+  uint64 size_bytes = 2;
+  bool created = 3;
+}
+
+// 工作区路径批量删除（P1-F1 tmp 清理的协议缺口；§5.2）：只接受工作区根相对
+// 路径（`.nova/runs/<runId>/tmp` 形态），服务端与 Runner 各自校验边界。
+// `removed` 按顶层目标计数：目录整树计 1，符号链接只删链接本身，
+// 不存在的路径视为已清理（幂等，不计数）。
+message DeleteWorkspacePathsRequest {
+  repeated string relative_paths = 1;
+}
+
+message DeleteWorkspacePathsResult {
+  uint32 removed = 1;
+}
+
 message Operation {
   string operation_id = 1;
   string target_boot_id = 2;
@@ -113,6 +229,9 @@ message Operation {
     ExecuteCommandRequest execute_command = 14;
     ApplyPatchRequest apply_patch = 15;
     ReadTextRequest read_text = 16;
+    ReadResourceSnapshotRequest read_resource_snapshot = 17;
+    WriteResourceFileRequest write_resource_file = 18;
+    DeleteWorkspacePathsRequest delete_workspace_paths = 19;
   }
 }
 
@@ -196,6 +315,9 @@ message OperationResult {
     ExecuteCommandResult execute_command = 14;
     ApplyPatchResult apply_patch = 15;
     ReadTextFileResult read_text = 16;
+    ReadResourceSnapshotResult read_resource_snapshot = 17;
+    WriteResourceFileResult write_resource_file = 18;
+    DeleteWorkspacePathsResult delete_workspace_paths = 19;
   }
 }
 
@@ -216,6 +338,7 @@ message RunnerEnvelope {
     OperationResult result = 13;
     ReconcileRequest reconcile = 14;
     OperationOutput output = 15;
+    ResourceCatalogPublished resource_catalog_published = 17;
   }
 }
 
@@ -229,5 +352,6 @@ message ServerEnvelope {
     QueryOperation query = 14;
     AcknowledgeResult acknowledge = 15;
     AcknowledgeOutput acknowledge_output = 16;
+    RefreshResourceCatalog refresh_resource_catalog = 17;
   }
 }
