@@ -4725,6 +4725,11 @@ export type GetSpec200TaskPlanItem = {
      */
   dependsOn: string[];
   /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  designRef?: string;
+  /**
      * @minItems 1
      * @maxItems 10
      */
@@ -4901,6 +4906,11 @@ export type SaveSpecDraftBodyContent = string | ({
      */
   dependsOn: string[];
   /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  designRef?: string;
+  /**
      * @minItems 1
      * @maxItems 10
      */
@@ -4999,6 +5009,11 @@ export type SaveSpecDraft200TaskPlanItem = {
      * @items.pattern ^T-\d{2,}$
      */
   dependsOn: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  designRef?: string;
   /**
      * @minItems 1
      * @maxItems 10
@@ -5191,6 +5206,11 @@ export type ReviewSpecStage200TaskPlanItem = {
      * @items.pattern ^T-\d{2,}$
      */
   dependsOn: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  designRef?: string;
   /**
      * @minItems 1
      * @maxItems 10
@@ -5572,6 +5592,11 @@ export type RecordSpecEvidence200TaskPlanItem = {
      */
   dependsOn: string[];
   /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  designRef?: string;
+  /**
      * @minItems 1
      * @maxItems 10
      */
@@ -5763,6 +5788,11 @@ export type AcceptSpec200TaskPlanItem = {
      * @items.pattern ^T-\d{2,}$
      */
   dependsOn: string[];
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  designRef?: string;
   /**
      * @minItems 1
      * @maxItems 10

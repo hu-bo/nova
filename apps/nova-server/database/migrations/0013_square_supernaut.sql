@@ -1,4 +1,4 @@
-﻿CREATE TABLE "run_artifacts" (
+CREATE TABLE "run_artifacts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"run_id" uuid NOT NULL,
 	"tool_execution_id" text NOT NULL,

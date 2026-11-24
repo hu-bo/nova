@@ -180,6 +180,10 @@ function remote(files = new MemoryFiles()) {
     capabilities: [],
     maxConcurrency: 4,
   };
+  const unsupported = async (): Promise<{ ok: false; error: RunnerFailure }> => ({
+    ok: false,
+    error: failure("UNSUPPORTED"),
+  });
   const session: RunnerSession = {
     identity,
     bootId: "boot",
@@ -212,6 +216,13 @@ function remote(files = new MemoryFiles()) {
     onStatus: () => () => undefined,
     cancel: async (): Promise<Result<void>> => ({ ok: true, value: undefined }),
     query: async () => ({ ok: false, error: failure("NOT_FOUND") }),
+    supportsLocalResources: () => false,
+    supportsLocalResourceWrites: () => false,
+    onResourceCatalog: () => () => undefined,
+    refreshResources: unsupported,
+    readResourceSnapshot: unsupported,
+    writeResourceFile: unsupported,
+    deleteWorkspacePaths: unsupported,
     close: async () => {
       closed = true;
     },
@@ -410,6 +421,91 @@ test("unknown remote outcomes stop the real loop without replaying or issuing an
   assert.equal(result.toolCalls[0]?.outcome, "unknown");
   assert.equal(model.requests.length, 1);
   assert.equal(runner.files.writes.length, 1);
+});
+
+test("large command output preserves the exit status and reaches the next model step", async (t) => {
+  for (const scenario of [
+    { stdout: "s".repeat(65_536), stderr: "", limit: 100_000, exitCode: 0 },
+    { stdout: '输出😀"\n'.repeat(1_000), stderr: "警告\t\u0001".repeat(1_000), limit: 8_000, exitCode: 7 },
+  ]) {
+    const { stdout, stderr, limit, exitCode } = scenario;
+    const runner = remote();
+    const events: AgentEvent[] = [];
+    const model = new ScriptedModel([call("bash", { command: "fixture", args: [] }), { text: "done" }]);
+    const harness = await createCodingHarness({
+      session: runner.session,
+      workspaceId: runner.workspaceId,
+      model: model.binding(),
+      profile: { systemPrompt: "Run the command." },
+      maxToolOutputBytes: limit,
+      onEvent(event) {
+        events.push(event);
+      },
+      createContext: (context) => ({
+        fs: runner.files,
+        cwd: ".",
+        signal: context.signal,
+        async exec(_command, options) {
+          options?.onOutput?.({ stream: "stdout", text: stdout });
+          if (stderr) options?.onOutput?.({ stream: "stderr", text: stderr });
+          return {
+            ok: true,
+            value: {
+              operationId: context.executionId,
+              exitCode,
+              stdout,
+              stderr,
+              durationMs: 1,
+              truncated: false,
+              outputGap: false,
+            },
+          };
+        },
+      }),
+    });
+    t.after(() => harness.close());
+
+    const result = await harness.run("Run command");
+    assert.equal(result.status, "succeeded", JSON.stringify(result.error));
+    const tool = result.toolCalls[0];
+    assert.equal(tool?.status, "succeeded");
+    assert.equal(model.requests.length, 2);
+    assert.ok(Buffer.byteLength(JSON.stringify(tool.value)) <= limit);
+    const value = tool.value;
+    assert.ok(value && typeof value === "object" && !Array.isArray(value));
+    assert.equal(value.status, exitCode === 0 ? "ok" : "error");
+    const details = value.details;
+    assert.ok(details && typeof details === "object" && !Array.isArray(details));
+    assert.equal(details.exitCode, exitCode);
+    assert.equal(details.truncated, true);
+    assert.equal(details.outputGap, false);
+    assert.ok(typeof details.stdout === "string");
+    assert.match(details.stdout, /partial output truncated/);
+    if (stderr) {
+      assert.ok(typeof details.stderr === "string");
+      assert.match(details.stderr, /partial output truncated/);
+    }
+    assert.deepEqual(
+      events.filter((event) => event.type === "tool.output").map((event) => event.text),
+      [stdout, stderr].filter(Boolean),
+    );
+  }
+});
+
+test("rejecting a returned result at the output boundary leaves its outcome known", async (t) => {
+  const model = new ScriptedModel([call("large_result"), { text: "done" }]);
+  const harness = await createCodingHarness({
+    model: model.binding(),
+    tools: [hostTool("large_result", "write", async () => ({ stdout: "s".repeat(1_000) }))],
+    maxToolOutputBytes: 128,
+  });
+  t.after(() => harness.close());
+
+  const result = await harness.run("Run tool");
+  assert.equal(result.status, "succeeded", JSON.stringify(result.error));
+  assert.equal(result.toolCalls[0]?.status, "failed");
+  assert.equal(result.toolCalls[0]?.error?.code, "INVALID_TOOL_OUTPUT");
+  assert.equal(result.toolCalls[0]?.outcome, "known");
 });
 
 test("custom plan paths, trusted restoration, legacy restoration and disabled gates remain distinct", async (t) => {

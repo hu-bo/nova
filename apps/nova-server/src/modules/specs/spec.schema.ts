@@ -16,6 +16,7 @@ export const taskSchema = z.object({
   title: z.string().trim().min(1).max(200),
   objective: z.string().trim().min(1).max(4000),
   dependsOn: z.array(z.string().regex(/^T-\d{2,}$/)).max(50),
+  designRef: z.string().trim().min(1).max(200).optional(),
   checks: z.array(taskCheckSchema).min(1).max(10),
 }).strict();
 export const taskPlanSchema = z.array(taskSchema).max(50);

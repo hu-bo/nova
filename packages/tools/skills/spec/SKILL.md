@@ -11,7 +11,7 @@ For requirements, inspect the bound specification and relevant workspace context
 
 Design maps affected modules, state transitions, failure handling and verification strategies to confirmed AC IDs.
 
-Tasks content is a JSON array. Each task has key (`T-01`), title, objective, dependsOn and checks. Each check has key, criterionIds, label and method: `{kind:"manual"}` or `{kind:"command",command,args,cwd?}`. Dependencies must exist and be acyclic; cover every AC ID.
+Tasks content is a JSON array. Each task has key (`T-01`), title, objective (what to do), designRef (a short quote or section reference into the confirmed design document that this task implements; required before the plan can be confirmed), dependsOn and checks (the task's acceptance: each check has key, criterionIds, label and method: `{kind:"manual"}` or `{kind:"command",command,args,cwd?}`). Dependencies must exist and be acyclic; cover every AC ID. Verification happens task by task inside the task plan: run a task, verify its checks one by one, and the task is complete when every check has passing evidence; there is no separate acceptance stage.
 
 When generating or revising a draft, call spec_update with complete replacement content and the revision returned by spec_read. After clarifying requirements, submit the draft without requiring the user to ask again. Submit one stage per Run. For tasks, content is the serialized JSON array.
 

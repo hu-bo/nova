@@ -4,7 +4,9 @@ import type { GetSpec200 } from '@/api/generated/projectsAPI.schemas';
 import { ApiError } from '@/api/api-error';
 import { SpecAcceptance } from '@/features/specs/spec-acceptance';
 import {
+  generationBlockReason,
   parseAcceptanceCriteria,
+  specGenerationError,
   specReviewError,
   taskDependencyError,
 } from '@/features/specs/spec-workbench-model';
@@ -76,6 +78,43 @@ it('explains missing and duplicate acceptance criteria in review errors', () => 
     ),
   ).toContain('AC-01 重复');
   expect(specReviewError(new ApiError(409, 409, '状态已变更'))).toBe('状态已变更');
+});
+it('gates draft generation behind confirmed upstream stages', () => {
+  const reviews = spec.reviews;
+  expect(generationBlockReason({ ...spec, reviews }, 'requirements')).toBeNull();
+  expect(generationBlockReason({ ...spec, reviews }, 'design')).toBe('请先确认需求');
+  expect(generationBlockReason({ ...spec, reviews }, 'tasks')).toBe('请先确认需求');
+  const requirementsConfirmed = {
+    ...spec,
+    reviews: { requirements: { revision: 2, reviewerId: 'user', reviewedAt: 'now' } },
+  };
+  expect(generationBlockReason(requirementsConfirmed, 'design')).toBeNull();
+  expect(generationBlockReason(requirementsConfirmed, 'tasks')).toBe('请先确认设计');
+  const designConfirmed = {
+    ...requirementsConfirmed,
+    reviews: {
+      ...requirementsConfirmed.reviews,
+      design: { revision: 2, reviewerId: 'user', reviewedAt: 'now' },
+    },
+  };
+  expect(generationBlockReason(designConfirmed, 'tasks')).toBeNull();
+});
+it('explains generation conflicts in Chinese', () => {
+  expect(
+    specGenerationError(
+      new ApiError(409, 409, 'Specification session is busy', undefined, undefined, {
+        reason: 'SPEC_BUSY',
+      }),
+    ),
+  ).toContain('会话正忙');
+  expect(
+    specGenerationError(
+      new ApiError(409, 409, 'generic', undefined, undefined, {
+        reason: 'SPEC_REVIEW_REQUIRED',
+      }),
+    ),
+  ).toContain('上游阶段');
+  expect(specGenerationError(new ApiError(409, 409, '状态已变更'))).toBe('状态已变更');
 });
 it('detects missing and cyclic task dependencies before save', () => {
   expect(taskDependencyError([{ ...spec.taskPlan[0]!, dependsOn: ['T-99'] }])).toContain('不存在');

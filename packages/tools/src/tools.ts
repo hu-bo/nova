@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { basename, posix } from "node:path";
 import { defineTool, ToolFailureError, type JsonValue, type ToolDefinition } from "@nnova/harness";
-import type { DirectoryEntry, ToolContext as RunnerToolContext } from "@nova/runner-sdk";
+import type { DirectoryEntry, ExecOutput, ToolContext as RunnerToolContext } from "@nova/runner-sdk";
 import { formatPatch, structuredPatch } from "diff";
 import { z } from "zod";
 
@@ -65,11 +65,60 @@ function remoteFailure(
 function toJson(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
+
+const partialOutputMarker = "\n[partial output truncated]";
+
 function boundedOutput(output: { stdout: string; stderr: string }) {
-  const clip = (value: string) =>
-    value.length <= 32_768 ? value : `${value.slice(0, 32_768)}\n[partial output truncated]`;
+  const clip = (value: string) => (value.length <= 32_768 ? value : value.slice(0, 32_768) + partialOutputMarker);
   return { stdout: clip(output.stdout), stderr: clip(output.stderr) };
 }
+
+function jsonStringBytes(value: string): number {
+  return Buffer.byteLength(JSON.stringify(value)) - 2;
+}
+
+function commandOutputPreview(text: string, maxBytes: number): string {
+  if (text.length <= maxBytes && jsonStringBytes(text) <= maxBytes) return text;
+  const prefixBudget = maxBytes - jsonStringBytes(partialOutputMarker);
+  if (prefixBudget <= 0) return "";
+
+  // Measure complete code points so the byte count increases with each prefix.
+  const prefix = (end: number) => {
+    if (/[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(text.slice(end - 1, end + 1))) end--;
+    return text.slice(0, end);
+  };
+  let low = 0;
+  let high = Math.min(text.length, prefixBudget);
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (jsonStringBytes(prefix(mid)) <= prefixBudget) low = mid;
+    else high = mid - 1;
+  }
+  return prefix(low) + partialOutputMarker;
+}
+
+function commandResult(output: ExecOutput, maxBytes: number | undefined) {
+  const { stdout, stderr, ...receipt } = output;
+  const status = receipt.exitCode === 0 ? "ok" : "error";
+  const exited = `(command exited ${receipt.exitCode})`;
+  const result = (stdout: string, stderr: string, truncated: boolean) => ({
+    status,
+    content: [stdout, stderr].filter(Boolean).join("\n") || exited,
+    details: { ...receipt, stdout, stderr, truncated },
+  });
+  if (maxBytes === undefined) return result(stdout, stderr, receipt.truncated);
+  if (2 * (stdout.length + stderr.length) <= maxBytes) {
+    const full = result(stdout, stderr, receipt.truncated);
+    if (Buffer.byteLength(JSON.stringify(full)) <= maxBytes) return full;
+  }
+
+  // Each stream is represented twice. Reserve two bytes for the escaped newline in content.
+  const metadataBytes = Buffer.byteLength(JSON.stringify(result("", "", true)));
+  const copies = stdout && stderr ? 4 : 2;
+  const previewBytes = Math.max(0, Math.floor((maxBytes - metadataBytes - 2) / copies));
+  return result(commandOutputPreview(stdout, previewBytes), commandOutputPreview(stderr, previewBytes), true);
+}
+
 function resourcePath(value: string): string {
   return posix.normalize(value.replaceAll("\\", "/")).toLowerCase();
 }
@@ -294,14 +343,7 @@ export const bash = tool({
         args: input.args,
         streamedOutput: boundedOutput(streamed),
       });
-    const content =
-      [result.value.stdout, result.value.stderr].filter(Boolean).join("\n") ||
-      `(command exited ${result.value.exitCode})`;
-    return {
-      status: result.value.exitCode === 0 ? "ok" : "error",
-      content,
-      details: result.value,
-    };
+    return commandResult(result.value, harnessContext.maxOutputBytes);
   },
 });
 

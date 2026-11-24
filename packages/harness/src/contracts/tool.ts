@@ -10,6 +10,8 @@ export interface ToolContext {
   runId: string;
   executionId: string;
   callId: string;
+  /** Size limit for the serialized return value, independent of streamed output. */
+  readonly maxOutputBytes?: number;
   output?(channel: "stdout" | "stderr", text: string): Promise<void>;
   idempotencyKey: string;
 }

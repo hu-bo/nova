@@ -212,7 +212,7 @@ export class SpecService {
     const snapshot = await this.get(projectId, specId, ownerId, revision);
     const taskMarkdown = ["# Tasks", "", ...snapshot.taskPlan.flatMap((task) => [
       `## ${task.key} ${task.title}`, "", `- Status: ${snapshot.tasks.find((entry) => entry.key === task.key)?.status ?? "not_started"}`,
-      `- Objective: ${task.objective}`, `- Depends on: ${task.dependsOn.length ? task.dependsOn.join(", ") : "None"}`, "- Checks:",
+      `- Objective: ${task.objective}`, `- Depends on: ${task.dependsOn.length ? task.dependsOn.join(", ") : "None"}`, `- Design ref: ${task.designRef ?? "None"}`, "- Checks:",
       ...task.checks.map((check) => {
         const currentAttempt = snapshot.tasks.find((item) => item.key === task.key)?.attemptId;
         const passed = passingEvidenceForCheck(snapshot.evidence, task.key, check.key, currentAttempt ?? undefined);
@@ -291,7 +291,7 @@ export class SpecService {
       if (queued) throw new DomainError("CONFLICT", "Specification session has queued work", { reason: "SPEC_BUSY" });
       if (version.acceptance) throw new DomainError("CONFLICT", "Accepted revision is frozen", { reason: "SPEC_ACCEPTED" });
       const [last] = await tx.select({ sequence: pendingInputs.sequence }).from(pendingInputs).where(eq(pendingInputs.conversationId, conversation.id)).orderBy(desc(pendingInputs.sequence)).limit(1);
-      const prompt = `请执行任务 ${task.key}：${task.title}\n\n目标：\n${task.objective}\n\n验证检查（请实际运行并记录结果）：\n${task.checks.map((check) => `- ${check.key} ${check.label}: ${check.method.kind === "manual" ? "人工复核" : [check.method.command, ...check.method.args].join(" ")} （覆盖 ${check.criterionIds.join(", ")}）`).join("\n")}\n\n请完成适用的检查，再报告结果。`;
+      const prompt = `请执行任务 ${task.key}：${task.title}\n\n目标：\n${task.objective}\n${task.designRef ? `\n设计引用（实现须对应此设计章节）：\n${task.designRef}\n` : ""}\n验证检查（请实际运行并记录结果）：\n${task.checks.map((check) => `- ${check.key} ${check.label}: ${check.method.kind === "manual" ? "人工复核" : [check.method.command, ...check.method.args].join(" ")} （覆盖 ${check.criterionIds.join(", ")}）`).join("\n")}\n\n请完成适用的检查，再报告结果。`;
       const payload: SubmitInput & { spec: { kind: "task"; specId: string; revision: number; taskKey: string; attemptId: string } } = { mode: "next_run", blocks: [{ type: "text", id: "spec-task-" + task.key, text: prompt }], configuration: configurationSchema.parse({ ...(conversation.metadata.configuration ?? {}), ...config, mode: "build" }), spec: { kind: "task", specId, revision: expected, taskKey: task.key, attemptId: randomUUID() } };
       const [input] = await tx.insert(pendingInputs).values({ conversationId: conversation.id, sequence: (last?.sequence ?? 0n) + 1n, mode: "next_run", payload, idempotencyKey: "spec-task:" + key, fingerprint: fp }).returning();
       if (!input) throw new Error("Task queue insert failed");

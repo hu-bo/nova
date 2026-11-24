@@ -129,6 +129,7 @@ export class ToolExecutor implements ToolRuntime {
         runId: run.runId,
         executionId,
         callId: call.callId,
+        maxOutputBytes: this.limits.maxOutputBytes,
         output: async (channel, text) => {
           const offset = offsets[channel];
           run.emit({
@@ -200,13 +201,18 @@ export class ToolExecutor implements ToolRuntime {
               throw error;
           }
         }
-        result = {
-          name: call.name,
-          callId: call.callId,
-          executionId,
-          status: "succeeded",
-          value: jsonValue(value, this.limits.maxOutputBytes),
-        };
+        try {
+          result = {
+            name: call.name,
+            callId: call.callId,
+            executionId,
+            status: "succeeded",
+            value: jsonValue(value, this.limits.maxOutputBytes),
+          };
+        } catch (error) {
+          if (!(error instanceof FrameworkError) || error.code !== "INVALID_INPUT") throw error;
+          throw new ToolFailureError("INVALID_TOOL_OUTPUT", error.message, "known");
+        }
       }
     } catch (error) {
       if (

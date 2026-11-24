@@ -20,3 +20,4 @@ packages/runner/vendor/
 .workbuddy-ai
 submodule/
 .openchamber
+.nova/

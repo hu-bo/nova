@@ -57,6 +57,7 @@ export function validateTaskPlan(tasks: SpecTask[], criteria: string[]) {
   const graph = new Map<string, string[]>();
   const covered = new Set<string>();
   for (const task of tasks) {
+    if (!task.designRef?.trim()) throw new DomainError("VALIDATION_ERROR", `Task ${task.key} needs a design reference`, { reason: "SPEC_DESIGN_REF_MISSING", taskKey: task.key });
     if (taskIds.has(task.key)) throw new DomainError("VALIDATION_ERROR", `Duplicate task ${task.key}`);
     taskIds.add(task.key); graph.set(task.key, task.dependsOn);
     const checkIds = new Set<string>();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   acceptSpec,
+  generateSpecDraft,
   recordSpecEvidence,
   reconcileSpecTaskAttempt,
   reviewSpecStage,
@@ -28,24 +29,28 @@ import { CommandIntent } from '@/api/command-intent';
 import { queryKeys } from '@/api/query-keys';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SettingsDialog } from '@/components/ui/settings-dialog';
 import { useIdentity } from '@/features/auth';
 import { MarkdownEditor } from './markdown-editor';
 import { useSpecQuery } from './spec.queries';
 import { SpecAcceptance } from './spec-acceptance';
 import {
+  generationBlockReason,
   parseAcceptanceCriteria,
+  specGenerationError,
   specReviewError,
   taskDependencyError,
+  taskDesignRefError,
 } from './spec-workbench-model';
 
+// 三阶段流程：验收并入任务页（逐条验收、全部通过后冻结），不再单列阶段。
 const stageList = [
   { id: 'requirements', label: '需求', icon: FileText },
   { id: 'design', label: '设计', icon: Layers3 },
   { id: 'tasks', label: '任务', icon: ListChecks },
-  { id: 'acceptance', label: '验收', icon: ShieldCheck },
 ] as const;
 type Tab = (typeof stageList)[number]['id'];
-type Stage = Exclude<Tab, 'acceptance'>;
+type Stage = Tab;
 type DraftValue = string | GetSpec200TaskPlanItem[];
 type StepState = 'active' | 'complete' | 'pending';
 const stepStates = {
@@ -82,6 +87,24 @@ function draftForStage(spec: GetSpec200, stage: Stage): DraftValue {
   if (stage === 'design') return spec.designMd ?? '';
   return spec.taskPlan;
 }
+function stageHasDraft(spec: GetSpec200, stage: Stage) {
+  if (stage === 'requirements') return spec.requirementsMd.trim().length > 0;
+  if (stage === 'design') return Boolean(spec.designMd?.trim());
+  return spec.taskPlan.length > 0;
+}
+/** 人工复核与核实原操作共用的说明弹窗；替代 window.prompt（部分环境不可用且无法测试）。 */
+type EvidenceDialog =
+  | { kind: 'manual'; taskKey: string; checkKey: string; attemptId: string; passed: boolean }
+  | { kind: 'reconcile'; attemptId: string };
+const evidenceDialogCopy = {
+  manualPassed: { title: '记录人工复核', hint: '通过说明（可留空）', required: false },
+  manualFailed: { title: '记录人工复核', hint: '未通过原因（必填）', required: true },
+  reconcile: { title: '核实原操作', hint: '核实说明（必填）', required: true },
+} satisfies Record<string, { title: string; hint: string; required: boolean }>;
+function evidenceDialogKey(dialog: EvidenceDialog): keyof typeof evidenceDialogCopy {
+  if (dialog.kind === 'reconcile') return 'reconcile';
+  return dialog.passed ? 'manualPassed' : 'manualFailed';
+}
 const stable = (value: unknown) => JSON.stringify(value);
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : '操作失败，请重试。';
@@ -90,6 +113,7 @@ const newTask = (index: number): GetSpec200TaskPlanItem => ({
   title: '',
   objective: '',
   dependsOn: [],
+  designRef: '',
   checks: [{ key: 'C-01', criterionIds: [], label: '', method: { kind: 'manual' } }],
 });
 
@@ -97,7 +121,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
   const current = useSpecQuery(projectId, specId);
   const spec = current.data;
   const [tab, setTab] = useState<Tab>('requirements');
-  const stage: Stage = tab === 'acceptance' ? 'tasks' : tab;
+  const stage: Stage = tab;
   const [preview, setPreview] = useState(true);
   const [draft, setDraft] = useState<DraftValue>('');
   const [baseRevision, setBaseRevision] = useState(0);
@@ -105,7 +129,11 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+  const [generationNotice, setGenerationNotice] = useState('');
+  const [evidenceDialog, setEvidenceDialog] = useState<EvidenceDialog | null>(null);
+  const [evidenceNote, setEvidenceNote] = useState('');
   const attemptIntents = useRef(new Map<string, CommandIntent>());
+  const generationIntents = useRef(new Map<Stage, CommandIntent>());
   const client = useQueryClient();
   const { identity } = useIdentity();
   const serverDraft = useMemo(() => (spec ? draftForStage(spec, stage) : ''), [spec, stage]);
@@ -115,6 +143,9 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
     setBaseRevision(spec.revision);
     setConflict(false);
   }, [spec, serverDraft, dirty]);
+  useEffect(() => {
+    setGenerationNotice('');
+  }, [spec?.revision]);
   const updateDraft = (value: DraftValue) => {
     setDraft(value);
     setDirty(stable(value) !== stable(serverDraft));
@@ -144,8 +175,15 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
       setPending(false);
     }
   }
-  const save = () =>
-    mutate(async () => {
+  const save = () => {
+    if (stage === 'tasks') {
+      const missing = taskDesignRefError(Array.isArray(draft) ? draft : []);
+      if (missing) {
+        setError(missing);
+        return;
+      }
+    }
+    void mutate(async () => {
       const result = await saveSpecDraft(projectId, specId, {
         expectedRevision: baseRevision,
         stage,
@@ -157,6 +195,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
       setDirty(false);
       setConflict(false);
     });
+  };
   const runTask = (taskKey: string) =>
     mutate(async () => {
       if (!spec) return;
@@ -168,33 +207,53 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
       });
       intent.accepted();
     });
-  const recordManual = async (
+  const generateDraft = () =>
+    mutate(async () => {
+      if (!spec) return;
+      const intent = generationIntents.current.get(stage) ?? new CommandIntent();
+      generationIntents.current.set(stage, intent);
+      const body = { expectedRevision: spec.revision, stage };
+      await generateSpecDraft(projectId, specId, body, {
+        headers: { 'Idempotency-Key': intent.prepare({ specId, ...body }) },
+      });
+      intent.accepted();
+      setGenerationNotice('已启动生成：进度见专用会话，草稿落定后本页自动更新。');
+    }, specGenerationError);
+  const openManualDialog = (
     taskKey: string,
     checkKey: string,
     attemptId: string,
     passed: boolean,
   ) => {
-    if (!spec) return;
-    const note = window.prompt(passed ? '记录通过说明（可留空）' : '记录未通过原因');
-    if (note === null || (!passed && !note.trim())) return;
-    await mutate(() =>
+    setEvidenceNote('');
+    setEvidenceDialog({ kind: 'manual', taskKey, checkKey, attemptId, passed });
+  };
+  const openReconcileDialog = (attemptId: string) => {
+    setEvidenceNote('');
+    setEvidenceDialog({ kind: 'reconcile', attemptId });
+  };
+  const submitEvidenceDialog = () => {
+    if (!spec || !evidenceDialog) return;
+    const note = evidenceNote.trim();
+    if (evidenceDialogCopy[evidenceDialogKey(evidenceDialog)].required && !note) return;
+    const dialog = evidenceDialog;
+    setEvidenceDialog(null);
+    if (dialog.kind === 'reconcile') {
+      void mutate(() =>
+        reconcileSpecTaskAttempt(projectId, specId, dialog.attemptId, {
+          expectedRevision: spec.revision,
+          note,
+        }),
+      );
+      return;
+    }
+    void mutate(() =>
       recordSpecEvidence(projectId, specId, {
         expectedRevision: spec.revision,
         evidenceId: crypto.randomUUID(),
-        taskKey,
-        checkKey,
-        source: { kind: 'manual', attemptId, passed, note },
-      }),
-    );
-  };
-  const reconcile = async (attemptId: string) => {
-    if (!spec) return;
-    const note = window.prompt('核对原操作回执和工作区后，记录核实说明。');
-    if (!note?.trim()) return;
-    await mutate(() =>
-      reconcileSpecTaskAttempt(projectId, specId, attemptId, {
-        expectedRevision: spec.revision,
-        note,
+        taskKey: dialog.taskKey,
+        checkKey: dialog.checkKey,
+        source: { kind: 'manual', attemptId: dialog.attemptId, passed: dialog.passed, note },
       }),
     );
   };
@@ -215,52 +274,52 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
   );
   const readonly = Boolean(spec.acceptance) || executionBusy;
   const reviewed = spec.reviews[stage]?.revision === spec.revision;
-  let content = <SpecAcceptance spec={spec} />;
-  if (tab !== 'acceptance') {
-    if (stage === 'tasks')
-      content = (
-        <TaskPlanEditor
-          value={Array.isArray(draft) ? draft : spec.taskPlan}
-          onChange={updateDraft}
-          readonly={readonly}
-        />
-      );
-    else if (!preview)
-      content = (
-        <MarkdownEditor
-          resetKey={specId + ':' + stage + ':' + spec.revision}
-          label={stage + ' Markdown 编辑器'}
-          value={typeof draft === 'string' ? draft : ''}
-          readonly={readonly}
-          onChange={updateDraft}
-        />
-      );
-    else
-      content = (
-        <article className="min-h-64 rounded-xl border bg-surface p-5 text-sm leading-7 [&_h1]:my-4 [&_h1]:text-2xl [&_h2]:my-4 [&_h2]:text-xl [&_h3]:my-3 [&_h3]:font-semibold [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-slate-950 [&_pre]:p-4 [&_pre]:text-slate-100 [&_table]:w-full [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:p-2 [&_ul]:list-disc [&_ul]:pl-6">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              h3: ({ children }) => (
-                <h3
-                  className={
-                    /^AC-\d+/.test(String(children))
-                      ? 'rounded-lg border-l-4 border-accent bg-accent/5 px-3 py-2 text-accent'
-                      : undefined
-                  }
-                >
-                  {children}
-                </h3>
-              ),
-            }}
-          >
-            {typeof draft === 'string' && draft.trim()
-              ? draft
-              : '在右侧会话中与 Agent 讨论并生成这一阶段的内容，也可以直接编辑 Markdown。'}
-          </ReactMarkdown>
-        </article>
-      );
-  }
+  const generationBlock = generationBlockReason(spec, stage);
+  const dialogCopy = evidenceDialog ? evidenceDialogCopy[evidenceDialogKey(evidenceDialog)] : null;
+  let content: ReactNode;
+  if (stage === 'tasks')
+    content = (
+      <TaskPlanEditor
+        value={Array.isArray(draft) ? draft : spec.taskPlan}
+        onChange={updateDraft}
+        readonly={readonly}
+      />
+    );
+  else if (!preview)
+    content = (
+      <MarkdownEditor
+        resetKey={specId + ':' + stage + ':' + spec.revision}
+        label={stage + ' Markdown 编辑器'}
+        value={typeof draft === 'string' ? draft : ''}
+        readonly={readonly}
+        onChange={updateDraft}
+      />
+    );
+  else
+    content = (
+      <article className="min-h-64 rounded-xl border bg-surface p-5 text-sm leading-7 [&_h1]:my-4 [&_h1]:text-2xl [&_h2]:my-4 [&_h2]:text-xl [&_h3]:my-3 [&_h3]:font-semibold [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-slate-950 [&_pre]:p-4 [&_pre]:text-slate-100 [&_table]:w-full [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:p-2 [&_ul]:list-disc [&_ul]:pl-6">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            h3: ({ children }) => (
+              <h3
+                className={
+                  /^AC-\d+/.test(String(children))
+                    ? 'rounded-lg border-l-4 border-accent bg-accent/5 px-3 py-2 text-accent'
+                    : undefined
+                }
+              >
+                {children}
+              </h3>
+            ),
+          }}
+        >
+          {typeof draft === 'string' && draft.trim()
+            ? draft
+            : '在右侧会话中与 Agent 讨论并生成这一阶段的内容，也可以直接编辑 Markdown。'}
+        </ReactMarkdown>
+      </article>
+    );
   return (
     <div className="min-w-0 space-y-5">
       <ol
@@ -269,10 +328,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
         className="flex items-center rounded-xl border bg-surface p-2"
       >
         {stageList.map((item, index) => {
-          const confirmed =
-            item.id === 'acceptance'
-              ? Boolean(spec.acceptance)
-              : spec.reviews[item.id]?.revision === spec.revision;
+          const confirmed = spec.reviews[item.id]?.revision === spec.revision;
           let state: StepState = 'pending';
           if (tab === item.id) state = 'active';
           else if (confirmed) state = 'complete';
@@ -293,6 +349,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
                   setTab(item.id);
                   setPreview(true);
                   setError('');
+                  setGenerationNotice('');
                 }}
                 className={
                   'flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-lg border px-1 py-3 text-xs transition-colors sm:flex-row sm:justify-center sm:gap-2 ' +
@@ -328,17 +385,27 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
           );
         })}
       </ol>
-      {tab !== 'acceptance' && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            {stage !== 'tasks' && (
-              <Button variant="ghost" size="sm" onPress={() => setPreview(!preview)}>
-                {preview ? '编辑 Markdown' : '预览'}
-              </Button>
-            )}
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          {stage !== 'tasks' && (
+            <Button variant="ghost" size="sm" onPress={() => setPreview(!preview)}>
+              {preview ? '编辑 Markdown' : '预览'}
+            </Button>
+          )}
+        </div>
           {!readonly && (
             <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={pending || Boolean(generationBlock)}
+                {...(generationBlock ? { title: generationBlock } : {})}
+                onPress={() => void generateDraft()}
+              >
+                <Sparkles size={14} />
+                {(stageHasDraft(spec, stage) ? '重新生成' : '生成') +
+                  stageList.find((item) => item.id === stage)?.label}
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -368,12 +435,16 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
                 <Check size={14} />
                 {reviewed ? '已确认' : '确认' + stageList.find((item) => item.id === stage)?.label}
               </Button>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
+      {generationNotice && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {generationNotice}
+        </p>
       )}
       {content}
-      {stage === 'requirements' && tab !== 'acceptance' && (
+      {stage === 'requirements' && (
         <div className="flex flex-wrap gap-2" aria-label="已解析验收条件">
           {parseAcceptanceCriteria(typeof draft === 'string' ? draft : '').map((criterion) => (
             <span
@@ -385,17 +456,18 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
           ))}
         </div>
       )}
-      {tab === 'tasks' && (
+      {stage === 'tasks' && (
         <TaskExecutionList
           spec={spec}
           canRun={!readonly && reviewed}
           canRecordEvidence={!spec.acceptance}
           busy={pending}
           onRun={(key) => void runTask(key)}
-          onManual={(...args) => void recordManual(...args)}
-          onReconcile={(id) => void reconcile(id)}
+          onManual={openManualDialog}
+          onReconcile={openReconcileDialog}
         />
       )}
+      {stage === 'tasks' && <SpecAcceptance spec={spec} />}
       {error && (
         <p role="alert" className="text-sm text-danger">
           {error}
@@ -423,7 +495,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
           </Button>
         </div>
       )}
-      {tab === 'acceptance' && !readonly && (
+      {stage === 'tasks' && !readonly && (
         <div className="flex justify-end">
           <Button
             disabled={
@@ -437,6 +509,48 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
             验收并冻结
           </Button>
         </div>
+      )}
+      {evidenceDialog && dialogCopy && (
+        <SettingsDialog
+          open
+          onClose={() => setEvidenceDialog(null)}
+          title={dialogCopy.title}
+          description={
+            evidenceDialog.kind === 'reconcile'
+              ? '核对原操作回执和工作区后，记录核实说明。尝试 ' +
+                evidenceDialog.attemptId.slice(0, 8)
+              : `${evidenceDialog.taskKey} / ${evidenceDialog.checkKey} · ${
+                  evidenceDialog.passed ? '记录通过' : '记录未通过'
+                }`
+          }
+          icon={evidenceDialog.kind === 'reconcile' ? <ShieldCheck size={18} /> : <Check size={18} />}
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitEvidenceDialog();
+          }}
+          footer={
+            <>
+              <Button variant="ghost" onPress={() => setEvidenceDialog(null)}>
+                取消
+              </Button>
+              <Button
+                type="submit"
+                disabled={pending || (dialogCopy.required && !evidenceNote.trim())}
+              >
+                {evidenceDialog.kind === 'reconcile' ? '提交核实' : '记录结果'}
+              </Button>
+            </>
+          }
+        >
+          <label className="text-xs text-muted-foreground">
+            {dialogCopy.hint}
+            <textarea
+              className="mt-1 min-h-20 w-full rounded-lg border bg-surface px-3 py-2 text-sm text-foreground"
+              value={evidenceNote}
+              onChange={(event) => setEvidenceNote(event.target.value)}
+            />
+          </label>
+        </SettingsDialog>
       )}
     </div>
   );
@@ -498,6 +612,15 @@ function TaskPlanEditor({
               className="mt-1 min-h-20 w-full rounded-lg border bg-surface px-3 py-2 text-sm text-foreground"
               value={task.objective}
               onChange={(event) => replaceTask(taskIndex, { objective: event.target.value })}
+            />
+          </label>
+          <label className="block text-xs text-muted-foreground">
+            设计引用（本任务实现设计文档的哪部分）
+            <Input
+              className="mt-1"
+              value={task.designRef ?? ''}
+              onChange={(event) => replaceTask(taskIndex, { designRef: event.target.value })}
+              placeholder="例如：设计 §3 状态机 / §4.1 可暂停计时"
             />
           </label>
           <label className="block text-xs text-muted-foreground">

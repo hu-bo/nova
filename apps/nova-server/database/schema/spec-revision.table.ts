@@ -12,6 +12,8 @@ export type SpecTask = {
   title: string;
   objective: string;
   dependsOn: string[];
+  /** 设计文档章节引用；新计划必填（validateTaskPlan 强制），历史数据可缺省。 */
+  designRef?: string | undefined;
   checks: SpecTaskCheck[];
 };
 export type SpecReview = { revision: number; sourceRevision?: number; reviewerId: string; reviewedAt: string };
