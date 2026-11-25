@@ -24,7 +24,6 @@ const TOOL_STATUS_BY_OPERATION_STATE = {
   failed: 'error',
   denied: 'error',
   cancelled: 'cancelled',
-  unknown: 'unknown',
 } satisfies Record<ToolOperation['state'], ToolStatus>;
 /** 消息持久化状态 → 视图状态。 */
 const MESSAGE_STATUS_BY_STATE: Record<Message['state'], ChatMessage['status']> = {

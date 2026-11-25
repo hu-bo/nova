@@ -73,7 +73,7 @@ ACP 发出 prompt 前持久化提交意图。响应丢失时按结果未知对�
 1. **提交。** 先订阅并确认连接，再提交 prompt。由 Nova 输入 ID 派生稳定的 OpenCode 消息 ID，并保存请求指纹。用同一 ID 重试前确认提交状态。实测重复 ID 只保留一条待投递输入，改变正文后再次提交同一 ID 也返回原输入，因此 Nova 要先校验指纹。
 2. **接管。** Worker 恢复时使用已有 `sessionID` 和输入 ID 查上游 inbox、消息历史、活动状态和待审批。利用已确认的消息及终态修复投影。当前 `prepare` 根据 continuation 与 outcome 决定 `recover` 的时机，接入时须把上游已提交和待确认状态纳入该判断。Nova 的 fence 保护数据库提交，调用上游前仍须校验租约及会话归属。
 3. **补读。** `/api/event` 只提供实时流。Windows 2.4.1 的实验性 session log 在试验的 `after` 和 `follow` 组合下只返回 `log.synced`。启用 HTTP/SSE 前验收快照对账，恢复最终文本、已完成的工具结果和消息终态，允许丢失中间增量。Nova 已落库的事件继续按产品游标重放。
-4. **审批和取消。** 审批请求落库后可挂起 Run 并释放租约。恢复时用已记录的回复和上游待审批状态对账，审批期间 Worker 重启和回复重复投递均需实测。取消调用 `interrupt`，由匹配的中断事件或确认后的状态收口。验收覆盖接管时 Run 已处于 `cancelling` 的路径。无法确认停止时进入 `cancelled_unconfirmed`，用户可在对账完成后继续。
+4. **审批和取消。** 审批请求落库后可挂起 Run 并释放租约。恢复时用已记录的回复和上游待审批状态对账，审批期间 Worker 重启和回复重复投递均需实测。取消调用 `interrupt`，按取消、超时或执行错误收口，并在工具结果中保留可取得的 stderr。验收覆盖接管时 Run 已处于 `cancelling` 的路径；断连后用户可查看错误并决定是否重试。
 
 [OpenCode 事件订阅语义](https://opencode.ai/docs/build/client/#stream-events) · [OpenCode 会话 API](https://opencode.ai/docs/api) · [Nova Run 恢复](../apps/nova-server/src/modules/runs/run.repository.ts)
 

@@ -7,7 +7,7 @@ import { commitSessionUpdate } from "../../contracts/session.js";
 import type { ToolContext, ToolDefinition, ToolPolicy, ToolRuntime } from "../../contracts/tool.js";
 import type { ToolCallResult } from "../../contracts/run.js";
 import type { JsonValue } from "../../contracts/message.js";
-import { FrameworkError, safeError, ToolFailureError, ToolSuspended } from "../../contracts/errors.js";
+import { FrameworkError, runFailureStatus, safeError, ToolFailureError, ToolSuspended } from "../../contracts/errors.js";
 import { canonical, jsonValue } from "../../shared/json.js";
 export class ToolExecutor implements ToolRuntime {
   constructor(
@@ -85,8 +85,13 @@ export class ToolExecutor implements ToolRuntime {
         callId: call.callId,
         executionId: previous.executionId,
         status: "failed",
-        outcome: "unknown",
-        error: { code: "TOOL_OUTCOME_UNKNOWN", message: "Previously dispatched operation requires inspection." },
+        outcome: "known",
+        error: { code: "RUN_INTERRUPTED", message: "Previous tool execution was interrupted before its result was saved." },
+        value: {
+          error: { code: "RUN_INTERRUPTED", message: "Previous tool execution was interrupted before its result was saved." },
+          outcome: "known",
+          details: { stdout: "", stderr: "", outputGap: true, outputTruncated: true },
+        },
       };
       await commitSessionUpdate(this.store, { execution: { ...previous, result } });
       return result;
@@ -229,15 +234,22 @@ export class ToolExecutor implements ToolRuntime {
       )
         outcome = "unknown";
       let failureCode = "TOOL_FAILED";
-      if (signal.aborted) failureCode = "CANCELLED";
-      else if (error instanceof z.ZodError) failureCode = inputPrepared ? "INVALID_TOOL_OUTPUT" : "INVALID_TOOL_INPUT";
+      if (signal.aborted) {
+        const status = runFailureStatus(signal);
+        if (status === "timed_out") failureCode = "TIMEOUT";
+        else if (status === "cancelled") failureCode = "CANCELLED";
+        else failureCode = "RUN_INTERRUPTED";
+        outcome = "known";
+      } else if (error instanceof z.ZodError)
+        failureCode = inputPrepared ? "INVALID_TOOL_OUTPUT" : "INVALID_TOOL_INPUT";
+      const safe = safeError(error, failureCode);
       result = {
         name: call.name,
         callId: call.callId,
         executionId,
         status: "failed",
         outcome,
-        error: safeError(error, failureCode),
+        error: signal.aborted ? { ...safe, code: failureCode } : safe,
       };
       result.value = {
         error: {

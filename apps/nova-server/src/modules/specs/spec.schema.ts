@@ -42,12 +42,11 @@ export const evidenceSchema = z.object({
     z.object({ kind: z.literal("carried"), revision: z.number().int().positive(), evidenceId: z.uuid(), note: z.string().trim().min(1).max(2000) }).strict(),
   ]),
 }).strict();
-export const reconcileSchema = z.object({ expectedRevision: z.number().int().positive(), note: z.string().max(2000).optional() }).strict();
 export type RecordEvidenceInput = z.infer<typeof evidenceSchema>;
 export const attemptQuerySchema = z.object({ revision: z.coerce.number().int().positive(), taskKey: z.string().optional(), cursor: z.string().optional() }).strict();
 export const specIdempotencyHeader = z.object({ "idempotency-key": z.string().trim().min(1).max(128) }).passthrough();
 
-export const taskStatusSchema = z.enum(["not_started", "queued", "running", "waiting", "passed", "needs_verification", "failed", "cancelled", "timed_out", "needs_reconciliation"]);
+export const taskStatusSchema = z.enum(["not_started", "queued", "running", "waiting", "passed", "needs_verification", "failed", "cancelled", "timed_out"]);
 export const evidenceViewSchema = z.object({ id: z.uuid(), taskKey: z.string(), checkKey: z.string(), passed: z.boolean(), source: z.enum(["automatic", "manual", "carried"]), attemptId: z.uuid().optional(), toolOperationId: z.string().optional(), fromRevision: z.number().optional(), reviewedBy: z.uuid().optional(), note: z.string().optional(), createdBy: z.uuid(), createdAt: z.iso.datetime() }).strict();
 export const specSnapshotSchema = z.object({
   id: z.uuid(), projectId: z.uuid(), conversationId: z.uuid(), title: z.string(), currentRevision: z.number().int().positive(), revision: z.number().int().positive(), requirementsMd: z.string(), designMd: z.string().nullable(), taskPlan: taskPlanSchema, reviews: z.record(z.string(), z.object({ revision: z.number(), sourceRevision: z.number().optional(), reviewerId: z.uuid(), reviewedAt: z.iso.datetime() })).default({}), evidence: z.array(evidenceViewSchema), acceptance: z.object({ reviewerId: z.uuid(), acceptedAt: z.iso.datetime(), revision: z.number(), evidenceIds: z.array(z.uuid()) }).nullable(), tasks: z.array(z.object({ key: z.string(), status: taskStatusSchema, attemptId: z.uuid().nullable(), runId: z.uuid().nullable() }).strict()), createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), history: z.array(z.object({ revision: z.number(), createdAt: z.iso.datetime(), createdBy: z.uuid() })),

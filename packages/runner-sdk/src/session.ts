@@ -62,6 +62,7 @@ interface PendingOperation {
   readonly onOutput?: (chunk: OutputChunk) => void;
   readonly decoders: { readonly stdout: TextDecoder; readonly stderr: TextDecoder };
   readonly offset: { stdout: number; stderr: number };
+  readonly output: { stdout: string; stderr: string };
   outputGap: boolean;
   lastSequence: number;
   localOutputBytes: number;
@@ -204,27 +205,38 @@ export class RunnerSessionImpl implements RunnerSession {
   }
 
   async cancel(operationId: string): Promise<Result<void>> {
-    if (!this.#pending.has(operationId)) return failure("NOT_FOUND", "Operation is no longer active.", "known", operationId);
+    const pending = this.#pending.get(operationId);
+    if (!pending) return failure("NOT_FOUND", "Operation is no longer active.", "known", operationId);
     this.#cancelWhenReconnected.add(operationId);
-    if (!this.connected) return failure("OFFLINE", "Cancellation is queued until the Runner reconnects.", "unknown", operationId);
+    if (!this.connected) {
+      const result = this.#pendingFailure(pending, "OFFLINE", "Runner disconnected before cancellation completed.");
+      this.#finish(pending, result);
+      return result;
+    }
     return new Promise((resolve) => {
       const waiters = this.#cancelWaiters.get(operationId) ?? [];
       const timer = setTimeout(() => {
-        const current = this.#cancelWaiters.get(operationId) ?? [];
-        const remaining = current.filter((waiter) => waiter.resolve !== resolve);
-        if (remaining.length) this.#cancelWaiters.set(operationId, remaining);
-        else this.#cancelWaiters.delete(operationId);
-        resolve(failure("OUTCOME_UNKNOWN", "Cancellation was sent but the Runner did not confirm a terminal result.", "unknown", operationId));
+        const active = this.#pending.get(operationId);
+        if (active)
+          this.#finish(
+            active,
+            this.#pendingFailure(active, "CANCELLED", "Cancellation grace period elapsed; captured output follows."),
+          );
+        else resolve(failure("NOT_FOUND", "Operation is no longer active.", "known", operationId));
       }, CANCEL_GRACE_MS);
       waiters.push({ resolve, timer });
       this.#cancelWaiters.set(operationId, waiters);
-      void this.#queueCancel(operationId).catch(() => {
-        clearTimeout(timer);
-        const current = this.#cancelWaiters.get(operationId) ?? [];
-        const remaining = current.filter((waiter) => waiter.resolve !== resolve);
-        if (remaining.length) this.#cancelWaiters.set(operationId, remaining);
-        else this.#cancelWaiters.delete(operationId);
-        resolve(failure("OFFLINE", "Cancellation could not be confirmed.", "unknown", operationId));
+      void this.#queueCancel(operationId).catch((error: unknown) => {
+        const active = this.#pending.get(operationId);
+        if (active)
+          this.#finish(
+            active,
+            this.#pendingFailure(active, "OFFLINE", `Cancellation could not be delivered: ${errorText(error)}`),
+          );
+        else {
+          clearTimeout(timer);
+          resolve(failure("OFFLINE", `Cancellation could not be delivered: ${errorText(error)}`, "known", operationId));
+        }
       });
     });
   }
@@ -437,7 +449,8 @@ export class RunnerSessionImpl implements RunnerSession {
     if (this.#closed) return;
     this.#closed = true;
     this.#transport?.socket.close(1000, "SDK closed");
-    for (const pending of this.#pending.values()) this.#finish(pending, failure("OFFLINE", "Runner SDK closed.", "unknown", pending.id));
+    for (const pending of this.#pending.values())
+      this.#finish(pending, failure("OFFLINE", "Runner SDK closed.", "known", pending.id));
     this.#cancelWhenReconnected.clear();
     for (const [requestId, query] of this.#queries) {
       clearTimeout(query.timer);
@@ -452,7 +465,7 @@ export class RunnerSessionImpl implements RunnerSession {
     if (nextBootId === this.bootId || this.#closed) return;
     this.#transport?.socket.close(1000, "Runner process restarted");
     for (const pending of this.#pending.values())
-      this.#finish(pending, failure("OUTCOME_UNKNOWN", "Runner restarted before this operation's receipt could be reconciled.", "unknown", pending.id));
+      this.#finish(pending, failure("RUNNER_RESTARTED", "Runner restarted before this operation completed.", "known", pending.id));
     this.#pending.clear();
     this.#cancelWhenReconnected.clear();
     this.#notifyStatus();
@@ -805,35 +818,45 @@ export class RunnerSessionImpl implements RunnerSession {
         waiters: [resolve],
         decoders: { stdout: new TextDecoder("utf-8"), stderr: new TextDecoder("utf-8") },
         offset: { stdout: 0, stderr: 0 },
+        output: { stdout: "", stderr: "" },
         outputGap: false,
         lastSequence: 0,
         localOutputBytes: 0,
         ...(onOutput ? { onOutput } : {}),
       };
       this.#pending.set(operationId, pending);
-      const cancel = () => {
+      const cancel = (code: "CANCELLED" | "TIMEOUT") => {
         if (!this.#pending.has(operationId) || pending.cancelGrace) return;
         this.#cancelWhenReconnected.add(operationId);
-        if (this.connected) void this.#queueCancel(operationId);
+        if (this.connected)
+          void this.#queueCancel(operationId).catch((error: unknown) => {
+            this.#finish(
+              pending,
+              this.#pendingFailure(pending, "OFFLINE", `Cancellation could not be delivered: ${errorText(error)}`),
+            );
+          });
         pending.cancelGrace = setTimeout(() => {
-          this.#finish(
-            pending,
-            failure("OUTCOME_UNKNOWN", "Operation cancellation was not confirmed before its deadline.", "unknown", operationId),
-          );
+          let message = "Operation was cancelled; cancellation grace period elapsed.";
+          if (code === "TIMEOUT") message = "Operation timed out; cancellation grace period elapsed.";
+          this.#finish(pending, this.#pendingFailure(pending, code, message));
         }, CANCEL_GRACE_MS);
       };
       const signals = [runSignal, additionalSignal].filter((signal): signal is AbortSignal => signal !== undefined);
-      pending.abort = cancel;
+      pending.abort = () => {
+        const reason = pending.signal?.reason;
+        if (reason instanceof Error && reason.name === "TimeoutError") cancel("TIMEOUT");
+        else cancel("CANCELLED");
+      };
       if (signals.length > 1) pending.signal = AbortSignal.any(signals);
       else if (signals[0]) pending.signal = signals[0];
-      pending.signal?.addEventListener("abort", cancel, { once: true });
-      pending.timeout = setTimeout(cancel, operation.timeoutMs + CANCEL_GRACE_MS);
+      pending.signal?.addEventListener("abort", pending.abort, { once: true });
+      pending.timeout = setTimeout(() => cancel("TIMEOUT"), operation.timeoutMs);
       this.#send({ requestId: operationId, operation: wireOperation }, "operation")
         .then(() => undefined)
-        .catch(() => {
+        .catch((error: unknown) => {
           this.#finish(
             pending,
-            failure("OUTCOME_UNKNOWN", "The Runner may have received this operation; it will never be replayed.", "unknown", operationId),
+            this.#pendingFailure(pending, "OFFLINE", `Operation could not be delivered: ${errorText(error)}`),
           );
         });
     });
@@ -877,6 +900,7 @@ export class RunnerSessionImpl implements RunnerSession {
           else {
             const text = pending.decoders[stream].decode(getBytes(output.data), { stream: true });
             if (text) {
+              pending.output[stream] = (pending.output[stream] + text).slice(-32_768);
               try {
                 pending.onOutput?.({ stream, text });
               } catch {
@@ -923,17 +947,10 @@ export class RunnerSessionImpl implements RunnerSession {
           this.#acknowledgeResult(id);
           return;
         }
-        for (const stream of ["stdout", "stderr"] as const) {
-          const trailing = pending.decoders[stream].decode();
-          if (trailing) {
-            try {
-              pending.onOutput?.({ stream, text: trailing });
-            } catch {
-              this.report({ code: "OUTPUT_OBSERVER_FAILED" });
-            }
-          }
-        }
-        this.#finish(pending, response);
+        const settled = !response.ok && response.error.outcome === "unknown"
+          ? failure("RUN_INTERRUPTED", response.error.message, "known", id, response.error.details)
+          : response;
+        this.#finish(pending, settled);
         this.#acknowledgeResult(id);
         return;
       }
@@ -1070,12 +1087,51 @@ export class RunnerSessionImpl implements RunnerSession {
       ...transport.acknowledgements.values(),
     ])
       entry.finish(new Error("Runner connection lost"));
+    for (const pending of this.#pending.values())
+      this.#finish(pending, this.#pendingFailure(pending, "OFFLINE", "Runner connection was lost before the operation completed."));
     this.#notifyStatus();
   }
 
-  #finish(pending: PendingOperation, result: Result<unknown>): void {
+  #pendingFailure(pending: PendingOperation, code: string, message: string): Result<never> {
+    return failure(code, message, "known", pending.id);
+  }
+
+  #drainPendingOutput(pending: PendingOperation) {
+    for (const stream of ["stdout", "stderr"] as const) {
+      const trailing = pending.decoders[stream].decode();
+      if (!trailing) continue;
+      pending.output[stream] = (pending.output[stream] + trailing).slice(-32_768);
+      try {
+        pending.onOutput?.({ stream, text: trailing });
+      } catch {
+        this.report({ code: "OUTPUT_OBSERVER_FAILED" });
+      }
+    }
+    return {
+      stdout: pending.output.stdout,
+      stderr: pending.output.stderr,
+      outputGap: pending.outputGap,
+      outputTruncated: pending.outputGap,
+    };
+  }
+
+  #finish(pending: PendingOperation, initial: Result<unknown>): void {
     if (!this.#pending.has(pending.id)) return;
+    const partial = this.#drainPendingOutput(pending);
+    let result = initial;
+    if (!initial.ok) {
+      const details = record(initial.error.details) ? initial.error.details : {};
+      result = failure(initial.error.code, initial.error.message, initial.error.outcome, pending.id, {
+        ...partial,
+        ...details,
+        stdout: string(details.stdout) && details.stdout ? details.stdout : partial.stdout,
+        stderr: string(details.stderr) && details.stderr ? details.stderr : partial.stderr,
+        outputGap: partial.outputGap || details.outputGap === true,
+        outputTruncated: partial.outputTruncated || details.outputTruncated === true,
+      });
+    }
     this.#pending.delete(pending.id);
+    this.#cancelWhenReconnected.delete(pending.id);
     if (pending.timeout) clearTimeout(pending.timeout);
     if (pending.cancelGrace) clearTimeout(pending.cancelGrace);
     if (pending.abort) pending.signal?.removeEventListener("abort", pending.abort);
@@ -1093,7 +1149,8 @@ export class RunnerSessionImpl implements RunnerSession {
       for (const waiter of cancelWaiters) {
         clearTimeout(waiter.timer);
         if (!result.ok && result.error.code === "CANCELLED") waiter.resolve({ ok: true, value: undefined });
-        else if (!result.ok) waiter.resolve(failure(result.error.code, result.error.message, result.error.outcome, pending.id));
+        else if (!result.ok)
+          waiter.resolve(failure(result.error.code, result.error.message, result.error.outcome, pending.id, result.error.details));
         else waiter.resolve(failure("TOO_LATE", "Operation completed before cancellation took effect.", "known", pending.id));
       }
       this.#cancelWaiters.delete(pending.id);
@@ -1141,6 +1198,11 @@ function wireParams(params: RemoteOperation["params"]): Record<string, unknown> 
 function errorMessage(result: Record<string, unknown>): string {
   if (record(result.error) && string(result.error.message)) return safeMessage(result.error.message);
   return "Runner operation failed.";
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
 }
 
 function runnerResult(result: Record<string, unknown>, localOutputGap: boolean): Result<unknown> {

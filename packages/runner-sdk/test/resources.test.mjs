@@ -72,6 +72,70 @@ test("refreshResources delivers a RefreshResourceCatalog frame with echo id", as
   assert.equal(refresh.refreshResourceCatalog.relativeDir, "sub/app");
 });
 
+test("command cancellation and local timeout settle with buffered stderr", async () => {
+  for (const interruption of ["cancel", "timeout"]) {
+    const { session, socket } = attach();
+    const context = session.createToolContext({ workspaceId: "ws-1", signal: new AbortController().signal });
+    const controller = new AbortController();
+    const execution = context.exec("example", {
+      timeoutMs: interruption === "timeout" ? 20 : 10_000,
+      signal: controller.signal,
+    });
+    const operation = sentEnvelopes(socket).find((item) => item.payload === "operation").operation;
+    socket.emit(
+      "message",
+      Buffer.from(encodeRunnerEnvelope({
+        requestId: operation.operationId,
+        output: {
+          operationId: operation.operationId,
+          bootId: "boot-1",
+          sequence: "1",
+          stream: "STDERR",
+          offset: "0",
+          data: Buffer.from(`partial ${interruption}`),
+        },
+      })),
+      true,
+    );
+    if (interruption === "cancel") controller.abort(new Error("user cancelled"));
+    const result = await execution;
+    assert.equal(result.ok, false);
+    assert.equal(result.error.outcome, "known");
+    assert.equal(result.error.code, interruption === "timeout" ? "TIMEOUT" : "CANCELLED");
+    assert.equal(result.error.details.stderr, `partial ${interruption}`);
+    await session.close();
+  }
+});
+
+test("Runner disconnect returns a known failure with the captured output tail", async () => {
+  const { session, socket } = attach();
+  const context = session.createToolContext({ workspaceId: "ws-1", signal: new AbortController().signal });
+  const execution = context.exec("example");
+  const operation = sentEnvelopes(socket).find((item) => item.payload === "operation").operation;
+  socket.emit(
+    "message",
+    Buffer.from(encodeRunnerEnvelope({
+      requestId: operation.operationId,
+      output: {
+        operationId: operation.operationId,
+        bootId: "boot-1",
+        sequence: "1",
+        stream: "STDERR",
+        offset: "0",
+        data: Buffer.from("connection lost after this"),
+      },
+    })),
+    true,
+  );
+  socket.close();
+  const result = await execution;
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "OFFLINE");
+  assert.equal(result.error.outcome, "known");
+  assert.equal(result.error.details.stderr, "connection lost after this");
+  await session.close();
+});
+
 test("capability-less runners fail with CAPABILITY_UNSUPPORTED instead of fabricated results", async () => {
   const { session, socket } = attach(["filesystem"]);
   assert.equal(session.supportsLocalResources(), false);

@@ -67,7 +67,7 @@
 | 审批超时         | 默认 `expired`，不执行；展示期限和范围                     | 改变现有编辑超时放行策略 |
 | 清空上下文       | 新 `contextEpoch`，当前 TODO 清零，历史展示保留            | 修复从旧历史恢复当前计划的问题             |
 | Runner Token     | 目标为只显示一次的可撤销凭据，旧可重复查看机制走兼容迁移   | 列表展示脱敏标识，需业务确认               |
-| 未知执行结果     | 显示”需要核实”，给出日志、Diff 和手动核实入口              | 不提供无条件”重试原命令”                   |
+| 工具中断         | 展示已捕获的错误与 stderr；由用户决定是否重试                | 保留运行记录，不自动重发有副作用命令       |
 | 文件上传（项目模式）| 会话绑定 Runner 时，点击附件按钮直接打开 `RemoteExplorer`，选择 Runner workspace 内的文件/目录；Server 落 `{ kind: "runner_ref", relative_path, summary }`（Runner workspace 内的相对路径 + 摘要），字节由 Runner 执行阶段按需读取 | 复用 `@nova/chat-ui` 的 RemoteExplorer；需后端目录接口、绑定必需 |
 | 文件上传（普通 chat）| 会话未绑定 Runner 时，点击附件按钮触发浏览器原生文件选择；走 Server 对象存储 upload-intent/complete，最终用 `objectId` 引用 | 浏览器本地文件上传；普通 chat 不强制 Runner |
 
@@ -213,7 +213,7 @@ REST 来源为后端模块的 request/response Zod schema，经 OpenAPI 导出�
 | 409 版本或运行冲突          | 重新取权威快照，保留草稿，用户确认后重新提交           |
 | 429 限流/配额               | 显示限制和 `Retry-After`，暂停自动发起                 |
 | 503 依赖/过载               | 有界退避，允许重试；不将已接受运行判为失败             |
-| `EXECUTION_OUTCOME_UNKNOWN` | 进入核实交互，禁止自动重发有副作用命令                 |
+| `EXECUTION_OUTCOME_UNKNOWN` | 展示通用错误提示；禁止自动重发有副作用命令             |
 
 ### 6.1.1 API 层统一通知
 
@@ -323,11 +323,11 @@ Server 校验设备归属、当前连接代次、目录存在与边界，并保�
 
 当前 Runner 文件 API 限制在注册 workspace；任意 Shell 可以具有更广 OS 权限，界面不得声称 workspace 是完整沙箱。要求项目级强隔离的入口仅在后端能力明确支持后出现。
 
-### 8.3 审批、取消与未知结果
+### 8.3 审批、取消与中断
 
 Decision 展示操作摘要、完整命令/参数或 Diff、作用路径、期限和授权范围。提交包含 decision revision 与幂等键；两个标签页竞争时，以 Server 第一个有效决策为准。倒计时结束，浏览器默认执行确认操作。
 
-取消请求被接受后显示 `cancelling`，收到 Server 确认或超时分类才展示终态。网络中断不等于进程终止；结果未知时展示风险与可核实材料，允许发起只读核实或结束运行，不自动再执行原操作。
+取消请求被接受后显示 `cancelling`，Server 按取消、超时或执行错误收口，并在工具结果中展示捕获到的错误和 stderr。网络中断不等于进程终止；用户可查看错误内容并决定是否重试。
 
 ### 8.4 上下文和计划
 
@@ -458,7 +458,7 @@ type RemoteExplorerListing = {
 
 浏览器只持有路径与展示所需的目录条目，不下载字节。用户在 `RemoteExplorer` 中确认后，Server 在该会话 binding 的 workspace 内做规范化校验（禁止 `..` 越界、禁止绝对路径），并由 Runner 对选定路径计算摘要（sha256 + size + mtime）。摘要连同 `{ kind: "runner_ref", relative_path, summary }` 写入 `messages.attachments` JSONB，与消息同事务落库。`RemoteExplorer` 的 `loadDirectory` 回调由 `runners` feature 实现，对接 Server 的 `files`/`files/summary` 接口；运行时配置（`loadDirectory` 来源、AbortSignal、确认回调）由 §4 中的 feature 公开入口提供，组件本身不感知数据源。
 
-执行阶段由模型触发工具读取，Server 在事务中创建 `runner_operations` intent（含 `(run_id, tool_call_id, runner_ref)` 摘要），通过 `RunnerExecutionPort` 派发；Runner 在原 workspace 内按 `relative_path` 读取并照常落 `tool_calls`。执行前再次校验 Runner 连接、workspace、binding revision 与摘要，摘要不一致按未知结果处理，禁止按工具名 blanket 放行。读取失败时 `tool_calls` 标记 `OUTCOME_UNKNOWN`。
+执行阶段由模型触发工具读取，Server 在事务中创建 `runner_operations` intent（含 `(run_id, tool_call_id, runner_ref)` 摘要），通过 `RunnerExecutionPort` 派发；Runner 在原 workspace 内按 `relative_path` 读取并照常落 `tool_calls`。执行前再次校验 Runner 连接、workspace、binding revision 与摘要，摘要不一致按工具失败返回，禁止按工具名 blanket 放行。读取失败时 `tool_calls` 保存错误结果。
 
 ### 11.3 `kind` 对比与客户端责任
 
@@ -537,7 +537,7 @@ type RemoteExplorerListing = {
 | 429 配额/速率限制               | 顶部 toast 显示 `Retry-After`（秒）；暂停自动重试；可手动重试                              | 从响应头解析 `Retry-After`；按值在 `run-stream-manager` 中设置倒计时暂停        |
 | 503 依赖/过载                   | 列表/详情保留；按钮显示”过载，稍后重试”；不重置已接受运行                                   | 触发有界退避；不动 `runs` 投影状态                                           |
 | `RESERVATION_RELEASED`         | 静默重试一次同 `Idempotency-Key`；仍失败展示”预算已释放，请稍后再发”                          | 保留原 key，调用查询接口确认是否已接受后再重试                               |
-| `EXECUTION_OUTCOME_UNKNOWN`     | 进入核实流程；禁止自动重发有副作用命令                                                      | 显示 §8.3 的”需要核实”面板                                                   |
+| `EXECUTION_OUTCOME_UNKNOWN`     | 展示通用错误提示；禁止自动重发有副作用命令                                                  | 用户查看运行记录后决定是否重试                                               |
 | `INFERENCE_STRENGTH_UNAVAILABLE` | 模型目录标灰；不发起提交                                                                    | 切回默认强度或保留旧锁定版本                                                 |
 
 配额预留/释放不在客户端计算；UI 只读取 `usage` 与 `reservation` 投影展示，不持有预算 owner。
@@ -633,7 +633,7 @@ type BroadcastMessage =
 | 413            | 提示精简后重试；本地草稿保留                                            | 取消本次写；不重新上传                                                                       |
 | 429            | 显示 `Retry-After`，暂停自动发起                                        | 解析 `Retry-After` 并在 `run-stream-manager` 设置倒计时；不重试                              |
 | 503            | 有界退避；不把已接受运行判为失败                                         | 触发指数退避；保留 `runs` 投影与 `pending_inputs`                                             |
-| `EXECUTION_OUTCOME_UNKNOWN` | 进入核实交互；禁止自动重发有副作用命令                              | 显示 §8.3 的核实面板；不发起重新 `Execute`                                                   |
+| `EXECUTION_OUTCOME_UNKNOWN` | 展示错误内容；禁止自动重发有副作用命令                              | 不自动发起重新 `Execute`                                                                       |
 | 网络断开        | 状态条显示”离线”，草稿保留；订阅进入 `reconnecting`                    | 区分主动取消（`AbortController.abort()`）与被动断开；后者继续退避                              |
 
 `ApiError` 持有 `httpStatus`、`subCode`、`requestId`；`requestId` 用于支持联系与上报，不作为 UI 主键。
@@ -647,9 +647,8 @@ Runner 是用户资源执行的执行者；客户端不与 Runner 直接通信�
 | Runner 暂时不可达                 | `runs.state=paused`，`pauseReason=RUNNER_OFFLINE`                                     | 状态条文案”设备离线”；不自动取消；保留草稿与 `pending_inputs`；可允许用户继续编辑              |
 | Runner 重新连接                   | Server 推送 `run.state.changed` 事件                                                  | 状态条回到正常；不触发连接重连（连接是浏览器↔Server）；不假装已自动恢复副作用                   |
 | Runner 替换（用户手动）           | 列表展示新设备；旧会话不自动跟进                                                       | 展示”新会话采用新环境”；旧会话在原设备离线时从会话入口直接切换到新设备；在线设备不允许切走                                     |
-| Runner 永久下线                   | `runs.state=cancelled_unconfirmed`（参考 [nova-server.md](nova-server.md) §7.1）         | 切换到”需要核实”面板；区分 `cancelled` 与 `cancelled_unconfirmed`，不显示”已停止”              |
+| Runner 永久下线                   | Run 按取消、超时或执行错误收口，并带工具错误                                      | 展示可用错误输出；用户决定是否重试                                              |
 
-`cancelled_unconfirmed` 是终态但效果未确认：UI 必须区分 `cancelled`（已确认停止）与 `cancelled_unconfirmed`（宽限结束但设备未确认），前者显示”已停止”，后者显示”需要核实”并提供日志/Diff/手动核实入口。客户端不自动重试原命令，也不允许静默回退到上一稳定状态。
 
 ### 13.5 性能预算与容量假设
 
@@ -679,7 +678,7 @@ Runner 是用户资源执行的执行者；客户端不与 Runner 直接通信�
 
 - §7.3 的连接管理与本节的错误映射共同形成运行时的”无静默失败”边界；任一环节假设”网络抖动会自动恢复”都被视为实现错误。
 - §6.2 的写操作不自动重试与本节错误码到 UI 映射一致；`429`/`503` 的暂停语义由 `run-stream-manager` 持有，避免每个组件自行实现。
-- §13.4 中 `cancelled_unconfirmed` 的处理是 §8.3 的细化，列入实施计划。
+- §13.4 的 Runner 断连处理沿用 §8.3 的中断结果和工具错误展示。
 - 本节未引入新的对外 API；所有路径仅依赖现有 REST/SSE 契约。
 
 ## 14. 配置、探针与可观测性（客户端视角）
@@ -835,10 +834,10 @@ Runner 是用户资源执行的执行者；客户端不与 Runner 直接通信�
 | ----------------------- | ------------------------------------------------------------------------------------------------------- |
 | 普通 chat 首条消息      | `historyLength===1` 文案；快照对齐；订阅补发；附件 `kind:"minio"` 上传→发送                              |
 | 项目模式会话            | 绑定 Runner 后 `RemoteExplorer` 打开；附件 `kind:"runner_ref"` 落库；Runner 离线不自动降级                 |
-| 审批/取消               | Decision 倒计时；回填 `expectedRevision`；取消显示 `cancelling` → `cancelled` 或 `cancelled_unconfirmed` |
+| 审批/取消               | Decision 倒计时；回填 `expectedRevision`；取消显示 `cancelling` 后按原因进入 `cancelled`、`timed_out` 或 `failed` |
 | 上下文维护              | 压缩/清空互斥；`contextEpoch` 切换后估算刷新；新 TODO 与历史 TODO 分别展示                              |
 | SSE 重连                | 401 后 single-flight refresh；410 触发 `snapshot.required`；多标签页 `identity-changed` 清空             |
-| 配额/限流               | 429 `Retry-After` 倒计时；503 有界退避；`EXECUTION_OUTCOME_UNKNOWN` 进入核实                             |
+| 配额/限流               | 429 `Retry-After` 倒计时；503 有界退避；中断错误由工具结果展示 stderr                                  |
 | 浏览器禁入              | 构建产物不包含 `runner-protocol`、`nova-server`、`@nova/casdoor/server`；`dev-auth` 在生产构建中不存在   |
 
 #### 15.5.2 工具链

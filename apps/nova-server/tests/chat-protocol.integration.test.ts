@@ -52,6 +52,7 @@ import {
   type SessionSnapshot,
   type PluginDefinition,
   modelRouter,
+  ToolFailureError,
 } from "@nnova/harness";
 import { z } from "zod";
 import { sessionCheckpointPolicyPlugin } from "@nnova/harness/plugins/session-checkpoint-policy";
@@ -117,7 +118,7 @@ import { createJobHost } from "../src/jobs/job-registry.js";
 import { claim as claimJobs, enqueue as enqueueJob } from "../src/jobs/postgres-job-store.js";
 
 const url = process.env.TEST_DATABASE_URL;
-test("effect isolation ignores unconfirmed reads and retains unconfirmed writes", () => {
+test("effect state tracks unfinished writes but does not expose unknown terminal outcomes", () => {
   const read: import("@nnova/harness").ExecutionRecord = {
     executionId: "read", runId: "run", stepId: "step", callId: "read", name: "grep", input: {},
     idempotencyKey: "read", dispatch: "dispatched", effects: "read",
@@ -126,7 +127,7 @@ test("effect isolation ignores unconfirmed reads and retains unconfirmed writes"
   assert.equal(executionEffectState([read, { ...read, executionId: "pending-read", result: undefined }]), "known");
   const write = { ...read, executionId: "write", effects: "write" as const, result: undefined };
   assert.equal(executionEffectState([read, write]), "pending");
-  assert.equal(executionEffectState([read, { ...write, result: read.result }]), "unknown");
+  assert.equal(executionEffectState([read, { ...write, result: read.result }]), "known");
   assert.equal(executionEffectState([{ ...write, effects: undefined }]), "pending");
 });
 test("cancellation closes pending tool history without losing completed or unconfirmed effects", () => {
@@ -185,16 +186,26 @@ test("cancellation closes pending tool history without losing completed or uncon
   const settled = cancelPendingTools(checkpoint);
   assert.deepEqual(
     settled.results.map((result) => publicOutcome(result) ?? result.status),
-    ["cancelled", "cancelled", "unknown", "succeeded"],
+    ["cancelled", "cancelled", "cancelled", "succeeded"],
   );
   assert.equal(settled.results[0]?.executionId, execution.executionId);
   assert.deepEqual(settled.results[3], succeeded);
   assert.equal(settled.checkpoint.continuation, undefined);
-  assert.equal(executionEffectState(settled.checkpoint.executions), "unknown");
+  assert.equal(executionEffectState(settled.checkpoint.executions), "known");
   assert.equal(nativeSnapshot(settled.checkpoint, 0).messages.length, 6);
   assert.deepEqual(cancelPendingTools(settled.checkpoint).results, []);
   assert.equal(checkpoint.executions[0]?.result, undefined);
   assert.deepEqual(checkpoint.continuation, { continuationId: "approval" });
+
+  const timedOut = cancelPendingTools(checkpoint, "timeout", [
+    { id: "unknown", callId: "unknown", state: "running", stderr: { text: "deadline exceeded", startOffset: 0, nextOffset: 17 } },
+  ]);
+  assert.equal(timedOut.results[2]?.error?.code, "TIMEOUT");
+  assert.equal(timedOut.results[2]?.outcome, "known");
+  assert.equal(
+    (timedOut.results[2]?.value as { details: { stderr: string } }).details.stderr,
+    "deadline exceeded",
+  );
 });
 test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => {
   const admin = new Pool({ connectionString: url });
@@ -1169,6 +1180,63 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     await repository.finish(nextClaim, "succeeded");
     assert.equal(effects, 0);
   });
+  await t.test("timeout and runner failures preserve stderr and release the next conversation turn", async () => {
+    for (const scenario of [
+      { code: "TIMEOUT", state: "timed_out" as const, reason: "RUN_DEADLINE", stderr: "deadline partial output" },
+      { code: "SPAWN_FAILED", state: "failed" as const, reason: "SPAWN_FAILED", stderr: "executable was not found" },
+    ]) {
+      const conversation = await newConversation();
+      const prepared = (await repository.prepare(conversation.id, "interruption-worker"))!;
+      const claim = claimOf(prepared);
+      const tool = defineTool({
+        name: "bash",
+        description: "command",
+        inputSchema: z.object({}),
+        outputSchema: z.object({}),
+        effects: "write",
+        async execute() {
+          throw new ToolFailureError(scenario.code, "Runner command failed.", "known", {
+            stdout: "",
+            stderr: scenario.stderr,
+            outputGap: false,
+            outputTruncated: false,
+          });
+        },
+      });
+      const agent = await harness(repository, claim, tool);
+      const result = await agent.run(
+        {
+          id: prepared.command.kind === "start" ? prepared.command.messageId : randomUUID(),
+          role: "user",
+          parts: [{ type: "text", text: "Run the command" }],
+        },
+        { runId: claim.id },
+      );
+      await agent.close();
+      assert.equal(result.status, "succeeded");
+      await repository.finish(claim, scenario.state, scenario.reason);
+      const after = await snapshot(conversation.id);
+      assert.equal(after.run?.state, scenario.state);
+      const toolResult = after.messages
+        .flatMap((message) => message.blocks)
+        .find((block) => block.type === "tool_result");
+      assert.equal(toolResult?.type, "tool_result");
+      if (toolResult?.type !== "tool_result") throw new Error("Expected a terminal tool result");
+      assert.equal(toolResult.outcome, "failed");
+      assert.ok(toolResult.content.some((block) => block.type === "error" && block.error.message === scenario.stderr));
+      assert.equal(after.operations[0]?.state, "failed");
+
+      await conversationRepository.enqueue({
+        conversationId: conversation.id,
+        ownerUserId: owner,
+        mode: "next_run",
+        blocks: [{ id: "text", type: "text", text: "Continue after interruption" }],
+      });
+      const next = await repository.prepare(conversation.id, "after-interruption-worker");
+      assert.ok(next, "a terminal interruption must release the conversation for its next input");
+      await repository.finish(claimOf(next), "cancelled");
+    }
+  });
   for (const failAt of ["pre_dispatch", "intent", "result"] as const)
     await t.test("lost " + failAt + " confirmation is recovered without duplicate effects", async () => {
       let armed = true;
@@ -1232,9 +1300,9 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       assert.equal(effects, failAt === "intent" ? 0 : 1);
       if (failAt === "intent") {
         assert.equal(result.status, "failed");
-        assert.equal(result.toolCalls[0]?.outcome, "unknown");
+        assert.equal(result.toolCalls[0]?.outcome, "known");
         await repository.finish(nextClaim, "failed");
-        assert.equal((await snapshot(conversation.id)).run?.state, "cancelled_unconfirmed");
+        assert.equal((await snapshot(conversation.id)).run?.state, "failed");
         const runnerId = randomUUID();
         const binding = {
           id: randomUUID(),

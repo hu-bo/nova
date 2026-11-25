@@ -32,15 +32,30 @@ export async function sshToolContext(
       signal.throwIfAborted();
       return { ok: true, value };
     } catch (error) {
+      const details = error instanceof DomainError ? error.details : undefined;
+      const timeout =
+        (error instanceof DomainError && error.details?.reason === "SSH_TIMEOUT") ||
+        (signal.aborted && signal.reason instanceof Error && signal.reason.name === "TimeoutError") ||
+        (signal.aborted && signal.reason === "timeout");
+      const cancelled = signal.aborted && signal.reason === "cancel";
+      let code = error instanceof DomainError ? error.code : "IO";
+      let message = error instanceof Error ? error.message : "Remote operation failed";
+      if (timeout) {
+        code = "TIMEOUT";
+        message = "Remote command timed out.";
+      } else if (cancelled) {
+        code = "CANCELLED";
+        message = "Remote command cancelled.";
+      } else if (signal.aborted) {
+        code = "RUN_INTERRUPTED";
+      }
       return {
         ok: false,
         error: {
-          code: error instanceof DomainError ? error.code : "IO",
-          message: error instanceof DomainError ? error.message : "Remote operation failed",
-          outcome:
-            signal.aborted || (error instanceof DomainError && error.code === "EXECUTION_OUTCOME_UNKNOWN")
-              ? "unknown"
-              : "known",
+          code,
+          message,
+          outcome: "known",
+          ...(details ? { details } : {}),
         },
       };
     }
@@ -166,6 +181,7 @@ export async function sshToolContext(
             executable,
             [...(options.args ?? [])],
             options.signal ?? signal,
+            options.timeoutMs,
           );
         if (output.stdout) options.onOutput?.({ stream: "stdout", text: output.stdout });
         if (output.stderr) options.onOutput?.({ stream: "stderr", text: output.stderr });

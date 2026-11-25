@@ -11,6 +11,7 @@ import type { RemoteRepository, RemoteConnectionRow } from "../src/modules/remot
 import { sshToolContext } from "../src/modules/runs/ssh-tool-context.js";
 import { ProjectBindingService } from "../src/modules/projects/project-binding.service.js";
 import type { Database } from "../database/index.js";
+import { DomainError } from "../src/shared/domain-error.js";
 
 test("SSH project bindings persist absolute directories, including /", async () => {
   const projectId = "00000000-0000-4000-8000-000000000001";
@@ -196,5 +197,61 @@ test("SSH browsing and attachments can leave the configured work directory", asy
     assert.equal(traversal.error.code, "FORBIDDEN");
     const legacy = await sshToolContext(service, row.id, "owner", ".", new AbortController().signal, "op-2");
     assert.equal(legacy.cwd, "/home");
+  });
+
+  await t.test("returns interrupted SSH commands as known failures with captured output", async () => {
+    const interruptedService = {
+      getEnvironment: service.getEnvironment.bind(service),
+      execute: async () => {
+        throw new DomainError("CONFLICT", "Remote command interrupted: connection closed", {
+          reason: "SSH_COMMAND_INTERRUPTED",
+          stdout: "partial stdout",
+          stderr: "partial stderr",
+          truncated: false,
+        });
+      },
+    } as unknown as RemoteConnectionService;
+    const context = await sshToolContext(
+      interruptedService,
+      row.id,
+      "owner",
+      "/etc",
+      new AbortController().signal,
+      "op-interrupted",
+    );
+    const result = await context.exec("make", { args: ["build"] });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.error.outcome, "known");
+    assert.equal(result.error.details?.stdout, "partial stdout");
+    assert.equal(result.error.details?.stderr, "partial stderr");
+  });
+
+  await t.test("maps SSH deadline to a known timeout failure", async () => {
+    const timedOutService = {
+      getEnvironment: service.getEnvironment.bind(service),
+      execute: async () => {
+        throw new DomainError("CONFLICT", "Remote command timed out.", {
+          reason: "SSH_TIMEOUT",
+          stdout: "partial stdout",
+          stderr: "partial stderr",
+          truncated: false,
+        });
+      },
+    } as unknown as RemoteConnectionService;
+    const context = await sshToolContext(
+      timedOutService,
+      row.id,
+      "owner",
+      "/etc",
+      new AbortController().signal,
+      "op-timeout",
+    );
+    const result = await context.exec("make", { args: ["build"] });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.error.code, "TIMEOUT");
+    assert.equal(result.error.outcome, "known");
+    assert.equal(result.error.details?.stderr, "partial stderr");
   });
 });

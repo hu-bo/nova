@@ -22,8 +22,7 @@ export type RunState =
   | "budget_exhausted"
   | "failed"
   | "timed_out"
-  | "cancelled"
-  | "cancelled_unconfirmed";
+  | "cancelled";
 
 export type RunPhase =
   | "prepare"

@@ -6,7 +6,6 @@ const MAX_OUTPUT_CHARS = 12_000;
 
 const toolStatusPresentation = {
   queued: { label: "等待执行", color: "text-amber-500", Icon: XCircle },
-  unknown: { label: "待核实", color: "text-amber-500", Icon: XCircle },
   running: { label: "运行中", color: "text-indigo-500", Icon: LoaderCircle },
   ok: { label: "已完成", color: "text-emerald-500", Icon: CheckCircle2 },
   cancelled: { label: "已取消", color: "text-slate-400", Icon: CircleOff },

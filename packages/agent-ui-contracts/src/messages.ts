@@ -91,7 +91,7 @@ export const blockSchema = z.discriminatedUnion("type", [
       type: z.literal("tool_result"),
       callId: idSchema,
       operationId: idSchema,
-      outcome: z.enum(["succeeded", "failed", "cancelled", "denied", "unknown"]),
+      outcome: z.enum(["succeeded", "failed", "cancelled", "denied"]),
       content: z.array(contentSchema),
     })
     .strict(),

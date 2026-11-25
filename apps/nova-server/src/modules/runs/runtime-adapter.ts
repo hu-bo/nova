@@ -43,6 +43,7 @@ export type RuntimeOutcome =
       detail?: string;
     }
   | { kind: "waiting" | "paused"; reason?: string };
+export type InterruptionReason = "cancel" | "timeout" | "error";
 export type RuntimeCommand = { kind: "start"; input: SubmitInput; messageId: string } | { kind: "recover" };
 export interface RuntimeContext {
   runId: string;
@@ -52,7 +53,7 @@ export interface RuntimeContext {
 }
 export interface RuntimeAdapter {
   execute(command: RuntimeCommand, context: RuntimeContext): Promise<RuntimeOutcome>;
-  cancel(runId: string): Promise<"confirmed" | "unknown">;
+  cancel(runId: string, reason: InterruptionReason): Promise<InterruptionReason>;
   dispose(): Promise<void>;
 }
 export interface RuntimeDependencies {

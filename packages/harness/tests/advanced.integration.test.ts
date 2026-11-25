@@ -439,7 +439,7 @@ test("checkpoint policy gates model and tool dispatch while notifications remain
       );
       if (scenario === "abort-tool") {
         assert.equal(result.status, "cancelled");
-        assert.equal(result.toolCalls[0]?.error?.code, "ABORTED_BEFORE_DISPATCH");
+        assert.equal(result.toolCalls[0]?.error?.code, "CANCELLED");
         assert.equal(result.toolCalls[0]?.outcome, "known");
       } else if (scenario === "normal" || scenario === "tool") {
         assert.equal(result.status, "succeeded");

@@ -150,7 +150,7 @@ export function ConversationWorkspace({
   const pauseReason = projection?.run?.reason ?? data.run?.reason ?? null;
   const active = isActiveRun(runState);
   const executionEnabled = Boolean(config.data?.capabilities.execution);
-  const maintenanceLocked = active || runState === 'cancelled_unconfirmed';
+  const maintenanceLocked = active;
   // 首屏自动加载第一页历史；「加载更早的消息」继续向前翻页。
   const history = useInfiniteQuery({
     queryKey: queryKeys.conversations.history(
@@ -421,7 +421,6 @@ export function ConversationWorkspace({
         <RunPanel
           stream={stream}
           controls={controls}
-          onRetry={stream.retry}
           executionEnabled={executionEnabled}
           continuationConfiguration={{
             ...(projection?.data.conversation.configuration ?? data.conversation.configuration),

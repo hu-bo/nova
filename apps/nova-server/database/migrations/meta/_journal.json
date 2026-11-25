@@ -99,6 +99,13 @@
       "when": 1795459882680,
       "tag": "0013_square_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795564800000,
+      "tag": "0014_normalize_legacy_cancelled_unconfirmed",
+      "breakpoints": true
     }
   ]
 }

@@ -18,7 +18,6 @@ import {
   acceptSpec,
   generateSpecDraft,
   recordSpecEvidence,
-  reconcileSpecTaskAttempt,
   reviewSpecStage,
   saveSpecDraft,
   startSpecTaskAttempt,
@@ -80,7 +79,6 @@ const taskStates = {
   failed: { label: '失败', className: 'text-danger' },
   cancelled: { label: '已取消', className: 'text-muted-foreground' },
   timed_out: { label: '已超时', className: 'text-danger' },
-  needs_reconciliation: { label: '待核实原操作', className: 'text-amber-700' },
 } satisfies Record<GetSpec200['tasks'][number]['status'], { label: string; className: string }>;
 function draftForStage(spec: GetSpec200, stage: Stage): DraftValue {
   if (stage === 'requirements') return spec.requirementsMd;
@@ -92,17 +90,13 @@ function stageHasDraft(spec: GetSpec200, stage: Stage) {
   if (stage === 'design') return Boolean(spec.designMd?.trim());
   return spec.taskPlan.length > 0;
 }
-/** 人工复核与核实原操作共用的说明弹窗；替代 window.prompt（部分环境不可用且无法测试）。 */
-type EvidenceDialog =
-  | { kind: 'manual'; taskKey: string; checkKey: string; attemptId: string; passed: boolean }
-  | { kind: 'reconcile'; attemptId: string };
+/** 替代 window.prompt（部分环境不可用且无法测试）。 */
+type EvidenceDialog = { kind: 'manual'; taskKey: string; checkKey: string; attemptId: string; passed: boolean };
 const evidenceDialogCopy = {
   manualPassed: { title: '记录人工复核', hint: '通过说明（可留空）', required: false },
   manualFailed: { title: '记录人工复核', hint: '未通过原因（必填）', required: true },
-  reconcile: { title: '核实原操作', hint: '核实说明（必填）', required: true },
 } satisfies Record<string, { title: string; hint: string; required: boolean }>;
 function evidenceDialogKey(dialog: EvidenceDialog): keyof typeof evidenceDialogCopy {
-  if (dialog.kind === 'reconcile') return 'reconcile';
   return dialog.passed ? 'manualPassed' : 'manualFailed';
 }
 const stable = (value: unknown) => JSON.stringify(value);
@@ -228,25 +222,12 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
     setEvidenceNote('');
     setEvidenceDialog({ kind: 'manual', taskKey, checkKey, attemptId, passed });
   };
-  const openReconcileDialog = (attemptId: string) => {
-    setEvidenceNote('');
-    setEvidenceDialog({ kind: 'reconcile', attemptId });
-  };
   const submitEvidenceDialog = () => {
     if (!spec || !evidenceDialog) return;
     const note = evidenceNote.trim();
     if (evidenceDialogCopy[evidenceDialogKey(evidenceDialog)].required && !note) return;
     const dialog = evidenceDialog;
     setEvidenceDialog(null);
-    if (dialog.kind === 'reconcile') {
-      void mutate(() =>
-        reconcileSpecTaskAttempt(projectId, specId, dialog.attemptId, {
-          expectedRevision: spec.revision,
-          note,
-        }),
-      );
-      return;
-    }
     void mutate(() =>
       recordSpecEvidence(projectId, specId, {
         expectedRevision: spec.revision,
@@ -270,7 +251,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
       </p>
     );
   const executionBusy = spec.tasks.some((task) =>
-    ['queued', 'running', 'waiting', 'needs_reconciliation'].includes(task.status),
+    ['queued', 'running', 'waiting'].includes(task.status),
   );
   const readonly = Boolean(spec.acceptance) || executionBusy;
   const reviewed = spec.reviews[stage]?.revision === spec.revision;
@@ -464,7 +445,6 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
           busy={pending}
           onRun={(key) => void runTask(key)}
           onManual={openManualDialog}
-          onReconcile={openReconcileDialog}
         />
       )}
       {stage === 'tasks' && <SpecAcceptance spec={spec} />}
@@ -515,15 +495,10 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
           open
           onClose={() => setEvidenceDialog(null)}
           title={dialogCopy.title}
-          description={
-            evidenceDialog.kind === 'reconcile'
-              ? '核对原操作回执和工作区后，记录核实说明。尝试 ' +
-                evidenceDialog.attemptId.slice(0, 8)
-              : `${evidenceDialog.taskKey} / ${evidenceDialog.checkKey} · ${
-                  evidenceDialog.passed ? '记录通过' : '记录未通过'
-                }`
-          }
-          icon={evidenceDialog.kind === 'reconcile' ? <ShieldCheck size={18} /> : <Check size={18} />}
+          description={`${evidenceDialog.taskKey} / ${evidenceDialog.checkKey} · ${
+            evidenceDialog.passed ? '记录通过' : '记录未通过'
+          }`}
+          icon={<Check size={18} />}
           onSubmit={(event) => {
             event.preventDefault();
             submitEvidenceDialog();
@@ -537,7 +512,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
                 type="submit"
                 disabled={pending || (dialogCopy.required && !evidenceNote.trim())}
               >
-                {evidenceDialog.kind === 'reconcile' ? '提交核实' : '记录结果'}
+                记录结果
               </Button>
             </>
           }
@@ -852,7 +827,6 @@ function TaskExecutionList({
   canRun,
   canRecordEvidence,
   busy,
-  onReconcile,
   onRun,
   onManual,
 }: {
@@ -861,7 +835,6 @@ function TaskExecutionList({
   canRun: boolean;
   canRecordEvidence: boolean;
   busy: boolean;
-  onReconcile: (attemptId: string) => void;
   onRun: (taskKey: string) => void;
   onManual: (taskKey: string, checkKey: string, attemptId: string, passed: boolean) => void;
 }) {
@@ -869,7 +842,7 @@ function TaskExecutionList({
     <div className="mt-5 space-y-3 border-t pt-4">
       {spec.taskPlan.map((task) => {
         const status = spec.tasks.find((item) => item.key === task.key);
-        const active = ['queued', 'running', 'waiting', 'needs_reconciliation'].includes(
+        const active = ['queued', 'running', 'waiting'].includes(
           status?.status ?? '',
         );
         const unmet = task.dependsOn.filter(
@@ -906,17 +879,6 @@ function TaskExecutionList({
                 {status?.status === 'not_started' ? '运行任务' : '重试任务'}
               </Button>
             </div>
-            {status?.status === 'needs_reconciliation' && status.attemptId && canRecordEvidence && (
-              <Button
-                className="mt-3"
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onPress={() => onReconcile(status.attemptId!)}
-              >
-                核实原操作
-              </Button>
-            )}
             {!!task.dependsOn.length && (
               <p
                 className={

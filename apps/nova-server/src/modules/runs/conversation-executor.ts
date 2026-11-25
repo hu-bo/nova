@@ -14,7 +14,7 @@ import type { RunClaim } from "./run.repository.js";
 import { createRunService, type RunService } from "./run.service.js";
 import "./nova-runtime.js";
 import { runtimeAdapters } from "./runtime-adapter.js";
-import type { RuntimeAdapter, RuntimeCommand } from "./runtime-adapter.js";
+import type { InterruptionReason, RuntimeAdapter, RuntimeCommand } from "./runtime-adapter.js";
 export class ConversationExecutor {
   private readonly repository: RunService;
   private readonly workerId = randomUUID();
@@ -76,15 +76,13 @@ export class ConversationExecutor {
       monitoring = true;
       void (async () => {
         const run = await this.repository.watch(claim);
-        if (
-          !run ||
-          run.state === "cancelling" ||
-          (prepared.conversation.metadata.goal?.status === "active" && run.goalStatus === "paused") ||
-          !(await this.repository.heartbeat(claim))
-        )
-          controller.abort();
+        if (!run) controller.abort(new Error("Run lease is no longer owned by this worker"));
+        else if (run.state === "cancelling") controller.abort("cancel");
+        else if (prepared.conversation.metadata.goal?.status === "active" && run.goalStatus === "paused")
+          controller.abort("cancel");
+        else if (!(await this.repository.heartbeat(claim))) controller.abort(new Error("Run lease heartbeat failed"));
       })()
-        .catch(() => controller.abort())
+        .catch((error: unknown) => controller.abort(error))
         .finally(() => {
           monitoring = false;
         });
@@ -160,7 +158,9 @@ export class ConversationExecutor {
           },
         };
       } while (!signal.aborted);
-      const cancellation = signal.aborted ? await adapter.cancel(claim.id) : "confirmed";
+      const interruption = signal.aborted
+        ? await adapter.cancel(claim.id, interruptionReason(signal, deadline))
+        : undefined;
       // §7 窗口表末行：技能声明必须交付文件但 Run 结束前没有 ready 产物 → 宿主结算为交付失败，
       // 不能只根据模型「已生成」的文字判定成功。
       const delivery = await this.deliveryShortfall(claim);
@@ -169,7 +169,7 @@ export class ConversationExecutor {
         await this.repository.finish(claim, "failed", "DELIVERY_UNFULFILLED");
         return;
       }
-      await this.repository.finish(claim, completionState(signal.aborted, cancellation));
+      await this.repository.finish(claim, completionState(interruption));
     } catch (error) {
       const domainReason = error instanceof DomainError ? error.details?.reason : undefined;
       let reason = "EXECUTION_FAILED";
@@ -179,24 +179,32 @@ export class ConversationExecutor {
         { reason, errorName: error instanceof Error ? error.name : "UNKNOWN", aborted: signal.aborted },
         "Conversation execution failed",
       );
-      const cancellation = signal.aborted && adapter ? await adapter.cancel(claim.id) : "confirmed";
-      await this.repository.finish(claim, failureState(signal.aborted, cancellation, deadline), reason);
+      let interruption: InterruptionReason | undefined;
+      if (signal.aborted) {
+        const reason = interruptionReason(signal, deadline);
+        interruption = adapter ? await adapter.cancel(claim.id, reason) : reason;
+      }
+      await this.repository.finish(claim, failureState(interruption), reason);
     } finally {
       clearInterval(timer);
       await adapter?.dispose();
     }
   }
 }
-/** Terminal state once the loop returns; an aborted signal beats success, then cancel confirmation. */
-function completionState(aborted: boolean, cancellation: "confirmed" | "unknown") {
-  if (!aborted) return "succeeded";
-  if (cancellation === "confirmed") return "cancelled";
-  return "cancelled_unconfirmed";
+function interruptionReason(signal: AbortSignal, deadline: number): InterruptionReason {
+  const reason: unknown = signal.reason;
+  if (reason instanceof Error && reason.name === "TimeoutError") return "timeout";
+  if (reason === "cancel") return "cancel";
+  if (Date.now() >= deadline) return "timeout";
+  return "error";
 }
-/** Terminal state after a thrown execution: unconfirmed cancels beat the deadline check, timeout beats cancel. */
-function failureState(aborted: boolean, cancellation: "confirmed" | "unknown", deadline: number) {
-  if (!aborted) return "failed";
-  if (cancellation === "unknown") return "cancelled_unconfirmed";
-  if (Date.now() >= deadline) return "timed_out";
-  return "cancelled";
+/** An interruption reason is the single source for terminal state precedence. */
+function completionState(reason?: InterruptionReason) {
+  if (reason === "cancel") return "cancelled";
+  if (reason === "timeout") return "timed_out";
+  if (reason === "error") return "failed";
+  return "succeeded";
+}
+function failureState(reason?: InterruptionReason) {
+  return completionState(reason === undefined ? "error" : reason);
 }

@@ -26,7 +26,6 @@ import { createSkillResourceTools } from "@nova/tools/harness";
 import type { ArtifactService } from "../artifacts/index.js";
 import { configuredModelPlugin } from "./configured-model.js";
 import { postgresSessionPlugin } from "./postgres-session-store.js";
-import { executionEffectState } from "./session-checkpoint.js";
 import { sshToolContext } from "./ssh-tool-context.js";
 import { runnerToolContext } from "./runner-tool-context.js";
 import { resolveProjectInstructions } from "./project-instructions.js";
@@ -51,7 +50,7 @@ export const runnerOsInstructions = (platform: string) =>
   ["Runner operating system: " + JSON.stringify(platform || "unknown"), ...RUNNER_OS_NOTES].join("\n");
 const MODE_INSTRUCTIONS = {
   plan: "PLAN MODE: analyze and plan using read-only tools. Do not modify files or execute shell commands.",
-  build: "BUILD MODE: implement the task. Writes and commands require approval. Stop when an operation has an unknown outcome.",
+  build: "BUILD MODE: implement the task. Writes and commands require approval. When a tool fails or is interrupted, read its error and stderr before continuing. Retry when appropriate; ask the user before repeating a write whose result is unclear.",
   auto: "AUTO MODE: unattended execution. Writes and commands are pre-approved; keep working through the task without waiting for confirmation. Report any operation you could not verify in the final message.",
 } satisfies Record<Configuration["mode"], string>;
 // 安全白名单单一来源: 声明 effects=read 的工具 (read_file、grep、list_dir 等) 在任何模式下无条件放行.
@@ -579,10 +578,9 @@ export class NovaRuntime implements RuntimeAdapter {
   async dispose() {
     await this.harness?.close();
   }
-  async cancel() {
+  async cancel(_runId: string, reason: import("./runtime-adapter.js").InterruptionReason) {
     this.harness?.cancel();
-    const { checkpoint } = await this.deps.repository.load(this.deps.claim);
-    return executionEffectState(checkpoint.executions) === "known" ? "confirmed" : "unknown";
+    return reason;
   }
 }
 runtimeAdapters.set("nova", {

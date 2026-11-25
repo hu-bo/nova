@@ -5224,7 +5224,7 @@
                       "properties": {
                         "state": {
                           "type": "string",
-                          "enum": ["cancelling", "cancelled", "cancelled_unconfirmed"]
+                          "enum": ["cancelling", "cancelled"]
                         },
                         "reason": {
                           "type": "string"

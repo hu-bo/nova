@@ -26,7 +26,6 @@ const stateOf = (data: Snapshot, startingInput: RunState['startingInput']): RunS
 });
 
 function selectStartingInput(data: Snapshot, previous: RunState['startingInput'], newRun = false) {
-  if (data.run?.state === 'cancelled_unconfirmed') return null;
   if (previous) {
     const queued = data.pendingInputs.find((input) => input.id === previous.id);
     if (queued) return { ...previous, ...queued };

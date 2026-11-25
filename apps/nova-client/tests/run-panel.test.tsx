@@ -59,7 +59,7 @@ function Panel({
       <RunStatus stream={stream} controls={controls} onRetry={() => {}} />
       {/* 占位触发器：模拟 Chat 输入框里的停止按钮调用同一个 controls.cancel。 */}
       <button onClick={() => controls.cancel.mutate()}>触发停止</button>
-      <RunPanel stream={stream} controls={controls} onRetry={onRetry} />
+      <RunPanel stream={stream} controls={controls} />
     </>
   );
 }
@@ -85,7 +85,7 @@ afterEach(() => {
   mocks.append.mockReset();
   vi.useRealTimers();
 });
-describe('approval, cancellation and unknown outcomes', () => {
+describe('approval, cancellation and interrupted runs', () => {
   it('shows that the first message is waiting to start until a run begins', () => {
     const value = stream();
     value.projection = initialProjection(
@@ -210,26 +210,12 @@ describe('approval, cancellation and unknown outcomes', () => {
     view.rerender(view.ui(value));
     expect(screen.getByText('正在运行')).toBeDefined();
   });
-  it('reports evidence refresh progress without treating it as execution confirmation', async () => {
+  it('does not show an execution reconciliation panel for a timed out run', () => {
     const value = stream();
-    value.projection!.run!.state = 'cancelled_unconfirmed';
-    let finishRefresh!: (success: boolean) => void;
-    const onRetry = vi
-      .fn<() => Promise<boolean>>()
-      .mockImplementationOnce(() => new Promise((resolve) => (finishRefresh = resolve)))
-      .mockResolvedValueOnce(true);
-    mount(value, onRetry);
-    expect(screen.getByText('执行结果需要核实')).toBeDefined();
-    await userEvent.click(screen.getByRole('button', { name: '刷新核实材料' }));
-    expect(
-      (screen.getByRole('button', { name: '正在刷新核实材料…' }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-    await act(async () => finishRefresh(false));
-    expect(screen.getByText('未能刷新核实材料，请稍后重试。')).toBeDefined();
-    await userEvent.click(screen.getByRole('button', { name: '刷新核实材料' }));
-    expect(screen.getByText('已刷新会话记录，执行结果仍需人工核实。')).toBeDefined();
-    expect(screen.getByText('执行结果需要核实')).toBeDefined();
-    expect(onRetry).toHaveBeenCalledTimes(2);
+    value.projection!.run!.state = 'timed_out';
+    mount(value);
+    expect(screen.queryByText('执行结果需要核实')).toBeNull();
+    expect(screen.queryByRole('button', { name: '刷新核实材料' })).toBeNull();
     expect(mocks.cancel).not.toHaveBeenCalled();
     expect(mocks.resolve).not.toHaveBeenCalled();
   });

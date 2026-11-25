@@ -45,7 +45,11 @@ export function safeError(error: unknown, code = "EXECUTION_FAILED"): SafeError 
 /** Kernel setup and agent execution use the same cancellation precedence. */
 export function runFailureStatus(signal: AbortSignal): "failed" | "cancelled" | "timed_out" {
   if (!signal.aborted) return "failed";
-  if (signal.reason instanceof FrameworkError && signal.reason.code === "TIMED_OUT") return "timed_out";
+  if (
+    (signal.reason instanceof FrameworkError && signal.reason.code === "TIMED_OUT") ||
+    (signal.reason instanceof Error && signal.reason.name === "TimeoutError")
+  )
+    return "timed_out";
   return "cancelled";
 }
 

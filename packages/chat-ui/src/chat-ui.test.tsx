@@ -472,8 +472,8 @@ describe("chat-ui", () => {
 
   it.each([
     { status: "ok", label: "已完成" },
+    { status: "error", label: "失败" },
     { status: "cancelled", label: "已取消" },
-    { status: "unknown", label: "待核实" },
   ] as const)("merges a $status tool result from its own message into the matching tool block", ({ status, label }) => {
     const messages: ChatMessage[] = [
       {

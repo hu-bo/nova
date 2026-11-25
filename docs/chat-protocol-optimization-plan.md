@@ -263,8 +263,7 @@ type RunState =
   | "succeeded"
   | "failed"
   | "timed_out"
-  | "cancelled"
-  | "cancelled_unconfirmed";
+  | "cancelled";
 
 interface RunView {
   id: Id;
@@ -562,7 +561,7 @@ dispose 只释放当前 adapter 的本地连接和订阅，不删除持久化 se
 
 网络请求和用户等待在事务外。waiting 释放 worker 槽位，但保留单会话活动 run 资格。已确认工具结果复用；明确未派发可派发；派发后无确定回执的副作用进入 outcome_unknown，不能自动重跑。
 
-取消接受先进入 cancelling，确认停止才 cancelled；无法确认则 cancelled_unconfirmed。未确认操作所属环境要在后续副作用准入时核对，不能清空 activeRunId 后忘记风险。可以先查询相关 runs 的有界 checkpoint，真实需要高频全局核对时再拆 operation 表。
+取消接受先进入 cancelling，随后按取消、超时或执行错误进入现有终态。Runner/SDK/Harness 在中断时尽量保存 stderr 和残余输出；不保留环境级副作用准入隔离。无设备级 fencing 时仍存在远端写入未停止的风险，调用方根据错误输出决定是否重试。
 
 原生后端与 Nova 数据库不能假设跨系统同事务，按原生身份/水位核对；没有持久化恢复能力时明确报错，不把内存 resume 描述成重启恢复。
 

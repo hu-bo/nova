@@ -324,7 +324,12 @@ export const bash = tool({
         queuedBytes += bytes;
         if (queuedBytes > 1048576) {
           outputQueue = outputQueue.then(() => {
-            throw new ToolFailureError("OUTPUT_LIMIT", "Output persistence buffer exceeded.", "unknown");
+            throw new ToolFailureError(
+              "OUTPUT_LIMIT",
+              "Output persistence buffer exceeded.",
+              "known",
+              boundedOutput(streamed),
+            );
           });
           return;
         }
@@ -336,7 +341,16 @@ export const bash = tool({
         void outputQueue.catch(() => undefined);
       },
     });
-    await outputQueue;
+    try {
+      await outputQueue;
+    } catch (error) {
+      throw new ToolFailureError(
+        "OUTPUT_PERSISTENCE_FAILED",
+        error instanceof Error ? error.message : "Command output could not be persisted.",
+        "known",
+        boundedOutput(streamed),
+      );
+    }
     if (!result.ok)
       remoteFailure(result.error, {
         command: input.command,

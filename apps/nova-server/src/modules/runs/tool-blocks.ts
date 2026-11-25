@@ -56,8 +56,18 @@ function safeStringify(value: JsonValue): string {
 export function projectToolContent(name: string, value: JsonValue): Content[] {
   const envelope = record(value);
   const failure = record(envelope?.error);
-  if (failure && typeof failure.code === "string" && typeof failure.message === "string")
-    return [{ id: "content", type: "error", error: { code: failure.code, message: truncate(failure.message) } }];
+  if (failure && typeof failure.code === "string" && typeof failure.message === "string") {
+    const blocks: Content[] = [
+      { id: "content:error", type: "error", error: { code: failure.code, message: truncate(failure.message) } },
+    ];
+    const details = record(envelope?.details);
+    const stdout = text(details?.stdout);
+    const stderr = text(details?.stderr);
+    if (stdout) blocks.push({ id: "content:stdout", type: "code", language: "text", code: truncate(stdout) });
+    if (stderr)
+      blocks.push({ id: "content:stderr", type: "error", error: { code: "STDERR", message: truncate(stderr) } });
+    return blocks;
+  }
   // Spec candidates remain complete in checkpoints; chat shows only their product status.
   if (name === "spec_read") return [{ id: "content", type: "text", text: "已读取当前规格，继续讨论需求与方案。" }];
   if (name === "spec_update") return [{ id: "content", type: "text", text: "已提交规格草稿，运行完成后校验并保存。" }];

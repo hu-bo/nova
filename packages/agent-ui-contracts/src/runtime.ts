@@ -12,7 +12,6 @@ export const runStateSchema = z.enum([
   "failed",
   "timed_out",
   "cancelled",
-  "cancelled_unconfirmed",
 ]);
 export const runViewSchema = z
   .object({
@@ -50,7 +49,7 @@ export const toolOperationSchema = z
   .object({
     id: idSchema,
     callId: idSchema,
-    state: z.enum(["queued", "running", "succeeded", "failed", "cancelled", "denied", "unknown"]),
+    state: z.enum(["queued", "running", "succeeded", "failed", "cancelled", "denied"]),
     attempt: z.number().int().positive().optional(),
     stdout: outputTailSchema.optional(),
     stderr: outputTailSchema.optional(),

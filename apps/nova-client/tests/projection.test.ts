@@ -175,12 +175,13 @@ describe('shared projection in the chat view', () => {
     expect(state.startingInput).toBeNull();
   });
 
-  it('keeps blocked execution visible in the queue', () => {
+  it('keeps queued execution available after a timed out run', () => {
     const state = initialProjection(
-      snapshot({ run: { id: 'run-1', state: 'cancelled_unconfirmed' }, pendingInputs: [input] }),
+      snapshot({ run: { id: 'run-1', state: 'timed_out' }, pendingInputs: [input] }),
     );
-    expect(state.pendingInputs).toEqual([input]);
-    expect(state.messages).toEqual([]);
+    expect(state.pendingInputs).toEqual([]);
+    expect(state.messages).toMatchObject([{ role: 'user', blocks: input.input.blocks }]);
+    expect(state.startingInput?.id).toBe(input.id);
   });
 
   it('retains unrelated messages and blocks while text and tool state change', () => {
@@ -343,7 +344,6 @@ describe('shared projection in the chat view', () => {
     ['failed', 'error'],
     ['denied', 'error'],
     ['cancelled', 'cancelled'],
-    ['unknown', 'unknown'],
   ] as const)(
     'preserves %s tool results through events, refresh and later runs',
     (outcome, status) => {

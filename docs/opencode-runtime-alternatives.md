@@ -10,7 +10,7 @@
 | 断线补读 | `/api/event` 提供实时流，需从消息、运行状态和待审批列表对账。Windows 2.4.1 实测实验性 session log 只返回 `log.synced` |
 | 提交和投影 | 以稳定的上游输入 ID 和请求指纹核实重复提交，按消息和工具 ID 合并事件与快照 |
 
-ACP 省去 HTTP 实例认证和端口转发，并以 `session/load` 回放作为历史修复来源。Nova 仍需保存提交意图、持久化产品事件和处理取消结果未知。 [HTTP/SSE 对账](opencode-runtime-design.md#4-事件兼容性)
+ACP 省去 HTTP 实例认证和端口转发，并以 `session/load` 回放作为历史修复来源。Nova 仍需保存提交意图、持久化产品事件，并按取消、超时或错误持久化中断结果。 [HTTP/SSE 对账](opencode-runtime-design.md#4-事件兼容性)
 
 ## 2. OpenCode 2.4.1 实测
 
@@ -54,7 +54,7 @@ ACP 子进程启动私有 OpenCode 服务并以 stdin/stdout 传输换行分隔�
 
 1. ACP 适配器收到 `session/request_permission` 后，在同一批提交交互事件和请求映射，保留 ACP 请求 ID、Nova interaction ID 和关联工具调用。Run 保持 `running`，UI 由待审批交互提示用户。`execute()` 等待回复，继续占用一个 Worker 并发槽，沿用 Run deadline 和租约心跳。
 2. `RunService.respond` 沿用已有的归属和 revision 校验，将回复持久化。首版由持租约的 Worker 在心跳周期检查已提交回复，按 run、interaction 和 fence 取值。API 与 Worker 分进程时也能送达。同进程的 resolver 可以在事务提交后加速唤醒。适配器只对匹配的请求回一次 `once` 或 `reject`，重复提交按现有幂等规则处理。
-3. deadline 到达时沿用取消与超时结算，清理待处理交互。连接退出时清理本地待回复请求。租约丢失时，仍存活的旧适配器关闭连接。持有效租约的一方负责结算。确认执行中断时用现有 `failed` 状态和中断原因。取消无法确认时用 `cancelled_unconfirmed`。连接丢失或租约过期时，仍需核实旧执行已停止。完成对账后，用户的新消息以新 Run 继续同一 `sessionId`。
+3. deadline 到达时沿用取消与超时结算，清理待处理交互。连接退出时清理本地待回复请求。租约丢失时，仍存活的旧适配器关闭连接。持有效租约的一方负责结算。中断按取消、超时或执行错误进入现有终态，并在工具结果中保存可取得的 stderr。连接丢失后用户可检查错误并决定是否重试，新消息以新 Run 继续同一 `sessionId`。
 
 可接受审批在现有 deadline 内占用试点执行槽。验收同时观察等待审批时其他会话的排队情况。 [Run 回复事务](../apps/nova-server/src/modules/runs/run.service.ts) · [Worker 监控](../apps/nova-server/src/modules/runs/conversation-executor.ts) · [Nova Run 状态](../packages/agent-ui-contracts/src/runtime.ts)
 
@@ -83,7 +83,7 @@ ACP 子进程启动私有 OpenCode 服务并以 stdin/stdout 传输换行分隔�
 | --- | --- | --- |
 | 历史恢复 | Worker 重启后 `session/load` 回放与库内投影一致，无重复，产品 SSE 游标连续 | 用消息和状态快照对账 |
 | 审批等待 | 保留连接和租约。覆盖 API 与 Worker 分进程、快速回复、重复回复、deadline 和失联。失联收口后由新 Run 继续原会话 | 可释放租约，recover 核实待审批。审批时重启和重复投递仍需验收 |
-| 取消 | `session/cancel` 后收到 `stopReason: cancelled` 才确认。取消无法确认时归为 `cancelled_unconfirmed` | `interrupt` 后用中断事件或可验证状态确认 |
+| 取消 | `session/cancel` 后收到 `stopReason: cancelled` 才确认；异常中断保留错误输出并按取消、超时或失败收口 | `interrupt` 后用中断事件或可验证状态确认，并保留工具错误 |
 | 执行跨 Worker 存活 | 只承诺历史恢复。stdin 关闭后审批和当前回合中断 | 阶段 2 要求独立保活或接管待审批时再评估并实测 |
 
 同机试点用固定 2.4.1 验证文本多轮、工具卡片、审批、取消、纯正文 Skill 选择、提交响应丢失和 Worker 重启。远程启用前独立验证 SSH 通道断开、进程清理和审批回复。

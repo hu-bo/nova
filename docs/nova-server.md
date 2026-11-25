@@ -338,8 +338,9 @@ stateDiagram-v2
   running --> cancelling: 用户取消
   waiting_decision --> cancelling: 用户取消
   paused --> cancelling: 用户取消
-  cancelling --> cancelled: 已确认停止
-  cancelling --> cancelled_unconfirmed: 宽限结束且效果未确认
+  cancelling --> cancelled: 用户取消
+  cancelling --> timed_out: deadline 到达
+  cancelling --> failed: 运行中断或执行错误
   running --> succeeded: 最终结果提交
   running --> failed: 确定的不可继续错误
   running --> timed_out: 累计期限耗尽
@@ -347,14 +348,13 @@ stateDiagram-v2
   failed --> [*]
   timed_out --> [*]
   cancelled --> [*]
-  cancelled_unconfirmed --> [*]
 ```
 
 `state` 表示生命周期，`phase` 表示恢复位置：prepare、model_request、model_committed、tool_batch_prepared、tool_dispatch、tool_results_committed、finalizing。pauseReason 如 RUNNER_OFFLINE、OUTCOME_UNKNOWN、DEPENDENCY_UNAVAILABLE；failureReason/budgetReason 不用含糊 loading 表达。
 
 所有状态转移校验 state/revision/fence；终态不可自动回到 queued。waiting_decision 保存 continuation 并释放 CPU worker 槽位，但仍保留会话唯一运行资格；决策回填重新取得 fence 继续。多次回填不能多次派发。
 
-取消接受后将 `runs.state` 推进为 `cancelling` 并写高优先级控制意图，Worker/模型/工具收到 AbortSignal；设备超时仍未确认时进入 `cancelled_unconfirmed`。它是不可恢复终态，但保留 outstanding operation 风险标记；涉及同一工作环境的后续副作用操作在停止/核实前被隔离。不能释放会话资格后直接让另一任务与未停止进程竞争。
+取消接受后将 `runs.state` 推进为 `cancelling` 并写高优先级控制意图，Worker/模型/工具收到带原因的 AbortSignal。收口时按触发原因进入 `cancelled`、`timed_out` 或 `failed`；工具结果保存已捕获的 stdout/stderr 与中断原因。后续 Run 不会因旧运行的环境副作用状态而被隔离。Runner 负责终止本地进程树；极少数未能停止的远程写入可能与后续操作竞争，调用方应检查错误输出并在需要时重试一次。
 
 ### 7.2 必须升级的底层契约
 
@@ -408,7 +408,7 @@ lease 和 fencing 保护数据库提交，不会自动停止设备上的 Shell�
 | boot 改变、回执遗失、派发结果无法确定               | paused/OUTCOME_UNKNOWN，人工核实                 |
 | 全部工具确定、context checkpoint 提交               | 进入下一模型轮次                                 |
 | final 已提交                                        | 只完成 terminal/计量等幂等收尾                   |
-| cancelled、cancelled_unconfirmed、failed、timed_out | 不自动恢复                                       |
+| cancelled、failed、timed_out                       | 不自动恢复                                       |
 
 按同 checkpoint 最多自动恢复 3 次作为初始策略，恢复不重置总 deadline、step/tool 预算、用量或 approval deadline。设备恢复只针对环境快照的原 Runner/workspace；不自动选择另一个在线设备。恢复扫描有界并发、抖动及可见失败原因。
 
@@ -617,9 +617,9 @@ DB migration 由单个发布锁执行，各应用副本不启动时同时 migrat
 | MinIO 故障                | 上传/下载失败，草稿保留               | 上传确认/GC 重试与对象对账                          |
 | Auth Service 故障         | 503 且不接受未验证身份                | 短缓存有期限，依赖恢复再鉴权                        |
 | 通知/Redis 丢失           | 事件可能短时延迟                      | DB polling catch-up，不丢 durable journal           |
-| 超时/取消但进程未确认停止 | 保留 outstanding operation 隔离       | 与 cancelled_unconfirmed 一样核实，不放开同环境写入 |
+| 超时/取消时 Runner 断连  | 以超时/取消/失败及工具错误收口       | 不保留环境级准入锁；检查 stderr 后按需重试一次       |
 
-数据库故障时仅凭进程内 token 继续派发副作用不可接受。没有设备/OS级 fencing 时，已开始的命令仍可能继续；架构保障是停止新增执行、阻止不安全接管、保存/重建未知状态，而不是宣称网络分区下远端操作必然立即停止。
+数据库故障时仅凭进程内 token 继续派发副作用不可接受。没有设备/OS级 fencing 时，已开始的命令仍可能继续；取消、超时和断连会保留可取得的工具错误与 stderr，但不承诺网络分区下远端操作必然立即停止。
 
 ## 14. 配置、探针与可观测性
 

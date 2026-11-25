@@ -1,7 +1,7 @@
 import { createScope, defineRepository, type RepositoryDatabase, type TransactionOptions } from "../../shared/scope.js";
 import { normalizeModelMessage } from "@nnova/harness/plugins/model-ai-sdk";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, getTableColumns, gt, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   applyEvent,
   configurationSchema,
@@ -287,12 +287,6 @@ export class RunRepository {
     conversation: ConversationRow,
     workerId: string,
   ): Promise<RunRow | null> {
-    const [unknown] = await tx
-      .select({ id: runs.id })
-      .from(runs)
-      .where(and(eq(runs.conversationId, conversation.id), eq(runs.state, "cancelled_unconfirmed")))
-      .limit(1);
-    if (unknown) return null;
     const [input] = await tx
       .select()
       .from(pendingInputs)
@@ -708,13 +702,6 @@ export class RunRepository {
       throw new DomainError("CONFLICT", "Tool execution limit exceeded");
     if (run.state === "cancelling" && batch.execution?.dispatch === "dispatched" && !batch.execution.result)
       throw new DomainError("CONFLICT", "Run is cancelling", { reason: "NOT_DISPATCHED" });
-    if (
-      batch.execution?.dispatch === "dispatched" &&
-      !batch.execution.result &&
-      batch.execution.effects !== "read" &&
-      (await environmentUnsettled(tx, conversation, run.checkpoint.configuration))
-    )
-      throw new DomainError("CONFLICT", "Execution environment requires inspection", { reason: "NOT_DISPATCHED" });
     const checkpoint = checkpointAfter(run.checkpoint, next, batch);
     const bytes = checkpointBytes ?? Buffer.byteLength(JSON.stringify(checkpoint));
     if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > 8 * 1024 * 1024 || checkpoint.executions.length > 1000)
@@ -1105,8 +1092,11 @@ export class RunRepository {
 
     const { conversation, run } = await this.ownedClaim(tx, claim);
     if (run.state === "cancelling") state = "cancelled";
-    if (run.checkpoint && (state === "cancelled" || state === "cancelled_unconfirmed")) {
-      const settled = cancelPendingTools(run.checkpoint);
+    if (run.checkpoint && ["cancelled", "timed_out", "failed"].includes(state)) {
+      let reason: "cancel" | "timeout" | "error" = "error";
+      if (state === "cancelled") reason = "cancel";
+      else if (state === "timed_out") reason = "timeout";
+      const settled = cancelPendingTools(run.checkpoint, reason, run.projection?.operations ?? []);
       run.checkpoint = settled.checkpoint;
       for (const result of settled.results) {
         const outcome = publicOutcome(result) ?? result.status;
@@ -1137,8 +1127,6 @@ export class RunRepository {
         });
       }
     }
-    const unknown = run.checkpoint && executionEffectState(run.checkpoint.executions) !== "known";
-    if (unknown) state = "cancelled_unconfirmed";
     const specExecution = run.checkpoint?.specExecution;
     if (specExecution?.kind === "task") {
       const [attempt] = await tx.select().from(specTaskAttempts).where(and(
@@ -1147,7 +1135,7 @@ export class RunRepository {
         eq(specTaskAttempts.revision, specExecution.revision),
         eq(specTaskAttempts.taskKey, specExecution.taskKey),
       )).for("update");
-      if (attempt && !attempt.releasedAt && state !== "cancelled_unconfirmed") {
+      if (attempt && !attempt.releasedAt) {
         if (state === "succeeded") {
           const [version] = await tx.select().from(specRevisions).where(and(
             eq(specRevisions.specId, specExecution.specId), eq(specRevisions.revision, specExecution.revision),
@@ -1374,9 +1362,8 @@ export class RunRepository {
         type: "spec.changed",
         payload: { specId: specExecution.specId, revision: specExecution.revision, change: "evidence" },
       });
-    // 运行临时目录清理（§7 清理段、P1-D3/F1）：Run 已知终态后入队；
-    // unknown 结果（cancelled_unconfirmed）不清理，发布未结算由 handler 延后重试。
-    if (state !== "cancelled_unconfirmed") {
+    // Run 到达终态后清理运行临时目录。
+    {
       const binding = conversation.metadata.binding ? bindingSchema.parse(conversation.metadata.binding) : null;
       const relativeCwd = (binding?.canonicalCwd ?? "").replaceAll("\\", "/").replace(/\/+$/, "");
       if (binding?.runnerId && binding.workspaceId) {
@@ -1398,7 +1385,7 @@ export class RunRepository {
         });
       }
     }
-    if (!unknown) await this.journal.wake(conversation.id, "finished:" + run.id);
+    await this.journal.wake(conversation.id, "finished:" + run.id);
   }
   async goalIteration(claim: RunClaim, complete = false) {
     const tx = this.transactionContext();
@@ -1473,7 +1460,6 @@ const draftMessageStates = {
   failed: "failed",
   timed_out: "failed",
   cancelled: "cancelled",
-  cancelled_unconfirmed: "cancelled",
 } satisfies Record<RunState, Message["state"]>;
 /** 失败运行写入消息错误块的兜底文案: 提供商原文存在时不使用本表. */
 function runFailureCopy(reason: string): string {
@@ -1511,45 +1497,6 @@ function environmentKey(conversation: ConversationRow, configuration: SubmitInpu
   if (parts.kind === "ssh") return "ssh:" + parts.remoteId;
   if (parts.kind === "runner") return "runner:" + parts.runnerId + ":" + parts.workspaceId;
   return "none";
-}
-
-async function environmentUnsettled(
-  tx: Transaction,
-  conversation: ConversationRow,
-  configuration: SubmitInput["configuration"],
-) {
-  const parts = environmentParts(conversation, configuration);
-  if (parts.kind === "none") return false;
-  const environment = environmentKey(conversation, configuration);
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${environment}))`);
-  // 归属写在 jsonb 里, 路径取值只能用 SQL 片段; 其余谓词走类型化列.
-  const remoteId = sql`(coalesce(${conversations.metadata}->'binding'->>'remoteConnectionId',${runs.checkpoint}->'configuration'->>'remoteConnectionId',${conversations.metadata}->'configuration'->>'remoteConnectionId'))`;
-  let settled: SQL | undefined;
-  if (parts.kind === "ssh") settled = eq(remoteId, parts.remoteId);
-  else if (parts.workspaceId === null) return false;
-  else
-    settled = and(
-      isNull(remoteId),
-      eq(sql`${conversations.metadata}->'binding'->>'runnerId'`, parts.runnerId),
-      eq(sql`${conversations.metadata}->'binding'->>'workspaceId'`, parts.workspaceId),
-    );
-  const [row] = await tx
-    .select({ id: runs.id })
-    .from(runs)
-    .innerJoin(conversations, eq(conversations.id, runs.conversationId))
-    .where(
-      and(
-        eq(conversations.ownerUserId, conversation.ownerUserId),
-        settled,
-        or(
-          eq(runs.state, "cancelled_unconfirmed"),
-          eq(runs.effectState, "unknown"),
-          and(eq(runs.effectState, "pending"), or(isNull(runs.leaseUntil), lt(runs.leaseUntil, sql`now()`))),
-        ),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
 }
 
 export const runRepository = defineRepository(

@@ -21,9 +21,6 @@ export function specGenerationError(error: unknown): string {
     if (error.details?.reason === 'SPEC_REVIEW_REQUIRED') {
       return '请先确认上游阶段，再生成本阶段草稿。';
     }
-    if (error.details?.reason === 'EXECUTION_OUTCOME_UNKNOWN') {
-      return '存在结果未知的操作，请先核实后再继续。';
-    }
   }
   return error instanceof Error ? error.message : '操作失败，请重试。';
 }

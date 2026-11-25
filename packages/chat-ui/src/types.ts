@@ -1,7 +1,7 @@
 import type { Todo as ProductTodo, ProductSkill } from "@nova/agent-ui-contracts";
 import type { ReactNode } from "react";
 
-export type ToolStatus = "queued" | "running" | "ok" | "error" | "cancelled" | "unknown";
+export type ToolStatus = "queued" | "running" | "ok" | "error" | "cancelled";
 
 export type Todo = ProductTodo & { note?: string | undefined };
 

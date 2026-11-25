@@ -405,10 +405,20 @@ test("a failed plan write does not unlock effects; a later successful write does
   assert.deepEqual(runner.files.writes, ["plan.md", ".\\plan.md", "allowed.ts"]);
 });
 
-test("unknown remote outcomes stop the real loop without replaying or issuing another model request", async (t) => {
+test("tool stderr is returned to the model and a failed write can be retried", async (t) => {
   const runner = remote();
-  runner.files.writeFailure = failure("OUTCOME_UNKNOWN", "unknown");
-  const model = new ScriptedModel([write("plan.md")]);
+  runner.files.writeFailure = {
+    ...failure("IO"),
+    details: { stdout: "", stderr: "disk is full", outputGap: false, outputTruncated: false },
+  };
+  const retryPlan = {
+    ...write("plan.md"),
+    check(request: ModelStepRequest) {
+      assert.match(JSON.stringify(request.messages), /disk is full/);
+      runner.files.writeFailure = undefined;
+    },
+  };
+  const model = new ScriptedModel([write("plan.md"), retryPlan, { text: "done" }]);
   const harness = await createCodingHarness({
     session: runner.session,
     workspaceId: "project",
@@ -416,11 +426,12 @@ test("unknown remote outcomes stop the real loop without replaying or issuing an
   });
   t.after(() => harness.close());
   const result = await harness.run("Work");
-  assert.equal(result.status, "failed");
-  assert.equal(result.error?.code, "TOOL_OUTCOME_UNKNOWN");
-  assert.equal(result.toolCalls[0]?.outcome, "unknown");
-  assert.equal(model.requests.length, 1);
-  assert.equal(runner.files.writes.length, 1);
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.toolCalls[0]?.error?.code, "IO");
+  assert.equal(result.toolCalls[0]?.outcome, "known");
+  assert.equal(result.toolCalls[1]?.status, "succeeded");
+  assert.equal(model.requests.length, 3);
+  assert.deepEqual(runner.files.writes, ["plan.md", "plan.md"]);
 });
 
 test("large command output preserves the exit status and reaches the next model step", async (t) => {

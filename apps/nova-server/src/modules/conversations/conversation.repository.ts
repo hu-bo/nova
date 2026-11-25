@@ -109,15 +109,6 @@ async function enqueue(
     throw new DomainError("CONFLICT", "Steering cannot change the active configuration");
   if (input.goal && conversation.activeRunId)
     throw new DomainError("CONFLICT", "Settle the active run before starting a goal");
-  const [unknown] = await tx
-    .select({ id: runs.id })
-    .from(runs)
-    .where(and(eq(runs.conversationId, conversation.id), eq(runs.state, "cancelled_unconfirmed")))
-    .limit(1);
-  if (unknown)
-    throw new DomainError("CONFLICT", "Inspect unknown operations before continuing", {
-      reason: "EXECUTION_OUTCOME_UNKNOWN",
-    });
   if (input.goal && conversation.metadata.goal && conversation.metadata.goal.status !== "completed")
     throw new DomainError("CONFLICT", "Finish or remove the existing goal first", { reason: "GOAL_ALREADY_EXISTS" });
   if (input.goal) {
@@ -453,13 +444,8 @@ export const conversationRepository = defineRepository(
         const tx = requireTransaction();
 
         const conversation = await lockOwned(tx, id, owner);
-        const [unknown] = await tx
-          .select({ id: runs.id })
-          .from(runs)
-          .where(and(eq(runs.conversationId, id), eq(runs.state, "cancelled_unconfirmed")))
-          .limit(1);
-        if (conversation.activeRunId || unknown)
-          throw new DomainError("CONFLICT", "Settle the active or unknown run first");
+        if (conversation.activeRunId)
+          throw new DomainError("CONFLICT", "Settle the active run first");
         if (conversation.metadata.specId)
           throw new DomainError("CONFLICT", "Specification sessions are maintained from the project specification", { reason: "SPEC_SESSION_RESTRICTED" });
         if (action === "delete") {

@@ -59,7 +59,7 @@ export function useSpecQuery(projectId: string, specId: string | null, revision?
     staleTime: 0,
     refetchInterval: (query) =>
       query.state.data?.tasks.some((task) =>
-        ['queued', 'running', 'waiting', 'needs_reconciliation'].includes(task.status),
+        ['queued', 'running', 'waiting'].includes(task.status),
       )
         ? 3000
         : false,

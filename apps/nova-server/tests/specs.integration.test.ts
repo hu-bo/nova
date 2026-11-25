@@ -4,7 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { Pool } from "pg";
 import { eq } from "drizzle-orm";
 import test from "node:test";
-import { createDatabase, conversations, pendingInputs, projects, runnerOperations, runs } from "../database/index.js";
+import { createDatabase, conversations, pendingInputs, projects, runs, specTaskAttempts } from "../database/index.js";
 import { SpecService } from "../src/modules/specs/spec.service.js";
 import { createRunService } from "../src/modules/runs/run.service.js";
 import { buildSystemInstructions } from "../src/modules/runs/nova-runtime.js";
@@ -170,19 +170,21 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
     executions: [{ executionId: randomUUID(), callId, name: "bash", input: { command: "make" }, dispatch: "dispatched", effects: "write", result: { status: "failed", outcome: "unknown" } }],
     specExecution: { kind: "task", specId: created.id, revision: current.revision, taskKey: "T-01", attemptId: first.attemptId },
   };
-  const activeConversation = (await db.select().from(conversations).where(eq(conversations.id, conversation.id)))[0]!;
-  await db.insert(runs).values({ id: uncertainRunId, conversationId: conversation.id, state: "cancelled_unconfirmed", checkpoint: uncertainCheckpoint as never, checkpointRevision: 1, revision: 1 });
+  await db.insert(runs).values({ id: uncertainRunId, conversationId: conversation.id, state: "running", workerId, fence: 1, leaseUntil: new Date(Date.now() + 60_000), checkpoint: uncertainCheckpoint as never, checkpointRevision: 1, revision: 1 });
   await db.update(pendingInputs).set({ status: "consumed", runId: uncertainRunId }).where(eq(pendingInputs.id, first.pendingInputId));
   await db.update(conversations).set({ activeRunId: uncertainRunId }).where(eq(conversations.id, conversation.id));
-  await assert.rejects(service.reconcile(projectId, created.id, first.attemptId, ownerId, current.revision, "远端回执尚未到达"), (error) => error instanceof DomainError && error.code === "CONFLICT");
-  await assert.rejects(service.startAttempt(projectId, created.id, "T-01", ownerId, current.revision, undefined, "blocked-unknown"), (error) => error instanceof DomainError && error.code === "CONFLICT");
-  await db.insert(runnerOperations).values({ operationId: randomUUID(), runId: uncertainRunId, toolCallId: callId, status: "acked", knownOutcome: true });
-  await service.reconcile(projectId, created.id, first.attemptId, ownerId, current.revision, "已核实原操作完成");
+  await createRunService(db).finish({ id: uncertainRunId, conversationId: conversation.id, workerId, fence: 1 }, "timed_out", "RUN_DEADLINE");
+  const timedOutAttempts = await service.attempts(projectId, created.id, ownerId, current.revision, "T-01");
+  assert.ok(timedOutAttempts.items.find((attempt) => attempt.id === first.attemptId)?.releasedAt);
+  const retryAfterTimeout = await service.startAttempt(projectId, created.id, "T-01", ownerId, current.revision, undefined, "retry-after-timeout");
+  assert.notEqual(retryAfterTimeout.attemptId, first.attemptId);
+  await db.update(pendingInputs).set({ status: "removed" }).where(eq(pendingInputs.id, retryAfterTimeout.pendingInputId));
+  await db.update(specTaskAttempts).set({ releasedAt: new Date() }).where(eq(specTaskAttempts.id, retryAfterTimeout.attemptId));
   const attemptEvidence = async (taskKey: string, requestKey: string, note: string) => {
     const attempt = await service.startAttempt(projectId, created.id, taskKey, ownerId, current.revision, undefined, requestKey);
     const input = (await db.select().from(pendingInputs).where(eq(pendingInputs.id, attempt.pendingInputId)))[0]!;
     await db.update(pendingInputs).set({ status: "removed" }).where(eq(pendingInputs.id, input.id));
-    await service.reconcile(projectId, created.id, attempt.attemptId, ownerId, current.revision, "测试中确认无远端副作用");
+    await db.update(specTaskAttempts).set({ releasedAt: new Date() }).where(eq(specTaskAttempts.id, attempt.attemptId));
     await service.recordEvidence(projectId, created.id, ownerId, { expectedRevision: current.revision, evidenceId: randomUUID(), taskKey, checkKey: "C-01", source: { kind: "manual", attemptId: attempt.attemptId, passed: true, note } });
   };
   const settleTaskAttempt = async (attempt: { attemptId: string; pendingInputId: string }, executions: Record<string, unknown>[]) => {

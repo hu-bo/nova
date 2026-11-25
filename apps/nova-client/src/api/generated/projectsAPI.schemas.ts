@@ -589,7 +589,7 @@ export type ListConversationMessages200ItemsItemBlocksItem = {
      * @maxLength 128
      */
   operationId: string;
-  outcome: 'succeeded' | 'failed' | 'cancelled' | 'denied' | 'unknown';
+  outcome: 'succeeded' | 'failed' | 'cancelled' | 'denied';
   content: ({
   /**
      * @minLength 1
@@ -849,7 +849,6 @@ export const ListConversationMessages200OperationsItemState = {
   failed: 'failed',
   cancelled: 'cancelled',
   denied: 'denied',
-  unknown: 'unknown',
 } as const;
 
 export type ListConversationMessages200OperationsItemStdout = {
@@ -1969,7 +1968,7 @@ export type GetConversationSnapshot200MessagesItemBlocksItem = {
      * @maxLength 128
      */
   operationId: string;
-  outcome: 'succeeded' | 'failed' | 'cancelled' | 'denied' | 'unknown';
+  outcome: 'succeeded' | 'failed' | 'cancelled' | 'denied';
   content: ({
   /**
      * @minLength 1
@@ -2233,7 +2232,6 @@ export const GetConversationSnapshot200RunState = {
   failed: 'failed',
   timed_out: 'timed_out',
   cancelled: 'cancelled',
-  cancelled_unconfirmed: 'cancelled_unconfirmed',
 } as const;
 
 export type GetConversationSnapshot200RunWaiting = typeof GetConversationSnapshot200RunWaiting[keyof typeof GetConversationSnapshot200RunWaiting];
@@ -2310,7 +2308,6 @@ export const GetConversationSnapshot200OperationsItemState = {
   failed: 'failed',
   cancelled: 'cancelled',
   denied: 'denied',
-  unknown: 'unknown',
 } as const;
 
 export type GetConversationSnapshot200OperationsItemStdout = {
@@ -2830,7 +2827,6 @@ export const GetConversationSnapshot200ArtifactsItemRunState = {
   failed: 'failed',
   timed_out: 'timed_out',
   cancelled: 'cancelled',
-  cancelled_unconfirmed: 'cancelled_unconfirmed',
 } as const;
 
 export type GetConversationSnapshot200ArtifactsItemErrorRecovery = typeof GetConversationSnapshot200ArtifactsItemErrorRecovery[keyof typeof GetConversationSnapshot200ArtifactsItemErrorRecovery];
@@ -4475,7 +4471,6 @@ export const ListConversationArtifacts200ItemsItemRunState = {
   failed: 'failed',
   timed_out: 'timed_out',
   cancelled: 'cancelled',
-  cancelled_unconfirmed: 'cancelled_unconfirmed',
 } as const;
 
 export type ListConversationArtifacts200ItemsItemErrorRecovery = typeof ListConversationArtifacts200ItemsItemErrorRecovery[keyof typeof ListConversationArtifacts200ItemsItemErrorRecovery];
@@ -4800,7 +4795,6 @@ export const GetSpec200TasksItemStatus = {
   failed: 'failed',
   cancelled: 'cancelled',
   timed_out: 'timed_out',
-  needs_reconciliation: 'needs_reconciliation',
 } as const;
 
 export type GetSpec200TasksItem = {
@@ -5085,7 +5079,6 @@ export const SaveSpecDraft200TasksItemStatus = {
   failed: 'failed',
   cancelled: 'cancelled',
   timed_out: 'timed_out',
-  needs_reconciliation: 'needs_reconciliation',
 } as const;
 
 export type SaveSpecDraft200TasksItem = {
@@ -5282,7 +5275,6 @@ export const ReviewSpecStage200TasksItemStatus = {
   failed: 'failed',
   cancelled: 'cancelled',
   timed_out: 'timed_out',
-  needs_reconciliation: 'needs_reconciliation',
 } as const;
 
 export type ReviewSpecStage200TasksItem = {
@@ -5482,25 +5474,6 @@ export type ListSpecAttempts200 = {
   nextCursor: string | null;
 };
 
-export type ReconcileSpecTaskAttemptBody = {
-  /**
-     * @maximum 9007199254740991
-     * @exclusiveMinimum 0
-     */
-  expectedRevision: number;
-  /** @maxLength 2000 */
-  note?: string;
-};
-
-export type ReconcileSpecTaskAttempt200 = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
-  releasedAt: string;
-  resolution: unknown | null;
-  [key: string]: unknown;
-};
-
 export type RecordSpecEvidenceBodySource = {
   kind: 'manual';
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
@@ -5667,7 +5640,6 @@ export const RecordSpecEvidence200TasksItemStatus = {
   failed: 'failed',
   cancelled: 'cancelled',
   timed_out: 'timed_out',
-  needs_reconciliation: 'needs_reconciliation',
 } as const;
 
 export type RecordSpecEvidence200TasksItem = {
@@ -5864,7 +5836,6 @@ export const AcceptSpec200TasksItemStatus = {
   failed: 'failed',
   cancelled: 'cancelled',
   timed_out: 'timed_out',
-  needs_reconciliation: 'needs_reconciliation',
 } as const;
 
 export type AcceptSpec200TasksItem = {
@@ -6813,7 +6784,6 @@ export const CancelRun200State = {
   failed: 'failed',
   timed_out: 'timed_out',
   cancelled: 'cancelled',
-  cancelled_unconfirmed: 'cancelled_unconfirmed',
 } as const;
 
 export type CancelRun200Waiting = typeof CancelRun200Waiting[keyof typeof CancelRun200Waiting];

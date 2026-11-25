@@ -10,7 +10,6 @@ import { nativeSnapshot, type Checkpoint } from "./runtime-adapter.js";
 
 export function executionEffectState(executions: readonly ExecutionRecord[]) {
   const effects = executions.filter((entry) => entry.effects !== "read");
-  if (effects.some((entry) => entry.result?.outcome === "unknown")) return "unknown";
   return effects.some((entry) => !entry.result && entry.dispatch === "dispatched") ? "pending" : "known";
 }
 
@@ -46,7 +45,11 @@ export function checkpointAfter(checkpoint: Checkpoint, next: SessionSnapshot, b
 }
 
 /** A suspended run has no live loop to close its accepted calls when cancellation wins. */
-export function cancelPendingTools(checkpoint: Checkpoint): { checkpoint: Checkpoint; results: ToolCallResult[] } {
+export function cancelPendingTools(
+  checkpoint: Checkpoint,
+  reason: "cancel" | "timeout" | "error" = "cancel",
+  operations: import("@nova/agent-ui-contracts").ToolOperation[] = [],
+): { checkpoint: Checkpoint; results: ToolCallResult[] } {
   if (checkpoint.backendId !== "nova") return { checkpoint, results: [] };
   const { continuation: _continuation, ...snapshot } = nativeSnapshot(checkpoint, 0);
   const pending = new Map<string, Extract<MessagePart, { type: "tool-call" }>>();
@@ -58,18 +61,27 @@ export function cancelPendingTools(checkpoint: Checkpoint): { checkpoint: Checkp
   const results = [...pending.values()].map((call): ToolCallResult => {
     const execution = snapshot.executions.findLast((entry) => entry.callId === call.callId);
     if (execution?.result) return execution.result;
-    const unknown = execution?.dispatch === "dispatched" && execution.effects !== "read";
-    const error = unknown
-      ? { code: "TOOL_OUTCOME_UNKNOWN", message: "操作已派发，结果尚未确认，请检查执行环境。" }
-      : { code: "CANCELLED", message: "流程已取消。" };
+    let error: { code: string; message: string };
+    if (reason === "cancel") error = { code: "CANCELLED", message: "流程已取消。" };
+    else if (reason === "timeout") error = { code: "TIMEOUT", message: "工具执行超时，操作已中断。" };
+    else error = { code: "RUN_INTERRUPTED", message: "工具因运行异常而中断。" };
+    const operation = execution && operations.find((item) => item.id === execution.executionId);
+    const stdout = operation?.stdout?.text ?? "";
+    const stderr = operation?.stderr?.text ?? "";
     return {
       executionId: execution?.executionId ?? randomUUID(),
       callId: call.callId,
       name: call.name,
       status: "failed",
-      outcome: unknown ? "unknown" : "known",
+      outcome: "known",
       error,
-      value: { error },
+      value: {
+        error,
+        outcome: "known",
+        ...(stdout || stderr
+          ? { details: { stdout, stderr, outputGap: false, outputTruncated: false } }
+          : {}),
+      },
     };
   });
   const executions = snapshot.executions.map((entry) => {

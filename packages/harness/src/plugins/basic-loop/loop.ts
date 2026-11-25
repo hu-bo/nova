@@ -111,8 +111,6 @@ export class BasicLoop implements AgentExecutor {
           };
           await this.commitResults(executed, continuation);
           pending = [];
-          if (executed.some((result) => result.outcome === "unknown"))
-            throw new FrameworkError("TOOL_OUTCOME_UNKNOWN", "A dispatched operation requires inspection.");
         }
       } else {
         if (!run.message) throw new FrameworkError("INVALID_INPUT", "A new run requires a message.");
@@ -409,11 +407,6 @@ export class BasicLoop implements AgentExecutor {
         continuation = { ...continuation, phase: "model", step: step + 1, messageId: "", pending: [], results };
         await this.commitResults(executed, continuation);
         pending = [];
-        if (executed.some((result) => result.outcome === "unknown"))
-          throw new FrameworkError(
-            "TOOL_OUTCOME_UNKNOWN",
-            "A tool may still have applied its effect. The loop stopped without retrying or issuing further tool calls.",
-          );
         run.signal.throwIfAborted();
       }
     } catch (failure) {

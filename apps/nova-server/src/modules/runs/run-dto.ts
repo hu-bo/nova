@@ -108,11 +108,11 @@ export function publicInteraction(interaction: Checkpoint["interactions"][number
   return view;
 }
 
-/** 工具调用的效果未知、权限拒绝和取消优先于底层成功/失败状态。 */
+/** 权限拒绝和取消优先于底层成功/失败状态；残余未知结果按失败呈现。 */
 export function publicOutcome(
   result: import("@nnova/harness").ExecutionRecord["result"],
-): "unknown" | "denied" | "cancelled" | null {
-  if (result?.outcome === "unknown") return "unknown";
+): "failed" | "denied" | "cancelled" | null {
+  if (result?.outcome === "unknown") return "failed";
   if (result?.error?.code === "TOOL_DENIED") return "denied";
   if (result?.error?.code === "CANCELLED") return "cancelled";
   return null;

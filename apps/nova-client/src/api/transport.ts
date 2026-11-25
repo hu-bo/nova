@@ -147,7 +147,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       const reason = envelope?.details?.reason;
       const message =
         reason === 'EXECUTION_OUTCOME_UNKNOWN' || code === 'EXECUTION_OUTCOME_UNKNOWN'
-          ? '执行结果需要核实，请查看日志或 Diff。'
+          ? '操作未能确认完成，请查看相关记录后决定是否重试。'
           : (messages[status] ?? '服务返回了无法识别的响应，请稍后重试。');
       const field =
         typeof envelope?.details?.field === 'string' ? envelope.details.field : undefined;

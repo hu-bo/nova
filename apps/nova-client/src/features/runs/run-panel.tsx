@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice } from '@/components/error-notice';
 import type { Configuration } from '@nova/agent-ui-contracts';
@@ -12,57 +11,24 @@ function decisionCountdown(remaining: number | null): string {
   return '授权已过期';
 }
 
-function VerificationNotice({ onRetry }: { onRetry: () => Promise<boolean> }) {
-  const [refresh, setRefresh] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
-  return (
-    <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-      <strong>执行结果需要核实</strong>
-      <p className="mt-1 leading-6">
-        设备未确认执行结果。请展开消息中的工具记录查看输出和
-        Diff，并到原工作区核实文件和相关进程的状态。
-      </p>
-      <p className="mt-1 leading-6">
-        刷新会重新读取服务端已保存的记录。若消息中看不到工具记录，请检查「聊天设置」中的「显示工具调用」和「接收工具结果」。
-      </p>
-      <Button
-        variant="outline"
-        className="mt-2"
-        disabled={refresh === 'pending'}
-        onPress={async () => {
-          setRefresh('pending');
-          setRefresh((await onRetry()) ? 'success' : 'error');
-        }}
-      >
-        {refresh === 'pending' ? '正在刷新核实材料…' : '刷新核实材料'}
-      </Button>
-      <p role="status" className="mt-1 text-muted-foreground">
-        {refresh === 'success' && '已刷新会话记录，执行结果仍需人工核实。'}
-        {refresh === 'error' && '未能刷新核实材料，请稍后重试。'}
-      </p>
-    </div>
-  );
-}
-
 /**
  * 运行事件面板。运行状态行已移至会话标题栏的 `RunStatus` 指示（任务详情开关左侧）；
  * 决策裁决 UI 已移入 `Chat` 的决策浮层（与参考实现一致）；
  * 工具参数与输出由 `Chat` 的消息内工具块渲染，不再在此重复展示；
  * 运行失败报错（含提供商原文）由服务端写入失败消息的错误块，在消息内展示。
- * 这里只保留流错误、预算耗尽提示、核实面板与决策倒计时摘要。
+ * 这里只保留流错误、预算耗尽提示与决策倒计时摘要。
  * TODO 计划由 `Chat` 的侧栏 / 折叠面板渲染，不再在此重复。
  * 开发期诊断不在这里：连接 / 协议 / 快照对齐异常由 `run-stream-manager` 输出到浏览器控制台。
  */
 export function RunPanel({
   stream,
   controls,
-  onRetry,
   executionEnabled = true,
   continuationConfiguration,
   budgetValid = true,
 }: {
   stream: RunStreamSnapshot;
   controls: RunControls;
-  onRetry: () => Promise<boolean>;
   executionEnabled?: boolean;
   continuationConfiguration?: Configuration;
   budgetValid?: boolean;
@@ -70,9 +36,6 @@ export function RunPanel({
   const projection = stream.projection;
   const { cancel, decision, remaining } = controls;
   const runState = projection?.run?.state;
-  const unknown =
-    projection?.run?.state === 'cancelled_unconfirmed' ||
-    Object.values(projection?.toolOutputs ?? {}).some((output) => output.status === 'unknown');
   return (
     <div className="space-y-2 px-4 py-2 sm:px-6">
       {stream.error && (
@@ -106,7 +69,6 @@ export function RunPanel({
           {controls.continueRun.error && <ErrorNotice error={controls.continueRun.error} />}
         </div>
       )}
-      {unknown && <VerificationNotice key={projection?.run?.id} onRetry={onRetry} />}
       {cancel.error && <ErrorNotice error={cancel.error} />}
       {decision && (
         <p role="status" className="flex flex-wrap items-center gap-2 text-xs text-amber-700">

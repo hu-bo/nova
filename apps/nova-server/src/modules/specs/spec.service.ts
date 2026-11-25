@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { configurationSchema, type Configuration, type SubmitInput } from "@nova/agent-ui-contracts";
-import { conversations, messages, pendingInputs, projects, projectBindings, runnerOperations, runs, specs, specRevisions, specTaskAttempts, type Database } from "../../../database/index.js";
+import { conversations, messages, pendingInputs, projects, projectBindings, runs, specs, specRevisions, specTaskAttempts, type Database } from "../../../database/index.js";
 import type { SpecEvidence, SpecTask, SpecTaskCheck } from "../../../database/schema/spec-revision.table.js";
 import { DomainError } from "../../shared/domain-error.js";
 import { createScope, type TransactionOptions } from "../../shared/scope.js";
@@ -37,11 +37,6 @@ export class SpecService {
   private transaction<R>(operation: (tx: Transaction) => Promise<R>, options?: TransactionOptions) {
     return this.scope.transaction((scope) => operation(scope.requireTransaction()), options);
   }
-  private async hasUnknownRun(tx: Transaction, conversationId: string) {
-    const [run] = await tx.select({ id: runs.id }).from(runs).where(and(eq(runs.conversationId, conversationId), eq(runs.state, "cancelled_unconfirmed"))).limit(1);
-    return Boolean(run);
-  }
-
   async list(projectId: string, ownerId: string, limit: number, cursor?: string) {
     const project = await this.queries.findOwnedProject(projectId, ownerId);
     if (!project) throw new DomainError("NOT_FOUND", "Project not found");
@@ -243,7 +238,6 @@ export class SpecService {
         (stage === "tasks" && (version.reviews.requirements?.revision !== expected || version.reviews.design?.revision !== expected)))
         throw new DomainError("CONFLICT", "Confirm the upstream stages before generating this draft", { reason: "SPEC_REVIEW_REQUIRED" });
       if (conversation.activeRunId) throw new DomainError("CONFLICT", "Specification session is busy", { reason: "SPEC_BUSY" });
-      if (await this.hasUnknownRun(tx, conversation.id)) throw new DomainError("CONFLICT", "Inspect unknown operations before continuing", { reason: "EXECUTION_OUTCOME_UNKNOWN" });
       const [queued] = await tx.select({ id: pendingInputs.id }).from(pendingInputs).where(and(eq(pendingInputs.conversationId, conversation.id), eq(pendingInputs.status, "queued"))).limit(1);
       if (queued) throw new DomainError("CONFLICT", "Specification session has queued work", { reason: "SPEC_BUSY" });
       const [last] = await tx.select({ sequence: pendingInputs.sequence }).from(pendingInputs).where(eq(pendingInputs.conversationId, conversation.id)).orderBy(desc(pendingInputs.sequence)).limit(1);
@@ -272,7 +266,6 @@ export class SpecService {
       if (!version) throw new DomainError("NOT_FOUND", "Specification revision not found");
       if (version.acceptance) throw new DomainError("CONFLICT", "Accepted revision is frozen", { reason: "SPEC_ACCEPTED" });
       if (version.reviews.tasks?.revision !== expected) throw new DomainError("CONFLICT", "Confirm the task plan first", { reason: "SPEC_REVIEW_REQUIRED" });
-      if (await this.hasUnknownRun(tx, conversation.id)) throw new DomainError("CONFLICT", "Inspect unknown operations before continuing", { reason: "EXECUTION_OUTCOME_UNKNOWN" });
       const task = version.taskPlan.find((entry) => entry.key === taskKey);
       if (!task) throw new DomainError("NOT_FOUND", "Task not found");
       if (task.dependsOn.length) {
@@ -310,53 +303,6 @@ export class SpecService {
     if (!owned) throw new DomainError("NOT_FOUND", "Specification not found");
     const rows = await this.queries.listAttempts(specId, revision, taskKey, cursor);
     return { items: rows.slice(0, 50).map(({ attempt, runId, runState }) => ({ ...attempt, createdAt: attempt.createdAt.toISOString(), releasedAt: attempt.releasedAt?.toISOString() ?? null, runId: runId ?? null, runState: runState ?? null })), nextCursor: rows.length > 50 ? rows[49]!.attempt.id : null };
-  }
-
-  async reconcile(projectId: string, specId: string, attemptId: string, ownerId: string, expected: number, note?: string) {
-    return this.transaction(async (tx) => {
-      const [owned] = await tx.select({ conversationId: specs.conversationId }).from(specs).innerJoin(projects, eq(projects.id, specs.projectId))
-        .where(and(eq(specs.id, specId), eq(specs.projectId, projectId), eq(projects.ownerUserId, ownerId), isNull(projects.deletedAt))).limit(1);
-      if (!owned) throw new DomainError("NOT_FOUND", "Specification not found");
-      const [reference] = await tx.select({ attempt: specTaskAttempts, input: pendingInputs }).from(specTaskAttempts)
-        .innerJoin(pendingInputs, eq(pendingInputs.id, specTaskAttempts.pendingInputId))
-        .where(and(eq(specTaskAttempts.id, attemptId), eq(specTaskAttempts.specId, specId))).limit(1);
-      if (!reference) throw new DomainError("NOT_FOUND", "Task attempt not found");
-      const [conversation] = await tx.select().from(conversations).where(and(eq(conversations.id, owned.conversationId), eq(conversations.ownerUserId, ownerId))).for("update");
-      if (!conversation) throw new DomainError("NOT_FOUND", "Specification not found");
-      if (conversation.activeRunId) await tx.select({ id: runs.id }).from(runs).where(eq(runs.id, conversation.activeRunId)).for("update");
-      const [run] = reference.input.runId ? await tx.select().from(runs).where(eq(runs.id, reference.input.runId)).for("update") : [];
-      const [spec] = await tx.select().from(specs).where(eq(specs.id, specId)).for("update");
-      if (!spec) throw new DomainError("NOT_FOUND", "Specification not found");
-      this.assertRevision(spec.currentRevision, expected);
-      const [attempt] = await tx.select().from(specTaskAttempts).where(and(eq(specTaskAttempts.id, attemptId), eq(specTaskAttempts.specId, specId))).for("update");
-      if (!attempt) throw new DomainError("NOT_FOUND", "Task attempt not found");
-      if (attempt.revision !== expected) throw new DomainError("CONFLICT", "Attempt belongs to another revision", { reason: "SPEC_REVISION_STALE", currentRevision: spec.currentRevision });
-      if (attempt.releasedAt) return { ...attempt, releasedAt: attempt.releasedAt.toISOString() };
-      if (run?.state === "cancelled_unconfirmed") {
-        const unresolved = run.checkpoint?.executions.filter((execution) => execution.result?.outcome === "unknown" || (!execution.result && execution.dispatch === "dispatched")) ?? [];
-        const receipts = unresolved.length ? await tx.select().from(runnerOperations).where(and(eq(runnerOperations.runId, run.id), inArray(runnerOperations.toolCallId, unresolved.map((execution) => execution.callId)))) : [];
-        const settledByReceipt = unresolved.length > 0 && receipts.length === unresolved.length && receipts.every((receipt) => receipt.knownOutcome && ["acked", "failed"].includes(receipt.status));
-        if (!settledByReceipt) throw new DomainError("CONFLICT", "The original operation has no settled runner receipt", { reason: "EXECUTION_OUTCOME_UNKNOWN" });
-        const resolvedAt = new Date();
-        const resolution = { note: note ?? null, resolvedBy: ownerId, resolvedAt: resolvedAt.toISOString(), receiptIds: receipts.map((receipt) => receipt.id) };
-        await tx.update(runs).set({ state: "cancelled", effectState: "known", failureReason: "RECONCILED", workerId: null, leaseUntil: null, updatedAt: resolvedAt }).where(eq(runs.id, run.id));
-        const [updated] = await tx.update(specTaskAttempts).set({ releasedAt: resolvedAt, resolution }).where(and(eq(specTaskAttempts.id, attemptId), isNull(specTaskAttempts.releasedAt))).returning();
-        if (conversation.activeRunId === run.id) {
-          conversation.activeRunId = null;
-          await tx.update(conversations).set({ activeRunId: null }).where(eq(conversations.id, conversation.id));
-        }
-        await this.journal.tx(tx).append(conversation, { runId: run.id, type: "run.changed", payload: { run: { id: run.id, state: "cancelled", reason: "RECONCILED" } } });
-        await this.journal.tx(tx).append(conversation, { runId: run.id, type: "spec.changed", payload: { specId, revision: spec.currentRevision, change: "evidence" } });
-        return { ...updated!, releasedAt: resolvedAt.toISOString() };
-      }
-      const settledRun = run && ["succeeded", "budget_exhausted", "failed", "timed_out", "cancelled"].includes(run.state);
-      const settledQueue = !run && ["removed", "rejected"].includes(reference.input.status);
-      if (!settledRun && !settledQueue) throw new DomainError("CONFLICT", "The original operation has not been proven settled", { reason: "EXECUTION_OUTCOME_UNKNOWN" });
-      const resolvedAt = new Date();
-      const resolution = { note: note ?? null, resolvedBy: ownerId, resolvedAt: resolvedAt.toISOString() };
-      const [updated] = await tx.update(specTaskAttempts).set({ releasedAt: resolvedAt, resolution }).where(and(eq(specTaskAttempts.id, attemptId), isNull(specTaskAttempts.releasedAt))).returning();
-      return { ...updated!, releasedAt: resolvedAt.toISOString() };
-    });
   }
 
   async recordEvidence(projectId: string, specId: string, ownerId: string, input: RecordEvidenceInput) {
@@ -427,7 +373,7 @@ export class SpecService {
       const { spec, conversation } = await this.lock(tx, projectId, specId, ownerId);
       this.assertRevision(spec.currentRevision, expected);
       const [active] = await tx.select({ id: specTaskAttempts.id }).from(specTaskAttempts).where(and(eq(specTaskAttempts.specId, specId), isNull(specTaskAttempts.releasedAt))).limit(1);
-      if (active || conversation.activeRunId || await this.hasUnknownRun(tx, conversation.id)) throw new DomainError("CONFLICT", "Settle active specification work before deleting");
+      if (active || conversation.activeRunId) throw new DomainError("CONFLICT", "Settle active specification work before deleting");
       await tx.delete(pendingInputs).where(eq(pendingInputs.conversationId, conversation.id));
       await tx.delete(messages).where(eq(messages.conversationId, conversation.id));
       await this.events.tx(tx).deleteConversation(conversation.id);
@@ -440,12 +386,12 @@ export class SpecService {
 }
 
 function attemptStatus(inputStatus: string, runState: string | null, releasedAt: Date | null) {
-  if (runState === "cancelled_unconfirmed" || (!releasedAt && inputStatus !== "queued" && runState == null)) return "needs_reconciliation";
   if (inputStatus === "queued") return "queued";
   if (["running", "waiting", "paused", "cancelling"].includes(runState ?? "")) return runState === "waiting" ? "waiting" : "running";
   if (runState === "succeeded") return "needs_verification";
   if (runState === "failed") return "failed";
   if (runState === "timed_out") return "timed_out";
-  if (["cancelled", "cancelled_unconfirmed"].includes(runState ?? "")) return "cancelled";
+  if (runState === "cancelled" || inputStatus === "removed" || inputStatus === "rejected") return "cancelled";
+  if (!releasedAt && runState == null) return "failed";
   return "needs_verification";
 }

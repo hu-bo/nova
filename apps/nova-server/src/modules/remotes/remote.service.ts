@@ -148,12 +148,23 @@ export class RemoteConnectionService {
       signal,
     );
   }
-  async execute(id: string, owner: string, cwd: string, executable: string, args: string[], signal?: AbortSignal) {
+  async execute(
+    id: string,
+    owner: string,
+    cwd: string,
+    executable: string,
+    args: string[],
+    signal?: AbortSignal,
+    timeoutMs = 120_000,
+  ) {
     const row = await this.requireVerified(id, owner);
     const listing = await this.files(id, owner, cwd);
     const quote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
     const command = "cd -- " + quote(listing.path) + " && " + [executable, ...args].map(quote).join(" ");
     let dispatched = false;
+    let stdout = "";
+    let stderr = "";
+    let truncated = false;
     return withSsh(
       this.credentials(row),
       (client) =>
@@ -164,9 +175,6 @@ export class RemoteConnectionService {
               return;
             }
             dispatched = true;
-            let stdout = "",
-              stderr = "",
-              truncated = false;
             const append = (previous: string, data: Buffer) => {
               const full = previous + data.toString("utf8");
               if (Buffer.byteLength(full) > 65536) {
@@ -181,26 +189,34 @@ export class RemoteConnectionService {
             channel.stderr.on("data", (chunk: Buffer) => {
               stderr = append(stderr, chunk);
             });
-            channel.once("error", () =>
-              reject(new DomainError("EXECUTION_OUTCOME_UNKNOWN", "Remote command outcome is unknown")),
-            );
-            channel.once("close", (code: number | undefined) =>
-              code === undefined
-                ? reject(new DomainError("EXECUTION_OUTCOME_UNKNOWN", "Remote command outcome is unknown"))
-                : resolve({ exitCode: code, stdout, stderr, truncated }),
-            );
+            channel.once("error", (error: Error) => reject(error));
+            channel.once("close", (code: number | undefined) => {
+              if (code === undefined) reject(new Error("Remote command closed without an exit status"));
+              else resolve({ exitCode: code, stdout, stderr, truncated });
+            });
           });
         }),
       signal,
-      120_000,
+      timeoutMs,
     ).catch((error: unknown) => {
-      if (dispatched)
+      if (dispatched) {
+        const timedOut = error instanceof DomainError && error.details?.reason === "SSH_TIMEOUT";
+        const causeMessage = error instanceof Error ? error.message : "unknown SSH error";
+        let reason: unknown = "SSH_COMMAND_INTERRUPTED";
+        if (timedOut) reason = "SSH_TIMEOUT";
+        else if (signal?.aborted) reason = signal.reason;
         throw new DomainError(
-          "EXECUTION_OUTCOME_UNKNOWN",
-          "Remote command outcome must be checked before retrying",
-          undefined,
+          "CONFLICT",
+          timedOut ? "Remote command timed out." : `Remote command interrupted: ${causeMessage}`,
+          {
+            reason,
+            stdout,
+            stderr,
+            truncated,
+          },
           { cause: error },
         );
+      }
       throw error;
     });
   }

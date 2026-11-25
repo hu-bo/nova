@@ -12,5 +12,4 @@ export const runPresentation = {
   failed: { label: '运行失败', indicator: 'bg-rose-500' },
   timed_out: { label: '运行超时', indicator: 'bg-rose-500' },
   cancelled: { label: '已停止', indicator: 'bg-slate-400' },
-  cancelled_unconfirmed: { label: '需要核实', indicator: 'bg-amber-500' },
 } satisfies Record<RunView['state'], { label: string; indicator: string }>;

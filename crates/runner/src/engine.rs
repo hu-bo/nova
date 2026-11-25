@@ -1241,19 +1241,12 @@ impl App {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
         let mut child = command.spawn().map_err(|error| {
-            if error.kind() == ErrorKind::NotFound {
-                (
-                    OperationStatus::Failed,
-                    ErrorCode::SpawnFailed,
-                    "Executable could not be found.".into(),
-                )
+            let message = if error.kind() == ErrorKind::NotFound {
+                format!("Executable could not be found: {error}")
             } else {
-                (
-                    OperationStatus::Failed,
-                    ErrorCode::SpawnFailed,
-                    "Executable could not be started.".into(),
-                )
-            }
+                format!("Executable could not be started: {error}")
+            };
+            (OperationStatus::Failed, ErrorCode::SpawnFailed, message)
         })?;
         let pid = child.id();
         #[cfg(windows)]
@@ -1279,6 +1272,7 @@ impl App {
             ErrorCode::Io,
             "stderr pipe is unavailable.".into(),
         ))?;
+        let mut stdin_writer = None;
         if !request.stdin.is_empty() {
             let mut input = child.stdin.take().ok_or((
                 OperationStatus::Failed,
@@ -1286,9 +1280,7 @@ impl App {
                 "stdin pipe is unavailable.".into(),
             ))?;
             let bytes = request.stdin.clone();
-            tokio::spawn(async move {
-                let _ = input.write_all(&bytes).await;
-            });
+            stdin_writer = Some(tokio::spawn(async move { input.write_all(&bytes).await }));
         }
         let mut buffers = [Vec::new(), Vec::new()];
         let mut captured_bytes = 0usize;
@@ -1299,6 +1291,7 @@ impl App {
         let mut err_done = false;
         let mut command_end: Option<Result<ExitStatus, std::io::Error>> = None;
         let mut terminal = None;
+        let mut pipe_error: Option<String> = None;
         let mut out_chunk = vec![0_u8; 16 * 1024];
         let mut err_chunk = vec![0_u8; 16 * 1024];
         while !out_done || !err_done || command_end.is_none() {
@@ -1312,12 +1305,12 @@ impl App {
                 read = stdout.read(&mut out_chunk), if !out_done => match read {
                     Ok(0) => out_done = true,
                     Ok(count) => collect_output(self, record, 0, &out_chunk[..count], &mut buffers[0], &mut captured_bytes, &mut output_truncated).await,
-                    Err(_) => out_done = true,
+                    Err(error) => { pipe_error = Some(format!("stdout pipe read failed: {error}")); out_done = true; },
                 },
                 read = stderr.read(&mut err_chunk), if !err_done => match read {
                     Ok(0) => err_done = true,
                     Ok(count) => collect_output(self, record, 1, &err_chunk[..count], &mut buffers[1], &mut captured_bytes, &mut output_truncated).await,
-                    Err(_) => err_done = true,
+                    Err(error) => { pipe_error = Some(format!("stderr pipe read failed: {error}")); err_done = true; },
                 },
             }
         }
@@ -1325,6 +1318,9 @@ impl App {
             terminate_process_tree(pid);
             let _ = child.start_kill();
             let _ = child.wait().await;
+            if let Some(writer) = stdin_writer.take() {
+                let _ = writer.await;
+            }
             #[cfg(windows)]
             drop(job);
             return Err((
@@ -1340,6 +1336,28 @@ impl App {
                     "Command was cancelled.".into()
                 },
             ));
+        }
+        if let Some(writer) = stdin_writer {
+            match writer.await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    return Err((
+                        OperationStatus::Failed,
+                        ErrorCode::Io,
+                        format!("stdin write failed: {error}"),
+                    ));
+                }
+                Err(error) => {
+                    return Err((
+                        OperationStatus::Failed,
+                        ErrorCode::Io,
+                        format!("stdin writer task failed: {error}"),
+                    ));
+                }
+            }
+        }
+        if let Some(error) = pipe_error {
+            return Err((OperationStatus::Failed, ErrorCode::Io, error));
         }
         #[cfg(windows)]
         drop(job);
@@ -1357,7 +1375,7 @@ impl App {
             tracing::warn!(pid = ?pid, status = ?status, exit_code = ?status.code(), "Command process did not exit successfully");
         }
         Ok(crate::proto::nova::runner::v1::ExecuteCommandResult {
-            exit_code: status.code().unwrap_or(-1),
+            exit_code: process_exit_code(status),
             stdout: buffers[0].clone(),
             stderr: buffers[1].clone(),
             output_truncated,
@@ -1626,6 +1644,21 @@ fn delete_single_path(path: &Path) -> Result<bool, WorkspaceError> {
 
 fn encoded_size(result: &OperationResult) -> usize {
     prost::Message::encoded_len(result)
+}
+
+fn process_exit_code(status: ExitStatus) -> i32 {
+    if let Some(code) = status.code() {
+        return code;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        return status.signal().map(|signal| -signal).unwrap_or(-1);
+    }
+    #[cfg(not(unix))]
+    {
+        -1
+    }
 }
 
 fn make_error(
@@ -1964,6 +1997,86 @@ mod tests {
                 .unwrap()
                 .contains("?? untracked.ts")
         );
+    }
+
+    #[tokio::test]
+    async fn spawn_failure_includes_the_operating_system_error() {
+        let workspace = TestWorkspace::new();
+        let app = workspace.app();
+        let (_, mut receiver) = submit(
+            &app,
+            Params::ExecuteCommand(ExecuteCommandRequest {
+                executable: "nova-runner-command-that-does-not-exist".into(),
+                cwd: ".".into(),
+                timeout_ms: 10_000,
+                ..Default::default()
+            }),
+        )
+        .await;
+        let result = terminal(&mut receiver).await;
+        assert_eq!(result.status, OperationStatus::Failed as i32);
+        let error = result.error.unwrap();
+        assert_eq!(error.code, ErrorCode::SpawnFailed as i32);
+        assert!(error.message.starts_with("Executable could not be found:"));
+        assert!(error.message.len() > "Executable could not be found:".len());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn command_timeout_and_cancel_keep_captured_stderr() {
+        let workspace = TestWorkspace::new();
+        let app = workspace.app();
+        let (_, mut timeout_receiver) = submit(
+            &app,
+            Params::ExecuteCommand(ExecuteCommandRequest {
+                executable: "sh".into(),
+                args: vec!["-c".into(), "printf 'before timeout' >&2; sleep 2".into()],
+                cwd: ".".into(),
+                timeout_ms: 100,
+                ..Default::default()
+            }),
+        )
+        .await;
+        let timed_out = terminal(&mut timeout_receiver).await;
+        assert_eq!(timed_out.status, OperationStatus::TimedOut as i32);
+        let timeout_error = timed_out.error.unwrap();
+        assert_eq!(timeout_error.code, ErrorCode::Timeout as i32);
+        assert_eq!(
+            String::from_utf8(timeout_error.stderr).unwrap(),
+            "before timeout"
+        );
+
+        let (operation_id, mut cancel_receiver) = submit(
+            &app,
+            Params::ExecuteCommand(ExecuteCommandRequest {
+                executable: "sh".into(),
+                args: vec!["-c".into(), "printf 'before cancel' >&2; sleep 2".into()],
+                cwd: ".".into(),
+                timeout_ms: 10_000,
+                ..Default::default()
+            }),
+        )
+        .await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        app.cancel(&operation_id).await;
+        let cancelled = terminal(&mut cancel_receiver).await;
+        assert_eq!(cancelled.status, OperationStatus::Cancelled as i32);
+        let cancel_error = cancelled.error.unwrap();
+        assert_eq!(cancel_error.code, ErrorCode::Cancelled as i32);
+        assert_eq!(
+            String::from_utf8(cancel_error.stderr).unwrap(),
+            "before cancel"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn signalled_command_exit_code_preserves_the_signal() {
+        let status = std::process::Command::new("sh")
+            .args(["-c", "kill -TERM $$"])
+            .status()
+            .unwrap();
+        assert_eq!(process_exit_code(status), -15);
     }
 
     #[test]
