@@ -1,5 +1,5 @@
-import { CornerDownLeft, CornerDownRight, Trash2 } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { AlertCircle, CornerDownLeft, CornerDownRight, Trash2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Composer } from "./composer.js";
 import type { ComposerProps, ComposerSubmission } from "./composer-types.js";
 import { DecisionPrompt } from "./decision-prompt.js";
@@ -19,6 +19,8 @@ export interface ChatFeedback {
   id: string;
   message: string;
   tone: "error" | "warning" | "info";
+  description?: string | undefined;
+  action?: ReactNode | undefined;
   dismissible?: boolean | undefined;
 }
 
@@ -96,8 +98,30 @@ export function Chat<TMetadata = unknown>({
   const incompleteTodos = state.todos.filter((todo) => todo.status !== "completed").length;
   const hasSidebar = sidebarOpen && (Boolean(sidebar) || incompleteTodos > 0);
   const connectionMessage = connectionMessages[state.connection];
+  const errorFeedback = state.feedback?.filter((feedback) => feedback.tone === "error") ?? [];
+  const composerFeedback = state.feedback?.filter((feedback) => feedback.tone !== "error") ?? [];
 
   const onAbort = actions.onAbort;
+  const messageAreaRef = useRef<HTMLDivElement>(null);
+  const composerDockRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const messageArea = messageAreaRef.current;
+    const composerDock = composerDockRef.current;
+    if (!messageArea || !composerDock) return;
+
+    const updateComposerHeight = () => {
+      messageArea.style.setProperty("--nova-chat-composer-height", `${composerDock.getBoundingClientRect().height}px`);
+    };
+    updateComposerHeight();
+
+    const observer = new ResizeObserver(updateComposerHeight);
+    observer.observe(composerDock);
+    return () => {
+      observer.disconnect();
+      messageArea.style.removeProperty("--nova-chat-composer-height");
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -122,8 +146,8 @@ export function Chat<TMetadata = unknown>({
     <div
       className={`nova-chat nova-chat-view grid min-h-0 flex-1 overflow-hidden bg-white ${hasSidebar ? "xl:grid-cols-[minmax(0,1fr)_260px]" : ""}`}
     >
-      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
-        <div className="relative min-h-0 flex-1 overflow-hidden px-1 py-1 sm:px-0">
+      <div ref={messageAreaRef} className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
+        <div className="relative min-h-0 flex-1 overflow-hidden px-1 py-0 sm:py-1 sm:px-0">
           {state.messages.length ? (
             <MessageList
               messages={state.messages}
@@ -149,9 +173,36 @@ export function Chat<TMetadata = unknown>({
               />
             </div>
           )}
+
+          {errorFeedback.length > 0 && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex max-h-[min(45dvh,24rem)] flex-col justify-end gap-2 overflow-y-auto px-3 pb-2 sm:px-4">
+              {errorFeedback.map((feedback) => (
+                <div
+                  key={feedback.id}
+                  className="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800 shadow-[0_18px_44px_-28px_rgb(136_19_55_/_0.5)] ring-1 ring-rose-200 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-100 dark:ring-rose-900"
+                  role="alert"
+                >
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 break-words">{feedback.message}</span>
+                  {feedback.dismissible && actions.onDismissFeedback && (
+                    <button
+                      type="button"
+                      className="shrink-0 font-semibold"
+                      onClick={() => actions.onDismissFeedback?.(feedback.id)}
+                    >
+                      关闭
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="min-w-0 shrink-0 overflow-visible border-slate-200 bg-white px-3 pb-0 pt-1 sm:px-4 sm:pb-1.5">
+        <div
+          ref={composerDockRef}
+          className="absolute inset-x-0 bottom-0 z-20 min-w-0 overflow-visible border-t border-slate-200/50  px-3 pb-0 pt-0 dark:border-slate-800/60 dark:bg-slate-950/30 sm:px-4 sm:pb-1.5"
+        >
           <div className="nova-chat-content">
             {sidebarOpen && incompleteTodos > 0 && (
               <div className="mb-2 xl:hidden">
@@ -159,17 +210,21 @@ export function Chat<TMetadata = unknown>({
               </div>
             )}
 
-            {state.feedback?.map((feedback) => (
+            {composerFeedback.map((feedback) => (
               <div
                 key={feedback.id}
                 className={`mb-2 flex items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-sm ring-1 ${feedbackClasses[feedback.tone]}`}
-                role={feedback.tone === "error" ? "alert" : "status"}
+                role="status"
               >
-                <span>{feedback.message}</span>
+                <div className="min-w-0 flex-1">
+                  <p>{feedback.message}</p>
+                  {feedback.description && <p className="mt-1">{feedback.description}</p>}
+                  {feedback.action && <div className="mt-2">{feedback.action}</div>}
+                </div>
                 {feedback.dismissible && actions.onDismissFeedback && (
                   <button
                     type="button"
-                    className="font-semibold"
+                    className="shrink-0 font-semibold"
                     onClick={() => actions.onDismissFeedback?.(feedback.id)}
                   >
                     关闭
@@ -239,7 +294,7 @@ export function Chat<TMetadata = unknown>({
       </div>
 
       {hasSidebar && (
-        <aside className="nova-scrollbar hidden min-h-0 overflow-x-hidden overflow-y-auto border-l border-slate-200 bg-white p-3 xl:block">
+        <aside className="nova-scrollbar hidden min-h-0 overflow-x-hidden overflow-y-auto border-l border-slate-200 p-3 xl:block">
           <div className="sticky top-3">
             {sidebar}
             {incompleteTodos > 0 && (

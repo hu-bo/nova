@@ -27,7 +27,6 @@ import { ArtifactsPanel, useConversationArtifactsQuery } from '@/features/artifa
 import { useIdentity } from '@/features/auth';
 import { useClientConfig } from '@/features/models';
 import {
-  RunPanel,
   RunStatus,
   isActiveRun,
   messageView,
@@ -299,13 +298,48 @@ export function ConversationWorkspace({
       ...(raw?.skill ? { skill: { id: raw.skill.id, version: raw.skill.version } } : {}),
     });
   }
+  const continuationConfiguration = {
+    ...(projection?.data.conversation.configuration ?? data.conversation.configuration),
+    budget: ctl.executionBudget,
+  };
   const feedback: ChatFeedback[] = [];
-  if (ctl.error && !(ctl.error instanceof ApiError && ctl.error.notified))
-    feedback.push({ id: 'composer', message: errorMessage(ctl.error), tone: 'error' });
+  function addErrorFeedback(id: string, error: unknown) {
+    if (!error || (error instanceof ApiError && error.notified)) return;
+    feedback.push({ id, message: errorMessage(error), tone: 'error' });
+  }
+  addErrorFeedback('composer', ctl.error);
+  if (stream.error) feedback.push({ id: 'run-stream', message: stream.error, tone: 'error' });
+  addErrorFeedback('run-cancel', controls.cancel.error);
+  addErrorFeedback('run-continue', controls.continueRun.error);
+  addErrorFeedback('run-decision', controls.resolve.error);
   if (ctl.skillModeNotice)
     feedback.push({ id: 'skill-mode', message: ctl.skillModeNotice, tone: 'warning' });
   if (clearNotice)
     feedback.push({ id: 'clear-notice', message: clearNotice, tone: 'info', dismissible: true });
+  if (runState === 'budget_exhausted')
+    feedback.push({
+      id: 'budget-exhausted',
+      message: '预算耗尽，任务未完成',
+      description: '已保存当前进度。继续后将开启新一轮，并重新计算本轮预算。',
+      tone: 'warning',
+      action: (
+        <Button
+          variant="outline"
+          disabled={
+            !executionEnabled ||
+            !ctl.budgetValid ||
+            controls.continueRun.isPending ||
+            controls.continueRun.isSuccess ||
+            Boolean(projection?.startingInput)
+          }
+          onPress={() => controls.continueRun.mutate(continuationConfiguration)}
+        >
+          {controls.continueRun.isPending || controls.continueRun.isSuccess
+            ? '正在继续…'
+            : '继续任务'}
+        </Button>
+      ),
+    });
   const connection = CHAT_CONNECTION_BY_STREAM_STATE[stream.state];
   const workingDirectory = data.binding ? data.binding.canonicalCwd : '项目工作目录';
   return (
@@ -313,7 +347,7 @@ export function ConversationWorkspace({
       className={'conversation-workspace flex min-h-0 flex-col ' + (embedded ? 'h-full' : 'h-dvh')}
       data-chat-width={preferences.chatFullWidth ? 'full' : undefined}
     >
-      <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 pr-4 pl-16 text-xs text-slate-500 lg:pl-6">
+      <header className="flex min-h-12 shrink-0 items-center justify-between gap-2 border-b border-slate-200 pr-4 pl-16 text-xs text-slate-500 lg:pl-6">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 py-1">
           <h1 className="min-w-0 max-w-full truncate text-sm font-semibold text-slate-800">
             {embedded ? '专用项目会话 · Plan' : data.conversation.title || '未命名会话'}
@@ -417,18 +451,6 @@ export function ConversationWorkspace({
           )}
         </div>
       </header>
-      <div className="max-h-[35vh] shrink-0 overflow-y-auto">
-        <RunPanel
-          stream={stream}
-          controls={controls}
-          executionEnabled={executionEnabled}
-          continuationConfiguration={{
-            ...(projection?.data.conversation.configuration ?? data.conversation.configuration),
-            budget: ctl.executionBudget,
-          }}
-          budgetValid={ctl.budgetValid}
-        />
-      </div>
       {exportHistory.error != null && <ErrorNotice error={exportHistory.error} />}
       {config.error && <ErrorNotice error={config.error} onRetry={() => void config.refetch()} />}
       {runState === 'paused' && (

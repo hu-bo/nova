@@ -372,6 +372,9 @@ importers:
 
   packages/agent-ui-contracts:
     dependencies:
+      '@lezer/markdown':
+        specifier: 1.8.1
+        version: 1.8.1
       zod:
         specifier: 4.6.4
         version: 4.6.4

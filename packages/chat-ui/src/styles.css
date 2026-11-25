@@ -71,6 +71,10 @@
     28px 28px;
 }
 
+.nova-chat .nova-message-list > .nova-chat-content {
+  padding-bottom: calc(var(--nova-chat-composer-height, 0px) + 0.5rem);
+}
+
 .nova-chat .nova-message-list article[data-role="user"] {
   background: linear-gradient(
     145deg,
@@ -90,8 +94,8 @@
   border: 0;
   background: linear-gradient(
     145deg,
-    rgb(var(--nova-chat-surface-rgb) / 0.96),
-    rgb(var(--nova-chat-subtle-surface-rgb) / 0.9)
+    rgb(var(--nova-chat-surface-rgb) / 0.7),
+    rgb(var(--nova-chat-subtle-surface-rgb) / 0.58)
   );
   box-shadow:
     0 26px 64px -36px rgb(var(--nova-fx-shadow) / 0.52),
@@ -452,6 +456,10 @@
     0 24px 58px -38px rgb(0 0 0 / 0.8),
     inset 0 1px rgb(255 255 255 / 0.06),
     0 0 0 1px rgb(129 140 248 / 0.12);
+}
+
+.dark .nova-chat .nova-composer {
+  background: linear-gradient(145deg, rgb(30 41 59 / 0.72), rgb(15 23 42 / 0.6));
 }
 
 .dark .nova-chat .nova-diff-block {
