@@ -39,6 +39,10 @@ export const productEventSchema = z.discriminatedUnion("type", [
       })
       .strict(),
   ),
+  event(
+    "configuration.changed",
+    z.object({ configuration: configurationSchema, capabilities: capabilitiesSchema }).strict(),
+  ),
   event("interaction.changed", z.object({ interaction: interactionSchema }).strict()),
   event("input.queued", z.object({ input: queuedInputSchema }).strict()),
   event("input.consumed", z.object({ input: queuedInputSchema }).strict()),

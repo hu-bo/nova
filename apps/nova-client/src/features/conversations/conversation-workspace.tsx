@@ -208,7 +208,7 @@ export function ConversationWorkspace({
     mode: data.conversation.mode,
     projectId: data.conversation.projectId ?? undefined,
     binding: data.binding,
-    runtime: data.conversation.configuration,
+    runtime: projection?.data.conversation.configuration ?? data.conversation.configuration,
     ...(initialSkill.success ? { initialSkill: initialSkill.data } : {}),
     contextEpoch: projection?.data.conversation.epoch ?? data.conversation.epoch,
     goal: projection?.goal ?? data.goal,

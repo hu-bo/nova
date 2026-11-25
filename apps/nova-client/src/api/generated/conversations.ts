@@ -45,6 +45,8 @@ import type {
   SteerConversationInputBody,
   UpdateConversationBinding200,
   UpdateConversationBindingBody,
+  UpdateConversationExecutionMode200,
+  UpdateConversationExecutionModeBody,
   UpdateConversationGoal200,
   UpdateConversationGoalBody
 } from './projectsAPI.schemas';
@@ -413,6 +415,121 @@ export function useListConversationMessages<TData = Awaited<ReturnType<typeof li
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getListConversationMessagesQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getUpdateConversationExecutionModeUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/execution-mode`
+}
+
+export const updateConversationExecutionMode = async (id: string,
+    updateConversationExecutionModeBody: UpdateConversationExecutionModeBody, options?: Parameters<typeof apiFetch>[1]): Promise<UpdateConversationExecutionMode200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<UpdateConversationExecutionMode200>(getUpdateConversationExecutionModeUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateConversationExecutionModeBody)
+  }
+);}
+
+
+
+
+
+export const getUpdateConversationExecutionModeQueryKey = (id: string,
+    updateConversationExecutionModeBody?: BodyType<UpdateConversationExecutionModeBody>,) => {
+    return [
+    'PATCH', `/api/conversations/${id}/execution-mode`, updateConversationExecutionModeBody
+    ] as const;
+    }
+
+
+export const getUpdateConversationExecutionModeQueryOptions = <TData = Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError = ErrorType<void>>(id: string,
+    updateConversationExecutionModeBody: BodyType<UpdateConversationExecutionModeBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getUpdateConversationExecutionModeQueryKey(id,updateConversationExecutionModeBody);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof updateConversationExecutionMode>>> = ({ signal }) => updateConversationExecutionMode(id,updateConversationExecutionModeBody, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type UpdateConversationExecutionModeQueryResult = NonNullable<Awaited<ReturnType<typeof updateConversationExecutionMode>>>
+export type UpdateConversationExecutionModeQueryError = ErrorType<void>
+
+
+export function useUpdateConversationExecutionMode<TData = Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError = ErrorType<void>>(
+ id: string,
+    updateConversationExecutionModeBody: BodyType<UpdateConversationExecutionModeBody>, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof updateConversationExecutionMode>>,
+          TError,
+          Awaited<ReturnType<typeof updateConversationExecutionMode>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUpdateConversationExecutionMode<TData = Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError = ErrorType<void>>(
+ id: string,
+    updateConversationExecutionModeBody: BodyType<UpdateConversationExecutionModeBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof updateConversationExecutionMode>>,
+          TError,
+          Awaited<ReturnType<typeof updateConversationExecutionMode>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUpdateConversationExecutionMode<TData = Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError = ErrorType<void>>(
+ id: string,
+    updateConversationExecutionModeBody: BodyType<UpdateConversationExecutionModeBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useUpdateConversationExecutionMode<TData = Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError = ErrorType<void>>(
+ id: string,
+    updateConversationExecutionModeBody: BodyType<UpdateConversationExecutionModeBody>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateConversationExecutionMode>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getUpdateConversationExecutionModeQueryOptions(id,updateConversationExecutionModeBody,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

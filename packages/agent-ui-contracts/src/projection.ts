@@ -139,6 +139,10 @@ export function applyEvent(state: Snapshot, event: ProductEvent): Snapshot {
         next.conversation = { ...next.conversation, configuration: event.payload.configuration };
       if (event.payload.capabilities) next.capabilities = event.payload.capabilities;
       break;
+    case "configuration.changed":
+      next.conversation = { ...next.conversation, configuration: event.payload.configuration };
+      next.capabilities = event.payload.capabilities;
+      break;
     case "interaction.changed":
       next.interactions = upsert(state.interactions, event.payload.interaction);
       break;

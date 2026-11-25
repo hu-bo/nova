@@ -183,6 +183,9 @@ export class ConversationService {
       return repository.updateGoal(id, owner, action, revision);
     });
   }
+  updateExecutionMode(id: string, owner: string, mode: Configuration["mode"]) {
+    return this.transaction(async ({ repository }) => repository.updateExecutionMode(id, owner, mode));
+  }
   /**
    * 直接切换本会话绑定的 Runner：仅当原绑定设备离线时允许（在线以实时连接注册表为准）。
    * 目标设备必须已注册且上报过工作目录；目录与指令保持会话原值。

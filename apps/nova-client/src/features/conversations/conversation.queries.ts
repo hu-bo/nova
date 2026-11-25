@@ -9,6 +9,7 @@ import {
   listConversations,
   removeConversationInput,
   steerConversationInput,
+  updateConversationExecutionMode,
 } from '@/api/generated/conversations';
 import type {
   AppendConversationInputBody,
@@ -99,6 +100,23 @@ export function useAppendPendingInputMutation(conversationId: string | null) {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.snapshot(identity!.identityId, conversationId!),
       });
+    },
+  });
+}
+export function useUpdateConversationExecutionModeMutation(conversationId: string | null) {
+  const queryClient = useQueryClient();
+  const { identity } = useIdentity();
+  return useMutation({
+    mutationFn: (mode: Configuration['mode']) =>
+      updateConversationExecutionMode(conversationId!, { mode }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.root(identity!.identityId),
+      });
+      if (conversationId)
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations.snapshot(identity!.identityId, conversationId),
+        });
     },
   });
 }

@@ -16,8 +16,10 @@ import {
   messagePageSchema,
   messageQuerySchema,
   updateConversationBodySchema,
+  updateConversationExecutionModeSchema,
   updateConversationGoalSchema,
   conversationGoalSchema,
+  executionModeSchema,
 } from "./conversation.schema.js";
 import type { ConversationService } from "./conversation.service.js";
 import {
@@ -102,6 +104,29 @@ export async function conversationRoutes(app: FastifyInstance, service: Conversa
         operations: page.operations.map((operation) => chatToolOperationOutput(operation, include)),
       });
     },
+  );
+  typed.patch(
+    "/:id/execution-mode",
+    {
+      schema: {
+        operationId: "updateConversationExecutionMode",
+        tags: ["conversations"],
+        params: conversationParamsSchema,
+        body: updateConversationExecutionModeSchema,
+        response: {
+          200: okEnvelope(z.object({ mode: executionModeSchema }).strict()),
+          ...errorResponses(404, 409),
+        },
+      },
+    },
+    async (request) =>
+      success(
+        await service.updateExecutionMode(
+          request.params.id,
+          requirePrincipal(request).localUserId,
+          request.body.mode,
+        ),
+      ),
   );
   typed.patch(
     "/:id",

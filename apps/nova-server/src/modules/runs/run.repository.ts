@@ -615,6 +615,10 @@ export class RunRepository {
       throw new DomainError("CONFLICT", "Checkpoint backend or epoch changed");
     checkpoint = {
       ...checkpoint,
+      configuration: {
+        ...checkpoint.configuration,
+        mode: configurationSchema.parse(conversation.metadata.configuration ?? {}).mode,
+      },
       reservedInputs: checkpoint.reservedInputs.filter((input) => !consumedInputIds.includes(input.id)),
     };
     if (

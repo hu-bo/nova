@@ -52,6 +52,7 @@ import {
   useCreateConversationMutation,
   useRemovePendingInputMutation,
   useSteerPendingInputMutation,
+  useUpdateConversationExecutionModeMutation,
 } from './conversation.queries';
 import { readDraft, saveDraft } from './draft-storage';
 
@@ -246,10 +247,14 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const [storedOptions] = useState(() => optionStore.get());
   const [text, setText] = useState(() => readDraft(accountId, draftId));
   const [executionMode, setExecutionMode] = useState<ExecutionMode>(() => {
+    if (conversationId && runtime?.mode) return runtime.mode;
     const stored = storedOptions?.executionMode;
     if (stored && isExecutionMode(stored)) return stored;
     return runtime?.mode ?? 'build';
   });
+  useEffect(() => {
+    if (conversationId && runtime?.mode) setExecutionMode(runtime.mode);
+  }, [conversationId, runtime?.mode]);
   const [budgetLimits, setBudgetLimits] = useState({
     maxSteps: runtime?.budget?.maxSteps?.toString() ?? '',
     maxToolCalls: runtime?.budget?.maxToolCalls?.toString() ?? '',
@@ -285,12 +290,17 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const [steeringId, setSteeringId] = useState<string | null>(null);
   const create = useCreateConversationMutation();
   const append = useAppendPendingInputMutation(conversationId);
+  const updateExecutionMode = useUpdateConversationExecutionModeMutation(conversationId);
   const remove = useRemovePendingInputMutation(conversationId);
   const steer = useSteerPendingInputMutation(conversationId);
   const uploads = useUploadQueue();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const sending =
-    create.isPending || append.isPending || modelSettings.saving || Boolean(options.startingSpec);
+    create.isPending ||
+    append.isPending ||
+    updateExecutionMode.isPending ||
+    modelSettings.saving ||
+    Boolean(options.startingSpec);
   const remoteConnectionId =
     mode === 'project' ? (binding?.remoteConnectionId ?? '') : (runtime?.remoteConnectionId ?? '');
   const selectedRemote = remoteCatalog.data?.items.find((entry) => entry.id === remoteConnectionId);
@@ -372,6 +382,17 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     setStoredReasoning(value);
   }
 
+  function changeConversationExecutionMode(nextMode: ExecutionMode) {
+    const previousMode = executionMode;
+    setSpecArmed(false);
+    setExecutionMode(nextMode);
+    if (!conversationId || nextMode === previousMode) return;
+    void updateExecutionMode.mutateAsync(nextMode).catch((cause: unknown) => {
+      setExecutionMode(previousMode);
+      setError(cause);
+    });
+  }
+
   /** 本次提交携带的 Agent profile：本地选择优先；其次延续会话已有 profile；求职草稿兜底 chat 常量。 */
   function resolveAgentProfile(): AgentProfile | null {
     if (selectedAgent) return selectedAgent;
@@ -421,6 +442,8 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   async function submit(submission: ComposerSubmission<Attachment>): Promise<boolean> {
     setError(null);
     let message = submission.text.trim();
+    let requestedModeChange: ExecutionMode | undefined;
+    let modePersisted = false;
     if (
       chatAgent &&
       (COMPOSER_COMMAND_PATTERN.test(message) ||
@@ -461,10 +484,20 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         startsSpec = false;
         setSpecArmed(false);
         nextMode = MODE_COMMANDS[name];
+        requestedModeChange = nextMode;
         setExecutionMode(nextMode);
       }
       if (!message) {
         changeText('');
+        if (requestedModeChange && conversationId) {
+          try {
+            await updateExecutionMode.mutateAsync(requestedModeChange);
+            modePersisted = true;
+          } catch (cause) {
+            setExecutionMode(executionMode);
+            setError(cause);
+          }
+        }
         return false;
       }
     }
@@ -518,6 +551,10 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       return false;
     }
     try {
+      if (requestedModeChange && conversationId) {
+        await updateExecutionMode.mutateAsync(requestedModeChange);
+        modePersisted = true;
+      }
       const profileId = submission.model ?? modelProfileId;
       const profile = modelSettings.profiles.find((entry) => entry.id === profileId);
       const requestedEffort = submission.reasoningEffort ?? reasoningEffort;
@@ -590,6 +627,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       setGoalArmed(false);
       return true;
     } catch (cause) {
+      if (requestedModeChange && !modePersisted) setExecutionMode(executionMode);
       setError(cause);
       return false;
     }
@@ -604,14 +642,11 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       setSpecArmed(true);
       setGoalArmed(false);
     } else if (skill.id === 'plan') {
-      setSpecArmed(false);
-      setExecutionMode('plan');
+      changeConversationExecutionMode('plan');
     } else if (skill.id === 'build') {
-      setSpecArmed(false);
-      setExecutionMode('build');
+      changeConversationExecutionMode('build');
     } else if (skill.id === 'auto') {
-      setSpecArmed(false);
-      setExecutionMode('auto');
+      changeConversationExecutionMode('auto');
     } else if (skill.id === 'clear') onClearContext?.();
   }
   const canSteer = isRunning && options.steeringEnabled === true;
@@ -845,6 +880,7 @@ export function useConversationComposer(options: ConversationComposerOptions) {
     projectId,
     executionMode,
     setExecutionMode,
+    changeExecutionMode: changeConversationExecutionMode,
     budgetLimits,
     setBudgetLimits,
     executionBudget,

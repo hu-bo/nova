@@ -43,6 +43,8 @@ export const conversationParamsSchema = z.object({ id: z.uuid() }).strict();
 export const pendingInputParamsSchema = conversationParamsSchema.extend({ inputId: z.uuid() }).strict();
 export const messageQuerySchema = toolOutputQuery.extend({ before: decimalSequenceSchema.optional() });
 export const updateConversationBodySchema = z.object({ title: z.string().trim().min(1).max(200) }).strict();
+export const executionModeSchema = z.enum(["build", "plan", "auto"]);
+export const updateConversationExecutionModeSchema = z.object({ mode: executionModeSchema }).strict();
 export const updateConversationGoalSchema = z
   .object({ action: z.enum(["pause", "resume", "complete", "remove"]), expectedRevision: z.number().int().positive() })
   .strict();

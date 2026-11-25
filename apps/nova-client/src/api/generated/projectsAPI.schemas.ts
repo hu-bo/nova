@@ -940,6 +940,32 @@ export type ListConversationMessages200 = {
   operations: ListConversationMessages200OperationsItem[];
 };
 
+export type UpdateConversationExecutionModeBodyMode = typeof UpdateConversationExecutionModeBodyMode[keyof typeof UpdateConversationExecutionModeBodyMode];
+
+
+export const UpdateConversationExecutionModeBodyMode = {
+  build: 'build',
+  plan: 'plan',
+  auto: 'auto',
+} as const;
+
+export type UpdateConversationExecutionModeBody = {
+  mode: UpdateConversationExecutionModeBodyMode;
+};
+
+export type UpdateConversationExecutionMode200Mode = typeof UpdateConversationExecutionMode200Mode[keyof typeof UpdateConversationExecutionMode200Mode];
+
+
+export const UpdateConversationExecutionMode200Mode = {
+  build: 'build',
+  plan: 'plan',
+  auto: 'auto',
+} as const;
+
+export type UpdateConversationExecutionMode200 = {
+  mode: UpdateConversationExecutionMode200Mode;
+};
+
 export type RenameConversationBody = {
   /**
      * @minLength 1

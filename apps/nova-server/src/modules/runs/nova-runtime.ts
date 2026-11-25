@@ -93,7 +93,8 @@ export const buildSystemInstructions = (sections: {
 }) =>
   [
     NOVA_IDENTITY_INSTRUCTION,
-    MODE_INSTRUCTIONS[sections.mode],
+    MODE_INSTRUCTIONS[sections.mode] +
+      " The host may change execution mode while this run is active; follow the latest Nova execution mode update in context when it differs from this initial setting.",
     ...(sections.runnerInstructions ? [sections.runnerInstructions] : []),
     ...(sections.projectInstructions ? [sections.projectInstructions] : []),
     ...(sections.specExecution?.kind === "generation" ? [specDraftPrompt(sections.specExecution)] : []),
@@ -294,9 +295,8 @@ export class NovaRuntime implements RuntimeAdapter {
         }),
       );
     }
-    // 产物发布（P1-D1）：仅 Runner 工作区环境且存储已配置时安装；SSH 暂不开二进制发布（§5.3）。
-    // Plan 不安装该工具（effects=write 不进入只读工具面；服务端仍二次校验）。
-    if (this.deps.artifacts && hasWorkspace && !remoteId && binding?.runnerId && configuration.mode !== "plan") {
+    // 产物发布（P1-D1）：仅 Runner 工作区环境且存储已配置时安装；模式策略仍会拒绝 Plan 写入。
+    if (this.deps.artifacts && hasWorkspace && !remoteId && binding?.runnerId) {
       const artifactRunnerId = binding.runnerId;
       const artifactWorkspaceId = binding.workspaceId;
       const artifactOutputDir = `.nova/runs/${claim.id}/outputs`;
@@ -341,9 +341,9 @@ export class NovaRuntime implements RuntimeAdapter {
       authorize: async ({ name, input, context: toolContext }) => {
         toolContext.signal.throwIfAborted();
         const tool = tools.find((item) => item.name === name);
-        const decision = toolModeDecision(configuration.mode, tool?.effects);
-        if (decision !== "ask") return decision;
         const { checkpoint } = await repository.load(claim);
+        const decision = toolModeDecision(checkpoint.configuration.mode, tool?.effects);
+        if (decision !== "ask") return decision;
         const prior = checkpoint.interactions.find((item) => item.callId === toolContext.callId);
         if (prior) {
           if (prior.state !== "pending")
@@ -415,7 +415,7 @@ export class NovaRuntime implements RuntimeAdapter {
     const instructions = agentPersona ? baseInstructions + "\n\n# Agent persona (pinned)\n\n" + agentPersona : baseInstructions;
     // Run 产物目录约定注入上下文（P1-D3）：交付文件写 outputs、临时文件写 tmp，恢复复用同目录。
     const artifactContext =
-      this.deps.artifacts && hasWorkspace && !remoteId && configuration.mode !== "plan"
+      this.deps.artifacts && hasWorkspace && !remoteId && binding?.runnerId
         ? "\n\nDeliverable files: write them under \".nova/runs/" + claim.id + "/outputs/\" (scratch files in \".nova/runs/" + claim.id + "/tmp/\"), then publish each deliverable with artifact_publish using the path relative to that outputs directory. Reference published artifacts by their artifact IDs in the final reply; do not present local paths as downloadable results."
         : "";
     const selectedSkills = [
@@ -429,11 +429,9 @@ export class NovaRuntime implements RuntimeAdapter {
         modelId: route.model.id,
       },
       sessionId: conversation.id,
-      profile: { systemPrompt: instructions + artifactContext },
+      profile: { systemPrompt: instructions },
       tools,
-      allowedTools: tools
-        .filter((tool) => configuration.mode !== "plan" || tool.effects === "read")
-        .map((tool) => tool.name),
+      allowedTools: tools.map((tool) => tool.name),
       policies: [policy],
       components: { sessionStore: postgresSessionPlugin(repository, claim) },
       plugins: [
@@ -441,8 +439,9 @@ export class NovaRuntime implements RuntimeAdapter {
         toolLoopDetectionPlugin({
           confirm: async (request) => {
             request.context.signal.throwIfAborted();
+            const { checkpoint } = await repository.load(claim);
             // 自由模式无人值守: 重复调用不再发起确认, 由预算与运行时限兜底.
-            if (configuration.mode === "auto") return "allow";
+            if (checkpoint.configuration.mode === "auto") return "allow";
             const pending = repetitionConfirmations.get(request.key);
             if (pending) return pending;
             const prior = context.checkpoint.interactions.find((item) => item.callId === request.key);
@@ -464,6 +463,42 @@ export class NovaRuntime implements RuntimeAdapter {
             return confirmation;
           },
         }),
+        {
+          manifest: {
+            id: "nova.execution-mode",
+            version: "0.1.0",
+            apiVersion: 1,
+            scope: "session",
+            requires: [],
+            provides: [],
+            contributes: [contextContributions],
+          },
+          setup(pluginContext) {
+            pluginContext.contribute(contextContributions, {
+              id: "nova.execution-mode",
+              order: 20,
+              async build(input) {
+                input.signal.throwIfAborted();
+                const { checkpoint } = await repository.load(claim);
+                const mode = checkpoint.configuration.mode;
+                return [
+                  {
+                    role: "user",
+                    parts: [
+                      {
+                        type: "text",
+                        text:
+                          "[Nova execution mode update — host state, not a user request]\n" +
+                          MODE_INSTRUCTIONS[mode] +
+                          (mode === "plan" ? "" : artifactContext),
+                      },
+                    ],
+                  },
+                ];
+              },
+            });
+          },
+        } satisfies PluginDefinition,
         ...(selectedSkills.length ? [skillsPlugin({ skills: selectedSkills, selected: selectedSkills.map((skill) => skill.id) })] : []),
         ...(!chatAgent ? [{
           manifest: {

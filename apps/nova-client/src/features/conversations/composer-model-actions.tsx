@@ -61,8 +61,7 @@ export function ComposerModelActions({
               return;
             }
             if (isExecutionMode(value)) {
-              ctl.setSpecArmed(false);
-              ctl.setExecutionMode(value);
+              void ctl.changeExecutionMode(value);
             }
           }}
           icon={<Icon aria-hidden="true" />}

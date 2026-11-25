@@ -7,6 +7,7 @@ import {
   configurationSchema,
   operationsFromMessages,
   type InputBlock,
+  type Configuration,
   type SubmitInput,
 } from "@nova/agent-ui-contracts";
 import {
@@ -372,6 +373,88 @@ export const conversationRepository = defineRepository(
           .returning();
         if (!row) throw new DomainError("NOT_FOUND", "Conversation not found");
         return row;
+      },
+      async updateExecutionMode(id: string, owner: string, mode: Configuration["mode"]) {
+        const tx = requireTransaction();
+
+        const conversation = await lockOwned(tx, id, owner);
+        if (conversation.metadata.specId && mode !== "plan")
+          throw new DomainError("CONFLICT", "Specification sessions use Plan mode", { reason: "SPEC_SESSION_RESTRICTED" });
+        const configuration = configurationSchema.parse(conversation.metadata.configuration ?? {});
+        if (configuration.agentProfile && mode !== "plan")
+          throw new DomainError("CONFLICT", "Chat agents use Plan mode");
+        if (configuration.mode === mode) return { mode };
+
+        const nextConfiguration = { ...configuration, mode };
+        conversation.metadata = { ...conversation.metadata, configuration: nextConfiguration };
+        await tx
+          .update(conversations)
+          .set({ metadata: conversation.metadata, updatedAt: new Date() })
+          .where(eq(conversations.id, conversation.id));
+
+        let resumedInteractions: string[] = [];
+        if (conversation.activeRunId) {
+          const [run] = await tx
+            .select({
+              id: runs.id,
+              state: runs.state,
+              revision: runs.revision,
+              checkpointMetadata: runs.checkpointMetadata,
+            })
+            .from(runs)
+            .where(and(eq(runs.id, conversation.activeRunId), eq(runs.conversationId, conversation.id)))
+            .for("update");
+          if (run?.checkpointMetadata) {
+            const interactions = run.checkpointMetadata.interactions.map((interaction) => {
+              if (
+                mode !== "auto" ||
+                interaction.kind !== "approval" ||
+                interaction.state !== "pending" ||
+                (interaction.expiresAt && Date.parse(interaction.expiresAt) <= Date.now())
+              )
+                return interaction;
+              resumedInteractions.push(interaction.id);
+              return {
+                ...interaction,
+                state: "resolved" as const,
+                revision: interaction.revision + 1,
+                response: { kind: "approval" as const, decision: "allow" as const, scope: "once" as const },
+                acceptedRevision: interaction.revision,
+              };
+            });
+            const checkpointMetadata = {
+              ...run.checkpointMetadata,
+              configuration: nextConfiguration,
+              interactions,
+            };
+            await tx
+              .update(runs)
+              .set({
+                checkpointMetadata,
+                revision: run.revision + 1,
+                checkpointRevision: run.revision + 1,
+                updatedAt: new Date(),
+              })
+              .where(eq(runs.id, run.id));
+            for (const interaction of interactions) {
+              if (resumedInteractions.includes(interaction.id))
+                await journal.append(conversation, {
+                  runId: run.id,
+                  type: "interaction.changed",
+                  payload: { interaction: publicInteraction(interaction) },
+                });
+            }
+          }
+        }
+
+        await journal.append(conversation, {
+          runId: conversation.activeRunId,
+          type: "configuration.changed",
+          payload: { configuration: nextConfiguration, capabilities: effectiveCapabilities(conversation) },
+        });
+        for (const interactionId of resumedInteractions)
+          await journal.wake(conversation.id, "response:" + conversation.activeRunId + ":" + interactionId);
+        return { mode };
       },
       /**
        * 直接切换本会话绑定的 Runner：仅当原绑定设备离线时允许（在线检查在 Service 层，
