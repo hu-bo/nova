@@ -8,8 +8,13 @@ import { createRemoteService } from "../remotes/index.js";
 import { createUserModelProfilesService } from "../model-config/index.js";
 import { createRunnerReader } from "../runners/index.js";
 import type { ArtifactService } from "../artifacts/index.js";
+import type { UploadStorage } from "../attachments/upload-storage.js";
 
-export async function conversationsModule(app: FastifyInstance, artifacts?: Pick<ArtifactService, "list">): Promise<void> {
+export async function conversationsModule(
+  app: FastifyInstance,
+  artifacts?: Pick<ArtifactService, "list">,
+  uploads?: UploadStorage,
+): Promise<void> {
   const conversationRepo = createConversationRepository(app.db);
   const remotes = createRemoteService(app);
   const service = createScope(app.db).get(
@@ -23,7 +28,8 @@ export async function conversationsModule(app: FastifyInstance, artifacts?: Pick
         runnerReader: createRunnerReader(app.db),
         skills: app.skillService,
       },
-      ({ repository, transaction }) => new ConversationService(repository, transaction, app.executionEnabled, artifacts),
+      ({ repository, transaction }) =>
+        new ConversationService(repository, transaction, app.executionEnabled, artifacts, uploads),
     ),
   );
   // 实际路径 /api/conversations/...; 由 app.ts 在 /api 前缀下挂载.

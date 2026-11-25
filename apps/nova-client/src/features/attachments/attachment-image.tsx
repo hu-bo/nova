@@ -6,19 +6,22 @@ import { secureAttachmentUrl } from './attachment-url';
 export function AttachmentImage({
   reference,
   name,
+  url: initialUrl,
 }: {
-  reference: { conversationId: string; messageId: string; blockId: string };
+  reference?: { conversationId: string; messageId: string; blockId: string } | undefined;
   name: string;
+  url?: string | undefined;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const { conversationId, messageId, blockId } = reference;
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    setUrl(null);
+    setUrl(initialUrl ? secureAttachmentUrl(initialUrl) : null);
     setError('');
+    if (!reference) return () => controller.abort();
+    const { conversationId, messageId, blockId } = reference;
     void getAttachmentImageUrl(
       { conversationId, messageId, blockId },
       { signal: controller.signal },
@@ -41,7 +44,7 @@ export function AttachmentImage({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [conversationId, messageId, blockId, revision]);
+  }, [reference, initialUrl, revision]);
   if (error)
     return (
       <div className="rounded-lg border p-3 text-sm">

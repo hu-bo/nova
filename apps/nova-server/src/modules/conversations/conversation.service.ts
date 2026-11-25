@@ -1,5 +1,6 @@
-import { configurationSchema, type InputBlock, type Configuration } from "@nova/agent-ui-contracts";
+import { configurationSchema, type Attachment, type InputBlock, type Configuration, type Message } from "@nova/agent-ui-contracts";
 import { DomainError } from "../../shared/domain-error.js";
+import { disabledUploadStorage, type UploadStorage } from "../attachments/upload-storage.js";
 import type { ProjectBindingService } from "../projects/index.js";
 import type { RunnerConnections, RunnerReader } from "../runners/index.js";
 import type { ConversationRow, ConversationRepository } from "./conversation.repository.js";
@@ -28,6 +29,7 @@ export class ConversationService {
     private readonly executionEnabled = true,
     /** 产物摘要进入会话读模型（P1-A1）；未接存储时省略该字段。 */
     private readonly artifacts?: Pick<ArtifactService, "list">,
+    private readonly uploads: UploadStorage = disabledUploadStorage(),
   ) {}
   async create(input: CreateConversationInput, owner: string, key?: string) {
     return this.transaction(async ({ repository, bindings, models, remotes, skills }) => {
@@ -96,12 +98,20 @@ export class ConversationService {
       },
       { isolationLevel: "repeatable read", accessMode: "read only" },
     );
+    snapshot.messages = await Promise.all(snapshot.messages.map((message) => this.publicMessage(message, owner)));
+    snapshot.pendingInputs = await Promise.all(
+      snapshot.pendingInputs.map(async (pending) => ({
+        ...pending,
+        input: { ...pending.input, blocks: await this.publicInputBlocks(pending.input.blocks, owner) },
+      })),
+    );
     // 产物摘要进入会话读模型（P1-A1）：快照级最新状态；实时顺序仍以 artifact.changed 事件 + 列表接口为准。
     if (this.artifacts) snapshot.artifacts = (await this.artifacts.list({ conversationId: id, ownerUserId: owner, limit: 50 })).items;
     return snapshot;
   }
-  messages(id: string, owner: string, before?: string) {
-    return this.conversations.messages(id, owner, before);
+  async messages(id: string, owner: string, before?: string) {
+    const page = await this.conversations.messages(id, owner, before);
+    return { ...page, items: await Promise.all(page.items.map((message) => this.publicMessage(message, owner))) };
   }
   async appendPendingInput(input: Parameters<ConversationRepository["enqueue"]>[0]) {
     return this.transaction(async ({ repository, bindings, models, remotes, skills }) => {
@@ -227,6 +237,12 @@ export class ConversationService {
         if (block.type === "image" ? !capability?.images : !capability?.files)
           throw new DomainError("CONFLICT", "This content type is not enabled");
         const { ref } = block.attachment;
+        if (ref.kind === "image") {
+          if (block.type !== "image" || !block.attachment.sha256 || !block.attachment.mimeType.startsWith("image/"))
+            throw new DomainError("VALIDATION_ERROR", "Select a verified image attachment");
+          await this.uploads.resolveImageUrl(owner, ref.url);
+          continue;
+        }
         if (ref.kind === "object") {
           if (
             block.type !== "image" ||
@@ -246,6 +262,35 @@ export class ConversationService {
         }
         if (!block.attachment.sha256) throw new DomainError("VALIDATION_ERROR", "Select a verified workspace file");
       }
+  }
+  private async publicAttachment(attachment: Attachment, owner: string): Promise<Attachment> {
+    const ref = attachment.ref;
+    if (ref.kind === "image") {
+      const signed = await this.uploads.resolveImageUrl(owner, ref.url);
+      return { ...attachment, ref: { kind: "image", url: signed.url } };
+    }
+    if (ref.kind === "object") {
+      const signed = await this.uploads.imageUrl(owner, ref);
+      return { ...attachment, ref: { kind: "image", url: signed.url } };
+    }
+    return attachment;
+  }
+  private async publicMessage(message: Message, owner: string): Promise<Message> {
+    const blocks = await Promise.all(
+      message.blocks.map(async (block) => {
+        if (block.type !== "image") return block;
+        return { ...block, attachment: await this.publicAttachment(block.attachment, owner) };
+      }),
+    );
+    return { ...message, blocks };
+  }
+  private async publicInputBlocks(blocks: InputBlock[], owner: string): Promise<InputBlock[]> {
+    return Promise.all(
+      blocks.map(async (block) => {
+        if (block.type !== "image") return block;
+        return { ...block, attachment: await this.publicAttachment(block.attachment, owner) };
+      }),
+    );
   }
   removePendingInput(input: Parameters<ConversationRepository["removePendingInput"]>[0]) {
     return this.transaction(async ({ repository }) => {

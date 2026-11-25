@@ -40,6 +40,7 @@ const sshPathSchema = z
   );
 const pathSchema = sshPathSchema.refine((path) => !path.startsWith("/"), "Workspace path must be relative");
 export const fileRefSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("image"), url: z.string().url() }).strict(),
   z.object({ kind: z.literal("object"), key: z.string().min(1).max(512), versionId: z.string().optional() }).strict(),
   z.object({ kind: z.literal("runner"), runnerId: idSchema, workspaceId: idSchema, path: pathSchema }).strict(),
   z.object({ kind: z.literal("ssh"), remoteConnectionId: idSchema, path: sshPathSchema }).strict(),

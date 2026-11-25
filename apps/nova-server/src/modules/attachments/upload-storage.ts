@@ -21,6 +21,10 @@ export interface UploadStorage {
     ref: Extract<FileRef, { kind: "object" }>,
   ): Promise<{ data: string; mimeType: string }>;
   imageUrl(ownerUserId: string, ref: Extract<FileRef, { kind: "object" }>): Promise<{ url: string; expiresAt: string }>;
+  resolveImageUrl(
+    ownerUserId: string,
+    url: string,
+  ): Promise<{ ref: Extract<FileRef, { kind: "object" }>; url: string; expiresAt: string }>;
 }
 
 export type MinioUploadStorageConfig = {
@@ -46,7 +50,13 @@ export function disabledUploadStorage(): UploadStorage {
   const unavailable = async (): Promise<never> => {
     throw new DomainError("SERVICE_UNAVAILABLE", "Attachment storage is not configured");
   };
-  return { createUpload: unavailable, completeUpload: unavailable, readImage: unavailable, imageUrl: unavailable };
+  return {
+    createUpload: unavailable,
+    completeUpload: unavailable,
+    readImage: unavailable,
+    imageUrl: unavailable,
+    resolveImageUrl: unavailable,
+  };
 }
 
 export function createMinioUploadStorage(
@@ -81,6 +91,12 @@ export function createMinioUploadStorage(
       logError(error, operation);
       throw storageUnavailable();
     }
+  };
+
+  const publicUrl = (value: string) => {
+    const url = new URL(value);
+    if (url.protocol === "http:") url.protocol = "https:";
+    return url.href;
   };
 
   const readObject = async (key: string): Promise<Buffer> => {
@@ -123,6 +139,33 @@ export function createMinioUploadStorage(
     const leaf = ownedLeaf(ownerUserId, pendingKey, "pending");
     return `uploads/${encodeURIComponent(ownerUserId)}/${leaf}`;
   };
+
+  function imageKeyFromUrl(ownerUserId: string, value: string): string {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw invalidAttachment("Invalid image URL");
+    }
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.hostname.toLowerCase() !== config.endPoint.toLowerCase()
+    )
+      throw new DomainError("FORBIDDEN", "Image URL does not belong to this storage");
+    const prefix = `/${config.bucket}/`;
+    if (!url.pathname.startsWith(prefix))
+      throw new DomainError("FORBIDDEN", "Image URL does not reference an attachment");
+    let key: string;
+    try {
+      key = decodeURIComponent(url.pathname.slice(prefix.length));
+    } catch {
+      throw invalidAttachment("Invalid image URL path");
+    }
+    validateOwnedFinalKey(ownerUserId, key);
+    return key;
+  }
 
   return {
     async createUpload(input) {
@@ -217,12 +260,18 @@ export function createMinioUploadStorage(
           const stat = await client.statObject(config.bucket, ref.key);
           if (stat.size > MAX_ATTACHMENT_BYTES) throw invalidAttachment(OVERSIZED_ATTACHMENT_MESSAGE);
           const url = await client.presignedGetObject(config.bucket, ref.key, DOWNLOAD_TTL_SECONDS);
-          return { url, expiresAt: new Date(Date.now() + DOWNLOAD_TTL_SECONDS * 1000).toISOString() };
+          return { url: publicUrl(url), expiresAt: new Date(Date.now() + DOWNLOAD_TTL_SECONDS * 1000).toISOString() };
         } catch (error) {
           if (isMissingObject(error)) throw new DomainError("NOT_FOUND", "Attachment not found");
           throw error;
         }
       });
+    },
+
+    async resolveImageUrl(ownerUserId, value) {
+      const ref = { kind: "object" as const, key: imageKeyFromUrl(ownerUserId, value) };
+      const signed = await this.imageUrl(ownerUserId, ref);
+      return { ref, ...signed };
     },
   };
 }

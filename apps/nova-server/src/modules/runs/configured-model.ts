@@ -42,8 +42,11 @@ export function configuredModelPlugin(
       logger: logger.child({ component: "configured-model", providerId: provider.id }),
       resolveImageUrl: async (uri) => {
         const prefix = "nova-object:";
-        if (!uri.startsWith(prefix)) throw new FrameworkError("MODEL_INCOMPATIBLE", "Invalid image reference.");
-        return (await uploads.imageUrl(ownerUserId, { kind: "object", key: uri.slice(prefix.length) })).url;
+        if (uri.startsWith(prefix))
+          return (await uploads.imageUrl(ownerUserId, { kind: "object", key: uri.slice(prefix.length) })).url;
+        if (uri.startsWith("https://") || uri.startsWith("http://"))
+          return (await uploads.resolveImageUrl(ownerUserId, uri)).url;
+        throw new FrameworkError("MODEL_INCOMPATIBLE", "Invalid image reference.");
       },
     },
   );

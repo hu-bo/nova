@@ -48,22 +48,26 @@ function blockView(block: Block, operations: ToolOperation[]): ViewBlock {
         removed: hunkLines.filter((line) => line.startsWith('-')).length,
       };
     }
-    case 'image':
+    case 'image': {
+      const ref = block.attachment.ref;
+      const url = ref.kind === 'image' ? ref.url : undefined;
       return {
         id: block.id,
         type: 'image',
-        key: block.attachment.ref.kind === 'object' ? block.attachment.ref.key : '',
+        key: url ?? (ref.kind === 'object' ? ref.key : ''),
         name: block.attachment.name,
         mimeType: block.attachment.mimeType,
+        ...(url ? { url } : {}),
       };
+    }
     case 'file':
       return {
         id: block.id,
         type: 'file',
         path:
-          block.attachment.ref.kind === 'object'
-            ? block.attachment.name
-            : block.attachment.ref.path,
+          block.attachment.ref.kind === 'runner' || block.attachment.ref.kind === 'ssh'
+            ? block.attachment.ref.path
+            : block.attachment.name,
         kind: 'file',
         ...(block.attachment.size !== undefined ? { size: block.attachment.size } : {}),
       };
@@ -150,17 +154,27 @@ function projectionView(
       role: 'user',
       status: 'done',
       createdAt: startingInput.createdAt,
-      blocks: startingInput.input.blocks.map((block): ViewBlock =>
-        block.type === 'text'
-          ? block
-          : {
-              id: block.id,
-              type: 'file',
-              path: block.attachment.name,
-              kind: 'file',
-              size: block.attachment.size,
-            },
-      ),
+      blocks: startingInput.input.blocks.map((block): ViewBlock => {
+        if (block.type === 'text') return block;
+        if (block.type === 'image') {
+          const url = block.attachment.ref.kind === 'image' ? block.attachment.ref.url : undefined;
+          return {
+            id: block.id,
+            type: 'image',
+            key: url ?? '',
+            name: block.attachment.name,
+            mimeType: block.attachment.mimeType,
+            ...(url ? { url } : {}),
+          };
+        }
+        return {
+          id: block.id,
+          type: 'file',
+          path: block.attachment.name,
+          kind: 'file',
+          size: block.attachment.size,
+        };
+      }),
     });
   return {
     data,

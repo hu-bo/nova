@@ -35,7 +35,7 @@ export const uploadCompleteBodySchema = z
   .strict();
 
 export const uploadCompleteResponseSchema = z.object({
-  key: z.string(),
+  url: z.string().url(),
   mime: z.string(),
   size: z.number().int().nonnegative(),
   sha256: z.string(),

@@ -157,7 +157,7 @@ export async function buildApp(config: AppConfig, options: { exportMode?: boolea
     if (config.ROLE !== "worker") {
       await app.register(healthModule);
       await app.register(projectsModule, { prefix: "/api" });
-      await app.register(async (scope) => conversationsModule(scope, artifactService), { prefix: "/api" });
+      await app.register(async (scope) => conversationsModule(scope, artifactService, uploadStorage), { prefix: "/api" });
       await app.register(async (scope) =>
         skillsModule(scope, {
           service: skillService,

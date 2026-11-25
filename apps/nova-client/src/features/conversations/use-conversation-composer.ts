@@ -540,11 +540,17 @@ export function useConversationComposer(options: ConversationComposerOptions) {
       const payload = submission.attachments.map((item) => item.metadata);
       const blocks: InputBlock[] = [
         ...(message ? [{ id: 'text', type: 'text' as const, text: message }] : []),
-        ...payload.map((attachment, index) => ({
-          id: 'attachment:' + index,
-          type: attachment.mimeType.startsWith('image/') ? ('image' as const) : ('file' as const),
-          attachment,
-        })),
+        ...payload.map((attachment, index): InputBlock => {
+          const id = 'attachment:' + index;
+          if (attachment.ref.kind === 'image') {
+            if (!attachment.mimeType.startsWith('image/'))
+              throw new ApiError(400, 'INVALID_IMAGE_ATTACHMENT', '图片附件缺少有效的图片类型。');
+            return { id, type: 'image', attachment };
+          }
+          if (attachment.mimeType.startsWith('image/'))
+            throw new ApiError(400, 'INVALID_IMAGE_ATTACHMENT', '图片附件缺少有效的签名地址。');
+          return { id, type: 'file', attachment };
+        }),
       ];
       const goal = startsGoal
         ? { objective: message, maxIterations, acceptanceCriteria }

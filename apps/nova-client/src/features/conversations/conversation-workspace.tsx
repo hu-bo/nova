@@ -270,8 +270,8 @@ export function ConversationWorkspace({
   const renderers = useMemo<BlockRenderers>(
     () => ({
       image: ({ block }) =>
-        block.type === 'image' && block.reference ? (
-          <AttachmentImage reference={block.reference} name={block.name} />
+        block.type === 'image' && (block.reference || block.url) ? (
+          <AttachmentImage reference={block.reference} url={block.url} name={block.name} />
         ) : null,
     }),
     [],

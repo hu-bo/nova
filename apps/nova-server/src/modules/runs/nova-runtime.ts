@@ -547,6 +547,16 @@ export class NovaRuntime implements RuntimeAdapter {
             if (!file.ok || file.value.sha256 !== sha256 || file.value.truncated)
               throw new DomainError("CONFLICT", "Attached file changed or exceeds the text limit");
             parts.push({ type: "text", text: "[Attached file " + name + "]\n" + file.value.text });
+          } else if (ref.kind === "image" && block.type === "image") {
+            parts.push({
+              type: "image",
+              reference: {
+                id: block.id,
+                mediaType: block.attachment.mimeType,
+                sizeBytes: block.attachment.size ?? 0,
+                uri: ref.url,
+              },
+            });
           } else if (ref.kind === "object" && block.type === "image") {
             parts.push({
               type: "image",

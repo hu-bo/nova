@@ -2551,6 +2551,26 @@
                                                     "kind": {
                                                       "type": "string",
                                                       "enum": [
+                                                        "image"
+                                                      ]
+                                                    },
+                                                    "url": {
+                                                      "type": "string",
+                                                      "format": "uri"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "url"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
                                                         "object"
                                                       ]
                                                     },
@@ -2685,6 +2705,26 @@
                                           "properties": {
                                             "ref": {
                                               "oneOf": [
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "image"
+                                                      ]
+                                                    },
+                                                    "url": {
+                                                      "type": "string",
+                                                      "format": "uri"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "url"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
                                                 {
                                                   "type": "object",
                                                   "properties": {
@@ -3145,6 +3185,26 @@
                                                               "kind": {
                                                                 "type": "string",
                                                                 "enum": [
+                                                                  "image"
+                                                                ]
+                                                              },
+                                                              "url": {
+                                                                "type": "string",
+                                                                "format": "uri"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "kind",
+                                                              "url"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "kind": {
+                                                                "type": "string",
+                                                                "enum": [
                                                                   "object"
                                                                 ]
                                                               },
@@ -3279,6 +3339,26 @@
                                                     "properties": {
                                                       "ref": {
                                                         "oneOf": [
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "kind": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                  "image"
+                                                                ]
+                                                              },
+                                                              "url": {
+                                                                "type": "string",
+                                                                "format": "uri"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "kind",
+                                                              "url"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          },
                                                           {
                                                             "type": "object",
                                                             "properties": {
@@ -5393,6 +5473,26 @@
                                             "kind": {
                                               "type": "string",
                                               "enum": [
+                                                "image"
+                                              ]
+                                            },
+                                            "url": {
+                                              "type": "string",
+                                              "format": "uri"
+                                            }
+                                          },
+                                          "required": [
+                                            "kind",
+                                            "url"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "enum": [
                                                 "object"
                                               ]
                                             },
@@ -5527,6 +5627,26 @@
                                   "properties": {
                                     "ref": {
                                       "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "enum": [
+                                                "image"
+                                              ]
+                                            },
+                                            "url": {
+                                              "type": "string",
+                                              "format": "uri"
+                                            }
+                                          },
+                                          "required": [
+                                            "kind",
+                                            "url"
+                                          ],
+                                          "additionalProperties": false
+                                        },
                                         {
                                           "type": "object",
                                           "properties": {
@@ -6424,6 +6544,26 @@
                                                     "kind": {
                                                       "type": "string",
                                                       "enum": [
+                                                        "image"
+                                                      ]
+                                                    },
+                                                    "url": {
+                                                      "type": "string",
+                                                      "format": "uri"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "url"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
                                                         "object"
                                                       ]
                                                     },
@@ -6558,6 +6698,26 @@
                                           "properties": {
                                             "ref": {
                                               "oneOf": [
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "image"
+                                                      ]
+                                                    },
+                                                    "url": {
+                                                      "type": "string",
+                                                      "format": "uri"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "url"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
                                                 {
                                                   "type": "object",
                                                   "properties": {
@@ -7018,6 +7178,26 @@
                                                               "kind": {
                                                                 "type": "string",
                                                                 "enum": [
+                                                                  "image"
+                                                                ]
+                                                              },
+                                                              "url": {
+                                                                "type": "string",
+                                                                "format": "uri"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "kind",
+                                                              "url"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "kind": {
+                                                                "type": "string",
+                                                                "enum": [
                                                                   "object"
                                                                 ]
                                                               },
@@ -7152,6 +7332,26 @@
                                                     "properties": {
                                                       "ref": {
                                                         "oneOf": [
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "kind": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                  "image"
+                                                                ]
+                                                              },
+                                                              "url": {
+                                                                "type": "string",
+                                                                "format": "uri"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "kind",
+                                                              "url"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          },
                                                           {
                                                             "type": "object",
                                                             "properties": {
@@ -8064,6 +8264,26 @@
                                                         "kind": {
                                                           "type": "string",
                                                           "enum": [
+                                                            "image"
+                                                          ]
+                                                        },
+                                                        "url": {
+                                                          "type": "string",
+                                                          "format": "uri"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "url"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
                                                             "object"
                                                           ]
                                                         },
@@ -8198,6 +8418,26 @@
                                               "properties": {
                                                 "ref": {
                                                   "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "image"
+                                                          ]
+                                                        },
+                                                        "url": {
+                                                          "type": "string",
+                                                          "format": "uri"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "url"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
                                                     {
                                                       "type": "object",
                                                       "properties": {
@@ -9070,6 +9310,26 @@
                                         "kind": {
                                           "type": "string",
                                           "enum": [
+                                            "image"
+                                          ]
+                                        },
+                                        "url": {
+                                          "type": "string",
+                                          "format": "uri"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "url"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
                                             "object"
                                           ]
                                         },
@@ -9204,6 +9464,26 @@
                               "properties": {
                                 "ref": {
                                   "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "image"
+                                          ]
+                                        },
+                                        "url": {
+                                          "type": "string",
+                                          "format": "uri"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "url"
+                                      ],
+                                      "additionalProperties": false
+                                    },
                                     {
                                       "type": "object",
                                       "properties": {
@@ -20776,8 +21056,9 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "key": {
-                          "type": "string"
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
                         },
                         "mime": {
                           "type": "string"
@@ -20792,7 +21073,7 @@
                         }
                       },
                       "required": [
-                        "key",
+                        "url",
                         "mime",
                         "size",
                         "sha256"

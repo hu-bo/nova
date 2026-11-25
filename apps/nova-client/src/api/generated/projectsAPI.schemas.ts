@@ -396,6 +396,9 @@ export type ListConversationMessages200ItemsItemBlocksItem = {
   type: 'image';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -460,6 +463,9 @@ export type ListConversationMessages200ItemsItemBlocksItem = {
   type: 'file';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -615,6 +621,9 @@ export type ListConversationMessages200ItemsItemBlocksItem = {
   type: 'image';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -679,6 +688,9 @@ export type ListConversationMessages200ItemsItemBlocksItem = {
   type: 'file';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -1347,6 +1359,9 @@ export type CreateConversationBodyInitialInputBlocksItem = {
   type: 'image';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -1411,6 +1426,9 @@ export type CreateConversationBodyInitialInputBlocksItem = {
   type: 'file';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -1775,6 +1793,9 @@ export type GetConversationSnapshot200MessagesItemBlocksItem = {
   type: 'image';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -1839,6 +1860,9 @@ export type GetConversationSnapshot200MessagesItemBlocksItem = {
   type: 'file';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -1994,6 +2018,9 @@ export type GetConversationSnapshot200MessagesItemBlocksItem = {
   type: 'image';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -2058,6 +2085,9 @@ export type GetConversationSnapshot200MessagesItemBlocksItem = {
   type: 'file';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -2474,6 +2504,9 @@ export type GetConversationSnapshot200PendingInputsItemInputBlocksItem = {
   type: 'image';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -2538,6 +2571,9 @@ export type GetConversationSnapshot200PendingInputsItemInputBlocksItem = {
   type: 'file';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -2987,6 +3023,9 @@ export type AppendConversationInputBodyBlocksItem = {
   type: 'image';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -3051,6 +3090,9 @@ export type AppendConversationInputBodyBlocksItem = {
   type: 'file';
   attachment: {
   ref: {
+  kind: 'image';
+  url: string;
+} | {
   kind: 'object';
   /**
      * @minLength 1
@@ -5977,7 +6019,7 @@ export type CompleteAttachmentUploadBody = {
 };
 
 export type CompleteAttachmentUpload200 = {
-  key: string;
+  url: string;
   mime: string;
   /**
      * @minimum 0

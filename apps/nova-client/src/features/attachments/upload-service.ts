@@ -137,7 +137,7 @@ export class UploadQueue {
       this.update(entry.id, {
         status: 'ready',
         attachment: {
-          ref: { kind: 'object', key: verified.key },
+          ref: { kind: 'image', url: secureAttachmentUrl(verified.url) },
           name: entry.file.name,
           sha256: verified.sha256,
           mimeType: verified.mime,
