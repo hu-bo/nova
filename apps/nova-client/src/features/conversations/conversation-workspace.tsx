@@ -563,6 +563,7 @@ export function ConversationWorkspace({
         description="消息历史和附件预览引用将被删除，删除后无法恢复。设备上的文件会保留。"
         confirmLabel="删除会话"
         pendingLabel="正在删除…"
+        enterToConfirm
         isPending={edit.isPending}
         error={edit.error}
         onConfirm={() => edit.mutate()}

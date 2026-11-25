@@ -10,6 +10,7 @@ export interface DialogContentProps extends Omit<
   showCloseButton?: boolean;
   dialogClassName?: string;
   closeDisabled?: boolean;
+  onKeyDownCapture?: ComponentProps<'div'>['onKeyDownCapture'];
   dialogProps?: Omit<ComponentProps<typeof HeroUIModal.Dialog>, 'children' | 'className'>;
 }
 
@@ -20,6 +21,7 @@ export function DialogContent({
   showCloseButton = true,
   dialogClassName,
   closeDisabled = false,
+  onKeyDownCapture,
   dialogProps,
   ...props
 }: DialogContentProps) {
@@ -29,7 +31,9 @@ export function DialogContent({
         {...dialogProps}
         className={cn('bg-surface p-0 text-surface-foreground', dialogClassName)}
       >
-        {children}
+        <div className="contents" onKeyDownCapture={onKeyDownCapture}>
+          {children}
+        </div>
         {showCloseButton && (
           <HeroUIModal.CloseTrigger
             aria-label="关闭"

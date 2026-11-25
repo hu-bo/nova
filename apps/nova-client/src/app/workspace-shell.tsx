@@ -247,6 +247,7 @@ export function WorkspaceShell() {
         description="这段会话的消息和任务记录将被删除，删除后无法恢复。"
         confirmLabel="删除会话"
         pendingLabel="正在删除…"
+        enterToConfirm
         isPending={removeMutation.isPending}
         error={removeMutation.error}
         onConfirm={() => void removeConversation()}

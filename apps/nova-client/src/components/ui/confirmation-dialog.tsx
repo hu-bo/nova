@@ -15,6 +15,7 @@ export function ConfirmationDialog({
   onConfirm,
   isPending = false,
   confirmDisabled = false,
+  enterToConfirm = false,
   error,
   children,
   icon = <Trash2 />,
@@ -29,6 +30,7 @@ export function ConfirmationDialog({
   onConfirm: () => void;
   isPending?: boolean;
   confirmDisabled?: boolean;
+  enterToConfirm?: boolean;
   error?: unknown;
   children?: ReactNode;
   icon?: ReactNode;
@@ -45,6 +47,28 @@ export function ConfirmationDialog({
       onSubmit={(event) => {
         event.preventDefault();
         if (!isPending && !confirmDisabled) onConfirm();
+      }}
+      onKeyDownCapture={(event) => {
+        if (
+          !enterToConfirm ||
+          event.key !== 'Enter' ||
+          event.nativeEvent.isComposing ||
+          event.repeat ||
+          event.altKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.shiftKey
+        )
+          return;
+        if (
+          event.target instanceof HTMLElement &&
+          (event.target.tagName === 'TEXTAREA' || event.target.isContentEditable)
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isPending && !confirmDisabled)
+          event.currentTarget.querySelector('form')?.requestSubmit();
       }}
       footer={
         <>

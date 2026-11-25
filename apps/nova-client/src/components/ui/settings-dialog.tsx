@@ -28,6 +28,7 @@ export interface SettingsDialogProps {
   footer?: ReactNode;
   onClose: () => void;
   onSubmit?: ComponentProps<'form'>['onSubmit'];
+  onKeyDownCapture?: ComponentProps<typeof DialogContent>['onKeyDownCapture'];
   isPending?: boolean;
   size?: DialogSize;
 }
@@ -43,6 +44,7 @@ export function SettingsDialog({
   footer,
   onClose,
   onSubmit,
+  onKeyDownCapture,
   isPending = false,
   size = 'md',
 }: SettingsDialogProps) {
@@ -70,6 +72,7 @@ export function SettingsDialog({
         size={size === 'xl' ? 'lg' : size}
         closeDisabled={isPending}
         dialogClassName={sizes[size]}
+        onKeyDownCapture={onKeyDownCapture}
         dialogProps={{
           'aria-labelledby': titleId,
           ...(description ? { 'aria-describedby': descriptionId } : {}),
