@@ -1,78 +1,100 @@
-# OpenCode 接入替代方案调研（ACP）
+# Nova 接入 OpenCode ACP 试点方案
 
-**调研笔记**。针对 [Nova 接入 OpenCode 2 设计](opencode-runtime-design.md)（下称"原方案"，走 `opencode serve` + HTTP/SSE）。结论先用一句话:
+**试点决策。** Nova Worker 启动 `opencode acp` 并通过 stdio 调用，OpenCode 在代码所在机器执行模型循环和工作区操作。Nova 保留 Run、审批和产品 SSE。审批期间 Worker 保持连接和租约，失联后回放历史并允许用户从同一会话继续。[HTTP/SSE 设计](opencode-runtime-design.md)留作阶段 2 候选，只有跨 Worker 保活或恢复挂起审批成为硬验收时再评估。
 
-> 有更简单的方案:用 `opencode acp`(Agent Client Protocol over stdio)作为交互路径。它能整段删掉原方案里实例凭据管理、端口转发、SSE 断线补读、experimental session log 对账、重复消息 ID 指纹这些最重的部分,且是 opencode 官方文档明确写给"第三方客户端作者"的接口。代价是执行不再独立于连接存活,这与阶段 2 的 Worker 接管验收冲突,需要取舍或分阶段混用。
+## 1. HTTP/SSE 方案的接入成本
 
-## 1. 原方案复杂度的来源
-
-原方案(serve + `@opencode/client`)的重头不在"事件 → 产品事件"投影本身(那部分无论什么传输都要写),而在它选了一个**网络服务**作为对接面,于是必须处理:
-
-| 复杂度 | 出处 |
+| 环节 | `opencode serve` 的接入工作 |
 | --- | --- |
-| 实例凭据(`OPENCODE_PASSWORD`)、Basic auth、实例级事件过滤 | 原方案 §2、§3 |
-| SSH 受控端口转发、云端私网入口/隧道 | 原方案 §2 部署表 |
-| `/api/event` 只有实时流,断线后需快照对账;Windows 2.4.1 的实验性 session log 实测不可用(`after`/`follow` 只回 `log.synced`) | 原方案 §4.1 第 3 条 |
-| 文本增量 offset 修复、缺片补齐 | 原方案 §4 表第 1 行 |
-| 用 Nova 输入 ID 派生上游消息 ID + 指纹校验,对抗"重复 ID 改变正文仍返回原输入"的实测行为 | 原方案 §4.1 第 1 条 |
-| 版本探测与兼容矩阵、待审批列表核实 | 原方案 §1、§4.1 |
+| 连接和部署 | Worker 管理服务认证，并通过回环、SSH 端口转发或受控私网入口访问实例 |
+| 断线补读 | `/api/event` 提供实时流，需从消息、运行状态和待审批列表对账。Windows 2.4.1 实测实验性 session log 只返回 `log.synced` |
+| 提交和投影 | 以稳定的上游输入 ID 和请求指纹核实重复提交，按消息和工具 ID 合并事件与快照 |
 
-## 2. 实测:opencode 自带 ACP 服务端
+ACP 省去 HTTP 实例认证和端口转发，并以 `session/load` 回放作为历史修复来源。Nova 仍需保存提交意图、持久化产品事件和处理取消结果未知。 [HTTP/SSE 对账](opencode-runtime-design.md#4-事件兼容性)
 
-本地 `opencode v2.0.25` 实测(临时脚本 spawn `opencode acp --print-logs`,newline-delimited JSON-RPC over stdio):
+## 2. OpenCode 2.4.1 实测
 
-- `initialize` 返回 `protocolVersion: 1`、`agentInfo.version`、能力:`loadSession: true`,会话能力 `list / resume / fork / close / delete / additionalDirectories`,`promptCapabilities: { embeddedContext, image }`,认证方法 `opencode-login`。版本探测由协议内能力协商替代。
-- `session/new` 只需 `cwd`,返回 `sessionId` 和 `configOptions`,其中 `mode` 选项就是 **build / plan(只读)/ 自定义 agent**,`model` 选项是完整 `provider/model@variant` 列表,Nova 的模型映射与 Plan 限制在传输层之下就有现成落点。原方案"Plan 限制应由执行端权限落实"直接对应 `session/set_mode`。
-- `session/load` 实测可用;v2 文档明确 **load 会回放历史**(包括每次已完成/失败的压缩各回放一条 update),替代原方案"基于快照对账"和失效的 session log。
-- 内部实现上 `opencode acp` 会自己拉起 `opencode serve --stdio --port 0` 私有实例——ACP 只是同一执行核的 stdio 门面,ACP 会话与终端/TUI 共用同一个 session store(双向可见)。
+在 Windows 使用独立子进程、临时工作区和本地模拟模型验证了以下行为。早期 2.0.25 仅用于初步握手，试点以 2.4.1 为基线。
 
-官方 v2 文档《ACP → Protocol reference》(opencode.ai/v2/docs/cli/acp,"This section is for ACP client authors")给出:
+| 验证项 | 结果 |
+| --- | --- |
+| 握手和建会话 | `initialize` 返回 ACP v1、`agentInfo.version` 和 `loadSession` 等能力。`session/new` 使用目标机绝对 `cwd` 和 `mcpServers: []`，返回 `sessionId` 与 model、effort、mode 配置项 |
+| 模型设置和调用 | `session/set_config_option` 可选已配置的自定义模型。模拟模型收到正确的上游模型名、认证头和 `/v1/chat/completions` 请求 |
+| 审批与取消 | 收到 `session/request_permission`。回 `once` 后工具完成，prompt 返回 `end_turn`。审批期间发 `session/cancel` 后收到工具终态，prompt 返回 `cancelled` |
+| 审批中断与历史回放 | 审批挂起时关闭 stdin，进程退出。重启后用原 `sessionId` 和 `cwd` 调 `session/load`，收到用户消息和失败工具记录，原审批请求没有恢复 |
+| Skills 输入 | 在 ACP prompt 上传 `skills: [{ id }]` 时，模型未收到技能正文，命令更新也未列出该技能。以 assistant-only text block 传入固定正文时，模型收到正文 |
+| 回合用量 | 观测到 `usage_update` 和 prompt 响应的 `usage`。文档将响应 `usage` 定义为本回合调用合计，将 `usage_update.cost` 定义为会话累计成本 |
 
-- **审批**:`session/request_permission`,固定三选项 `once`(allow_once)/ `always`(allow_always)/ `reject`(reject_once);改文件时附 diff 预览;取消 prompt 时待审批自动按拒绝处理。与 Nova"单次允许/拒绝"逐字对应,`always` ↔ 「本会话允许」的映射也变成协议级语义。
-- **回合与终态**:`session/prompt` 是请求/响应,响应携带 `stopReason`(end_turn / cancelled)与 `usage`(inputTokens/outputTokens/totalTokens);响应前还有 `usage_update`(used/size/cost)。Run 终态 = prompt 响应,**不需要**再从 `session.execution.*` 事件推断归属、中断确认。
-- **取消**:`session/cancel` 通知,规格要求之后仍会收到最终 tool 更新再收口——原方案"取消结合中断确认和状态对账"与 `cancelled_unconfirmed` 路径大幅收窄到"进程失联"一种情况。
-- **流式**:文本/推理/工具经 `session/update`(`agent_message_chunk`、`thought_message_chunk`、`tool_call`/`tool_call_update`)推送,无 SSE 游标、无分通道缺口修复需求。
-- 子代理以 `_meta["opencode/child-session"]` 标注,工具 ID 带 `ses_child:` 前缀;MCP 经 `session/new` 传入;`OPENCODE_ENABLE_QUESTION_TOOL=1` 打开交互式问题工具(对应表单类交互,待验证)。
-- 远程机器场景:`load/resume/fork 必须带原目录作为 cwd`,同一进程可开多会话(`session/list` 支持按 cwd 过滤)。
+ACP 子进程启动私有 OpenCode 服务并以 stdin/stdout 传输换行分隔的 JSON-RPC。日志经 stderr 输出。固定 CLI 版本并用握手检查所需能力。模式通过 `session/set_config_option` 或 `session/set_mode` 选择。OpenCode 默认 Plan 可以写计划文件，Shell 依权限配置处理。Nova 按执行端实测的写入、Shell、插件和 MCP 边界开放 Plan。 [OpenCode ACP](https://opencode.ai/docs/cli/acp) · [OpenCode Agents](https://opencode.ai/docs/agents/#built-in-agents)
 
-## 3. 三种接入面对比
+## 3. 接入能力
 
-| 维度 | serve + HTTP/SSE(原方案) | **ACP stdio(`opencode acp`)** | `opencode run --format json` |
+| 维度 | ACP stdio 试点 | HTTP/SSE 候选 | `opencode run --format json` |
 | --- | --- | --- | --- |
-| 传输与部署 | 常驻服务 + 凭据 + 端口转发/隧道 | 子进程 stdin/stdout;远程机复用既有 SSH exec 通道,**无需开新端口** | 同 ACP,一次性子进程 |
-| Worker 断线/接管 | **执行存活**,重连对账即可续跑 | 进程随 stdin 关闭退出,存续 Run 被打断;接管后靠 `session/load` 回放恢复投影 | 同 ACP |
-| 断线补读 | 实时流 + 快照对账;session log 实测不可用 | `session/load` 协议内建历史回放 | 无(重跑或续 `--session`) |
-| 审批 | 事件 + 待审批列表核实 | `session/request_permission` 请求/响应,once/always/reject | 无交互通道,只能 `--auto` 或预置 allow/deny 规则 |
-| Run 终态 | 由 execution 事件结算 | prompt 响应即终态 | 进程退出码 + 末条 JSON |
-| 取消 | `interrupt` + 中断事件确认 | `session/cancel` + 响应 stopReason | kill 进程 |
-| 模型/模式选择 | provider/model 配置 | `configOptions`(实测含 model/effort/mode) | `--model`/`--agent` 旗标 |
-| 用量 | `session.usage.updated` | `usage_update` + prompt 响应 `usage` | JSON 事件内 |
-| 显式 Skill 选择 | prompt 带 `skills:[{id}]` | 待验证(可用 `available_commands_update` 清单 + `_meta` 扩展) | `--command`/消息内提及 |
-| Steer / 输入队列 | inbox 语义,首版 Nova 串行提交规避 | 无(v1 串行提交同样够用) | 无 |
-| 规格来源 | 私有 API,以实测为准 | 开放标准,有官方 TS 库 `@agentclientprotocol/sdk`(client 侧 fluent API)与兼容性测试套件 | CLI 帮助 |
+| 部署 | 同机子进程。远程用 SSH 双向 exec | 独立服务，通过受控连接访问 | CLI 冒烟和排查 |
+| 回合终态 | `session/prompt` 响应或协议错误，经 Nova 结算 | execution 事件和状态对账 | 退出码和 JSON |
+| 审批 | `session/request_permission`，首版 once/reject | 审批事件和待审批列表 | 使用预置权限，缺少交互通道 |
+| 历史恢复 | `session/load` 回放保存的历史 | 消息和状态快照 | 新命令可续已有会话 |
+| 显式 Skill | 纯正文固定版本用 assistant-only context | 原生 `skills: [{ id }]`，已验证 | 按 CLI 输入和运行环境提供 |
 
-`run --format json` 是最低成本的冒烟路径(装好 CLI 就能验证事件投影和工具卡片渲染),但缺交互审批,不适合作为产品路径;ACP 是"去掉网络服务化"后的完整替代;serve 保留的唯一硬优势是**执行生命周期独立于 Worker 连接**。
+### 3.1 Skills 准入
 
-## 4. 建议
+| 来源或用法 | ACP stdio | HTTP/SSE |
+| --- | --- | --- |
+| 工作区和用户已有 Skills | OpenCode 原生发现 `.opencode/skills`、`.agents/skills` 等目录。ACP 试点不开放 OpenCode 本地目录的原生显式选择 | 目录 API 查询并按工作区作用域展示，显式选择由 prompt 原生加载 |
+| Nova 固定版本纯正文 | 校验 `skillSelection`、使用已固定的正文快照，在 ACP prompt 加 `annotations.audience: ["assistant"]` 的文本块 | 具备可用 OpenCode ID 时按原生选择提交 |
+| 含资源文件的 Skills | 后续增加文件投递通道，以版本和摘要固定目标机目录，通过 OpenCode `skills` 配置纳入。配套文件交付前关闭显式入口 | 原生选择依赖目标工作区已可见的技能及配套文件，平台包同样要完成版本交付 |
+| `nova.spec` | 待通过 MCP 或插件提供 `spec_read`、`spec_update`，保留 Nova 修订校验和结算 | 同 ACP |
 
-1. **阶段 1(新项目试点)改走 ACP**:适配器 = 进程监管 + `@agentclientprotocol/sdk` client + `session/update → 产品事件`投影。可删除原方案 §2 的端口转发/凭据管理和 §4.1 的提交幂等指纹、补读、待审批对账三条最重的链路。同机场景 spawn 子进程即可,与"安装官方 CLI、无需 Nova Runner"的目标一致。
-2. **阶段 2 放行条件需要重新措辞**:"审批期间 Worker 重启"在 ACP 下意味着该 Run 被中断、由接管方 `session/load` 回放对账后引导用户继续,而不是存续执行无缝续跑。若产品坚持"执行必须挺过 Worker 故障",保留 serve 路径作为该场景的升级方案,两条路共用同一套投影与 Run 结算代码;若可接受"中断 + 回放恢复",ACP 一路走到底。
-3. **冒烟验证**可先用 `opencode run --format json --auto` 打通投影,再切 ACP 加审批。
-4. 原方案 §4 的事件映射表、§5 Skills 兼容矩阵、§6 的阶段划分仍然成立,可平移:只需把"OpenCode 2 来源"一列从 `session.*` 事件名换成对应 ACP 方法/`sessionUpdate` 类型。
+准入与 UI 使用同一份后端、传输、环境和模式能力。ACP 只接受可通过正文注入实现的显式选择，版本无效、未获授权或依赖未交付资源时拒绝。通过 `skills` 配置纳入的 `.nova/skills` 遵循同样的规则。 [Nova Skill 契约](../packages/agent-ui-contracts/src/skills.ts) · [OpenCode Skills](https://opencode.ai/docs/skills/) · [ACP prompt 内容](https://opencode.ai/docs/cli/acp#prompt-content)
+
+## 4. 试点实现和验收
+
+### 4.1 审批挂起与答复
+
+1. ACP 适配器收到 `session/request_permission` 后，在同一批提交交互事件和请求映射，保留 ACP 请求 ID、Nova interaction ID 和关联工具调用。Run 保持 `running`，UI 由待审批交互提示用户。`execute()` 等待回复，继续占用一个 Worker 并发槽，沿用 Run deadline 和租约心跳。
+2. `RunService.respond` 沿用已有的归属和 revision 校验，将回复持久化。首版由持租约的 Worker 在心跳周期检查已提交回复，按 run、interaction 和 fence 取值。API 与 Worker 分进程时也能送达。同进程的 resolver 可以在事务提交后加速唤醒。适配器只对匹配的请求回一次 `once` 或 `reject`，重复提交按现有幂等规则处理。
+3. deadline 到达时沿用取消与超时结算，清理待处理交互。连接退出时清理本地待回复请求。租约丢失时，仍存活的旧适配器关闭连接。持有效租约的一方负责结算。确认执行中断时用现有 `failed` 状态和中断原因。取消无法确认时用 `cancelled_unconfirmed`。连接丢失或租约过期时，仍需核实旧执行已停止。完成对账后，用户的新消息以新 Run 继续同一 `sessionId`。
+
+可接受审批在现有 deadline 内占用试点执行槽。验收同时观察等待审批时其他会话的排队情况。 [Run 回复事务](../apps/nova-server/src/modules/runs/run.service.ts) · [Worker 监控](../apps/nova-server/src/modules/runs/conversation-executor.ts) · [Nova Run 状态](../packages/agent-ui-contracts/src/runtime.ts)
+
+### 4.2 ACP 事件投影
+
+| ACP 来源 | Nova 产品事件 | 转换规则 |
+| --- | --- | --- |
+| `agent_message_chunk`、`agent_thought_chunk` | `message.started`、`block.upsert`、`text.delta`、`text.reset`、`message.committed` | 按上游消息 ID 和块顺序关联文本与推理，按 Nova 字符串长度计算增量 offset，正常收口后提交消息 |
+| `tool_call`、`tool_call_update` | `block.upsert`、`tool.changed` | 按工具调用 ID 更新。来源具备可验证的通道、增量和 offset 时才投影 `tool.output` |
+| `session/request_permission` 和本地答复 | `interaction.changed` | 按 §4.1 保留连接和租约，首版只映射 once/reject |
+| 本轮 prompt 响应与 `session/load` 的 `user_message_chunk` | `message.committed`、`input.consumed` | 根据已归属的 prompt 完成响应或历史消息，在同一批次确认输入消费和用户消息 |
+| prompt 响应 `usage`、`usage_update` | `usage.changed` | 分开记录回合统计与会话统计，按上游口径更新 |
+| prompt 响应 `stopReason`、协议错误、传输丢失 | `run.changed` | 按当前回合和本地取消状态结算。收到 `cancelled` 确认取消，响应丢失进入对账 |
+
+**实时和回放。** `session/load` 期间隔离回放通知，按消息 ID 和工具调用 ID 与已落库投影幂等合并。仅写入必要的补全和修复事件。允许缺失中间增量，保留 Nova 产品 SSE 游标的连续性。
+
+**提交意图。** 发出 prompt 前持久化输入 ID、上游会话、提交阶段和已知的消息关联。已尝试提交的 checkpoint 进入 `recover`，通过回放核实能够归属的输入及执行记录。消息存在可证明输入已入历史。工具副作用和 Run 终态需要各自的证据。响应丢失且无法确认时保留未知结果，禁止自动重发同一输入。 [ACP 回合规范](https://agentclientprotocol.com/protocol/v1/prompt-turn) · [ACP Session Setup](https://agentclientprotocol.com/protocol/v1/session-setup)
+
+### 4.3 SSH 双向 exec
+
+远程 ACP 在 `RemoteConnectionService` 增加常驻双向 exec，只供 ACP adapter 打开远端 `opencode acp`。复用 `requireVerified`、凭据与主机校验，提供 stdin、stdout、stderr 和退出结果，持续传输协议帧，不按一次性命令的累计输出长度截断。连接生命周期受 Run deadline、取消和 Worker 退出管理。现有 `execute()` 继续服务一次性命令。 [Nova SSH 服务](../apps/nova-server/src/modules/remotes/remote.service.ts)
+
+### 4.4 放行条件
+
+| 验收项 | ACP 试点 | HTTP/SSE 候选 |
+| --- | --- | --- |
+| 历史恢复 | Worker 重启后 `session/load` 回放与库内投影一致，无重复，产品 SSE 游标连续 | 用消息和状态快照对账 |
+| 审批等待 | 保留连接和租约。覆盖 API 与 Worker 分进程、快速回复、重复回复、deadline 和失联。失联收口后由新 Run 继续原会话 | 可释放租约，recover 核实待审批。审批时重启和重复投递仍需验收 |
+| 取消 | `session/cancel` 后收到 `stopReason: cancelled` 才确认。取消无法确认时归为 `cancelled_unconfirmed` | `interrupt` 后用中断事件或可验证状态确认 |
+| 执行跨 Worker 存活 | 只承诺历史恢复。stdin 关闭后审批和当前回合中断 | 阶段 2 要求独立保活或接管待审批时再评估并实测 |
+
+同机试点用固定 2.4.1 验证文本多轮、工具卡片、审批、取消、纯正文 Skill 选择、提交响应丢失和 Worker 重启。远程启用前独立验证 SSH 通道断开、进程清理和审批回复。
 
 ## 5. 待验证清单
 
-- 2.4.x(原方案验证版本)与 2.0.25(本地实测)的 ACP 差异:增量粒度(`delta`/`messageId`)、`usage_update` 的会话累计口径、`configOptions` 中 model 是否允许客户端设置及鉴权。
-- 同一 ACP 进程多会话并发:是否支持不同 `cwd`(`additionalDirectories` 能力的语义),还是需按项目目录各起一个进程。
-- 显式 Skill 选择随 ACP prompt 提交的表达(`available_commands` 是否覆盖 skills、`_meta` 扩展)。
-- 审批挂起语义:opencode 在 `request_permission` 等待期间 prompt 请求是否阻塞、Worker 可否安全把 Run 置 waiting 并落库。
-- `plan` 模式对写入/shell 的实际拒绝行为(原方案"Plan 限制应由执行端权限落实"在 ACP 下的等价验证)。
-- QuestionTool(`OPENCODE_ENABLE_QUESTION_TOOL=1`)与 Nova 单个问题交互契约的映射。
-- Windows 下进程监管细节:stdin 关闭退出是否可靠、崩溃后 stderr 日志采集(`--print-logs`)。
+- `always` 的保存范围，确认是会话级还是目录配置级。
+- `usage_update` 的多轮累计口径，与回合 `usage` 对照，覆盖重复事件和回放。
+- 同一 ACP 进程内多个会话使用不同 `cwd` 并发时的隔离。`additionalDirectories` 用于会话附加目录，单独验证多会话并发。
 
 ## 参考
 
-- OpenCode v2《CLI 命令》《Web》《ACP Protocol reference》(opencode.ai/docs)
-- Agent Client Protocol 规范与 schema(agentclientprotocol.com),官方 TS 库 `@agentclientprotocol/sdk`
-- Zed ACP Registry 已收录 "OpenCode V2"(zed.dev/acp/agent/opencode-v2)
-- 本地实测:Windows,opencode v2.0.25,`initialize` / `session/new` / `session/load` 握手(2026-11-24)
+- [Agent Client Protocol 文档](https://agentclientprotocol.com/protocol/v1/overview) · [官方 TypeScript SDK](https://github.com/agentclientprotocol/typescript-sdk)
+- [Zed 通过 ACP 启动 OpenCode V2](https://zed.dev/acp/agent/opencode-v2) · [OpenClaw 在服务端通过 ACP 调度 OpenCode](https://docs.openclaw.ai/tools/acp-agents) · [OpenChamber 连接 OpenCode Server](https://github.com/openchamber/openchamber/blob/main/packages/docs/content/docs/opencode-server.mdx)
