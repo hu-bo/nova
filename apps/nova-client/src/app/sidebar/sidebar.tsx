@@ -92,9 +92,9 @@ export function SidebarContent({
       <Link
         to="/"
         onClick={onNavigate}
-        className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 px-4"
+        className="flex h-12 shrink-0 items-center gap-3 border-b border-slate-200 px-4"
       >
-        <span className="grid size-8 place-items-center rounded-xl bg-accent text-accent-foreground">
+        <span className="grid size-7 place-items-center rounded-xl bg-accent text-accent-foreground">
           <Sparkles size={18} />
         </span>
         <div>
@@ -310,15 +310,15 @@ export function SidebarContent({
           <NavItem to="/skills" icon={<Puzzle size={14} />} label="我的技能" onClick={onNavigate} />
         </section>
       </nav>
-      <div className="shrink-0 border-t border-slate-200 px-3 py-2">
+      <div className="shrink-0 border-t border-slate-200 px-3 py-1">
         <NavItem
           to="/settings/models"
           icon={<Settings size={16} />}
           label="设置"
           onClick={onNavigate}
         />
-        <div className="mt-2 flex min-w-0 items-center gap-2 border-t border-slate-200 px-2 pt-3">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+        <div className="mt-1 flex min-w-0 items-center gap-2 border-t border-slate-200 px-2 pt-2">
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
             {avatarLabel}
           </span>
           <p className="min-w-0 flex-1 truncate text-xs font-medium text-slate-600">{userLabel}</p>

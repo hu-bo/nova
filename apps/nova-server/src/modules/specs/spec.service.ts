@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { configurationSchema, type Configuration, type SubmitInput } from "@nova/agent-ui-contracts";
+import { specAcceptanceCriteria } from "@nova/agent-ui-contracts/spec";
 import { conversations, messages, pendingInputs, projects, projectBindings, runs, specs, specRevisions, specTaskAttempts, type Database } from "../../../database/index.js";
 import type { SpecEvidence, SpecTask, SpecTaskCheck } from "../../../database/schema/spec-revision.table.js";
 import { DomainError } from "../../shared/domain-error.js";
@@ -10,7 +11,7 @@ import { eventWriter } from "../events/index.js";
 import { specSnapshotSchema, taskPlanSchema } from "./spec.schema.js";
 import type { CreateSpecInput, RecordEvidenceInput } from "./spec.schema.js";
 import type { Transaction } from "../../shared/unit-of-work.js";
-import { acceptanceCriteriaIn, passingEvidenceForCheck, validateRequirements, validateTaskPlan } from "./spec.validation.js";
+import { passingEvidenceForCheck, validateDesign, validateTaskPlan } from "./spec.validation.js";
 import { specReadRepository } from "./spec-read.repository.js";
 
 type Stage = "requirements" | "design" | "tasks";
@@ -185,16 +186,21 @@ export class SpecService {
       if (!version) throw new DomainError("NOT_FOUND", "Specification revision not found");
       if (version.acceptance) return expected;
       if (version.reviews[stage]?.revision === expected) return expected;
-      if (stage === "requirements") {
-        validateRequirements(version.requirementsMd);
+      if (stage === "requirements" && !version.requirementsMd.trim()) {
+        throw new DomainError("VALIDATION_ERROR", "Requirements draft is empty", { reason: "SPEC_REQUIREMENTS_EMPTY" });
       }
-      if (stage === "design" && version.reviews.requirements?.revision !== expected) throw new DomainError("CONFLICT", "Confirm requirements first", { reason: "SPEC_REVIEW_REQUIRED" });
-      if (stage === "design" && !version.designMd?.trim()) throw new DomainError("VALIDATION_ERROR", "Design draft is empty");
+      if (stage === "design") {
+        if (version.reviews.requirements?.revision !== expected) throw new DomainError("CONFLICT", "Confirm requirements first", { reason: "SPEC_REVIEW_REQUIRED" });
+        validateDesign(version.designMd ?? "");
+      }
       if (stage === "tasks") {
         if (version.reviews.requirements?.revision !== expected || version.reviews.design?.revision !== expected) throw new DomainError("CONFLICT", "Confirm requirements and design first", { reason: "SPEC_REVIEW_REQUIRED" });
-        validateTaskPlan(version.taskPlan, acceptanceCriteriaIn(version.requirementsMd));
+        validateTaskPlan(version.taskPlan, specAcceptanceCriteria(version).map(({ id }) => id));
       }
-      const reviews = { ...version.reviews, [stage]: { revision: expected, sourceRevision: expected, reviewerId: ownerId, reviewedAt: new Date().toISOString() } };
+      const reviews = { ...version.reviews, [stage]: {
+        revision: expected, sourceRevision: expected, reviewerId: ownerId, reviewedAt: new Date().toISOString(),
+        ...(stage === "design" ? { criteriaSource: "design" as const } : {}),
+      } };
       await tx.update(specRevisions).set({ reviews }).where(and(eq(specRevisions.specId, specId), eq(specRevisions.revision, expected)));
       await tx.update(specs).set({ updatedAt: new Date() }).where(eq(specs.id, specId));
       await this.changedEvent(tx, conversation, specId, expected, "review");

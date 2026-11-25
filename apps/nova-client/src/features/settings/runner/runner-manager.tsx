@@ -167,7 +167,7 @@ export function RunnerManager({
             className="grid gap-3 px-4 py-3 transition hover:bg-slate-50 sm:grid-cols-[minmax(130px,0.6fr)_minmax(180px,1.4fr)_auto] sm:items-center"
           >
             <div className="flex min-w-0 items-center gap-3">
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
                 <KeyRound className="size-4" aria-hidden="true" />
               </span>
               <div className="min-w-0">

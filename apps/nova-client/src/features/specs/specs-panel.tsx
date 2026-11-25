@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { parseAcceptanceCriteria, specDesignSections } from '@nova/agent-ui-contracts/spec';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -35,7 +36,6 @@ import { useSpecQuery } from './spec.queries';
 import { SpecAcceptance } from './spec-acceptance';
 import {
   generationBlockReason,
-  parseAcceptanceCriteria,
   specGenerationError,
   specReviewError,
   taskDependencyError,
@@ -256,6 +256,12 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
   const readonly = Boolean(spec.acceptance) || executionBusy;
   const reviewed = spec.reviews[stage]?.revision === spec.revision;
   const generationBlock = generationBlockReason(spec, stage);
+  const designCriteria =
+    stage === 'design' && typeof draft === 'string' ? parseAcceptanceCriteria(draft) : [];
+  const emptyDraftHint =
+    stage === 'design'
+      ? `设计文档包含${specDesignSections.join('、')}。可在会话中生成设计，也可直接编辑 Markdown。`
+      : '在右侧会话中与 Agent 讨论并生成需求，也可以直接编辑 Markdown。';
   const dialogCopy = evidenceDialog ? evidenceDialogCopy[evidenceDialogKey(evidenceDialog)] : null;
   let content: ReactNode;
   if (stage === 'tasks')
@@ -273,6 +279,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
         label={stage + ' Markdown 编辑器'}
         value={typeof draft === 'string' ? draft : ''}
         readonly={readonly}
+        highlightAcceptance={stage === 'design'}
         onChange={updateDraft}
       />
     );
@@ -282,10 +289,10 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            h3: ({ children }) => (
+            h3: ({ children, node }) => (
               <h3
                 className={
-                  /^AC-\d+/.test(String(children))
+                  designCriteria.some(({ from }) => from === node?.position?.start.offset)
                     ? 'rounded-lg border-l-4 border-accent bg-accent/5 px-3 py-2 text-accent'
                     : undefined
                 }
@@ -295,9 +302,7 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
             ),
           }}
         >
-          {typeof draft === 'string' && draft.trim()
-            ? draft
-            : '在右侧会话中与 Agent 讨论并生成这一阶段的内容，也可以直接编辑 Markdown。'}
+          {typeof draft === 'string' && draft.trim() ? draft : emptyDraftHint}
         </ReactMarkdown>
       </article>
     );
@@ -425,9 +430,9 @@ export function SpecWorkbench({ projectId, specId }: { projectId: string; specId
         </p>
       )}
       {content}
-      {stage === 'requirements' && (
-        <div className="flex flex-wrap gap-2" aria-label="已解析验收条件">
-          {parseAcceptanceCriteria(typeof draft === 'string' ? draft : '').map((criterion) => (
+      {designCriteria.length > 0 && (
+        <div className="flex flex-wrap gap-2" aria-label="设计验收标准">
+          {designCriteria.map((criterion) => (
             <span
               key={criterion.id + criterion.from}
               className="rounded-md bg-accent/10 px-2 py-1 font-mono text-xs text-accent"

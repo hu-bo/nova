@@ -16,7 +16,7 @@ export type SpecTask = {
   designRef?: string | undefined;
   checks: SpecTaskCheck[];
 };
-export type SpecReview = { revision: number; sourceRevision?: number; reviewerId: string; reviewedAt: string };
+export type SpecReview = { revision: number; sourceRevision?: number; reviewerId: string; reviewedAt: string; criteriaSource?: "design" };
 export type SpecEvidence = {
   id: string;
   taskKey: string;

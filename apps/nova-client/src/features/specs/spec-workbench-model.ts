@@ -1,4 +1,3 @@
-import { markdownLanguage } from '@codemirror/lang-markdown';
 import type { GetSpec200, GetSpec200TaskPlanItem } from '@/api/generated/projectsAPI.schemas';
 import { ApiError } from '@/api/api-error';
 
@@ -34,6 +33,17 @@ export function taskDesignRefError(tasks: GetSpec200TaskPlanItem[]): string | nu
 
 export function specReviewError(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.details?.reason === 'SPEC_REQUIREMENTS_EMPTY') {
+      return '请填写需求内容后再确认。';
+    }
+    if (error.details?.reason === 'SPEC_DESIGN_SECTIONS_MISSING') {
+      const sections = error.details.missingSections;
+      const names = Array.isArray(sections)
+        ? sections.filter((section) => typeof section === 'string').join('、')
+        : '';
+      if (names) return `请补全设计文档的「${names}」章节后再确认。`;
+      return '请补全设计文档的目标、功能、实现方案和验收标准后再确认。';
+    }
     if (error.details?.reason === 'SPEC_DESIGN_REF_MISSING') {
       const taskKey = error.details.taskKey;
       if (typeof taskKey === 'string') {
@@ -42,36 +52,20 @@ export function specReviewError(error: unknown): string {
       return '任务缺少设计引用，请补全对应设计文档章节后再确认。';
     }
     if (error.details?.reason === 'SPEC_CRITERIA_MISSING') {
-      return '需求草稿缺少验收条件。请在右侧会话中与助手补充需求，由助手整理并更新草稿后再确认。';
+      return '请在设计文档的「验收标准」中添加至少一条验收项。';
+    }
+    if (error.details?.reason === 'SPEC_CRITERION_FORMAT') {
+      return '请为每条设计验收项添加 AC-01 形式的三级标题，并描述可验证的预期结果。';
     }
     if (error.details?.reason === 'SPEC_CRITERION_DUPLICATE') {
       const id = error.details.criterionId;
       if (typeof id === 'string' && /^AC-\d{2,}$/.test(id)) {
-        return `验收条件编号 ${id} 重复。请在右侧会话中让助手整理并更新草稿后再确认。`;
+        return `设计文档的验收编号 ${id} 重复，请为每条验收项使用唯一编号。`;
       }
       return '验收条件编号重复。请在右侧会话中让助手整理并更新草稿后再确认。';
     }
   }
   return error instanceof Error ? error.message : '操作失败，请重试。';
-}
-
-export function parseAcceptanceCriteria(markdown: string) {
-  const criteria: { id: string; title: string; from: number }[] = [];
-  let inSection = false;
-  markdownLanguage.parser.parse(markdown).iterate({
-    enter(node) {
-      if (node.name === 'ATXHeading1') inSection = false;
-      if (node.name === 'ATXHeading2') {
-        inSection = /^##\s+验收条件(?:\s+#+)?\s*$/.test(markdown.slice(node.from, node.to));
-      }
-      if (!inSection || node.name !== 'ATXHeading3') return;
-      const match = /^###\s+(AC-\d{2,})(?:\s+(.*?))?\s*#*\s*$/.exec(
-        markdown.slice(node.from, node.to),
-      );
-      if (match?.[1]) criteria.push({ id: match[1], title: match[2] ?? '', from: node.from });
-    },
-  });
-  return criteria;
 }
 
 export function taskDependencyError(tasks: GetSpec200TaskPlanItem[]) {

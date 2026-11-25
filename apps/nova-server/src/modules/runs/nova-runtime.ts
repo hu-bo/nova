@@ -11,6 +11,7 @@ import {
   type PluginDefinition,
 } from "@nnova/harness";
 import type { Configuration, Goal } from "@nova/agent-ui-contracts";
+import { specAcceptanceCriteria } from "@nova/agent-ui-contracts/spec";
 import { createCodingHarness, type CodingHarness } from "@nova/coding-harness";
 import { sessionCheckpointPolicyPlugin } from "@nnova/harness/plugins/session-checkpoint-policy";
 import { toolLoopDetectionPlugin } from "@nnova/harness/plugins/tool-loop-detection";
@@ -24,6 +25,7 @@ import type { RunnerConnections } from "../runners/index.js";
 import type { RunnerLocalResources } from "../runners/index.js";
 import { createSkillResourceTools } from "@nova/tools/harness";
 import type { ArtifactService } from "../artifacts/index.js";
+import { validateDesign } from "../specs/index.js";
 import { configuredModelPlugin } from "./configured-model.js";
 import { postgresSessionPlugin } from "./postgres-session-store.js";
 import { sshToolContext } from "./ssh-tool-context.js";
@@ -76,7 +78,7 @@ const specDraftPrompt = (draft: Extract<NonNullable<Checkpoint["specExecution"]>
   draft.stage +
   " draft requested by the user. Read the bound revision with spec_read. " +
   (draft.stage === "requirements"
-    ? "First investigate available context. If essential information is missing, ask the user focused questions in the conversation and wait for their reply instead of submitting a candidate. Once sufficient information is available, prepare and submit the complete draft with spec_update."
+    ? "First investigate available context. If essential information is missing, ask the user focused questions in the conversation and wait for their reply instead of submitting a candidate. Once sufficient information is available, prepare and submit the complete draft with spec_update. Acceptance criteria are optional in requirements. If they are missing, you may briefly invite the user to add expected outcomes and continue drafting."
     : "Submit the complete candidate with spec_update.") +
   " Do not write specification files to the workspace.";
 // 段落顺序与空段跳过构成 systemPrompt 的版式契约；"不适用"以 undefined/"" 传入并被跳过.
@@ -189,9 +191,11 @@ export class NovaRuntime implements RuntimeAdapter {
           designMd: prepared.specRevision.designMd,
           taskPlan: prepared.specRevision.taskPlan,
           reviews: prepared.specRevision.reviews,
+          acceptanceCriterionIds: specAcceptanceCriteria(prepared.specRevision).map(({ id }) => id),
           acceptance: prepared.specRevision.acceptance,
         }),
         canUpdate: specExecution.kind !== "task",
+        validateDesign,
         ...(specExecution.kind === "generation" ? { stage: specExecution.stage } : {}),
       }));
     }

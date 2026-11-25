@@ -5,7 +5,8 @@ import { z } from 'zod';
 
 export const specSkill: SkillResource = {
   id: 'nova.spec',
-  version: '1.0.0',
+  // Startup registers immutable skill versions. Bump this when SKILL.md changes.
+  version: '1.1.0',
   description: 'Maintain a versioned Feature Spec in the Nova Spec Workbench.',
   content: readFileSync(new URL('../skills/spec/SKILL.md', import.meta.url), 'utf8'),
 };
@@ -21,6 +22,7 @@ export function createSpecTools(options: {
   revision: number;
   snapshot: JsonValue;
   canUpdate: boolean;
+  validateDesign: (markdown: string) => void;
   stage?: 'requirements' | 'design' | 'tasks';
 }): ToolDefinition[] {
   const tools: ToolDefinition[] = [defineTool({
@@ -46,6 +48,7 @@ export function createSpecTools(options: {
     effects: 'read',
     execute: async (input, context) => {
       context.signal.throwIfAborted();
+      if (input.stage === 'design') options.validateDesign(input.content);
       return { baseRevision: input.expectedRevision, stage: input.stage, content: input.content };
     },
   }));

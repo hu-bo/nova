@@ -1,3 +1,4 @@
+import { parseSpecDocument, specDesignAcceptanceHeading, specDesignSections } from "@nova/agent-ui-contracts/spec";
 import { DomainError } from "../../shared/domain-error.js";
 import type { SpecEvidence, SpecTask } from "../../../database/schema/spec-revision.table.js";
 
@@ -16,39 +17,26 @@ export function passingEvidenceForCheck<
   );
 }
 
-export function acceptanceCriteriaIn(markdown: string) {
-  const found: string[] = [];
-  let fence: string | null = null;
-  let inAcceptanceSection = false;
-  for (const line of markdown.split(/\r?\n/)) {
-    const fenceLine = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
-    if (fenceLine) {
-      if (fence === null) fence = fenceLine[0]!;
-      else if (fenceLine[0] === fence) fence = null;
-      continue;
-    }
-    if (fence !== null) continue;
-    if (/^#\s+/.test(line)) { inAcceptanceSection = false; continue; }
-    const section = /^##\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
-    if (section) { inAcceptanceSection = section[1] === "验收条件"; continue; }
-    if (!inAcceptanceSection) continue;
-    const match = /^###\s+(AC-\d{2,})(?:\s|$)/.exec(line);
-    if (match) found.push(match[1]!);
+export function validateDesign(markdown: string) {
+  const { sections, acceptanceHeadings } = parseSpecDocument(markdown);
+  const missingSections = specDesignSections.filter((title) =>
+    !sections.some((section) => section.title === title && (title === specDesignAcceptanceHeading || section.hasContent)),
+  );
+  if (missingSections.length) {
+    throw new DomainError("VALIDATION_ERROR", `Design needs content under ${missingSections.join(", ")}`, { reason: "SPEC_DESIGN_SECTIONS_MISSING", missingSections });
   }
-  return found;
-}
-
-export function validateRequirements(markdown: string) {
-  const criteria = acceptanceCriteriaIn(markdown);
-  if (!criteria.length) {
-    throw new DomainError("VALIDATION_ERROR", "Requirements need acceptance criterion headings under ## 验收条件", { reason: "SPEC_CRITERIA_MISSING" });
+  if (!acceptanceHeadings.length) {
+    throw new DomainError("VALIDATION_ERROR", `Design needs acceptance criteria under ## ${specDesignAcceptanceHeading}`, { reason: "SPEC_CRITERIA_MISSING" });
   }
   const seen = new Set<string>();
-  for (const criterion of criteria) {
-    if (seen.has(criterion)) {
-      throw new DomainError("VALIDATION_ERROR", "Acceptance criterion IDs must be unique", { reason: "SPEC_CRITERION_DUPLICATE", criterionId: criterion });
+  for (const { id, hasContent } of acceptanceHeadings) {
+    if (!id || !hasContent) {
+      throw new DomainError("VALIDATION_ERROR", "Use level-three headings such as ### AC-01 and describe each expected outcome", { reason: "SPEC_CRITERION_FORMAT" });
     }
-    seen.add(criterion);
+    if (seen.has(id)) {
+      throw new DomainError("VALIDATION_ERROR", `Acceptance criterion ID ${id} is repeated`, { reason: "SPEC_CRITERION_DUPLICATE", criterionId: id });
+    }
+    seen.add(id);
   }
 }
 

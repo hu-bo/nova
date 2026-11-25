@@ -118,7 +118,7 @@ export function DraftWorkspace({
         (preferences.contextPanelOpen ? 'xl:grid-cols-[minmax(0,1fr)_280px]' : '')
       }
     >
-      <header className="col-span-full flex h-14 min-w-0 items-center justify-between gap-3 border-b border-slate-200 pr-4 pl-16 lg:pl-6">
+      <header className="col-span-full flex h-12 min-w-0 items-center justify-between gap-3 border-b border-slate-200 pr-4 pl-16 lg:pl-6">
         <p className="min-w-0 truncate text-sm font-semibold text-slate-800">
           {project.data?.name ? project.data.name + ' / 新会话' : '新会话'}
         </p>

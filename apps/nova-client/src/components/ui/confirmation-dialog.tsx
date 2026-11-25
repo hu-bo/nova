@@ -1,5 +1,5 @@
 import { Trash2 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { ErrorNotice } from '@/components/error-notice';
 import { Button } from './button';
 import { SettingsDialog } from './settings-dialog';
@@ -35,6 +35,35 @@ export function ConfirmationDialog({
   children?: ReactNode;
   icon?: ReactNode;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (!open || !enterToConfirm) return;
+
+    function confirmOnEnter(event: KeyboardEvent) {
+      if (
+        event.key !== 'Enter' ||
+        event.isComposing ||
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      )
+        return;
+      const target = event.target;
+      const dialog = formRef.current?.closest('[role="dialog"]');
+      if (!(target instanceof HTMLElement) || !dialog?.contains(target)) return;
+      if (target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isPending && !confirmDisabled) formRef.current?.requestSubmit();
+    }
+
+    document.addEventListener('keydown', confirmOnEnter, true);
+    return () => document.removeEventListener('keydown', confirmOnEnter, true);
+  }, [open, enterToConfirm, isPending, confirmDisabled]);
+
   return (
     <SettingsDialog
       open={open}
@@ -48,28 +77,7 @@ export function ConfirmationDialog({
         event.preventDefault();
         if (!isPending && !confirmDisabled) onConfirm();
       }}
-      onKeyDownCapture={(event) => {
-        if (
-          !enterToConfirm ||
-          event.key !== 'Enter' ||
-          event.nativeEvent.isComposing ||
-          event.repeat ||
-          event.altKey ||
-          event.ctrlKey ||
-          event.metaKey ||
-          event.shiftKey
-        )
-          return;
-        if (
-          event.target instanceof HTMLElement &&
-          (event.target.tagName === 'TEXTAREA' || event.target.isContentEditable)
-        )
-          return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (!isPending && !confirmDisabled)
-          event.currentTarget.querySelector('form')?.requestSubmit();
-      }}
+      formRef={formRef}
       footer={
         <>
           <Button variant="ghost" disabled={isPending} onPress={onClose}>

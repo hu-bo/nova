@@ -4773,6 +4773,13 @@ export type GetSpec200TaskPlanItem = {
   checks: GetSpec200TaskPlanItemChecksItem[];
 };
 
+export type GetSpec200ReviewsCriteriaSource = typeof GetSpec200ReviewsCriteriaSource[keyof typeof GetSpec200ReviewsCriteriaSource];
+
+
+export const GetSpec200ReviewsCriteriaSource = {
+  design: 'design',
+} as const;
+
 export type GetSpec200Reviews = {[key: string]: {
   revision: number;
   sourceRevision?: number;
@@ -4780,6 +4787,7 @@ export type GetSpec200Reviews = {[key: string]: {
   reviewerId: string;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   reviewedAt: string;
+  criteriaSource?: GetSpec200ReviewsCriteriaSource;
 }};
 
 export type GetSpec200EvidenceItemSource = typeof GetSpec200EvidenceItemSource[keyof typeof GetSpec200EvidenceItemSource];
@@ -5057,6 +5065,13 @@ export type SaveSpecDraft200TaskPlanItem = {
   checks: SaveSpecDraft200TaskPlanItemChecksItem[];
 };
 
+export type SaveSpecDraft200ReviewsCriteriaSource = typeof SaveSpecDraft200ReviewsCriteriaSource[keyof typeof SaveSpecDraft200ReviewsCriteriaSource];
+
+
+export const SaveSpecDraft200ReviewsCriteriaSource = {
+  design: 'design',
+} as const;
+
 export type SaveSpecDraft200Reviews = {[key: string]: {
   revision: number;
   sourceRevision?: number;
@@ -5064,6 +5079,7 @@ export type SaveSpecDraft200Reviews = {[key: string]: {
   reviewerId: string;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   reviewedAt: string;
+  criteriaSource?: SaveSpecDraft200ReviewsCriteriaSource;
 }};
 
 export type SaveSpecDraft200EvidenceItemSource = typeof SaveSpecDraft200EvidenceItemSource[keyof typeof SaveSpecDraft200EvidenceItemSource];
@@ -5253,6 +5269,13 @@ export type ReviewSpecStage200TaskPlanItem = {
   checks: ReviewSpecStage200TaskPlanItemChecksItem[];
 };
 
+export type ReviewSpecStage200ReviewsCriteriaSource = typeof ReviewSpecStage200ReviewsCriteriaSource[keyof typeof ReviewSpecStage200ReviewsCriteriaSource];
+
+
+export const ReviewSpecStage200ReviewsCriteriaSource = {
+  design: 'design',
+} as const;
+
 export type ReviewSpecStage200Reviews = {[key: string]: {
   revision: number;
   sourceRevision?: number;
@@ -5260,6 +5283,7 @@ export type ReviewSpecStage200Reviews = {[key: string]: {
   reviewerId: string;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   reviewedAt: string;
+  criteriaSource?: ReviewSpecStage200ReviewsCriteriaSource;
 }};
 
 export type ReviewSpecStage200EvidenceItemSource = typeof ReviewSpecStage200EvidenceItemSource[keyof typeof ReviewSpecStage200EvidenceItemSource];
@@ -5618,6 +5642,13 @@ export type RecordSpecEvidence200TaskPlanItem = {
   checks: RecordSpecEvidence200TaskPlanItemChecksItem[];
 };
 
+export type RecordSpecEvidence200ReviewsCriteriaSource = typeof RecordSpecEvidence200ReviewsCriteriaSource[keyof typeof RecordSpecEvidence200ReviewsCriteriaSource];
+
+
+export const RecordSpecEvidence200ReviewsCriteriaSource = {
+  design: 'design',
+} as const;
+
 export type RecordSpecEvidence200Reviews = {[key: string]: {
   revision: number;
   sourceRevision?: number;
@@ -5625,6 +5656,7 @@ export type RecordSpecEvidence200Reviews = {[key: string]: {
   reviewerId: string;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   reviewedAt: string;
+  criteriaSource?: RecordSpecEvidence200ReviewsCriteriaSource;
 }};
 
 export type RecordSpecEvidence200EvidenceItemSource = typeof RecordSpecEvidence200EvidenceItemSource[keyof typeof RecordSpecEvidence200EvidenceItemSource];
@@ -5814,6 +5846,13 @@ export type AcceptSpec200TaskPlanItem = {
   checks: AcceptSpec200TaskPlanItemChecksItem[];
 };
 
+export type AcceptSpec200ReviewsCriteriaSource = typeof AcceptSpec200ReviewsCriteriaSource[keyof typeof AcceptSpec200ReviewsCriteriaSource];
+
+
+export const AcceptSpec200ReviewsCriteriaSource = {
+  design: 'design',
+} as const;
+
 export type AcceptSpec200Reviews = {[key: string]: {
   revision: number;
   sourceRevision?: number;
@@ -5821,6 +5860,7 @@ export type AcceptSpec200Reviews = {[key: string]: {
   reviewerId: string;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   reviewedAt: string;
+  criteriaSource?: AcceptSpec200ReviewsCriteriaSource;
 }};
 
 export type AcceptSpec200EvidenceItemSource = typeof AcceptSpec200EvidenceItemSource[keyof typeof AcceptSpec200EvidenceItemSource];

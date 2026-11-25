@@ -1,8 +1,8 @@
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorState } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet } from '@codemirror/view';
+import { parseAcceptanceCriteria } from '@nova/agent-ui-contracts/spec';
 import { useEffect, useRef } from 'react';
-import { parseAcceptanceCriteria } from './spec-workbench-model';
 
 const acceptanceHighlights = ViewPlugin.fromClass(
   class {
@@ -13,7 +13,7 @@ const acceptanceHighlights = ViewPlugin.fromClass(
     mark(view: EditorView) {
       return Decoration.set(
         parseAcceptanceCriteria(view.state.doc.toString()).map((criterion) =>
-          Decoration.line({ class: 'cm-ac-heading' }).range(criterion.from),
+          Decoration.line({ class: 'cm-ac-heading' }).range(view.state.doc.lineAt(criterion.from).from),
         ),
       );
     }
@@ -54,12 +54,14 @@ export function MarkdownEditor({
   label,
   resetKey,
   readonly = false,
+  highlightAcceptance = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   resetKey: string;
   readonly?: boolean;
+  highlightAcceptance?: boolean;
 }) {
   const parent = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -72,7 +74,7 @@ export function MarkdownEditor({
       doc: value,
       extensions: [
         markdown(),
-        acceptanceHighlights,
+        ...(highlightAcceptance ? [acceptanceHighlights] : []),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readonly),
         editorTheme,
@@ -89,7 +91,7 @@ export function MarkdownEditor({
     };
     // resetKey changes only when loading another version or stage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey, readonly]);
+  }, [resetKey, readonly, highlightAcceptance]);
 
   useEffect(() => {
     const editor = view.current;

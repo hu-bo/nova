@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { Pool } from "pg";
 import { eq } from "drizzle-orm";
+import { parseAcceptanceCriteria } from "@nova/agent-ui-contracts/spec";
 import test from "node:test";
 import { createDatabase, conversations, pendingInputs, projects, runs, specTaskAttempts } from "../database/index.js";
 import { SpecService } from "../src/modules/specs/spec.service.js";
@@ -10,11 +11,13 @@ import { createRunService } from "../src/modules/runs/run.service.js";
 import { buildSystemInstructions } from "../src/modules/runs/nova-runtime.js";
 import { specSkill } from "@nova/tools/harness";
 import { DomainError } from "../src/shared/domain-error.js";
-import { acceptanceCriteriaIn, passingEvidenceForCheck, validateRequirements, validateTaskPlan } from "../src/modules/specs/spec.validation.js";
+import { passingEvidenceForCheck, validateDesign, validateTaskPlan } from "../src/modules/specs/spec.validation.js";
 import type { SpecEvidence } from "../database/schema/spec-revision.table.js";
 
 const url = process.env.TEST_DATABASE_URL;
-const requirements = (value: string) => `# Export\n\n## 验收条件\n\n### AC-01 导出\n\n${value}\n`;
+const requirements = (value: string) => `# 会话导出\n\n${value}\n`;
+const design = (criteria: string) => `# 会话导出设计\n\n## 目标\n\n保留完整会话。\n\n## 功能\n\n下载 Markdown。\n\n## 实现方案\n\n沿游标读取历史消息。\n\n## 验收标准\n\n${criteria}\n`;
+const exportCriterion = "### AC-01 完整导出\n\n导出的 Markdown 包含所有历史消息，且保持原顺序。";
 const taskPlan = [
   { key: "T-01", title: "准备内容", objective: "准备可导出的内容。", designRef: "设计 §1 总体结构", dependsOn: [], checks: [{ key: "C-01", criterionIds: ["AC-01"], label: "内容可读", method: { kind: "command" as const, command: "printf", args: ["ok"] } }] },
   { key: "T-02", title: "验证导出", objective: "确认导出结果。", designRef: "设计 §2 导出流程", dependsOn: ["T-01"], checks: [{ key: "C-01", criterionIds: ["AC-01"], label: "文件可下载", method: { kind: "manual" as const } }] },
@@ -41,18 +44,24 @@ test("requirements generation can ask for missing information before submitting 
   });
   assert.match(instructions, /ask the user focused questions/);
   assert.match(instructions, /instead of submitting a candidate/);
+  assert.match(instructions, /Acceptance criteria are optional in requirements/);
   assert.match(specSkill.content, /After clarifying requirements, submit the draft without requiring the user to ask again/);
-  assert.match(specSkill.content, /do not ask them to write Markdown or acceptance criteria/);
+  assert.match(specSkill.content, /Continue drafting when the behavior and scope are clear, even without acceptance criteria/);
 });
 
-test("acceptance headings support closing markers and end at the next section", () => {
-  const markdown = "## 验收条件 ##\n### AC-01 导出\n~~~md\n### AC-02 示例\n~~~\n# 其他\n### AC-03 不属于验收条件";
-  assert.deepEqual(acceptanceCriteriaIn(markdown), ["AC-01"]);
-  assert.deepEqual(acceptanceCriteriaIn("## 验收条件\n### AC-01\n### AC-01 重复"), ["AC-01", "AC-01"]);
-  assert.deepEqual(acceptanceCriteriaIn("## 验收条件##\n### AC-01"), []);
-  assert.throws(() => validateRequirements("姓名、手机号、家庭地址"), (error) => error instanceof DomainError && error.details?.reason === "SPEC_CRITERIA_MISSING");
-  assert.throws(() => validateRequirements("## 验收条件\n### AC-01\n### AC-01 重复"), (error) => error instanceof DomainError && error.details?.reason === "SPEC_CRITERION_DUPLICATE" && error.details.criterionId === "AC-01");
-  assert.doesNotThrow(() => validateRequirements(markdown));
+test("design validation requires populated sections and well-formed unique criteria", () => {
+  const markdown = design(exportCriterion + "\n\n~~~md\n### AC-02 示例\n~~~\n\n# 其他\n### AC-03 不属于验收标准")
+    .replace("## 验收标准", "## 验收标准 ##");
+  assert.deepEqual(parseAcceptanceCriteria(markdown).map(({ id }) => id), ["AC-01"]);
+  assert.doesNotThrow(() => validateDesign(markdown));
+  assert.throws(() => validateDesign("### AC-01 导出"), (error) => error instanceof DomainError && error.details?.reason === "SPEC_DESIGN_SECTIONS_MISSING");
+  assert.throws(() => validateDesign(design(exportCriterion).replace("下载 Markdown。", "")), (error) =>
+    error instanceof DomainError && error.details?.reason === "SPEC_DESIGN_SECTIONS_MISSING" &&
+    Array.isArray(error.details.missingSections) && error.details.missingSections.includes("功能"));
+  assert.throws(() => validateDesign(design("~~~md\n### AC-01 示例\n~~~")), (error) => error instanceof DomainError && error.details?.reason === "SPEC_CRITERIA_MISSING");
+  assert.throws(() => validateDesign(design(exportCriterion + "\n### AC-1 格式错误")), (error) => error instanceof DomainError && error.details?.reason === "SPEC_CRITERION_FORMAT");
+  assert.throws(() => validateDesign(design("### AC-01")), (error) => error instanceof DomainError && error.details?.reason === "SPEC_CRITERION_FORMAT");
+  assert.throws(() => validateDesign(design(exportCriterion + "\n### AC-01 重复")), (error) => error instanceof DomainError && error.details?.reason === "SPEC_CRITERION_DUPLICATE" && error.details.criterionId === "AC-01");
 });
 
 test("task evidence follows the current attempt and never crosses task/check boundaries", () => {
@@ -120,6 +129,19 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
   const conversation = (await db.select().from(conversations).where(eq(conversations.id, created.conversationId)))[0]!;
   const runId = randomUUID();
   const workerId = "sdd-test-worker";
+  const runService = createRunService(db);
+  const firstGeneration = await runService.prepare(started.conversationId, workerId);
+  assert.ok(firstGeneration?.run.projection);
+  await db.update(runs).set({ projection: {
+    ...firstGeneration.run.projection,
+    messages: [{
+      id: randomUUID(), runId: firstGeneration.run.id, sequence: "1", role: "assistant", state: "completed",
+      blocks: [{ id: "text", type: "text", text: "导出时需要包含附件吗？" }], createdAt: new Date().toISOString(),
+    }],
+  } }).where(eq(runs.id, firstGeneration.run.id));
+  await runService.finish({ id: firstGeneration.run.id, conversationId: started.conversationId, workerId, fence: firstGeneration.run.fence }, "succeeded");
+  assert.equal((await service.get(projectId, started.id, ownerId)).revision, 1, "a clarification must not replace the requirements draft");
+
   const lateText = requirements("不应覆盖手动保存版本的迟到生成内容。");
   const projection = {
     conversation: { id: conversation.id, title: conversation.title, mode: conversation.mode, projectId, epoch: conversation.contextEpoch, configuration: { backendId: "nova", modelId: null, mode: "plan" } },
@@ -132,13 +154,23 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
     executions: [], interactions: [], approvals: [], reservedInputs: [],
     specExecution: { kind: "generation", specId: created.id, revision: 1, stage: "requirements" },
   };
-  await db.insert(runs).values({ id: runId, conversationId: conversation.id, state: "running", workerId, fence: 1, leaseUntil: new Date(Date.now() + 60_000), checkpoint: checkpoint as never, checkpointRevision: 1, revision: 1, projection: projection as never });
+  const lateOperationId = randomUUID();
+  const lateCallId = randomUUID();
+  const lateDraftCheckpoint = { ...checkpoint, executions: [{
+    executionId: lateOperationId, callId: lateCallId, runId, stepId: randomUUID(), idempotencyKey: randomUUID(),
+    name: "spec_update", effects: "read", dispatch: "dispatched",
+    input: { expectedRevision: 1, stage: "requirements", content: lateText },
+    result: { name: "spec_update", callId: lateCallId, executionId: lateOperationId, status: "succeeded", outcome: "known", value: { baseRevision: 1, stage: "requirements", content: lateText } },
+  }] };
+  await db.insert(runs).values({ id: runId, conversationId: conversation.id, state: "running", workerId, fence: 1, leaseUntil: new Date(Date.now() + 60_000), checkpoint: lateDraftCheckpoint as never, checkpointRevision: 1, revision: 1, projection: projection as never });
   await db.update(pendingInputs).set({ status: "consumed", runId }).where(eq(pendingInputs.id, generation.pendingInputId));
   await db.update(conversations).set({ activeRunId: runId }).where(eq(conversations.id, conversation.id));
-  await createRunService(db).finish({ id: runId, conversationId: conversation.id, workerId, fence: 1 }, "succeeded");
+  await runService.finish({ id: runId, conversationId: conversation.id, workerId, fence: 1 }, "succeeded");
   const afterLateGeneration = await service.get(projectId, created.id, ownerId);
   assert.equal(afterLateGeneration.currentRevision, savedInitial.revision);
   assert.equal(afterLateGeneration.requirementsMd, requirements("手动保存的当前内容。"));
+  const [activeConversation] = await db.select().from(conversations).where(eq(conversations.id, conversation.id));
+  assert.equal(activeConversation?.activeRunId, null, "the old generation run must have released the conversation");
 
   const revision = afterLateGeneration.revision;
   const concurrent = await Promise.allSettled([
@@ -150,8 +182,12 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
   assert.ok(conflict?.status === "rejected" && conflict.reason instanceof DomainError && conflict.reason.code === "CONFLICT");
   let current = await service.get(projectId, created.id, ownerId);
   await service.review(projectId, created.id, ownerId, current.revision, "requirements");
-  current = await service.save(projectId, created.id, ownerId, current.revision, "design", "# 设计\n\n采用独立导出流程。\n");
-  await service.review(projectId, created.id, ownerId, current.revision, "design");
+  current = await service.save(projectId, created.id, ownerId, current.revision, "design", design(""));
+  await assert.rejects(service.review(projectId, created.id, ownerId, current.revision, "design"), (error) =>
+    error instanceof DomainError && error.details?.reason === "SPEC_CRITERIA_MISSING");
+  current = await service.save(projectId, created.id, ownerId, current.revision, "design", design(exportCriterion));
+  current = await service.review(projectId, created.id, ownerId, current.revision, "design");
+  assert.equal(current.reviews.design?.criteriaSource, "design");
   current = await service.save(projectId, created.id, ownerId, current.revision, "tasks", taskPlan);
   await service.review(projectId, created.id, ownerId, current.revision, "tasks");
 
@@ -234,15 +270,12 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
   const taskFile = exported.files.find((file) => file.name === "tasks.md");
   assert.ok(taskFile?.content.includes("## T-01"));
   assert.ok(taskFile?.content.includes("[x] C-01"));
-  assert.equal(activeConversation.activeRunId, null, "the old generation run must have released the conversation");
-
   const skillSpec = await service.create(projectId, ownerId, { title: "会话内修订", brief: "初始需求" }, "skill-spec");
-  const runService = createRunService(db);
   let sequence = 0n;
-  const settleSkillDraft = async (content: string, advanceWhileRunning = false) => {
+  const settleSkillDraft = async (content: string, stage: "requirements" | "design" | "tasks" = "requirements", advanceWhileRunning = false) => {
     await db.insert(pendingInputs).values({
       conversationId: skillSpec.conversationId, sequence: ++sequence, mode: "next_run", fingerprint: randomUUID(),
-      payload: { blocks: [{ id: "text", type: "text", text: "请修订需求" }], mode: "next_run", configuration: { backendId: "nova", modelId: null, mode: "plan" } },
+      payload: { blocks: [{ id: "text", type: "text", text: "请修订草稿" }], mode: "next_run", configuration: { backendId: "nova", modelId: null, mode: "plan" } },
     });
     const prepared = await runService.prepare(skillSpec.conversationId, workerId);
     assert.ok(prepared?.run.checkpoint && prepared.specRevision);
@@ -253,8 +286,8 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
     const checkpointWithDraft: NonNullable<typeof prepared.run.checkpoint> = { ...prepared.run.checkpoint, executions: [{
       executionId: operationId, callId, runId: prepared.run.id, stepId: randomUUID(), idempotencyKey: randomUUID(),
       name: "spec_update", effects: "read", dispatch: "dispatched",
-      input: { expectedRevision: prepared.specRevision.revision, stage: "requirements", content },
-      result: { name: "spec_update", callId, executionId: operationId, status: "succeeded", outcome: "known", value: { baseRevision: prepared.specRevision.revision, stage: "requirements", content } },
+      input: { expectedRevision: prepared.specRevision.revision, stage, content },
+      result: { name: "spec_update", callId, executionId: operationId, status: "succeeded", outcome: "known", value: { baseRevision: prepared.specRevision.revision, stage, content } },
     }] };
     await db.update(runs).set({ checkpoint: checkpointWithDraft }).where(eq(runs.id, prepared.run.id));
     if (advanceWhileRunning) await service.save(projectId, skillSpec.id, ownerId, prepared.specRevision.revision, "requirements", requirements("保留用户的新版本"));
@@ -265,7 +298,19 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
   assert.equal(drafted.revision, 2);
   assert.equal(drafted.requirementsMd, requirements("由持久化的规格工具结果更新。"));
   assert.deepEqual(drafted.reviews, {}, "Agent draft tools cannot confirm a stage");
-  const staleDraft = await settleSkillDraft(requirements("迟到工具候选"), true);
+  const staleDraft = await settleSkillDraft(requirements("迟到工具候选"), "requirements", true);
   assert.equal(staleDraft.requirementsMd, requirements("保留用户的新版本"));
   assert.equal(staleDraft.revision, 3);
+
+  await service.review(projectId, skillSpec.id, ownerId, staleDraft.revision, "requirements");
+  assert.equal((await settleSkillDraft(design(""), "design")).revision, staleDraft.revision);
+  const draftedDesign = await settleSkillDraft(design(exportCriterion), "design");
+  assert.equal(draftedDesign.revision, staleDraft.revision + 1);
+  assert.equal(draftedDesign.designMd, design(exportCriterion));
+  await service.review(projectId, skillSpec.id, ownerId, draftedDesign.revision, "design");
+  assert.equal((await settleSkillDraft("[]", "tasks")).revision, draftedDesign.revision);
+  const draftedTasks = await settleSkillDraft(JSON.stringify(taskPlan), "tasks");
+  assert.equal(draftedTasks.revision, draftedDesign.revision + 1);
+  assert.deepEqual(draftedTasks.taskPlan, taskPlan);
+  assert.equal(draftedTasks.reviews.design?.criteriaSource, "design");
 });

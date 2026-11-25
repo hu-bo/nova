@@ -17,6 +17,7 @@ import {
   type Snapshot,
   type SubmitInput,
 } from "@nova/agent-ui-contracts";
+import { specAcceptanceCriteria } from "@nova/agent-ui-contracts/spec";
 import {
   conversations,
   messages,
@@ -40,9 +41,8 @@ import { readCheckpoint } from "./session-checkpoint.repository.js";
 import { cancelPendingTools, checkpointAfter, executionEffectState } from "./session-checkpoint.js";
 import { projectToolContent } from "./tool-blocks.js";
 import { skillView } from "../skills/index.js";
-import { taskPlanSchema } from "../specs/spec.schema.js";
+import { taskPlanSchema, validateDesign, validateTaskPlan } from "../specs/index.js";
 import { specDraftCandidateSchema } from "@nova/tools/harness";
-import { acceptanceCriteriaIn, validateTaskPlan } from "../specs/spec.validation.js";
 import {
   conversationView,
   effectiveCapabilities,
@@ -1186,8 +1186,8 @@ export class RunRepository {
         let assistantText: string | undefined;
         if (output.success && output.data.baseRevision === specExecution.revision && output.data.stage === stage)
           assistantText = output.data.content;
-        // Older queued generation Runs can still settle their final Markdown response.
-        if (!submitted && specExecution.kind === "generation") assistantText = run.projection?.messages
+        // Free-form requirements may be questions or reminders. Only an explicit candidate saves them.
+        if (!submitted && specExecution.kind === "generation" && stage !== "requirements") assistantText = run.projection?.messages
           .filter((message) => message.role === "assistant")
           .map((message) => message.blocks.filter((block) => block.type === "text").map((block) => block.text).join(""))
           .filter(Boolean).at(-1)?.trim();
@@ -1196,16 +1196,16 @@ export class RunRepository {
         let candidate: string | import("../../../database/schema/spec-revision.table.js").SpecTask[] | null = null;
         if (base && spec.currentRevision === specExecution.revision && assistantText && Buffer.byteLength(assistantText) <= 131072) {
           try {
-            if (stage === "requirements") {
-              const criteria = acceptanceCriteriaIn(assistantText);
-              if (criteria.length && new Set(criteria).size === criteria.length) candidate = assistantText;
+            if (stage === "requirements" && assistantText.trim()) {
+              candidate = assistantText;
             } else if (stage === "design") {
-              if (assistantText.trim()) candidate = assistantText;
-            } else {
+              validateDesign(assistantText);
+              candidate = assistantText;
+            } else if (stage === "tasks") {
               const jsonText = assistantText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
               const parsed = taskPlanSchema.safeParse(JSON.parse(jsonText));
               if (parsed.success) {
-                validateTaskPlan(parsed.data, acceptanceCriteriaIn(base.requirementsMd));
+                validateTaskPlan(parsed.data, specAcceptanceCriteria(base).map(({ id }) => id));
                 candidate = parsed.data;
               }
             }

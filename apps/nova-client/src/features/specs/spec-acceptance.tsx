@@ -1,6 +1,7 @@
 import { Check, ShieldCheck } from 'lucide-react';
+import { specAcceptanceCriteria } from '@nova/agent-ui-contracts/spec';
 import type { GetSpec200 } from '@/api/generated/projectsAPI.schemas';
-import { parseAcceptanceCriteria, passingEvidence } from './spec-workbench-model';
+import { passingEvidence } from './spec-workbench-model';
 
 const sourceLabels = {
   automatic: '自动验证',
@@ -9,7 +10,7 @@ const sourceLabels = {
 } satisfies Record<GetSpec200['evidence'][number]['source'], string>;
 
 export function SpecAcceptance({ spec }: { spec: GetSpec200 }) {
-  const criteria = parseAcceptanceCriteria(spec.requirementsMd);
+  const criteria = specAcceptanceCriteria(spec);
   const matrix = criteria.map((criterion) => {
     const checks = spec.taskPlan.flatMap((task) =>
       task.checks
@@ -87,7 +88,7 @@ export function SpecAcceptance({ spec }: { spec: GetSpec200 }) {
         </div>
         {!matrix.length && (
           <p className="mt-4 text-sm text-muted-foreground">
-            与助手完善需求并生成验收条件后，这里会显示覆盖矩阵。
+            在设计文档中补充验收标准后，这里会显示覆盖矩阵。
           </p>
         )}
       </section>
