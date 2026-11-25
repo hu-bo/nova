@@ -24,7 +24,7 @@ export interface ReadableClipboardImages {
 /** 同步提取剪贴板携带的图片文件：优先 `items`，取不到时退回 `files`（部分应用的复制行为只填后者）。 */
 export function collectClipboardImages(clipboard: ClipboardDataFiles): File[] {
   const fromItems = Array.from(clipboard.items)
-    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .filter((item) => item.type.startsWith("image/"))
     .flatMap((item) => {
       const file = item.getAsFile();
       return file ? [file] : [];
@@ -142,8 +142,13 @@ export function UploadCover<TMetadata = unknown>({
       addFiles(images);
       return;
     }
-    // 剪贴板里有文本（含富文本）时不拦截，让默认粘贴把内容插入输入框。
-    if (Array.from(event.clipboardData.types).some((type) => type.startsWith("text/"))) return;
+    const clipboardTypes = Array.from(event.clipboardData.types);
+    const hasImagePayload =
+      clipboardTypes.includes("Files") ||
+      clipboardTypes.some((type) => type.startsWith("image/")) ||
+      Array.from(event.clipboardData.items).some((item) => item.type.startsWith("image/"));
+    // 一些应用会同时声明文本和图片格式；图片无法同步读取时优先尝试图片兜底。
+    if (!hasImagePayload && clipboardTypes.some((type) => type.startsWith("text/"))) return;
     // 某些应用复制的图片不出现在 paste 事件里；默认粘贴本来插不进内容，
     // 拦下事件改走 Async Clipboard API（HTTPS / localhost 可用，其余环境返回空即无操作）。
     event.preventDefault();
