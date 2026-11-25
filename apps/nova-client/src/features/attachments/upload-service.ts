@@ -4,6 +4,7 @@ import type { CreateAttachmentUpload200 } from '@/api/generated/projectsAPI.sche
 import type { Attachment } from '@nova/agent-ui-contracts';
 import { ApiError, errorMessage } from '@/api/api-error';
 import { uuid } from '@/lib/uuid';
+import { secureAttachmentUrl } from './attachment-url';
 export type UploadStatus = 'selected' | 'ticketed' | 'uploading' | 'verifying' | 'ready' | 'failed';
 export type UploadEntry = {
   id: string;
@@ -111,7 +112,7 @@ export class UploadQueue {
       if (Date.parse(ticket.upload.expiresAt) <= Date.now())
         throw new ApiError(410, 410, '上传链接已过期，请重新上传。');
       this.update(entry.id, { status: 'uploading' });
-      const response = await fetch(ticket.upload.url, {
+      const response = await fetch(secureAttachmentUrl(ticket.upload.url), {
         method: ticket.upload.method,
         headers: ticket.upload.headers,
         body: entry.file,

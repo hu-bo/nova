@@ -307,8 +307,8 @@ export function useConversationComposer(options: ConversationComposerOptions) {
         ]
       : [],
   );
-  const attachments = usesRemoteFiles ? remote : ready;
-  const blocked = !usesRemoteFiles && uploads.entries.some((entry) => entry.status !== 'ready');
+  const attachments = [...remote, ...ready];
+  const blocked = uploads.entries.some((entry) => entry.status !== 'ready');
   const [storedProfileId, setStoredProfileId] = useState(() =>
     runtime?.modelId ? 'server:' + runtime.modelId : modelStore.get(),
   );
@@ -760,21 +760,19 @@ export function useConversationComposer(options: ConversationComposerOptions) {
   const composer: ChatComposerConfig<Attachment> = {
     value: text,
     onTextChange: changeText,
-    ...(!usesRemoteFiles ? { onFilesSelected: (files: File[]) => uploads.add(files) } : {}),
+    ...(!chatAgent ? { onFilesSelected: (files: File[]) => uploads.add(files) } : {}),
     disabled: sending,
     submitDisabled: blocked || (chatAgent && skillCatalog.isPending),
     // 粘贴/选择文件默认开启，不随 capabilities.uploads（服务端 MINIO .env 配置）静默禁用；
     // 存储未就绪时由上传队列把服务端 503 明确展示为单条失败，可重试。
-    allowFiles: !chatAgent && !usesRemoteFiles,
+    allowFiles: !chatAgent,
     accept: IMAGE_ACCEPT,
     attachments,
     onAttachmentsChange: (next) => {
-      if (usesRemoteFiles) setRemote(next);
-      else {
-        const ids = new Set(next.map((item) => item.id));
-        for (const entry of uploads.entries)
-          if (entry.status === 'ready' && !ids.has(entry.id)) uploads.remove(entry.id);
-      }
+      const ids = new Set(next.map((item) => item.id));
+      setRemote((current) => current.filter((item) => ids.has(item.id)));
+      for (const entry of uploads.entries)
+        if (entry.status === 'ready' && !ids.has(entry.id)) uploads.remove(entry.id);
     },
     ...(!chatAgent ? { onAttachmentButtonClick: addAttachment } : {}),
     models: modelOptions,

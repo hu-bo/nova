@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getAttachmentImageUrl } from '@/api/generated/attachments';
 import { errorMessage } from '@/api/api-error';
 import { Button } from '@/components/ui/button';
+import { secureAttachmentUrl } from './attachment-url';
 export function AttachmentImage({
   reference,
   name,
@@ -24,9 +25,10 @@ export function AttachmentImage({
     )
       .then((result) => {
         if (controller.signal.aborted) return;
-        const parsed = new URL(result.url);
+        const imageUrl = secureAttachmentUrl(result.url);
+        const parsed = new URL(imageUrl);
         if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error('Invalid preview URL');
-        setUrl(result.url);
+        setUrl(imageUrl);
         timer = setTimeout(
           () => setRevision((value) => value + 1),
           Math.max(1000, Date.parse(result.expiresAt) - Date.now() - 10000),
