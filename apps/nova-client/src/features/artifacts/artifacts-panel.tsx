@@ -183,9 +183,15 @@ export function ArtifactsPanel({
   run,
 }: ArtifactsPanelProps) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-slate-50/40 p-4" aria-label="产物">
-      <h2 className="text-xs font-semibold text-slate-500">产物</h2>
-      <div className="mt-1 space-y-3">
+    <section
+      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-slate-200 bg-slate-50/40 p-3"
+      aria-label="产物"
+    >
+      <h2 className="mr-auto text-xs font-semibold text-slate-700">产物</h2>
+      {!isPending && error == null && artifacts.length === 0 && storageConfigured !== false && (
+        <p className="text-xs text-slate-500">没有产物</p>
+      )}
+      <div className="w-full space-y-2 empty:hidden">
         {isPending && artifacts.length === 0 && (
           <p role="status" className="text-xs text-slate-500">
             正在加载产物…
@@ -196,9 +202,6 @@ export function ArtifactsPanel({
           <p className="text-xs leading-5 text-slate-500">
             存储未配置：文件产出暂不可用，产物需要服务端配置对象存储后才能发布。
           </p>
-        )}
-        {!isPending && error == null && artifacts.length === 0 && storageConfigured !== false && (
-          <p className="text-xs text-slate-500">没有产物</p>
         )}
         {artifacts.map((artifact) => (
           <ArtifactCard key={artifact.id} artifact={artifact} run={run} />

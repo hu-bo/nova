@@ -489,7 +489,7 @@ export function ConversationWorkspace({
           headerContent: <ComposerGoalHeader controller={ctl} />,
         }}
         sidebar={
-          <div className="space-y-3">
+          <div className="space-y-2">
             <ConversationContext controller={ctl} />
             <ArtifactsPanel
               artifacts={artifactItems}
