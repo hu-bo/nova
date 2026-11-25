@@ -69,12 +69,13 @@ export function ModelPicker({
         disabled={Boolean(disabled)}
         aria-label="选择模型"
         title={selected ? selected.model + ' · ' + selected.providerName : '选择或配置模型'}
+        className="nova-model-picker-trigger"
       >
         <Cpu size={15} />
-        <span className="max-w-24 truncate text-xs sm:max-w-48">
+        <span className="nova-model-picker-label max-w-24 truncate text-xs sm:max-w-48">
           {selected?.model ?? (loading ? '加载模型…' : '选择模型')}
         </span>
-        <ChevronDown size={12} />
+        <ChevronDown className="nova-model-picker-chevron" size={12} />
       </Button>
       <Popover.Content placement="top end" className="z-50 w-[min(370px,calc(100vw-24px))]">
         <Popover.Dialog>

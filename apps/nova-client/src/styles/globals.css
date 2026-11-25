@@ -175,24 +175,44 @@
   min-height: 3.75rem;
 }
 @media (max-width: 640px) {
-  /* 移动端把输入框底部压成一行：不换行，模型名截断，按钮收紧。 */
+  /* 移动端工具栏统一使用图标按钮，并为发送按钮保留固定空间。 */
   .conversation-workspace .nova-composer-input-row,
   .conversation-workspace .nova-composer-options,
   .conversation-workspace .nova-model-controls {
     flex-wrap: nowrap;
   }
+  .conversation-workspace .nova-composer-options {
+    flex: 1 1 auto;
+  }
   .conversation-workspace .nova-composer-input-row > div:last-child {
     min-width: 0;
-    flex-shrink: 1;
+    flex: 0 0 auto;
   }
   .conversation-workspace .nova-model-controls {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-width: 0;
+    gap: 0.125rem;
   }
   .conversation-workspace .nova-composer-input-row [data-slot='button'] {
     gap: 0.25rem;
-    height: 1.75rem;
+    height: 2rem;
     padding-inline: 0.5rem;
     font-size: 0.75rem;
+  }
+  .conversation-workspace .nova-composer-input-row .nova-model-picker-trigger,
+  .conversation-workspace .nova-composer-input-row .nova-composer-option-trigger {
+    box-sizing: border-box;
+    width: 2rem;
+    min-width: 2rem;
+    max-width: 2rem;
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+  }
+  .conversation-workspace .nova-composer-input-row .nova-model-picker-label,
+  .conversation-workspace .nova-composer-input-row .nova-model-picker-chevron,
+  .conversation-workspace .nova-composer-input-row .nova-composer-option-label,
+  .conversation-workspace .nova-composer-input-row .nova-composer-option-chevron {
+    display: none;
   }
 }

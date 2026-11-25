@@ -45,7 +45,6 @@ export function ComposerModelActions({
           options={ctl.reasoningEfforts}
           disabled={ctl.sending}
           onChange={ctl.changeReasoning}
-          className="hidden sm:inline-flex"
           icon={<BrainCircuit aria-hidden="true" />}
         />
       )}
