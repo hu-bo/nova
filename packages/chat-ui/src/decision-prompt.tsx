@@ -1,5 +1,5 @@
 import { Check, CheckCircle2, Circle, CircleStop, HelpCircle, LoaderCircle, ShieldCheck, X, Zap } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./components/ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./components/ui/card.js";
 import { Checkbox } from "./components/ui/checkbox.js";
@@ -15,6 +15,7 @@ const approvalRiskLabels = {
 
 export interface DecisionPromptProps {
   request: DecisionRequest;
+  autoApproveInSeconds?: number | null | undefined;
   onResolve: (response: DecisionResponse) => void | Promise<void>;
   disabled?: boolean | undefined;
   resolved?: DecisionResponse | undefined;
@@ -33,6 +34,7 @@ function approvalDetails(request: Extract<DecisionRequest, { kind: "approval" }>
 
 export function DecisionPrompt({
   request,
+  autoApproveInSeconds = null,
   onResolve,
   disabled = false,
   resolved,
@@ -42,6 +44,8 @@ export function DecisionPrompt({
   const [submitted, setSubmitted] = useState(false);
   const [answers, setAnswers] = useState<string[]>([]);
   const [customText, setCustomText] = useState("");
+  const autoApproveButtonRef = useRef<HTMLButtonElement>(null);
+  const autoApprovedDecisionId = useRef<string | null>(null);
   const codeChanges = request.kind === "approval" ? request.codeChanges : undefined;
   const patches = useMemo(
     () => codeChanges?.map((change) => ({ path: change.path, ...unifiedPatchOf(change) })) ?? [],
@@ -55,6 +59,18 @@ export function DecisionPrompt({
   }, [request.decisionId]);
 
   const locked = disabled || submitted || resolved !== undefined || isAborting;
+
+  useEffect(() => {
+    if (
+      request.kind !== "approval" ||
+      autoApproveInSeconds !== 1 ||
+      locked ||
+      autoApprovedDecisionId.current === request.decisionId
+    )
+      return;
+    autoApprovedDecisionId.current = request.decisionId;
+    autoApproveButtonRef.current?.click();
+  }, [autoApproveInSeconds, locked, request.decisionId, request.kind]);
 
   async function resolve(response: DecisionResponse) {
     setSubmitted(true);
@@ -98,9 +114,23 @@ export function DecisionPrompt({
             <Zap className="size-5" strokeWidth={2.5} aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <CardTitle id={`${request.decisionId}-title`} className="text-base text-indigo-950 dark:text-indigo-100">
-              需要授权
-            </CardTitle>
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <CardTitle
+                id={`${request.decisionId}-title`}
+                className="min-w-0 text-base text-indigo-950 dark:text-indigo-100"
+              >
+                需要授权
+              </CardTitle>
+              {autoApproveInSeconds !== null && autoApproveInSeconds > 0 && (
+                <span
+                  role="timer"
+                  aria-live="off"
+                  className="shrink-0 text-xs font-medium text-indigo-700 dark:text-indigo-200"
+                >
+                  {autoApproveInSeconds} 秒后将自动确认
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-xs leading-5 text-indigo-700/85 dark:text-indigo-200/80">
               {request.toolName} 请求执行一项 {approvalRiskLabels[request.risk]}
             </p>
@@ -129,6 +159,7 @@ export function DecisionPrompt({
         </div>
         <CardFooter className="shrink-0 flex-wrap gap-2 px-3 pb-3 pt-2.5">
           <Button
+            ref={autoApproveButtonRef}
             type="button"
             variant="primary"
             size="sm"

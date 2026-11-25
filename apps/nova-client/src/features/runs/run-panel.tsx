@@ -4,19 +4,12 @@ import type { Configuration } from '@nova/agent-ui-contracts';
 import type { RunControls } from './run-controls';
 import type { RunStreamSnapshot } from './run-stream-manager';
 
-/** 决策过期倒计时文案：无过期时间为空串，剩余 0 秒视为授权已过期。 */
-function decisionCountdown(remaining: number | null): string {
-  if (remaining === null) return '';
-  if (remaining) return remaining + ' 秒后过期';
-  return '授权已过期';
-}
-
 /**
  * 运行事件面板。运行状态行已移至会话标题栏的 `RunStatus` 指示（任务详情开关左侧）；
  * 决策裁决 UI 已移入 `Chat` 的决策浮层（与参考实现一致）；
  * 工具参数与输出由 `Chat` 的消息内工具块渲染，不再在此重复展示；
  * 运行失败报错（含提供商原文）由服务端写入失败消息的错误块，在消息内展示。
- * 这里只保留流错误、预算耗尽提示与决策倒计时摘要。
+ * 这里只保留流错误与预算耗尽提示。
  * TODO 计划由 `Chat` 的侧栏 / 折叠面板渲染，不再在此重复。
  * 开发期诊断不在这里：连接 / 协议 / 快照对齐异常由 `run-stream-manager` 输出到浏览器控制台。
  */
@@ -34,7 +27,7 @@ export function RunPanel({
   budgetValid?: boolean;
 }) {
   const projection = stream.projection;
-  const { cancel, decision, remaining } = controls;
+  const { cancel } = controls;
   const runState = projection?.run?.state;
   return (
     <div className="space-y-2 px-4 py-2 sm:px-6">
@@ -70,12 +63,6 @@ export function RunPanel({
         </div>
       )}
       {cancel.error && <ErrorNotice error={cancel.error} />}
-      {decision && (
-        <p role="status" className="flex flex-wrap items-center gap-2 text-xs text-amber-700">
-          <span>等待你的确认</span>
-          <span>{decisionCountdown(remaining)}</span>
-        </p>
-      )}
     </div>
   );
 }

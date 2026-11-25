@@ -27,6 +27,7 @@ export interface ChatState {
   todos: Todo[];
   queuedMessages: ChatQueuedMessage[];
   pendingDecision?: DecisionRequest | null | undefined;
+  approvalAutoConfirmInSeconds?: number | null | undefined;
   connection: "connecting" | "open" | "reconnecting" | "closed";
   isRunning: boolean;
   isAborting?: boolean | undefined;
@@ -140,6 +141,7 @@ export function Chat<TMetadata = unknown>({
             <div className="nova-decision-layer pointer-events-none absolute inset-0 z-20 flex flex-col justify-end">
               <DecisionPrompt
                 request={state.pendingDecision}
+                autoApproveInSeconds={state.approvalAutoConfirmInSeconds}
                 disabled={state.isResolvingDecision}
                 onResolve={actions.onResolveDecision}
                 {...(actions.onAbort ? { onAbort: actions.onAbort } : {})}

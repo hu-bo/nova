@@ -475,6 +475,8 @@ export function ConversationWorkspace({
           todos,
           queuedMessages: ctl.queuedMessages,
           pendingDecision: controls.request,
+          approvalAutoConfirmInSeconds:
+            controls.request?.kind === 'approval' ? controls.remaining : null,
           connection,
           isRunning: active,
           isAborting: controls.cancelling,
