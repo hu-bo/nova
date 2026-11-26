@@ -14,7 +14,7 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+    <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-2xl">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">{eyebrow}</p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
@@ -54,5 +54,5 @@ export function TableFrame({ children }: { children: ReactNode }) {
 }
 
 export const tableHeadClass =
-  "bg-surface-secondary text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground";
-export const tableCellClass = "px-5 py-4 align-middle text-sm text-muted-foreground";
+  "whitespace-nowrap bg-surface-secondary text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+export const tableCellClass = "whitespace-nowrap px-3 py-2.5 align-middle text-sm text-muted-foreground";

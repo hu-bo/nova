@@ -79,24 +79,35 @@ export function ProvidersPage() {
     return (
       <Table variant="secondary" className="overflow-clip rounded-xl bg-surface ring-1 ring-border">
         <Table.ScrollContainer>
-          <Table.Content aria-label="Provider 列表" className="w-full min-w-[840px]">
+          <Table.Content aria-label="Provider 列表" className="w-full min-w-[760px]">
             <Table.Header>
-              <Table.Column isRowHeader className={`${tableHeadClass} rounded-none px-5 py-3`}>
+              <Table.Column isRowHeader className={`${tableHeadClass} rounded-none px-3 py-2`}>
                 名称
               </Table.Column>
-              <Table.Column className={`${tableHeadClass} px-5 py-3`}>供应商</Table.Column>
-              <Table.Column className={`${tableHeadClass} px-5 py-3`}>连接地址</Table.Column>
-              <Table.Column className={`${tableHeadClass} px-5 py-3`}>凭据</Table.Column>
-              <Table.Column className={`${tableHeadClass} px-5 py-3`}>可见范围</Table.Column>
-              <Table.Column className={`${tableHeadClass} px-5 py-3`}>状态</Table.Column>
-              <Table.Column className={`${tableHeadClass} rounded-none px-5 py-3 text-right`}>操作</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-3 py-2`}>供应商</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-3 py-2`}>连接地址</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-3 py-2`}>凭据</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-3 py-2`}>可见范围</Table.Column>
+              <Table.Column className={`${tableHeadClass} px-3 py-2`}>状态</Table.Column>
+              <Table.Column className={`${tableHeadClass} rounded-none px-3 py-2 text-right`}>操作</Table.Column>
             </Table.Header>
             <Table.Body>
               {providers.map((provider) => (
                 <Table.Row key={provider.id}>
-                  <Table.Cell className={`${tableCellClass} font-semibold text-foreground`}>{provider.name}</Table.Cell>
+                  <Table.Cell className={`${tableCellClass} max-w-[180px] font-semibold text-foreground`}>
+                    <span className="block truncate" title={provider.name}>
+                      {provider.name}
+                    </span>
+                  </Table.Cell>
                   <Table.Cell className={tableCellClass}>
-                    <span className="rounded-lg bg-surface-tertiary px-2 py-1 font-mono text-xs text-foreground">
+                    <span
+                      className="inline-block max-w-[150px] truncate rounded-lg bg-surface-tertiary px-2 py-0.5 align-middle font-mono text-xs leading-5 text-foreground"
+                      title={
+                        adaptersQuery.data?.find((adapter) => adapter.id === provider.adapterId)?.label ??
+                        provider.adapterId ??
+                        "旧配置"
+                      }
+                    >
                       {adaptersQuery.data?.find((adapter) => adapter.id === provider.adapterId)?.label ??
                         provider.adapterId ??
                         "旧配置"}
@@ -108,8 +119,10 @@ export function ProvidersPage() {
                     </span>
                   </Table.Cell>
                   <Table.Cell className={tableCellClass}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs">{provider.credentialMasked}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="max-w-[150px] truncate font-mono text-xs" title={provider.credentialMasked}>
+                        {provider.credentialMasked}
+                      </span>
                       <button
                         onClick={() => void handleCopy(provider)}
                         className="flex-shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-surface-tertiary hover:text-foreground"
@@ -125,7 +138,7 @@ export function ProvidersPage() {
                   </Table.Cell>
                   <Table.Cell className={tableCellClass}>
                     <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${provider.isPublic ? "bg-success/10 text-success" : "bg-surface-tertiary text-muted-foreground"}`}
+                      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 align-middle text-xs font-semibold leading-none ${provider.isPublic ? "bg-success/10 text-success" : "bg-surface-tertiary text-muted-foreground"}`}
                     >
                       {provider.isPublic ? "公开" : "仅创建者"}
                     </span>
@@ -134,7 +147,7 @@ export function ProvidersPage() {
                     <StatusBadge enabled={provider.enabled} />
                   </Table.Cell>
                   <Table.Cell className={`${tableCellClass} text-right`}>
-                    <div className="flex justify-end gap-1">
+                    <div className="flex flex-nowrap justify-end gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -181,7 +194,7 @@ export function ProvidersPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Connections"
         title="Provider 连接"
@@ -200,7 +213,7 @@ export function ProvidersPage() {
         }
       />
       {!query.isLoading && !query.error && (
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Metric label="Provider" value={providers.length} icon={<ServerCog className="size-5" />} />
           <Metric
             label="已启用"
@@ -250,8 +263,8 @@ export function ProvidersPage() {
 
 function Metric({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
   return (
-    <Card className="flex items-center gap-4 p-5">
-      <div className="grid size-10 place-items-center rounded-xl bg-accent-soft text-accent">{icon}</div>
+    <Card className="flex items-center gap-3 p-3">
+      <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">{icon}</div>
       <div>
         <p className="text-2xl font-bold text-foreground">{value}</p>
         <p className="text-xs font-medium text-muted-foreground">{label}</p>

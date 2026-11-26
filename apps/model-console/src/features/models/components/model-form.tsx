@@ -102,7 +102,7 @@ export function ModelForm({
       size="lg"
       onClose={close}
     >
-      <form onSubmit={submit} className="space-y-6">
+      <form onSubmit={submit} className="space-y-4">
         {formError && (
           <div className="rounded-xl bg-danger/10 p-3 text-sm text-danger ring-1 ring-danger/30" role="alert">
             {formError}
@@ -110,7 +110,7 @@ export function ModelForm({
         )}
         <section>
           <h3 className="text-sm font-semibold text-foreground">映射与容量</h3>
-          <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <FieldLabel label="公开模型名" error={errors.publicName?.message}>
               <Input {...register("publicName")} placeholder="nova-fast" autoFocus className={fieldInputClass} />
             </FieldLabel>
@@ -179,7 +179,7 @@ export function ModelForm({
             </FieldLabel>
           </div>
         </section>
-        <section className="grid gap-5 rounded-xl bg-surface-secondary p-5 ring-1 ring-border lg:grid-cols-3">
+        <section className="grid gap-3 rounded-xl bg-surface-secondary p-3 ring-1 ring-border lg:grid-cols-3">
           <ChoiceGroup title="Thinking 等级" error={errors.thinkingLevels?.message}>
             {thinkingLevels.length === 0 && (
               <p className="text-xs text-muted-foreground">
@@ -216,7 +216,7 @@ export function ModelForm({
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             统一结算币种。没有独立缓存折扣时，缓存读取价应与输入价一致。
           </p>
-          <div className="mt-4 grid gap-5 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <FieldLabel label="输入" error={errors.priceIn?.message}>
               <Input {...register("priceIn")} inputMode="decimal" className={fieldInputClass} />
             </FieldLabel>
@@ -228,7 +228,7 @@ export function ModelForm({
             </FieldLabel>
           </div>
         </section>
-        <div className="flex justify-end gap-3 border-t border-border pt-5">
+        <div className="flex justify-end gap-2 border-t border-border pt-3">
           <Button type="button" onPress={close} isDisabled={pending}>
             取消
           </Button>
@@ -258,7 +258,7 @@ function ChoiceGroup({
   return (
     <div>
       <p className="text-sm font-semibold text-foreground">{title}</p>
-      <div className="mt-3 flex flex-wrap gap-3">{children}</div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">{children}</div>
       {error && (
         <p className="mt-2 text-xs font-medium text-danger" role="alert">
           {error}

@@ -24,7 +24,10 @@ export function Badge({ className, variant = "default", children, ...props }: Ba
       color={colorMap[variant]}
       variant="soft"
       size="sm"
-      className={cn("gap-1.5 px-2.5 py-1 text-xs font-semibold", className)}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2 py-0.5 text-xs font-semibold leading-none align-middle",
+        className,
+      )}
       {...props}
     >
       {children}

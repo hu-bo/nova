@@ -63,7 +63,7 @@ export function Dialog({ open, title, description, children, onClose, size = "md
     >
       <HeroUIModal.Container size={sizes[size]}>
         <HeroUIModal.Dialog className="min-w-0 max-w-full bg-surface text-surface-foreground">
-          <HeroUIModal.Header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+          <HeroUIModal.Header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
             <div>
               <HeroUIModal.Heading className="text-lg font-semibold text-foreground">{title}</HeroUIModal.Heading>
               {description && <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>}
@@ -79,7 +79,7 @@ export function Dialog({ open, title, description, children, onClose, size = "md
               <X className="size-5" aria-hidden="true" />
             </HeroUIModal.CloseTrigger>
           </HeroUIModal.Header>
-          <HeroUIModal.Body className="max-h-[min(76vh,820px)] min-w-0 overflow-y-auto px-5 py-4" data-dialog-body>
+          <HeroUIModal.Body className="max-h-[min(76vh,820px)] min-w-0 overflow-y-auto px-4 py-3" data-dialog-body>
             {children}
           </HeroUIModal.Body>
         </HeroUIModal.Dialog>

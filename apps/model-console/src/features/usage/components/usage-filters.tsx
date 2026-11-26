@@ -23,8 +23,8 @@ export function UsageFilters({
     onApply(draft);
   };
   return (
-    <Card className="p-5">
-      <form onSubmit={applyFilters} className="grid items-end gap-4 md:grid-cols-2 xl:grid-cols-5">
+    <Card className="p-3">
+      <form onSubmit={applyFilters} className="grid items-end gap-3 md:grid-cols-2 xl:grid-cols-5">
         <FieldLabel label="开始日期">
           <Input
             type="date"

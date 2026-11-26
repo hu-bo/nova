@@ -82,30 +82,42 @@ export function ModelsPage() {
       );
     return (
       <TableFrame>
-        <table className="w-full min-w-[1100px]">
+        <table className="w-full min-w-[1000px]">
           <thead className={tableHeadClass}>
             <tr>
-              <th className="px-5 py-3">公开名称</th>
-              <th className="px-5 py-3">上游映射</th>
-              <th className="px-5 py-3">容量</th>
-              <th className="px-5 py-3">Reasoning</th>
-              <th className="px-5 py-3">价格（入 / 出 / 缓存）</th>
-              <th className="px-5 py-3">状态</th>
-              <th className="px-5 py-3 text-right">操作</th>
+              <th className="px-3 py-2">公开名称</th>
+              <th className="px-3 py-2">上游映射</th>
+              <th className="px-3 py-2">容量</th>
+              <th className="px-3 py-2">Reasoning</th>
+              <th className="px-3 py-2">价格（入 / 出 / 缓存）</th>
+              <th className="px-3 py-2">状态</th>
+              <th className="px-3 py-2 text-right">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {models.map((model) => (
               <tr key={model.id} className="transition hover:bg-surface-secondary">
                 <td className={tableCellClass}>
-                  <p className="font-semibold text-foreground">{model.publicName}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="max-w-[220px] truncate font-semibold text-foreground" title={model.publicName}>
+                    {model.publicName}
+                  </p>
+                  <p
+                    className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground"
+                    title={`${model.inputModalities.join(" + ")} · ${model.parallelToolCalls ? "并行工具" : "串行工具"}`}
+                  >
                     {model.inputModalities.join(" + ")} · {model.parallelToolCalls ? "并行工具" : "串行工具"}
                   </p>
                 </td>
                 <td className={tableCellClass}>
-                  <p className="font-medium text-foreground">{model.providerName}</p>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground">{model.upstreamName}</p>
+                  <p className="max-w-[180px] truncate font-medium text-foreground" title={model.providerName}>
+                    {model.providerName}
+                  </p>
+                  <p
+                    className="mt-1 max-w-[180px] truncate font-mono text-xs text-muted-foreground"
+                    title={model.upstreamName}
+                  >
+                    {model.upstreamName}
+                  </p>
                 </td>
                 <td className={tableCellClass}>
                   <p>{formatTokens(model.contextWindow)}</p>
@@ -116,18 +128,26 @@ export function ModelsPage() {
                     <BrainCircuit className="size-4 text-accent" />
                     {model.reasoningFormat}
                   </span>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p
+                    className="mt-1 max-w-[150px] truncate text-xs text-muted-foreground"
+                    title={model.thinkingLevels.length ? model.thinkingLevels.join(" / ") : "不支持 thinking"}
+                  >
                     {model.thinkingLevels.length ? model.thinkingLevels.join(" / ") : "不支持 thinking"}
                   </p>
                 </td>
-                <td className={`${tableCellClass} font-mono text-xs`}>
-                  {model.priceIn} / {model.priceOut} / {model.priceCacheRead}
+                <td className={`${tableCellClass} max-w-[220px] font-mono text-xs`}>
+                  <span
+                    className="block truncate"
+                    title={`${model.priceIn} / ${model.priceOut} / ${model.priceCacheRead}`}
+                  >
+                    {model.priceIn} / {model.priceOut} / {model.priceCacheRead}
+                  </span>
                 </td>
                 <td className={tableCellClass}>
                   <StatusBadge enabled={model.enabled} />
                 </td>
                 <td className={`${tableCellClass} text-right`}>
-                  <div className="flex justify-end gap-1">
+                  <div className="flex flex-nowrap justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -172,7 +192,7 @@ export function ModelsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Catalog"
         title="模型目录"
@@ -192,7 +212,7 @@ export function ModelsPage() {
         }
       />
       {providers.length === 0 && !providersQuery.isLoading && !providersQuery.error && (
-        <div className="rounded-xl bg-warning/10 p-4 text-sm text-warning-foreground ring-1 ring-warning/30">
+        <div className="rounded-xl bg-warning/10 p-3 text-sm text-warning-foreground ring-1 ring-warning/30">
           请先在 Provider 页面添加连接，再注册模型。
         </div>
       )}

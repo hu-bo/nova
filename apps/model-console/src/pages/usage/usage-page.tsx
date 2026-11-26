@@ -33,7 +33,7 @@ export function UsagePage() {
     if (!report) return null;
     return (
       <>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric
             icon={<BarChart3 className="size-5" />}
             label="Harness Runs"
@@ -65,18 +65,18 @@ export function UsagePage() {
           </Card>
         ) : (
           <TableFrame>
-            <table className="w-full min-w-[1180px]">
+            <table className="w-full min-w-[1080px]">
               <thead className={tableHeadClass}>
                 <tr>
-                  <th className="px-5 py-3">时间</th>
-                  <th className="px-5 py-3">对话</th>
-                  <th className="px-5 py-3">模型 / 版本</th>
-                  <th className="px-5 py-3">状态</th>
-                  <th className="px-5 py-3 text-right">输入</th>
-                  <th className="px-5 py-3 text-right">输出</th>
-                  <th className="px-5 py-3 text-right">缓存</th>
-                  <th className="px-5 py-3 text-right">推理</th>
-                  <th className="px-5 py-3 text-right">费用</th>
+                  <th className="px-3 py-2">时间</th>
+                  <th className="px-3 py-2">对话</th>
+                  <th className="px-3 py-2">模型 / 版本</th>
+                  <th className="px-3 py-2">状态</th>
+                  <th className="px-3 py-2 text-right">输入</th>
+                  <th className="px-3 py-2 text-right">输出</th>
+                  <th className="px-3 py-2 text-right">缓存</th>
+                  <th className="px-3 py-2 text-right">推理</th>
+                  <th className="px-3 py-2 text-right">费用</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -89,8 +89,10 @@ export function UsagePage() {
                     >
                       {item.conversationTitle || "未命名会话"}
                     </td>
-                    <td className={tableCellClass}>
-                      <span>{item.modelName}</span>
+                    <td className={`${tableCellClass} max-w-[190px]`}>
+                      <span className="inline-block max-w-[150px] truncate align-middle" title={item.modelName}>
+                        {item.modelName}
+                      </span>
                       <span className="ml-1.5 text-xs text-muted-foreground">v{item.modelConfigVersion}</span>
                     </td>
                     <td className={tableCellClass}>
@@ -106,9 +108,7 @@ export function UsagePage() {
               </tbody>
             </table>
             {report.totals.requests > report.items.length && (
-              <p className="px-5 py-3 text-xs text-muted-foreground">
-                显示最近 500 条 Run；上方汇总包含完整筛选范围。
-              </p>
+              <p className="px-3 py-2 text-xs text-muted-foreground">显示最近 500 条 Run；上方汇总包含完整筛选范围。</p>
             )}
           </TableFrame>
         )}
@@ -117,7 +117,7 @@ export function UsagePage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Harness runtime"
         title="用量与费用"
@@ -144,10 +144,14 @@ export function UsagePage() {
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <Card className="p-5">
-      <div className="grid size-10 place-items-center rounded-xl bg-accent-soft text-accent">{icon}</div>
-      <p className="mt-4 text-xl font-bold text-foreground">{value}</p>
-      <p className="mt-1 text-xs font-medium text-muted-foreground">{label}</p>
+    <Card className="min-w-0 p-3">
+      <div className="grid size-8 place-items-center rounded-lg bg-accent-soft text-accent">{icon}</div>
+      <p className="mt-2 truncate text-lg font-bold text-foreground" title={value}>
+        {value}
+      </p>
+      <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground" title={label}>
+        {label}
+      </p>
     </Card>
   );
 }
@@ -163,10 +167,14 @@ const USAGE_STATUS_VIEWS: Record<UsageStatus, { label: string; className: string
 function UsageBadge({ status, estimated }: { status: UsageStatus; estimated: boolean }) {
   const view = USAGE_STATUS_VIEWS[status] ?? USAGE_STATUS_VIEWS.failed;
   return (
-    <span className="flex flex-wrap gap-1.5">
-      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${view.className}`}>{view.label}</span>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap align-middle">
+      <span
+        className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-none ${view.className}`}
+      >
+        {view.label}
+      </span>
       {estimated && (
-        <span className="rounded-full bg-surface-tertiary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+        <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-surface-tertiary px-2 py-0.5 text-xs font-semibold leading-none text-muted-foreground">
           估算
         </span>
       )}

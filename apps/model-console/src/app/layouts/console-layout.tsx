@@ -55,7 +55,7 @@ export function ConsoleLayout() {
             <p className="hidden text-xs text-muted-foreground sm:block">模型配置管理 · 不在推理请求路径中</p>
           </div>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-full bg-success/10 px-3 py-1.5 text-xs font-semibold text-success">
+        <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-success/10 px-3 py-1.5 text-xs font-semibold text-success">
           <span className="size-2 rounded-full bg-success" aria-hidden="true" />
           管理面
         </span>
@@ -101,7 +101,7 @@ export function ConsoleLayout() {
       </dialog>
 
       <main className="pt-16 lg:ml-64">
-        <div className="mx-auto max-w-[1600px] p-5 sm:p-8 lg:p-10">
+        <div className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-6">
           <Outlet />
         </div>
       </main>
