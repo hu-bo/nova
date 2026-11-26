@@ -174,29 +174,6 @@ export function Chat<TMetadata = unknown>({
             </div>
           )}
 
-          {errorFeedback.length > 0 && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex max-h-[min(45dvh,24rem)] flex-col justify-end gap-2 overflow-y-auto px-3 pb-2 sm:px-4">
-              {errorFeedback.map((feedback) => (
-                <div
-                  key={feedback.id}
-                  className="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800 shadow-[0_18px_44px_-28px_rgb(136_19_55_/_0.5)] ring-1 ring-rose-200 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-100 dark:ring-rose-900"
-                  role="alert"
-                >
-                  <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 break-words">{feedback.message}</span>
-                  {feedback.dismissible && actions.onDismissFeedback && (
-                    <button
-                      type="button"
-                      className="shrink-0 font-semibold"
-                      onClick={() => actions.onDismissFeedback?.(feedback.id)}
-                    >
-                      关闭
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         <div
@@ -277,6 +254,30 @@ export function Chat<TMetadata = unknown>({
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {errorFeedback.length > 0 && (
+              <div className="mb-2 flex max-h-[min(45dvh,24rem)] flex-col gap-2 overflow-y-auto">
+                {errorFeedback.map((feedback) => (
+                  <div
+                    key={feedback.id}
+                    className="flex w-full items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800 shadow-[0_18px_44px_-28px_rgb(136_19_55_/_0.5)] ring-1 ring-rose-200 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-100 dark:ring-rose-900"
+                    role="alert"
+                  >
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 break-words">{feedback.message}</span>
+                    {feedback.dismissible && actions.onDismissFeedback && (
+                      <button
+                        type="button"
+                        className="shrink-0 font-semibold"
+                        onClick={() => actions.onDismissFeedback?.(feedback.id)}
+                      >
+                        关闭
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
