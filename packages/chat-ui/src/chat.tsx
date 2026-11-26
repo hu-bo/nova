@@ -162,7 +162,7 @@ export function Chat<TMetadata = unknown>({
           )}
 
           {state.pendingDecision && (
-            <div className="nova-decision-layer pointer-events-none absolute inset-0 z-20 flex flex-col justify-end">
+            <div className="nova-decision-layer pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col justify-end">
               <DecisionPrompt
                 request={state.pendingDecision}
                 autoApproveInSeconds={state.approvalAutoConfirmInSeconds}

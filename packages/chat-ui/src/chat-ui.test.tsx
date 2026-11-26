@@ -239,7 +239,7 @@ describe("chat-ui", () => {
     const composer = html.indexOf("nova-composer");
     expect(messageList).toBeGreaterThanOrEqual(0);
     expect(decisionLayer).toBeGreaterThan(messageList);
-    expect(html).toContain("pointer-events-none absolute inset-0");
+    expect(html).toContain("pointer-events-none absolute inset-x-0 top-0");
     expect(approvalCard).toBeGreaterThan(decisionLayer);
     expect(approvalCard).toBeLessThan(mobileTodo);
     expect(composer).toBeGreaterThan(approvalCard);

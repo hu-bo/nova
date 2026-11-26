@@ -318,11 +318,11 @@
 
 /* `Chat` floats the pending decision over the message area instead of stacking it under the TODO
    panel, feedback, and queued list, which on a short screen pushed the action row out of view.
-   The layer covers that area, so the card is capped by the space actually left above the composer
-   stack and not only by the viewport: the header and the actions stay put while the details scroll.
-   The stronger shadow marks it as an overlay; the layer ignores pointer events so the message
-   stream keeps scrolling beside the card. */
+   The measured composer height keeps the card above the composer stack; its available height also
+   keeps the header and actions visible while the details scroll. The stronger shadow marks it as an
+   overlay; the layer ignores pointer events so the message stream keeps scrolling beside the card. */
 .nova-chat .nova-decision-layer {
+  bottom: var(--nova-chat-composer-height, 0px);
   padding-bottom: 0.25rem;
 }
 
