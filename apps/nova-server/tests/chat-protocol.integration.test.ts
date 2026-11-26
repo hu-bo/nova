@@ -1181,6 +1181,77 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     await repository.finish(nextClaim, "succeeded");
     assert.equal(effects, 0);
   });
+  await t.test(
+    "switching to auto during a pending approval resolves it in both checkpoint columns and lets the run resume",
+    async () => {
+      const conversation = await newConversation();
+      const prepared = (await repository.prepare(conversation.id, "waiting-worker"))!;
+      const claim = claimOf(prepared);
+      const tool = defineTool({
+        name: "write",
+        description: "write",
+        effects: "write",
+        inputSchema: z.object({}),
+        async execute() {
+          return {};
+        },
+      });
+      const first = await harness(repository, claim, tool, {
+        id: "approval",
+        async authorize({ context }) {
+          const checkpoint = (await repository.load(claim)).checkpoint;
+          const prior = checkpoint.interactions.find((item) => item.callId === context.callId);
+          if (prior?.response?.kind === "approval") return prior.response.decision;
+          await repository.requestInteraction(claim, {
+            id: "approval",
+            kind: "approval",
+            callId: context.callId,
+            revision: 1,
+            state: "pending",
+            toolName: "write",
+            args: {},
+            risk: "write",
+            allowedScopes: ["once"],
+          });
+          return { kind: "ask", continuationId: "approval" };
+        },
+      });
+      try {
+        assert.equal(
+          (
+            await first.run(
+              {
+                id: prepared.command.kind === "start" ? prepared.command.messageId : randomUUID(),
+                role: "user",
+                parts: [{ type: "text", text: "Start" }],
+              },
+              { runId: claim.id },
+            )
+          ).kind,
+          "suspended",
+        );
+        await repository.suspend(claim);
+      } finally {
+        await first.close();
+      }
+      // 审批挂起时 waiting run 不可被其它 worker 认领。
+      assert.equal(await repository.prepare(conversation.id, "blocked-worker"), null);
+      // 切到 auto 必须把 pending 审批在完整 checkpoint 列与 metadata 列同时 resolve：执行器
+      // resumeClaim 与工具 policy 都读 checkpoint 列，只写 metadata 会让 run 永远停在 waiting（切 Auto 卡死）。
+      await conversationTransaction(({ repository: conv }) => conv.updateExecutionMode(conversation.id, owner, "auto"));
+      const [runRow] = (await pool.query("select checkpoint, checkpoint_metadata from runs where id=$1", [claim.id])).rows;
+      for (const column of [runRow.checkpoint, runRow.checkpoint_metadata]) {
+        const approval = column.interactions.find((item: { id: string }) => item.id === "approval");
+        assert.equal(approval?.state, "resolved", "pending approval must be resolved in both checkpoint columns");
+        assert.equal(approval?.response?.decision, "allow");
+      }
+      assert.equal(runRow.checkpoint.configuration.mode, "auto", "executor reads mode from the checkpoint column");
+      // 两列一致后 run 重新可认领，切 Auto 不再卡死。
+      const resumed = await repository.prepare(conversation.id, "resumed-worker");
+      assert.ok(resumed, "run must become claimable after switching to auto");
+      await repository.finish(claimOf(resumed!), "cancelled");
+    },
+  );
   await t.test("timeout and runner failures preserve stderr and release the next conversation turn", async () => {
     for (const scenario of [
       { code: "TIMEOUT", state: "timed_out" as const, reason: "RUN_DEADLINE", stderr: "deadline partial output" },

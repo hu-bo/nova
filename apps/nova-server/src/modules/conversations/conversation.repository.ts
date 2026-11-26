@@ -399,6 +399,7 @@ export const conversationRepository = defineRepository(
               id: runs.id,
               state: runs.state,
               revision: runs.revision,
+              checkpoint: runs.checkpoint,
               checkpointMetadata: runs.checkpointMetadata,
             })
             .from(runs)
@@ -427,9 +428,16 @@ export const conversationRepository = defineRepository(
               configuration: nextConfiguration,
               interactions,
             };
+            // 执行器 resumeClaim 与工具 policy 都读完整 checkpoint 列（readCheckpoint 在
+            // revision 对齐时直接返回它），只写 metadata 会让 checkpoint 列的审批停在 pending、
+            // mode 停在旧值：waiting run 永远领不起来，切 Auto 就卡死。两列必须一致更新。
+            const checkpoint = run.checkpoint
+              ? { ...run.checkpoint, configuration: nextConfiguration, interactions }
+              : run.checkpoint;
             await tx
               .update(runs)
               .set({
+                checkpoint,
                 checkpointMetadata,
                 revision: run.revision + 1,
                 checkpointRevision: run.revision + 1,
