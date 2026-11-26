@@ -7,8 +7,10 @@ import { createCredentialCipher, maskCredential } from "./credential-cipher.js";
 import type { ModelRow, ProviderRow } from "./model-config.repository.js";
 import {
   modelConfigurationSchema,
+  usageReportSchema,
   type CreateModelInput,
   type CreateProviderInput,
+  type GetUsageQuery,
   type UpdateModelInput,
   type UpdateProviderInput,
 } from "./model-config.schema.js";
@@ -26,6 +28,46 @@ export class ModelConfigService {
 
   async listProviders() {
     return (await this.repository.listProviders()).map(toProviderDto);
+  }
+
+  async getUsage(query: GetUsageQuery) {
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const from = query.from ? new Date(query.from) : monthStart;
+    const to = query.to ? new Date(query.to) : now;
+    if (from > to) throw new DomainError("VALIDATION_ERROR", "The end time must not be before the start time");
+    const { totals, rows } = await this.repository.getUsage(query, from, to);
+    if (!totals) throw new Error("Failed to aggregate model usage");
+    return usageReportSchema.parse({
+      generatedAt: now.toISOString(),
+      from: from.toISOString(),
+      to: to.toISOString(),
+      totals: {
+        requests: safeCount(String(totals.requests)),
+        input: safeCount(totals.input),
+        output: safeCount(totals.output),
+        cacheRead: safeCount(totals.cacheRead),
+        reasoning: safeCount(totals.reasoning),
+        cost: normalizeDecimal(totals.cost),
+      },
+      items: rows.map(({ usage, conversationTitle }) => ({
+        id: usage.runId,
+        conversationId: usage.conversationId,
+        conversationTitle: conversationTitle ?? "",
+        runId: usage.runId,
+        modelId: usage.modelId,
+        modelName: usage.modelName,
+        modelConfigVersion: usage.modelConfigVersion,
+        status: usage.status,
+        input: usage.inputTokens,
+        output: usage.outputTokens,
+        cacheRead: usage.cacheReadTokens,
+        reasoning: usage.reasoningTokens,
+        cost: normalizeDecimal(usage.cost),
+        estimated: usage.estimated,
+        createdAt: usage.createdAt.toISOString(),
+      })),
+    });
   }
 
   async createProvider(input: CreateProviderInput, principal: Principal) {
@@ -148,6 +190,18 @@ export class ModelConfigService {
     if (!model) throw new DomainError("NOT_FOUND", "Model not found");
     return toModelDto(model);
   }
+}
+
+function safeCount(value: string) {
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error("Aggregated model usage exceeds the safe integer range");
+  return count;
+}
+
+function normalizeDecimal(value: string) {
+  const [integer = "0", fraction] = value.split(".");
+  const normalizedFraction = fraction?.replace(/0+$/, "");
+  return normalizedFraction ? `${integer}.${normalizedFraction}` : integer;
 }
 
 function toProviderDto(provider: ProviderRow) {

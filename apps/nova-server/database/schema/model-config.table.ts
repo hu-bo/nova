@@ -1,4 +1,4 @@
-import { boolean, index, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { ReasoningEffort } from "@nnova/harness";
 import type { ReasoningFormat } from "@nnova/harness/plugins/model-ai-sdk";
 
@@ -11,6 +11,7 @@ export const modelConfigs = pgTable(
   "model_configs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    version: integer("version").default(1).notNull(),
     publicName: text("public_name").notNull(),
     providerId: uuid("provider_id").notNull(),
     upstreamName: text("upstream_name").notNull(),

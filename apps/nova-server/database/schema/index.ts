@@ -9,6 +9,7 @@ export { uiEvents } from "./ui-event.table.js";
 export { runnerTokens, runners, runnerOperations } from "./runner-token.table.js";
 export { modelProviders } from "./model-provider.table.js";
 export { modelConfigs } from "./model-config.table.js";
+export { modelUsages } from "./model-usage.table.js";
 export { remoteConnections } from "./remote-connection.table.js";
 export { jobs } from "./job.table.js";
 export { sessionCommits } from "./session-commit.table.js";

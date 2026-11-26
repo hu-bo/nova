@@ -153,8 +153,20 @@ export class NovaRuntime implements RuntimeAdapter {
       conversation.ownerUserId,
       configuration.reasoningEffort ?? null,
     );
-    if (configuration.modelId === null && effectiveModelId === null) {
-      await repository.pinModel(claim, route.model.id);
+    const pinDefaultModel = configuration.modelId === null && effectiveModelId === null;
+    await repository.pinModel(
+      claim,
+      {
+        modelId: route.model.id,
+        modelName: route.model.upstreamName,
+        version: route.model.version,
+        priceIn: route.model.priceIn,
+        priceOut: route.model.priceOut,
+        priceCacheRead: route.model.priceCacheRead,
+      },
+      pinDefaultModel,
+    );
+    if (pinDefaultModel) {
       configuration.modelId = route.model.id;
     }
     if (!route.model.inputModalities.includes("image")) {

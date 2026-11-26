@@ -8,6 +8,7 @@ import { providerCatalog } from "@nnova/harness/plugins/model-ai-sdk";
 import {
   createModelBodySchema,
   createProviderBodySchema,
+  getUsageQuerySchema,
   modelIdParamsSchema,
   modelSchema,
   providerIdParamsSchema,
@@ -15,6 +16,7 @@ import {
   providerAdapterDescriptorSchema,
   updateModelBodySchema,
   updateProviderBodySchema,
+  usageReportSchema,
 } from "./model-config.schema.js";
 import type { ModelConfigService } from "./model-config.service.js";
 
@@ -32,6 +34,18 @@ export async function modelConfigRoutes(app: FastifyInstance, service: ModelConf
       },
     },
     async () => success(providerAdapterDescriptorSchema.array().parse(providerCatalog)),
+  );
+  typed.get(
+    "/usage",
+    {
+      schema: {
+        operationId: "getUsage",
+        tags: ["model-config"],
+        querystring: getUsageQuerySchema,
+        response: { 200: okEnvelope(usageReportSchema), ...adminErrorResponses },
+      },
+    },
+    async (request) => success(await service.getUsage(request.query)),
   );
   typed.get(
     "/providers",

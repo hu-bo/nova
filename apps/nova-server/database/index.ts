@@ -3,6 +3,7 @@ export {
   conversations,
   jobs,
   modelConfigs,
+  modelUsages,
   modelProviders,
   remoteConnections,
   messages,

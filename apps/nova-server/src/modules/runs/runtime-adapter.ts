@@ -17,6 +17,14 @@ export interface Checkpoint {
   backendId: string;
   epoch: number;
   configuration: Configuration;
+  modelSnapshot?: {
+    modelId: string;
+    modelName: string;
+    version: number;
+    priceIn: string;
+    priceOut: string;
+    priceCacheRead: string;
+  };
   execution?: AcceptedExecution;
   nativeState: JsonValue;
   executions: ExecutionRecord[];

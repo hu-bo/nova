@@ -153,7 +153,55 @@ export const modelSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+export const usageStatusSchema = z.enum(["succeeded", "failed", "cancelled", "timed_out"]);
+export const getUsageQuerySchema = z
+  .object({
+    from: z.iso.datetime().optional(),
+    to: z.iso.datetime().optional(),
+    modelId: z.string().uuid().optional(),
+    status: usageStatusSchema.optional(),
+  })
+  .strict()
+  .refine((query) => !query.from || !query.to || query.from <= query.to, {
+    path: ["to"],
+    message: "The end time must not be before the start time",
+  });
+
+const usageTotalsSchema = z.object({
+  requests: z.number().int().nonnegative(),
+  input: z.number().int().nonnegative(),
+  output: z.number().int().nonnegative(),
+  cacheRead: z.number().int().nonnegative(),
+  reasoning: z.number().int().nonnegative(),
+  cost: z.string(),
+});
+const usageItemSchema = z.object({
+  id: z.string().uuid(),
+  conversationId: z.string().uuid(),
+  conversationTitle: z.string(),
+  runId: z.string().uuid(),
+  modelId: z.string().uuid(),
+  modelName: z.string(),
+  modelConfigVersion: z.number().int().positive(),
+  status: usageStatusSchema,
+  input: z.number().int().nonnegative(),
+  output: z.number().int().nonnegative(),
+  cacheRead: z.number().int().nonnegative(),
+  reasoning: z.number().int().nonnegative(),
+  cost: z.string(),
+  estimated: z.boolean(),
+  createdAt: z.string().datetime(),
+});
+export const usageReportSchema = z.object({
+  generatedAt: z.string().datetime(),
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+  totals: usageTotalsSchema,
+  items: usageItemSchema.array(),
+});
+
 export type CreateProviderInput = z.infer<typeof createProviderBodySchema>;
 export type UpdateProviderInput = z.infer<typeof updateProviderBodySchema>;
 export type CreateModelInput = z.infer<typeof createModelBodySchema>;
 export type UpdateModelInput = z.infer<typeof updateModelBodySchema>;
+export type GetUsageQuery = z.infer<typeof getUsageQuerySchema>;

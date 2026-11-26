@@ -1936,15 +1936,15 @@ export type DeleteModelDefault = {
 
 export type GetUsageParams = {
 /**
- * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+ * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
  */
 from?: string;
 /**
- * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+ * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
  */
 to?: string;
 /**
- * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$
+ * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
  */
 modelId?: string;
 status?: GetUsageStatus;
@@ -1962,27 +1962,27 @@ export const GetUsageStatus = {
 
 export type GetUsage200Totals = {
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   requests: number;
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   input: number;
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   output: number;
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   cacheRead: number;
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   reasoning: number;
@@ -2000,55 +2000,201 @@ export const GetUsage200ItemsItemStatus = {
 } as const;
 
 export type GetUsage200ItemsItem = {
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   conversationId: string;
   conversationTitle: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   runId: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$ */
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   modelId: string;
   modelName: string;
   /**
-     * @minimum -9007199254740991
      * @maximum 9007199254740991
+     * @exclusiveMinimum 0
      */
   modelConfigVersion: number;
   status: GetUsage200ItemsItemStatus;
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   input: number;
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   output: number;
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   cacheRead: number;
   /**
-     * @minimum -9007199254740991
+     * @minimum 0
      * @maximum 9007199254740991
      */
   reasoning: number;
   cost: string;
   estimated: boolean;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   createdAt: string;
 };
 
 export type GetUsage200 = {
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   generatedAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   from: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   to: string;
   totals: GetUsage200Totals;
   items: GetUsage200ItemsItem[];
+};
+
+export type GetUsage400Details = {[key: string]: unknown};
+
+export type GetUsage400 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: GetUsage400Details;
+};
+
+export type GetUsage401Details = {[key: string]: unknown};
+
+export type GetUsage401 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: GetUsage401Details;
+};
+
+export type GetUsage403Details = {[key: string]: unknown};
+
+export type GetUsage403 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: GetUsage403Details;
+};
+
+export type GetUsage404Details = {[key: string]: unknown};
+
+export type GetUsage404 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: GetUsage404Details;
+};
+
+export type GetUsage409Details = {[key: string]: unknown};
+
+export type GetUsage409 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: GetUsage409Details;
+};
+
+export type GetUsage500Details = {[key: string]: unknown};
+
+export type GetUsage500 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: GetUsage500Details;
+};
+
+export type GetUsage503Details = {[key: string]: unknown};
+
+export type GetUsage503 = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: GetUsage503Details;
+};
+
+export type GetUsageDefaultDetails = {[key: string]: unknown};
+
+export type GetUsageDefault = {
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  code: number;
+  /**
+     * @minimum -9007199254740991
+     * @maximum 9007199254740991
+     */
+  subCode?: number;
+  message: string;
+  requestId: string;
+  details?: GetUsageDefaultDetails;
 };
 
 export type ListProviderAdapters200ItemId = typeof ListProviderAdapters200ItemId[keyof typeof ListProviderAdapters200ItemId];
@@ -3817,7 +3963,7 @@ export const getGetUsageQueryKey = (params?: GetUsageParams,) => {
     }
 
 
-export const getGetUsageQueryOptions = <TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<unknown>>(params?: GetUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
+export const getGetUsageQueryOptions = <TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<GetUsage400 | GetUsage401 | GetUsage403 | GetUsage404 | GetUsage409 | GetUsage500 | GetUsage503 | GetUsageDefault>>(params?: GetUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -3836,10 +3982,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetUsageQueryResult = NonNullable<Awaited<ReturnType<typeof getUsage>>>
-export type GetUsageQueryError = ErrorType<unknown>
+export type GetUsageQueryError = ErrorType<GetUsage400 | GetUsage401 | GetUsage403 | GetUsage404 | GetUsage409 | GetUsage500 | GetUsage503 | GetUsageDefault>
 
 
-export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<unknown>>(
+export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<GetUsage400 | GetUsage401 | GetUsage403 | GetUsage404 | GetUsage409 | GetUsage500 | GetUsage503 | GetUsageDefault>>(
  params: undefined |  GetUsageParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getUsage>>,
@@ -3849,7 +3995,7 @@ export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError
       >, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<unknown>>(
+export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<GetUsage400 | GetUsage401 | GetUsage403 | GetUsage404 | GetUsage409 | GetUsage500 | GetUsage503 | GetUsageDefault>>(
  params?: GetUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getUsage>>,
@@ -3859,12 +4005,12 @@ export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError
       >, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<unknown>>(
+export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<GetUsage400 | GetUsage401 | GetUsage403 | GetUsage404 | GetUsage409 | GetUsage500 | GetUsage503 | GetUsageDefault>>(
  params?: GetUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
-export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<unknown>>(
+export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorType<GetUsage400 | GetUsage401 | GetUsage403 | GetUsage404 | GetUsage409 | GetUsage500 | GetUsage503 | GetUsageDefault>>(
  params?: GetUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>>, request?: SecondParameter<typeof apiMutator>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {

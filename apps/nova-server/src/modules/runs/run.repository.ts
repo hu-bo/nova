@@ -20,6 +20,7 @@ import {
 import { specAcceptanceCriteria } from "@nova/agent-ui-contracts/spec";
 import {
   conversations,
+  modelUsages,
   messages,
   pendingInputs,
   runs,
@@ -33,7 +34,7 @@ import {
 import { eventWriter, type UiEventWriter } from "../events/index.js";
 import { enqueue, rearmStaleRuns } from "../../jobs/postgres-job-store.js";
 import { DomainError } from "../../shared/domain-error.js";
-import { runtimeAdapters, runView, type Checkpoint } from "./runtime-adapter.js";
+import { nativeSnapshot, runtimeAdapters, runView, type Checkpoint } from "./runtime-adapter.js";
 import { bindingSchema } from "../projects/index.js";
 import { advanceStream, streamStateOf, type StreamState } from "./stream-state.js";
 import { runProjectionReader, type RunProjectionReader } from "./run-projection.repository.js";
@@ -558,31 +559,41 @@ export class RunRepository {
     }
     return { checkpoint: run.checkpoint, revision: run.revision, projection: run.projection };
   }
-  async pinModel(claim: RunClaim, modelId: string) {
+  async pinModel(
+    claim: RunClaim,
+    snapshot: NonNullable<Checkpoint["modelSnapshot"]>,
+    pinConfiguration: boolean,
+  ) {
     const tx = this.transactionContext();
 
     const { conversation, run } = await this.ownedClaim(tx, claim);
     if (!run.checkpoint) throw new DomainError("CONFLICT", "Checkpoint unavailable");
-    if (run.checkpoint.configuration.modelId !== null) return;
-    const configuration = { ...run.checkpoint.configuration, modelId };
+    const shouldPinConfiguration = pinConfiguration && run.checkpoint.configuration.modelId === null;
+    if (run.checkpoint.modelSnapshot && !shouldPinConfiguration) return;
+    const configuration = shouldPinConfiguration
+      ? { ...run.checkpoint.configuration, modelId: snapshot.modelId }
+      : run.checkpoint.configuration;
+    const checkpoint = { ...run.checkpoint, configuration, modelSnapshot: run.checkpoint.modelSnapshot ?? snapshot };
     await tx
       .update(runs)
       .set({
-        ...checkpointStorage({ ...run.checkpoint, configuration }),
+        ...checkpointStorage(checkpoint),
         revision: run.revision + 1,
         checkpointRevision: run.revision + 1,
       })
       .where(eq(runs.id, run.id));
-    conversation.metadata = { ...conversation.metadata, configuration };
-    await tx
-      .update(conversations)
-      .set({ metadata: conversation.metadata })
-      .where(eq(conversations.id, conversation.id));
-    await this.journal.append(conversation, {
-      runId: run.id,
-      type: "run.changed",
-      payload: { run: runView(run), configuration, capabilities: effectiveCapabilities(conversation) },
-    });
+    if (shouldPinConfiguration) {
+      conversation.metadata = { ...conversation.metadata, configuration };
+      await tx
+        .update(conversations)
+        .set({ metadata: conversation.metadata })
+        .where(eq(conversations.id, conversation.id));
+      await this.journal.append(conversation, {
+        runId: run.id,
+        type: "run.changed",
+        payload: { run: runView(run), configuration, capabilities: effectiveCapabilities(conversation) },
+      });
+    }
   }
   async releaseForRecovery(claim: RunClaim) {
     const tx = this.transactionContext();
@@ -1256,6 +1267,45 @@ export class RunRepository {
           ),
         }
       : null;
+    const usage = checkpoint ? readRunUsage(checkpoint, run.id, run.revision) : undefined;
+    const modelSnapshot = checkpoint?.modelSnapshot;
+    const usageStatus = reportStatus(state);
+    if (usage && modelSnapshot && usageStatus) {
+      const input = usage.inputTokens ?? 0;
+      const output = usage.outputTokens ?? 0;
+      const cacheRead = usage.cachedInputTokens ?? 0;
+      const reasoning = usage.reasoningTokens ?? 0;
+      await tx
+        .insert(modelUsages)
+        .values({
+          runId: run.id,
+          conversationId: conversation.id,
+          conversationTitle: conversation.title ?? "",
+          modelId: modelSnapshot.modelId,
+          modelName: modelSnapshot.modelName,
+          modelConfigVersion: modelSnapshot.version,
+          status: usageStatus,
+          inputTokens: input,
+          outputTokens: output,
+          cacheReadTokens: cacheRead,
+          reasoningTokens: reasoning,
+          cost: calculateModelCost(
+            input,
+            output,
+            cacheRead,
+            modelSnapshot.priceIn,
+            modelSnapshot.priceOut,
+            modelSnapshot.priceCacheRead,
+          ),
+          estimated:
+            usage.inputTokens === null ||
+            usage.outputTokens === null ||
+            usage.cachedInputTokens === null ||
+            usage.reasoningTokens === null,
+          createdAt: new Date(),
+        })
+        .onConflictDoNothing({ target: modelUsages.runId });
+    }
     const rejected = await tx
       .update(pendingInputs)
       .set({ status: "rejected" })
@@ -1446,6 +1496,45 @@ function checkpointStorage(checkpoint: Checkpoint | null) {
   if (!checkpoint) return { checkpoint, checkpointMetadata: null };
   const { nativeState: _nativeState, executions: _executions, ...metadata } = checkpoint;
   return { checkpoint, checkpointMetadata: metadata };
+}
+function readRunUsage(checkpoint: Checkpoint, runId: string, revision: number) {
+  if (checkpoint.backendId !== "nova") return undefined;
+  try {
+    return nativeSnapshot(checkpoint, revision).runs.find((result) => result.runId === runId)?.usage;
+  } catch {
+    // A malformed legacy snapshot must not prevent the run from reaching its terminal state.
+    return undefined;
+  }
+}
+function reportStatus(state: RunState): "succeeded" | "failed" | "cancelled" | "timed_out" | undefined {
+  switch (state) {
+    case "succeeded":
+      return "succeeded";
+    case "failed":
+    case "budget_exhausted":
+      return "failed";
+    case "cancelled":
+      return "cancelled";
+    case "timed_out":
+      return "timed_out";
+    default:
+      return undefined;
+  }
+}
+function priceUnits(price: string) {
+  const [integer = "0", fraction = ""] = price.split(".");
+  return BigInt(integer + fraction.padEnd(8, "0"));
+}
+function calculateModelCost(input: number, output: number, cacheRead: number, priceIn: string, priceOut: string, priceCacheRead: string) {
+  const regularInput = Math.max(0, input - cacheRead);
+  const tokenPriceUnits =
+    BigInt(regularInput) * priceUnits(priceIn) +
+    BigInt(output) * priceUnits(priceOut) +
+    BigInt(cacheRead) * priceUnits(priceCacheRead);
+  const amountUnits = (tokenPriceUnits + 500_000n) / 1_000_000n;
+  const whole = amountUnits / 100_000_000n;
+  const fraction = (amountUnits % 100_000_000n).toString().padStart(8, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 /** 日志里的工具状态: 未返回结果时按 dispatch 区分, 结果里再优先透出 unknown/denied. */
 function operationState(entry: import("@nnova/harness").ExecutionRecord) {

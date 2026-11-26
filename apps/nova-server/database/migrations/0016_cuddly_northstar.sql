@@ -1,0 +1,1 @@
+ALTER TABLE "model_usages" ADD COLUMN "conversation_title" text NOT NULL;

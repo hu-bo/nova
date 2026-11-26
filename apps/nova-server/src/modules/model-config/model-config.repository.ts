@@ -1,9 +1,19 @@
 import { createScope, defineRepository } from "../../shared/scope.js";
-import { modelConfigs, modelProviders, type Database } from "../../../database/index.js";
-import { and, asc, eq, isNull, ne, or } from "drizzle-orm";
+import { modelConfigs, modelProviders, modelUsages, type Database } from "../../../database/index.js";
+import { and, asc, count, desc, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
+import type { GetUsageQuery } from "./model-config.schema.js";
 
 export type ProviderRow = typeof modelProviders.$inferSelect;
 export type ModelRow = typeof modelConfigs.$inferSelect;
+
+function usageConditions(query: GetUsageQuery, from: Date, to: Date) {
+  return and(
+    gte(modelUsages.createdAt, from),
+    lte(modelUsages.createdAt, to),
+    ...(query.modelId ? [eq(modelUsages.modelId, query.modelId)] : []),
+    ...(query.status ? [eq(modelUsages.status, query.status)] : []),
+  );
+}
 
 export type ProviderInsert = Pick<
   typeof modelProviders.$inferInsert,
@@ -51,6 +61,27 @@ export type ModelWrite = Pick<
 
 export const modelConfigRepository = defineRepository(({ db, requireTransaction }) => {
   return {
+    async getUsage(query: GetUsageQuery, from: Date, to: Date) {
+      const where = usageConditions(query, from, to);
+      const [totals] = await db
+        .select({
+          requests: count(),
+          input: sql<string>`coalesce(sum(${modelUsages.inputTokens}), 0)::text`,
+          output: sql<string>`coalesce(sum(${modelUsages.outputTokens}), 0)::text`,
+          cacheRead: sql<string>`coalesce(sum(${modelUsages.cacheReadTokens}), 0)::text`,
+          reasoning: sql<string>`coalesce(sum(${modelUsages.reasoningTokens}), 0)::text`,
+          cost: sql<string>`coalesce(sum(${modelUsages.cost}), 0)::text`,
+        })
+        .from(modelUsages)
+        .where(where);
+      const rows = await db
+        .select({ usage: modelUsages, conversationTitle: modelUsages.conversationTitle })
+        .from(modelUsages)
+        .where(where)
+        .orderBy(desc(modelUsages.createdAt), desc(modelUsages.runId))
+        .limit(500);
+      return { totals, rows };
+    },
     async listVisibleModels(owner: string) {
       const rows = await db
         .select({ model: modelConfigs, provider: modelProviders })
@@ -112,7 +143,7 @@ export const modelConfigRepository = defineRepository(({ db, requireTransaction 
         .returning();
       const [model] = await tx
         .update(modelConfigs)
-        .set({ ...modelPatch, updatedAt: now })
+        .set({ ...modelPatch, version: sql`${modelConfigs.version} + 1`, updatedAt: now })
         .where(eq(modelConfigs.id, id))
         .returning();
       return model && provider ? { model, provider } : undefined;
@@ -264,7 +295,7 @@ export const modelConfigRepository = defineRepository(({ db, requireTransaction 
     async updateModel(id: string, patch: Partial<ModelWrite>): Promise<ModelRow | undefined> {
       const [model] = await db
         .update(modelConfigs)
-        .set({ ...patch, updatedAt: new Date() })
+        .set({ ...patch, version: sql`${modelConfigs.version} + 1`, updatedAt: new Date() })
         .where(and(eq(modelConfigs.id, id), isNull(modelConfigs.deletedAt)))
         .returning();
       return model;
