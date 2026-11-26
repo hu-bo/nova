@@ -1480,6 +1480,7 @@ function runFailureCopy(reason: string): string {
       TOOL_LIMIT: "已达到本轮工具调用次数上限，任务尚未完成。可以发送“继续”，接着当前进度处理。",
       RUN_DEADLINE: "本轮运行超过时限被中止，可以发送消息继续处理或稍后重试。",
       MODEL_UNAVAILABLE: "所选模型不可用，请检查模型配置或切换模型后重试。",
+      MODEL_INCOMPATIBLE: "所选模型无法处理本轮消息，请检查图片支持设置或切换模型后重试。",
       INFERENCE_STRENGTH_UNAVAILABLE: "所选模型不支持当前推理强度，请调整推理强度或切换模型后重试。",
     }[reason] ?? "本轮运行失败，可以发送消息继续处理或稍后重试。"
   );

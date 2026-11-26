@@ -1,6 +1,7 @@
 import { ModelConfigService } from "../src/modules/model-config/model-config.service.js";
 import { createModelConfigRepository } from "../src/modules/model-config/model-config.repository.js";
 import { createModelBodySchema } from "../src/modules/model-config/model-config.schema.js";
+import { createRunService, type RunService as RunRepository } from "../src/modules/runs/run.service.js";
 import { createRunRepository } from "../src/modules/runs/run.repository.js";
 import { readCheckpoint } from "../src/modules/runs/session-checkpoint.repository.js";
 import { createScope, defineService } from "../src/shared/scope.js";
@@ -47,6 +48,7 @@ import {
   commitSessionUpdate,
   applySessionCommit,
   type AgentEvent,
+  type AgentMessage,
   FrameworkError,
   type SessionCommit,
   type SessionSnapshot,
@@ -104,10 +106,9 @@ import {
 } from "../database/index.js";
 import { createConversationRepository } from "../src/modules/conversations/conversation.repository.js";
 import type { RunClaim } from "../src/modules/runs/run.repository.js";
-import { createRunService, type RunService as RunRepository } from "../src/modules/runs/run.service.js";
 import { postgresSessionPlugin } from "../src/modules/runs/postgres-session-store.js";
 import { nativeSnapshot, runtimeAdapters, type Checkpoint, type RuntimeAdapter } from "../src/modules/runs/runtime-adapter.js";
-import { cancelPendingTools, executionEffectState } from "../src/modules/runs/session-checkpoint.js";
+import { cancelPendingTools, checkpointAfter, executionEffectState } from "../src/modules/runs/session-checkpoint.js";
 import { publicOutcome } from "../src/modules/runs/run-dto.js";
 import "../src/modules/runs/nova-runtime.js";
 import { ConversationExecutor } from "../src/modules/runs/conversation-executor.js";
@@ -1869,6 +1870,87 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
           } finally {
             await db.update(modelConfigs).set({ enabled: true }).where(eq(modelConfigs.id, modelEntry!.id));
           }
+        });
+        await httpTest.test("an incompatible image input does not poison the next text turn", async () => {
+          const imageUrl = "https://images.invalid/unsupported.png";
+          const imagePrompt = "请描述这张图片";
+          const conversation = await conversationRepository.create({
+            ownerUserId: owner,
+            mode: "chat",
+            projectId: null,
+            title: "Image compatibility",
+            metadata: {
+              configuration: { backendId: "nova", modelId: modelEntry!.id, mode: "build" },
+            },
+            initialInput: {
+              blocks: [
+                { id: "text", type: "text", text: imagePrompt },
+                {
+                  id: "image",
+                  type: "image",
+                  attachment: {
+                    ref: { kind: "image", url: imageUrl },
+                    name: "image.png",
+                    mimeType: "image/png",
+                    size: 10,
+                  },
+                },
+              ],
+            },
+          });
+          const beforeRequests = requests.length;
+
+          await executor.handle({ aggregateId: conversation.id } as never);
+          const failed = await snapshot(conversation.id);
+          assert.equal(failed.run?.state, "failed");
+          assert.equal(failed.run?.reason, "MODEL_INCOMPATIBLE");
+          assert.match(JSON.stringify(failed.messages.at(-1)?.blocks), /图片支持/);
+          assert.equal(requests.length, beforeRequests, "unsupported images are rejected before provider dispatch");
+
+          const [failedRun] = await db.select().from(runs).where(eq(runs.id, failed.run!.id));
+          assert.ok(failedRun?.checkpoint);
+          const oldImageInput: AgentMessage = {
+            role: "user",
+            parts: [
+              { type: "text", text: imagePrompt },
+              {
+                type: "image",
+                reference: { id: "image", uri: imageUrl, mediaType: "image/png", sizeBytes: 10 },
+              },
+            ],
+          };
+          const oldSession = nativeSnapshot(failedRun.checkpoint, failedRun.revision);
+          const oldCheckpoint = checkpointAfter(
+            failedRun.checkpoint,
+            { ...oldSession, messages: [oldImageInput] },
+            {},
+          );
+          await db.update(runs).set({ checkpoint: oldCheckpoint }).where(eq(runs.id, failedRun.id));
+          const [failedConversation] = await db
+            .select()
+            .from(conversations)
+            .where(eq(conversations.id, conversation.id));
+          assert.ok(failedConversation);
+          await db
+            .update(conversations)
+            .set({ metadata: { ...failedConversation.metadata, latestCheckpointRunId: failedRun.id } })
+            .where(eq(conversations.id, conversation.id));
+
+          await conversationRepository.enqueue({
+            conversationId: conversation.id,
+            ownerUserId: owner,
+            mode: "next_run",
+            blocks: [{ id: "text", type: "text", text: "继续处理文字消息" }],
+          });
+          await executor.handle({ aggregateId: conversation.id } as never);
+
+          const recovered = await snapshot(conversation.id);
+          assert.equal(recovered.run?.state, "succeeded");
+          assert.deepEqual(recovered.pendingInputs, []);
+          const followUpRequests = requests.slice(beforeRequests);
+          assert.equal(followUpRequests.length, 2);
+          assert.ok(!JSON.stringify(followUpRequests).includes(imagePrompt));
+          assert.ok(!JSON.stringify(followUpRequests).includes(imageUrl));
         });
         await httpTest.test("workspace tasks are not limited to 64 model steps or tool executions", async () => {
           upstreamStatus = 200;

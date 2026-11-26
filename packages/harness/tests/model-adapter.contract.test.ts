@@ -578,7 +578,7 @@ test("Anthropic thinking signatures survive the shared stream and replay with to
   );
 });
 
-test("compatible reasoning is replayed and object image references are resolved at the host boundary", async (t) => {
+test("compatible reasoning is replayed and text with object images is resolved at the host boundary", async (t) => {
   const bodies: unknown[] = [];
   const resolved: string[] = [];
   const model = await adapter(
@@ -599,6 +599,7 @@ test("compatible reasoning is replayed and object image references are resolved 
   const input: AgentMessage = {
     role: "user",
     parts: [
+      { type: "text", text: "What is shown in this picture?" },
       { type: "image", reference: { id: "image", uri: "nova-object:private", mediaType: "image/png", sizeBytes: 10 } },
     ],
   };
@@ -615,6 +616,7 @@ test("compatible reasoning is replayed and object image references are resolved 
   await consume(model, { messages: [input, completed.message] });
   assert.deepEqual(resolved, ["nova-object:private", "nova-object:private"]);
   for (const body of bodies) assert.equal(z.record(z.string(), z.unknown()).parse(body).reasoning_split, true);
+  assert.ok(JSON.stringify(bodies[0]).includes("What is shown in this picture?"));
   assert.ok(JSON.stringify(bodies[0]).includes("https://images.invalid/signed"));
   assert.ok(JSON.stringify(bodies[1]).includes('"reasoning_content":"consider"'));
 });

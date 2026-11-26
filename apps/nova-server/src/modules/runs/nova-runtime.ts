@@ -34,8 +34,16 @@ import { resolveProjectInstructions } from "./project-instructions.js";
 import type { ConversationRow, RunClaim } from "./run.repository.js";
 import type { RunService } from "./run.service.js";
 import type { AcceptedExecution } from "./agent-profile.js";
-import type { Checkpoint, RuntimeAdapter, RuntimeCommand, RuntimeContext, RuntimeOutcome } from "./runtime-adapter.js";
-import { runtimeAdapters } from "./runtime-adapter.js";
+import {
+  nativeSnapshot,
+  runtimeAdapters,
+  type Checkpoint,
+  type RuntimeAdapter,
+  type RuntimeCommand,
+  type RuntimeContext,
+  type RuntimeOutcome,
+} from "./runtime-adapter.js";
+import { checkpointAfter } from "./session-checkpoint.js";
 import type { UploadStorage } from "../attachments/index.js";
 type Prepared = NonNullable<Awaited<ReturnType<RunService["prepare"]>>>;
 const object = (value: unknown): Record<string, unknown> =>
@@ -148,6 +156,13 @@ export class NovaRuntime implements RuntimeAdapter {
     if (configuration.modelId === null && effectiveModelId === null) {
       await repository.pinModel(claim, route.model.id);
       configuration.modelId = route.model.id;
+    }
+    if (!route.model.inputModalities.includes("image")) {
+      if (command.kind === "start" && command.input.blocks.some((block) => block.type === "image"))
+        throw new DomainError("CONFLICT", "Selected model does not support image input", {
+          reason: "MODEL_INCOMPATIBLE",
+        });
+      await this.removeUnsupportedImages(claim);
     }
     const remoteId = binding?.remoteConnectionId ?? configuration.remoteConnectionId;
     const workspace = binding?.canonicalCwd ?? ".";
@@ -623,6 +638,16 @@ export class NovaRuntime implements RuntimeAdapter {
       ...(result.budgetReason ? { reason: result.budgetReason } : {}),
       ...(result.error ? { reason: result.error.code, ...(result.error.detail ? { detail: result.error.detail } : {}) } : {}),
     };
+  }
+  private async removeUnsupportedImages(claim: RunClaim): Promise<void> {
+    const { checkpoint, revision } = await this.deps.repository.load(claim);
+    const session = nativeSnapshot(checkpoint, revision);
+    if (!session.messages.some((message) => message.parts.some((part) => part.type === "image"))) return;
+    const messages = session.messages.filter(
+      (message) => !message.parts.some((part) => part.type === "image"),
+    );
+    const cleanedSession = { ...session, messages };
+    await this.deps.repository.commit(claim, revision, checkpointAfter(checkpoint, cleanedSession, {}));
   }
   async dispose() {
     await this.harness?.close();

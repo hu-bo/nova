@@ -11,6 +11,7 @@ import { resolveRemotePath, relativeRemotePath } from '../src/features/remotes/r
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   append: vi.fn(),
+  updateMode: vi.fn(),
   remove: vi.fn(),
   removeAsync: vi.fn(),
   steer: vi.fn(),
@@ -64,6 +65,10 @@ vi.mock('../src/features/conversations/conversation.queries', () => ({
     mutateAsync: mocks.append,
     isPending: false,
     error: null,
+  }),
+  useUpdateConversationExecutionModeMutation: () => ({
+    mutateAsync: mocks.updateMode,
+    isPending: false,
   }),
   useSteerPendingInputMutation: () => ({ mutateAsync: mocks.steer, isPending: false }),
   useRemovePendingInputMutation: () => ({
@@ -191,6 +196,7 @@ afterEach(() => {
   localStorage.clear();
   mocks.create.mockReset();
   mocks.append.mockReset();
+  mocks.updateMode.mockReset();
   mocks.remove.mockReset();
   mocks.removeAsync.mockReset();
   mocks.steer.mockReset();
@@ -618,14 +624,41 @@ describe('SSH filesystem selection', () => {
       expect.objectContaining({ type: 'file', attachment }),
     );
   });
+  it('submits image attachments together with their text prompt', async () => {
+    mocks.append.mockResolvedValue({ inputId: 'image-input' });
+    const { result } = mount({
+      conversationId: 'existing',
+      runtime: { backendId: 'nova', modelId: null, mode: 'build' },
+    });
+    const attachment = attachmentSchema.parse({
+      ref: { kind: 'image', url: 'https://uploads.invalid/image.png' },
+      name: 'image.png',
+      mimeType: 'image/png',
+      size: 10,
+      sha256: 'a'.repeat(64),
+    });
+
+    await act(async () => {
+      await result.current.submit({
+        text: '请描述这张图片',
+        files: [],
+        attachments: [{ id: 'image-1', name: 'image.png', metadata: attachment }],
+      });
+    });
+
+    expect(mocks.append.mock.calls[0]![0].blocks).toEqual([
+      { id: 'text', type: 'text', text: '请描述这张图片' },
+      { id: 'attachment:0', type: 'image', attachment },
+    ]);
+  });
 });
 describe('conversation commands', () => {
-  it('keeps image paste enabled without the uploads capability and disabled for remote workspaces', () => {
+  it('keeps image paste enabled when the uploads service is unavailable', () => {
     // 能力门控只应体现在上传失败提示上，不再静默禁用输入框的粘贴入口。
     expect(mount().result.current.composer.allowFiles).toBe(true);
     expect(
       mount({ mode: 'project', projectId: 'project-1' }).result.current.composer.allowFiles,
-    ).toBe(false);
+    ).toBe(true);
   });
   it('creates a conversation only after the first accepted message and keeps failed text available', async () => {
     mocks.create
