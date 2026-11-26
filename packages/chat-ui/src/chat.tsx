@@ -201,7 +201,7 @@ export function Chat<TMetadata = unknown>({
 
         <div
           ref={composerDockRef}
-          className="absolute inset-x-0 bottom-0 z-20 min-w-0 overflow-visible border-t border-slate-200/50  px-3 pb-0 pt-0 dark:border-slate-800/60 dark:bg-slate-950/30 sm:px-4 sm:pb-1.5"
+          className="absolute inset-x-0 bottom-0 z-20 min-w-0 overflow-visible px-3 pb-0 pt-0 dark:bg-slate-950/30 sm:px-4 sm:pb-1.5"
         >
           <div className="nova-chat-content">
             {sidebarOpen && incompleteTodos > 0 && (
