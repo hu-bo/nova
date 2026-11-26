@@ -4,7 +4,7 @@ import type { Database } from "../../../database/index.js";
 import { artifactRepository } from "./artifact.repository.js";
 
 /**
- * 产物清理调度（docs/nova-skills.md §7 清理段，P1-F1）。
+ * 产物清理调度（docs/design/nova-skills.md §7 清理段，P1-F1）。
  * 删除会话时由 conversations 域在既有删除 Run 的事务中调用本端口：
  * 级联删行前收集对象键并写入对象删除 Job（事务外由 worker handler 删对象）。
  * 项目删除沿会话清理路径进行；停用技能不删除历史产物（本端口只挂在会话删除上）。

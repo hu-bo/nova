@@ -6,7 +6,7 @@ import type { GetProjectBinding200 } from '@/api/generated/projectsAPI.schemas';
 import { queryKeys } from '@/api/query-keys';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { ConfirmationDialog } from '@/components/ui/dialog';
 import { useIdentity } from '@/features/auth';
 import { RunnerManagerDialog } from '@/features/settings';
 import { runnerStatus, useRunnersQuery } from '@/features/runners';

@@ -7,7 +7,7 @@ import { createRemoteConnection, updateRemoteConnection } from '@/api/generated/
 import { ErrorNotice } from '@/components/error-notice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { SettingsDialog } from '@/components/ui/settings-dialog';
+import { SettingsDialog } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { FieldLabel, Select } from '@/lib/form';
 import { zodResolver } from '@hookform/resolvers/zod';

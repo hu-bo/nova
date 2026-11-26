@@ -1,7 +1,7 @@
 /**
  * Query key factory with identity scope.
  *
- * 与 docs/nova-client.md §6.2 对齐: 所有 cache key 必须以 `['nova', identityId, ...]` 开头,
+ * 与 docs/design/nova-client.md §6.2 对齐: 所有 cache key 必须以 `['nova', identityId, ...]` 开头,
  * 切换身份时由 clearAll() 把 cache 清空; 不能跨身份复用 query key. 后续 team 功能接入
  * space 时, 在 identity 与 resource 之间追加 activeSpaceId 一段.
  */

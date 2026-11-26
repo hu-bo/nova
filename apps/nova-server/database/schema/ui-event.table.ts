@@ -1,18 +1,18 @@
-import { bigint, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { productId } from "./product-id.js";
 import type { ProductEvent } from "@nova/agent-ui-contracts";
 export const uiEvents = pgTable(
   "ui_events",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    conversationId: uuid("conversation_id").notNull(),
+    conversationId: productId("conversation_id", "conversation").notNull(),
     sequence: bigint("sequence", { mode: "bigint" }).notNull(),
-    runId: uuid("run_id"),
+    runId: productId("run_id", "run"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
     type: text("type").$type<ProductEvent["type"]>().notNull(),
     payload: jsonb("payload").$type<ProductEvent["payload"]>().notNull(),
   },
   (table) => [
-    index("ui_events_conversation_sequence_idx").on(table.conversationId, table.sequence),
+    primaryKey({ columns: [table.conversationId, table.sequence], name: "ui_events_pkey" }),
     index("ui_events_occurred_at_idx").on(table.occurredAt),
   ],
 );

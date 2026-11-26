@@ -25,6 +25,7 @@ import { createEventService } from "../src/modules/events/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
+import { newProductId } from "../database/schema/product-id.js";
 import { readFile, readdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
@@ -116,7 +117,7 @@ import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { createAppLogger } from "../src/shared/logger.js";
 import { createJobHost } from "../src/jobs/job-registry.js";
-import { claim as claimJobs, enqueue as enqueueJob } from "../src/jobs/postgres-job-store.js";
+import { claim as claimJobs, enqueue as enqueueJob, rearmStaleRuns } from "../src/jobs/postgres-job-store.js";
 
 const url = process.env.TEST_DATABASE_URL;
 test("effect state tracks unfinished writes but does not expose unknown terminal outcomes", () => {
@@ -246,8 +247,26 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     ]),
   ]);
   await pool.query("insert into runs(conversation_id,state) values($1,'running')", [legacyId]);
-  for (const file of migrationFiles.filter((file) => file >= "0006"))
-    await pool.query(await readFile(new URL(file, directory), "utf8"));
+  const compactMigration = "0017_compact_product_ids.sql";
+  for (const file of migrationFiles.filter((file) => file >= "0006" && file < compactMigration))
+    await pool.query((await readFile(new URL(file, directory), "utf8")).replaceAll('"public".', ""));
+  const compactSql = await readFile(new URL(compactMigration, directory), "utf8");
+  await t.test("legacy migration preserves history and compact ID migration requires clearing it", async () => {
+    const [conversation] = (await pool.query(
+      "select metadata, event_floor_sequence from conversations where id=$1", [legacyId],
+    )).rows;
+    const [message] = (await pool.query("select sequence, blocks from messages where conversation_id=$1", [legacyId])).rows;
+    const [run] = (await pool.query("select state from runs where conversation_id=$1", [legacyId])).rows;
+    assert.equal(conversation.metadata.configuration.mode, "plan");
+    assert.equal(conversation.event_floor_sequence, "3");
+    assert.equal(message.sequence, "1");
+    assert.equal(message.blocks[1]?.type, "image");
+    assert.equal(run.state, "failed");
+    await assert.rejects(pool.query(compactSql), { code: "55000" });
+  });
+  await pool.query("truncate conversations, messages, runs cascade");
+  for (const file of migrationFiles.filter((file) => file >= compactMigration))
+    await pool.query(file === compactMigration ? compactSql : (await readFile(new URL(file, directory), "utf8")).replaceAll('"public".', ""));
   const repository = createRunService(db);
   const eventRetention = createEventRetentionService(db, createConversationEventHeads(db));
   const rawConversations = createConversationRepository(db);
@@ -399,13 +418,42 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       await repository.finish(nextClaim, "succeeded");
     }
   });
-  await t.test("forward migration preserves history and ends nonrecoverable legacy runs", async () => {
-    const migrated = await snapshot(legacyId);
-    assert.equal(migrated.messages[0]?.sequence, "1");
-    assert.equal(migrated.messages[0]?.blocks[1]?.type, "image");
-    assert.equal(migrated.conversation.configuration.mode, "plan");
-    const [run] = await db.select().from(runs).where(eq(runs.conversationId, legacyId));
-    assert.equal(run?.state, "failed");
+  await t.test("compact IDs round trip through the event journal, job queue and API", async (child) => {
+    const conversation = await newConversation();
+    const run = (await repository.prepare(conversation.id, "compact-id-worker"))!.run;
+    const [input] = await db.select().from(pendingInputs).where(eq(pendingInputs.conversationId, conversation.id));
+    assert.match(conversation.id, /^cv_[A-Za-z0-9_-]{16}$/);
+    assert.match(run.id, /^rn_[A-Za-z0-9_-]{16}$/);
+    assert.match(input!.id, /^pi_[A-Za-z0-9_-]{16}$/);
+    assert.match(input!.fingerprint, /^[A-Za-z0-9_-]{43}$/);
+    const [size] = await db.select({
+      length: sql<number>`octet_length(${conversations.id})`,
+      bytes: sql<number>`pg_column_size(${conversations.id})`,
+    }).from(conversations).where(eq(conversations.id, conversation.id));
+    assert.deepEqual(size, { length: 12, bytes: 13 });
+    const app = await buildApp(loadConfig({ DATABASE_URL: target.toString(), LOG_LEVEL: "silent", AUTH_MODE: "dev" }), {
+      exportMode: true,
+    });
+    await app.ready();
+    child.after(() => app.close());
+    const headers = { authorization: "Bearer dev:" + owner + ":compact-id-owner" };
+    const response = await app.inject({ method: "GET", url: "/api/conversations/" + conversation.id + "/snapshot", headers });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().data.run.id, run.id);
+    const wrongKind = await app.inject({ method: "GET", url: "/api/conversations/" + run.id + "/snapshot", headers });
+    assert.equal(wrongKind.statusCode, 400);
+    await db.update(runs).set({ leaseUntil: new Date(0) }).where(eq(runs.id, run.id));
+    await rearmStaleRuns({ db });
+    await rearmStaleRuns({ db });
+    const recoveryJob = await db.select().from(schema.jobs)
+      .where(eq(schema.jobs.dedupeKey, `recover:${run.id}:${run.revision}`));
+    assert.equal(recoveryJob.length, 1);
+    assert.equal(recoveryJob[0]?.aggregateId, conversation.id);
+    assert.deepEqual(recoveryJob[0]?.payload, { conversationId: conversation.id });
+    const recovered = await repository.prepare(conversation.id, "compact-id-recovery");
+    assert.equal(recovered?.run.id, run.id);
+    await repository.finish(claimOf(recovered!), "succeeded");
+    assert.equal((await snapshot(conversation.id)).run?.id, run.id);
     const tables = await pool.query(
       "select tablename from pg_tables where schemaname=current_schema() order by tablename",
     );
@@ -414,10 +462,6 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       Object.values(schema)
         .map((table) => getTableName(table))
         .sort(),
-    );
-    assert.equal(
-      (await db.select().from(conversations).where(eq(conversations.id, legacyId)))[0]?.eventFloorSequence,
-      3n,
     );
   });
   await t.test("synchronous event batching pauses on failure and retries a lost acknowledgement once", async () => {
@@ -620,9 +664,8 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     const loaded = await repository.load(claim);
     const block = loaded.projection!.messages[0]!.blocks[0]!;
     assert.equal(block.type === "text" && block.text, "新😀" + "x".repeat(1001));
-    await pool.query("update ui_events set occurred_at=now()-interval '2 days' where conversation_id=$1", [
-      conversation.id,
-    ]);
+    await db.update(uiEvents).set({ occurredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) })
+      .where(eq(uiEvents.conversationId, conversation.id));
     await eventRetention.retain();
     assert.deepEqual(
       (await repository.load(claim)).projection,
@@ -659,9 +702,8 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     const loaded = await repository.load(claim);
     const block = loaded.projection!.messages[0]!.blocks[0]!;
     assert.equal(block.type === "text" && block.text, text.repeat(20));
-    await pool.query("update ui_events set occurred_at=now()-interval '2 days' where conversation_id=$1", [
-      conversation.id,
-    ]);
+    await db.update(uiEvents).set({ occurredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) })
+      .where(eq(uiEvents.conversationId, conversation.id));
     await eventRetention.retain();
     assert.deepEqual((await repository.load(claim)).projection, loaded.projection);
     await repository.finish(claim, "failed", "TEST_END");
@@ -872,7 +914,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       assert.equal(stopped, false);
       releases.forEach((release) => release());
       await stopping;
-      const completed = await pool.query("select status from jobs where aggregate_id=ANY($1::uuid[])", [ids]);
+      const completed = await pool.query("select status from jobs where aggregate_id=ANY($1::text[])", [ids]);
       assert.ok(completed.rows.every((row) => row.status === "succeeded"));
     } finally {
       releases.forEach((release) => release());
@@ -1239,8 +1281,10 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
       // 切到 auto 必须把 pending 审批在完整 checkpoint 列与 metadata 列同时 resolve：执行器
       // resumeClaim 与工具 policy 都读 checkpoint 列，只写 metadata 会让 run 永远停在 waiting（切 Auto 卡死）。
       await conversationTransaction(({ repository: conv }) => conv.updateExecutionMode(conversation.id, owner, "auto"));
-      const [runRow] = (await pool.query("select checkpoint, checkpoint_metadata from runs where id=$1", [claim.id])).rows;
-      for (const column of [runRow.checkpoint, runRow.checkpoint_metadata]) {
+      const [runRow] = await db.select({ checkpoint: runs.checkpoint, checkpointMetadata: runs.checkpointMetadata })
+        .from(runs).where(eq(runs.id, claim.id));
+      assert.ok(runRow?.checkpoint && runRow.checkpointMetadata);
+      for (const column of [runRow.checkpoint, runRow.checkpointMetadata]) {
         const approval = column.interactions.find((item: { id: string }) => item.id === "approval");
         assert.equal(approval?.state, "resolved", "pending approval must be resolved in both checkpoint columns");
         assert.equal(approval?.response?.decision, "allow");
@@ -2677,7 +2721,7 @@ test("durable chat protocol with real PostgreSQL", { skip: !url }, async (t) => 
     assert.equal((await service.readImage(input)).data, "image");
     for (const invalid of [
       { ...input, ownerUserId: randomUUID() },
-      { ...input, conversationId: randomUUID() },
+      { ...input, conversationId: newProductId("conversation") },
       { ...input, messageId: randomUUID() },
       { ...input, blockId: "missing" },
     ])

@@ -3,7 +3,7 @@ import { idSchema, publicErrorSchema } from "./messages.js";
 import { runStateSchema } from "./runtime.js";
 
 /**
- * 文件产物共享契约（docs/nova-skills.md §7、§8.1、P1-A1）。
+ * 文件产物共享契约（docs/design/nova-skills.md §7、§8.1、P1-A1）。
  * 产物状态只描述文件发布（publishing/ready/failed）；执行结果仍读 `runs.state`，
  * 不维护第二套技能运行状态机。归属由 Run→会话链派生，事件仅带定位三元组，
  * 客户端据事件刷新 `GET /conversations/:id/artifacts`。

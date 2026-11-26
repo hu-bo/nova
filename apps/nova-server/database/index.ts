@@ -25,5 +25,6 @@ export {
   runArtifacts,
 } from "./schema/index.js";
 export { sql } from "drizzle-orm";
+export { formatProductId, productIdText } from "./schema/product-id.js";
 export type { RunState } from "./schema/run.table.js";
 export type { ConversationMetadata } from "./schema/conversation.table.js";

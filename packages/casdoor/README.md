@@ -4,7 +4,7 @@ Casdoor SDK for browser apps backed by auth-service.
 
 React 使用 `@nova/casdoor/client/react`；Provider 会启动和释放会话刷新。直接 `new CasdoorClient(config)` 时，构造函数只读取状态，挂载后调用 `client.start()`、卸载时 `client.destroy()`；`createCasdoorClient()` 与 Vue `initCasdoor()` 会自动启动。
 
-回调要求同一标签页已保存的 OAuth state，缺失或不一致会拒绝交换。刷新在 client 内合并，退出后的旧异步响应不会恢复会话。需要页面刷新后保留会话时配置 `storage.type: 'sessionStorage'`；业务请求使用 SDK getter 获取当前 token，不拼接存储键。Nova 的完整接线见 [Casdoor 接入](../../docs/casdoor.md)。
+回调要求同一标签页已保存的 OAuth state，缺失或不一致会拒绝交换。刷新在 client 内合并，退出后的旧异步响应不会恢复会话。需要页面刷新后保留会话时配置 `storage.type: 'sessionStorage'`；业务请求使用 SDK getter 获取当前 token，不拼接存储键。Nova 的完整接线见 [Casdoor 接入](../../docs/guides/casdoor.md)。
 
 ## Install
 
@@ -68,4 +68,4 @@ const identity = await auth.verifyAccessToken(accessToken, abortSignal);
 - `POST /api/apps/{app_name}/oauth/token/refresh`
 - `GET /api/me`
 
-[packages\casdoor\example](packages\casdoor\example)
+[React 和 Vue 接入示例](example/)

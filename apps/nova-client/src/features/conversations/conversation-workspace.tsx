@@ -9,8 +9,8 @@ import type { GetConversationSnapshot200 } from '@/api/generated/projectsAPI.sch
 import { queryKeys } from '@/api/query-keys';
 import { ErrorNotice } from '@/components/error-notice';
 import { Button } from '@/components/ui/button';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import {
+  ConfirmationDialog,
   Dialog,
   DialogBody,
   DialogContent,
@@ -18,10 +18,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  SettingsDialog,
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
-import { SettingsDialog } from '@/components/ui/settings-dialog';
 import { AttachmentImage } from '@/features/attachments';
 import { ArtifactsPanel, useConversationArtifactsQuery } from '@/features/artifacts';
 import { useIdentity } from '@/features/auth';

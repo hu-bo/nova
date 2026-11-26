@@ -5,8 +5,7 @@ import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ErrorNotice } from '@/components/error-notice';
-import { SettingsDialog } from '@/components/ui/settings-dialog';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { ConfirmationDialog, SettingsDialog } from '@/components/ui/dialog';
 import {
   Table,
   TableBody,

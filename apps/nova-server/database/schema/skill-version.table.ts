@@ -3,7 +3,7 @@ import type { SkillExecutionRequirements, SkillResourceEntry } from "@nova/agent
 import { skills } from "./skill.table.js";
 
 /**
- * 不可变技能执行版本表（docs/nova-skills.md §6、§8.1）。
+ * 不可变技能执行版本表（docs/design/nova-skills.md §6、§8.1）。
  * - 发布后不覆盖正文与执行配置；同 (skillId, version) 不同摘要的写入被服务层拒绝（409），
  *   不提供物理删除入口，已引用版本保留。
  * - sha256 覆盖「规范化正文 + 执行配置 + 资源清单」，版本摘要即快照身份。

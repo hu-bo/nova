@@ -1,4 +1,5 @@
 import { bigint, boolean, index, jsonb, pgTable, text as pgTableText, timestamp, uuid } from "drizzle-orm/pg-core";
+import { productId } from "./product-id.js";
 
 /**
  * Runner token 表:
@@ -66,7 +67,7 @@ export const runnerOperations = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     operationId: pgTableText("operation_id").notNull(),
-    runId: uuid("run_id").notNull(),
+    runId: productId("run_id", "run").notNull(),
     toolCallId: pgTableText("tool_call_id").notNull(),
     boot: pgTableText("boot"),
     status: pgTableText("status").$type<RunnerOperationStatus>().default("queued").notNull(),

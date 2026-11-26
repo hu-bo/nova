@@ -1,6 +1,7 @@
 import { webcrypto } from 'node:crypto';
 import { waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { CompleteAttachmentUpload200 } from '../src/api/generated/projectsAPI.schemas';
 const mocks = vi.hoisted(() => ({ ticket: vi.fn(), complete: vi.fn() }));
 vi.mock('../src/api/generated/attachments', () => ({
   createAttachmentUpload: mocks.ticket,
@@ -55,12 +56,13 @@ describe('direct upload lifecycle', () => {
     async ({ name, mime, size }) => {
       vi.stubGlobal('crypto', webcrypto);
       mocks.ticket.mockResolvedValue(ticket());
+      const verifiedUrl = 'https://storage.example/read?signature=verified';
       mocks.complete.mockResolvedValue({
-        key: 'owned/key',
+        url: verifiedUrl,
         size,
         mime,
         sha256: 'a'.repeat(64),
-      });
+      } satisfies CompleteAttachmentUpload200);
       const fetcher = vi.fn(async () => new Response('', { status: 200 }));
       vi.stubGlobal('fetch', fetcher);
       const queue = new UploadQueue();
@@ -78,12 +80,15 @@ describe('direct upload lifecycle', () => {
         method: 'PUT',
       });
       expect(queue.getSnapshot()[0]?.attachment).toEqual({
-        ref: { kind: 'object', key: 'owned/key' },
+        ref: { kind: 'image', url: verifiedUrl },
         name,
         sha256: 'a'.repeat(64),
         mimeType: mime,
         size,
       });
+      queue.retry(queue.getSnapshot()[0]!.id);
+      expect(queue.getSnapshot()[0]?.status).toBe('ready');
+      expect(mocks.ticket).toHaveBeenCalledOnce();
       queue.dispose();
     },
   );
@@ -126,28 +131,6 @@ describe('direct upload lifecycle', () => {
     expect(queue.getSnapshot()).toEqual([]);
     expect(fetcher).not.toHaveBeenCalled();
     expect(mocks.complete).not.toHaveBeenCalled();
-    queue.dispose();
-  });
-
-  it('does not restart a verified attachment when retry is requested again', async () => {
-    vi.stubGlobal('crypto', webcrypto);
-    mocks.ticket.mockResolvedValue(ticket());
-    mocks.complete.mockResolvedValue({
-      key: 'owned/key',
-      size: 11,
-      mime: 'image/png',
-      sha256: 'a'.repeat(64),
-    });
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('', { status: 200 })),
-    );
-    const queue = new UploadQueue();
-    queue.add([image()]);
-    await waitFor(() => expect(queue.getSnapshot()[0]?.status).toBe('ready'));
-    queue.retry(queue.getSnapshot()[0]!.id);
-    expect(queue.getSnapshot()[0]?.status).toBe('ready');
-    expect(mocks.ticket).toHaveBeenCalledOnce();
     queue.dispose();
   });
 });

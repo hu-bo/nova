@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { interactionResponseSchema, interactionSchema, runViewSchema } from "@nova/agent-ui-contracts";
+import { interactionResponseSchema, interactionSchema, runIdSchema, runViewSchema } from "@nova/agent-ui-contracts";
 export const runSchema = runViewSchema;
 export const runCancelResponseSchema = runViewSchema;
-export const runParamsSchema = z.object({ id: z.uuid() }).strict();
+export const runParamsSchema = z.object({ id: runIdSchema }).strict();
 export const interactionParamsSchema = runParamsSchema.extend({ interactionId: z.string().min(1).max(128) }).strict();
 export const respondInteractionBodySchema = z
   .object({ expectedRevision: z.number().int().positive(), response: interactionResponseSchema })

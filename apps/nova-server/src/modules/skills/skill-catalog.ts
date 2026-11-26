@@ -20,7 +20,7 @@ import type { SkillRow } from "../../../database/schema/skill.table.js";
 import type { SkillVersionRow } from "../../../database/schema/skill-version.table.js";
 
 /**
- * 合并目录查询（docs/nova-skills.md §3.1、§8.2 GET /skills、P0-C4）。
+ * 合并目录查询（docs/design/nova-skills.md §3.1、§8.2 GET /skills、P0-C4）。
  * 内置 + 平台 + 当前 Runner 全局层 + 会话/项目目录层（canonicalCwd 精确匹配，不向上继承）。
  * 只读：本函数不触发快照 RPC（快照在接受目录发布时已摄取，详情正文走版本详情接口）。
  * 分页游标只作用于平台来源；内置与本地条目数量有界，每页返回；客户端按隔离键缓存合并。

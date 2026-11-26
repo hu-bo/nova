@@ -1,6 +1,6 @@
 import { deleteProject } from '@/api/generated/projects';
 import { queryKeys } from '@/api/query-keys';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { ConfirmationDialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useIdentity } from '@/features/auth';
 import { useMutation, useQueryClient } from '@tanstack/react-query';

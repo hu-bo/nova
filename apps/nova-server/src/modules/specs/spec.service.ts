@@ -60,22 +60,22 @@ export class SpecService {
       const creationKey = `sdd:${key}`, signature = hash({ projectId, ...input });
       const [priorConversation] = await tx.select().from(conversations).where(and(eq(conversations.ownerUserId, ownerId), sql`${conversations.metadata}->>'creationKey' = ${creationKey}`)).limit(1);
       if (priorConversation) {
-        if (priorConversation.metadata.creationPayload !== signature) throw new DomainError("CONFLICT", "Idempotency key reused", { reason: "IDEMPOTENCY_KEY_REUSED" });
+        if (priorConversation.metadata.creationFingerprint !== signature) throw new DomainError("CONFLICT", "Idempotency key reused", { reason: "IDEMPOTENCY_KEY_REUSED" });
         const [prior] = await tx.select({ id: specs.id, projectId: specs.projectId, conversationId: specs.conversationId, title: specs.title, currentRevision: specs.currentRevision }).from(specs).where(eq(specs.conversationId, priorConversation.id));
         if (prior) return prior;
       }
       const [binding] = await tx.select().from(projectBindings).where(and(eq(projectBindings.projectId, projectId), eq(projectBindings.isCurrent, true))).orderBy(desc(projectBindings.revision)).limit(1);
-      const conversationId = randomUUID();
       const configuration = configurationSchema.parse({ ...input.configuration, mode: "plan" });
       const metadata = {
         configuration,
         specId: "pending",
         binding: binding ? { id: binding.id, revision: binding.revision, runnerId: binding.runnerId, remoteConnectionId: binding.remoteConnectionId, workspaceId: binding.workspaceId, canonicalCwd: binding.canonicalCwd, instructions: binding.instructions } : null,
         creationKey,
-        creationPayload: signature,
+        creationFingerprint: signature,
       };
-      const [conversation] = await tx.insert(conversations).values({ id: conversationId, ownerUserId: ownerId, mode: "project", projectId, title: input.title, metadata }).returning();
+      const [conversation] = await tx.insert(conversations).values({ ownerUserId: ownerId, mode: "project", projectId, title: input.title, metadata }).returning();
       if (!conversation) throw new Error("Failed to create specification conversation");
+      const conversationId = conversation.id;
       const [spec] = await tx.insert(specs).values({ projectId, conversationId, title: input.title }).returning();
       if (!spec) throw new Error("Failed to create specification");
       conversation.metadata = { ...metadata, specId: spec.id };

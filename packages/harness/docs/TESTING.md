@@ -16,7 +16,7 @@ pnpm check:boundaries
 pnpm test
 ```
 
-`pnpm test` 会自动发现并串行执行 `tests/**/*.test.ts`；当前包含 21 条核心与场景集成测试。`pnpm test:coding` 仍可单独运行三条真实 Coding 场景。
+从仓库根目录运行 `pnpm --filter @nnova/harness test`，会自动发现并串行执行本包的 `tests/**/*.test.ts`。内核、模型适配、Agent 和 Task/Flow 各有现成套件，相关回归补到对应文件。真实 Coding 场景归 `tests/scenarios/`，可用 `pnpm --filter @nnova/harness test:coding` 单独运行。场景夹具统一放在 `tests/fixtures/`。
 
 ## 三条完整场景
 

@@ -159,3 +159,5 @@ npm 发布使用同一批二进制，暂存全部四个平台后，将 `packages
 GitHub Release 和 npm 发布是独立作业；npm 发布不等待 Windows 安装包或 GitHub Release 完成，一边失败不代表另一边没有发布。当前流程没有为预发布版本单独指定 npm dist-tag。
 
 [`runner-sdk-release.yml`](../../.github/workflows/runner-sdk-release.yml) 使用 `runner-sdk-v*` 标签，发布的是 `@nova/runner-sdk` 和 `@nova/runner-protocol`，不会发布本包或 Runner 二进制。修改 Runner 默认参数等运行行为后，需要重新发布本包，使用 npm 的设备才能获得更新。
+
+Nova 工作台中的连接、工作区绑定和重连问题见 [Runner 连接与排障](../../docs/guides/runner-troubleshooting.md)。

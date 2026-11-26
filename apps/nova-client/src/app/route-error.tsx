@@ -1,6 +1,5 @@
 import { ApiError, errorMessage } from '@/api/api-error';
-import { Button } from '@/components/ui/button';
-import { buttonVariants } from '@/components/ui/button-variants';
+import { Button, buttonVariants } from '@/components/ui/button';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { Link, useRouter } from '@tanstack/react-router';
 import { AlertCircle, ArrowLeft } from 'lucide-react';

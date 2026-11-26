@@ -22,7 +22,7 @@ import type { ArtifactRow } from "./artifact.repository.js";
 import type { ArtifactSettlement } from "../runs/index.js";
 
 /**
- * 产物发布、恢复与下载授权（docs/nova-skills.md §7，P1-D2/E1）。
+ * 产物发布、恢复与下载授权（docs/design/nova-skills.md §7，P1-D2/E1）。
  * 崩溃窗口处理与 §7 窗口表一致：
  * - 对象已传、结算前退出 → 恢复按稳定发布键核对对象大小后完成结算，返回同一产物 ID；
  * - 上传超时结果未知 → 保留 publishing 待核实，不重新生成文件；

@@ -19,6 +19,10 @@
     "./dev-auth": {
       "types": "./dist/dev-auth.d.ts",
       "import": "./dist/dev-auth.js"
+    },
+    "./product-ids": {
+      "types": "./dist/product-ids.d.ts",
+      "default": "./dist/product-ids.js"
     }
   },
   "scripts": {

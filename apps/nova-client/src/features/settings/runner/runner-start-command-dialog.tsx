@@ -3,7 +3,7 @@ import { Check, Clipboard, Terminal } from 'lucide-react';
 import { useId, useState } from 'react';
 import { ErrorNotice } from '@/components/error-notice';
 import { Button } from '@/components/ui/button';
-import { SettingsDialog } from '@/components/ui/settings-dialog';
+import { SettingsDialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { copyText } from '@/lib/clipboard';
 import type { RunnerToken } from '@/features/runners';

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { ConfirmationDialog } from '@/components/ui/dialog';
 import { useIdentity } from '@/features/auth';
 import {
   useConversationSnapshot,

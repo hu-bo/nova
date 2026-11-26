@@ -5,9 +5,8 @@ import { ErrorNotice } from '@/components/error-notice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { ConfirmationDialog, SettingsDialog } from '@/components/ui/dialog';
 import { EmptyState, LoadingState } from '@/components/ui/feedback';
-import { SettingsDialog } from '@/components/ui/settings-dialog';
 import {
   Table,
   TableBody,

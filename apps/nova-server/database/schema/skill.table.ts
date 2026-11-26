@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SkillExecutionRequirements, SkillSource } from "@nova/agent-ui-contracts";
 
 /**
- * 技能管理身份表（docs/nova-skills.md §8.1）：
+ * 技能管理身份表（docs/design/nova-skills.md §8.1）：
  * - builtin/platform：保存平台草稿（draftBody/draftRequirements），草稿保存携带 draftRevision 防并发覆盖；
  *   currentPublishedVersionId 指向最新已发布版本，仅作列表展示，执行引用固定到确切版本行。
  * - runner-global/runner-project：只保存来源索引（runnerId/workspaceId/relativeCwd/slug + 目录摘要），
@@ -32,7 +32,7 @@ export const skills = pgTable(
     draftBody: text("draft_body"),
     draftRequirements: jsonb("draft_requirements").$type<SkillExecutionRequirements>(),
     draftRevision: integer("draft_revision").default(1).notNull(),
-    /** 指向 skill_versions.id；一致性由服务层保证（与 runner_operations.run_id 相同的普通 uuid 引用约定）。 */
+    /** 指向 skill_versions.id；一致性由服务层保证。 */
     currentPublishedVersionId: uuid("current_published_version_id"),
     /** 停用只拒绝新的选择；已接受排队/恢复与历史保持原版本可用（§6 末段）。 */
     disabled: boolean("disabled").default(false).notNull(),

@@ -83,7 +83,7 @@ export const conversationEventHeads = defineRepository(({ db, requireTransaction
       .from(conversations)
       .leftJoin(
         runs,
-        sql`${runs.id} = coalesce(${conversations.activeRunId}, (${conversations.metadata}->>'latestRunId')::uuid)`,
+        sql`${runs.id} = coalesce(${conversations.activeRunId}, ${conversations.latestRunId})`,
       )
       .where(inArray(conversations.id, [...ids]));
   },
@@ -101,7 +101,9 @@ export const conversationEventHeads = defineRepository(({ db, requireTransaction
     requireTransaction();
     if (!cutoffs.length) return;
     const values = sql.join(
-      cutoffs.map(({ conversationId, sequence }) => sql`(${conversationId}::uuid, ${sequence}::bigint)`),
+      cutoffs.map(({ conversationId, sequence }) =>
+        sql`(${sql.param(conversationId, conversations.id)}::bytea, ${sequence}::bigint)`,
+      ),
       sql`, `,
     );
     await db

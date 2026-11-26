@@ -11,6 +11,7 @@ output/
 apps/nova-server/logs/
 target/
 packages/runner/vendor/
+/packages/harness/.tmp/coding-*/
 
 *.log
 .DS_Store

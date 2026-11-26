@@ -1,11 +1,12 @@
-import { bigint, index, jsonb, pgTable, text as pgTableText, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, jsonb, pgTable, text as pgTableText, timestamp } from "drizzle-orm/pg-core";
+import { productId, randomProductId } from "./product-id.js";
 import type { Snapshot } from "@nova/agent-ui-contracts";
 import type { Checkpoint } from "../../src/modules/runs/runtime-adapter.js";
 import type { StreamState } from "../../src/modules/runs/stream-state.js";
 
 /**
  * 运行表:
- * - state 与 phase 严格分离 (见 docs/nova-server.md §7.1):
+ * - state 与 phase 严格分离 (见 docs/design/nova-server.md §7.1):
  *   state = 生命周期; phase = 恢复位置 (prepare/model_request/tool_dispatch/...).
  * - 单会话非终态 run 互斥由 runs 部分唯一索引保证 (state IN 非终态集合);
  *   此处不声明唯一索引, 留给后续 migration 阶段补齐。
@@ -36,8 +37,8 @@ export type RunPhase =
 export const runs = pgTable(
   "runs",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    conversationId: uuid("conversation_id").notNull(),
+    id: productId("id", "run").default(randomProductId).primaryKey(),
+    conversationId: productId("conversation_id", "conversation").notNull(),
     state: pgTableText("state").$type<RunState>().notNull(),
     phase: pgTableText("phase").$type<RunPhase>().default("prepare").notNull(),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),

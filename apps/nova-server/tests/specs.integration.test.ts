@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { newProductId } from "../database/schema/product-id.js";
 import { readFile, readdir } from "node:fs/promises";
 import { Pool } from "pg";
 import { eq } from "drizzle-orm";
@@ -96,7 +97,8 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
 
   const directory = new URL("../database/migrations/", import.meta.url);
   const migrations = (await readdir(directory)).filter((file) => file.endsWith(".sql")).sort();
-  for (const file of migrations) await pool.query(await readFile(new URL(file, directory), "utf8"));
+  for (const file of migrations)
+    await pool.query((await readFile(new URL(file, directory), "utf8")).replaceAll('"public".', ""));
 
   const ownerId = randomUUID();
   const projectId = randomUUID();
@@ -127,7 +129,7 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
   assert.equal(duplicateGeneration.pendingInputId, generation.pendingInputId);
 
   const conversation = (await db.select().from(conversations).where(eq(conversations.id, created.conversationId)))[0]!;
-  const runId = randomUUID();
+  const runId = newProductId("run");
   const workerId = "sdd-test-worker";
   const runService = createRunService(db);
   const firstGeneration = await runService.prepare(started.conversationId, workerId);
@@ -199,7 +201,7 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
   assert.equal(first.attemptId, duplicate.attemptId);
   await assert.rejects(service.startAttempt(projectId, created.id, "T-01", ownerId, current.revision, undefined, "second-active"), (error) => error instanceof DomainError && error.code === "CONFLICT");
 
-  const uncertainRunId = randomUUID();
+  const uncertainRunId = newProductId("run");
   const callId = randomUUID();
   const uncertainCheckpoint = {
     ...checkpoint,
@@ -224,7 +226,7 @@ test("spec workflow is revision-safe, idempotent, permission-scoped, and evidenc
     await service.recordEvidence(projectId, created.id, ownerId, { expectedRevision: current.revision, evidenceId: randomUUID(), taskKey, checkKey: "C-01", source: { kind: "manual", attemptId: attempt.attemptId, passed: true, note } });
   };
   const settleTaskAttempt = async (attempt: { attemptId: string; pendingInputId: string }, executions: Record<string, unknown>[]) => {
-    const runId = randomUUID();
+    const runId = newProductId("run");
     const checkpointForRun = {
       ...checkpoint,
       executions,

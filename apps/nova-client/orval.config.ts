@@ -55,7 +55,7 @@ const alignWithTransport = defineTransformer((spec) => {
 export default defineConfig({
   projects: {
     input: {
-      // 单一来源: 后端 nova-server 导出的 openapi.json (见 docs/nova-server.md §5.2).
+      // 单一来源: 后端 nova-server 导出的 openapi.json (见 docs/design/nova-server.md §5.2).
       // 由 pnpm --filter @react-fastify-template/app-server openapi:export 更新服务端契约.
       target: '../nova-server/openapi.json',
       override: { transformer: alignWithTransport },

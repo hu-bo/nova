@@ -1,4 +1,4 @@
-import { SettingsDialog } from '@/components/ui/settings-dialog';
+import { SettingsDialog } from '@/components/ui/dialog';
 import { RunnerManager } from './runner-manager';
 
 interface RunnerManagerDialogProps {

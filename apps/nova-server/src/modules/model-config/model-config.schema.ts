@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conversationIdSchema, runIdSchema } from "@nova/agent-ui-contracts";
 import { providerCatalog, providerIds } from "@nnova/harness/plugins/model-ai-sdk";
 
 export const providerProtocolSchema = z.enum(["openai", "anthropic"]);
@@ -176,10 +177,10 @@ const usageTotalsSchema = z.object({
   cost: z.string(),
 });
 const usageItemSchema = z.object({
-  id: z.string().uuid(),
-  conversationId: z.string().uuid(),
+  id: runIdSchema,
+  conversationId: conversationIdSchema,
   conversationTitle: z.string(),
-  runId: z.string().uuid(),
+  runId: runIdSchema,
   modelId: z.string().uuid(),
   modelName: z.string(),
   modelConfigVersion: z.number().int().positive(),

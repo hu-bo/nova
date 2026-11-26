@@ -4,7 +4,7 @@ import { z } from "zod";
 const idSchema = z.string().min(1).max(128);
 
 /**
- * Skills 共享契约（docs/nova-skills.md §4.1、§8.1）。
+ * Skills 共享契约（docs/design/nova-skills.md §4.1、§8.1）。
  *
  * 运行时 ID 约定：内置技能保留 `nova.*` 确切 ID（如 `nova.spec`、`nova.skills-creater`），
  * 磁盘同名文件不能替换；用户技能运行时 ID 为 `skill.<平台UUID>`，避免以数字开头的 UUID

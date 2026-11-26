@@ -1078,7 +1078,7 @@ export type RenameConversation200 = {
   configuration: RenameConversation200Configuration;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   activeRunId: string | null;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
@@ -1264,7 +1264,7 @@ export type ListConversations200ItemsItem = {
   configuration: ListConversations200ItemsItemConfiguration;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   activeRunId: string | null;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
@@ -1649,7 +1649,7 @@ export type CreateConversation200 = {
   configuration: CreateConversation200Configuration;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   activeRunId: string | null;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
@@ -3329,7 +3329,7 @@ export const RemoveConversationInput200 = {
 
 export type ListSkillsParams = {
 /**
- * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ * @pattern ^cv_[A-Za-z0-9_-]{16}$
  */
 conversationId?: string;
 /**
@@ -4353,7 +4353,7 @@ export type DisableSkill200 = {
 
 export type ListAgentsParams = {
 /**
- * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ * @pattern ^cv_[A-Za-z0-9_-]{16}$
  */
 conversationId?: string;
 /**
@@ -4670,7 +4670,7 @@ export type ListSpecs200ItemsItem = {
   projectId: string;
   title: string;
   currentRevision: number;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
   conversationId: string;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   updatedAt: string;
@@ -4721,7 +4721,7 @@ export type CreateSpec201 = {
   id: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   projectId: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
   conversationId: string;
   title: string;
   currentRevision: number;
@@ -4883,7 +4883,7 @@ export type GetSpec200TasksItem = {
   attemptId: string | null;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   runId: string | null;
 };
@@ -4901,7 +4901,7 @@ export type GetSpec200 = {
   id: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   projectId: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
   conversationId: string;
   title: string;
   /**
@@ -5175,7 +5175,7 @@ export type SaveSpecDraft200TasksItem = {
   attemptId: string | null;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   runId: string | null;
 };
@@ -5193,7 +5193,7 @@ export type SaveSpecDraft200 = {
   id: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   projectId: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
   conversationId: string;
   title: string;
   /**
@@ -5379,7 +5379,7 @@ export type ReviewSpecStage200TasksItem = {
   attemptId: string | null;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   runId: string | null;
 };
@@ -5397,7 +5397,7 @@ export type ReviewSpecStage200 = {
   id: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   projectId: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
   conversationId: string;
   title: string;
   /**
@@ -5471,13 +5471,13 @@ export type GenerateSpecDraftBody = {
 };
 
 export type GenerateSpecDraft202 = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^pi_[A-Za-z0-9_-]{16}$ */
   pendingInputId: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   attemptId?: string;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   runId: string | null;
 };
@@ -5514,13 +5514,13 @@ export type StartSpecTaskAttemptBody = {
 };
 
 export type StartSpecTaskAttempt202 = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^pi_[A-Za-z0-9_-]{16}$ */
   pendingInputId: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   attemptId?: string;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   runId: string | null;
 };
@@ -5540,7 +5540,7 @@ export type ListSpecAttempts200ItemsItem = {
   id: string;
   revision: number;
   taskKey: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^pi_[A-Za-z0-9_-]{16}$ */
   pendingInputId: string;
   requestKey: string;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
@@ -5552,7 +5552,7 @@ export type ListSpecAttempts200ItemsItem = {
   releasedAt: string | null;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   runId: string | null;
   /** @nullable */
@@ -5752,7 +5752,7 @@ export type RecordSpecEvidence200TasksItem = {
   attemptId: string | null;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   runId: string | null;
 };
@@ -5770,7 +5770,7 @@ export type RecordSpecEvidence200 = {
   id: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   projectId: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
   conversationId: string;
   title: string;
   /**
@@ -5956,7 +5956,7 @@ export type AcceptSpec200TasksItem = {
   attemptId: string | null;
   /**
      * @nullable
-     * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+     * @pattern ^rn_[A-Za-z0-9_-]{16}$
      */
   runId: string | null;
 };
@@ -5974,7 +5974,7 @@ export type AcceptSpec200 = {
   id: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   projectId: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
   conversationId: string;
   title: string;
   /**
@@ -6096,7 +6096,7 @@ export type CompleteAttachmentUpload200 = {
 };
 
 export type ReadAttachmentImageBody = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
   conversationId: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   messageId: string;
@@ -6114,7 +6114,7 @@ export type ReadAttachmentImage200 = {
 
 export type GetAttachmentImageUrlParams = {
 /**
- * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ * @pattern ^cv_[A-Za-z0-9_-]{16}$
  */
 conversationId: string;
 /**
@@ -7431,6 +7431,125 @@ export type ListProviderAdapters200Item = {
   protocol: ListProviderAdapters200ItemProtocol;
   reasoningFormat: ListProviderAdapters200ItemReasoningFormat;
   thinkingLevels: ListProviderAdapters200ItemThinkingLevelsItem[];
+};
+
+export type GetUsageParams = {
+/**
+ * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+ */
+from?: string;
+/**
+ * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+ */
+to?: string;
+/**
+ * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+ */
+modelId?: string;
+status?: GetUsageStatus;
+};
+
+export type GetUsageStatus = typeof GetUsageStatus[keyof typeof GetUsageStatus];
+
+
+export const GetUsageStatus = {
+  succeeded: 'succeeded',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  timed_out: 'timed_out',
+} as const;
+
+export type GetUsage200Totals = {
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  requests: number;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  input: number;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  output: number;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  cacheRead: number;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  reasoning: number;
+  cost: string;
+};
+
+export type GetUsage200ItemsItemStatus = typeof GetUsage200ItemsItemStatus[keyof typeof GetUsage200ItemsItemStatus];
+
+
+export const GetUsage200ItemsItemStatus = {
+  succeeded: 'succeeded',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  timed_out: 'timed_out',
+} as const;
+
+export type GetUsage200ItemsItem = {
+  /** @pattern ^rn_[A-Za-z0-9_-]{16}$ */
+  id: string;
+  /** @pattern ^cv_[A-Za-z0-9_-]{16}$ */
+  conversationId: string;
+  conversationTitle: string;
+  /** @pattern ^rn_[A-Za-z0-9_-]{16}$ */
+  runId: string;
+  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  modelId: string;
+  modelName: string;
+  /**
+     * @maximum 9007199254740991
+     * @exclusiveMinimum 0
+     */
+  modelConfigVersion: number;
+  status: GetUsage200ItemsItemStatus;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  input: number;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  output: number;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  cacheRead: number;
+  /**
+     * @minimum 0
+     * @maximum 9007199254740991
+     */
+  reasoning: number;
+  cost: string;
+  estimated: boolean;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  createdAt: string;
+};
+
+export type GetUsage200 = {
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  generatedAt: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  from: string;
+  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  to: string;
+  totals: GetUsage200Totals;
+  items: GetUsage200ItemsItem[];
 };
 
 /**

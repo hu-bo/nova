@@ -93,4 +93,4 @@ pnpm example:coding-dashboard --model your-model-id --continue <run-id>
 
 产物位于 `output/coding-dashboard`，浏览器材料位于 `output/playwright`。继续已有运行要求 `plan.md` 和 `index.html` 都存在，由示例宿主确认计划写入事实。
 
-详细设计与后续接入路线见 [架构说明](../../docs/coding-harness-architecture.md)。
+详细设计与后续接入路线见 [架构说明](../../docs/design/coding-harness-architecture.md)。

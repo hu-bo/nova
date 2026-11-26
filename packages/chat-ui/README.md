@@ -7,10 +7,11 @@ Nova 的聊天展示组件库，提供消息、结构化 Block、Decision、TODO
 组件只负责渲染和收集用户输入，不请求接口、不保存业务数据，也不持有全局状态。
 宿主应用负责 HTTP / SSE、文件上传、会话状态、模型配置和持久化。
 
-本包维护 UI 所需的最小投影类型（`Block`、`ChatMessage`、`Todo` 和 `Decision`）。这些类型不是服务端协议；宿主可以在边界处把自己的协议对象映射成组件输入。
+宿主将快照和流事件投影为 `Block`、`ChatMessage`、`Todo` 和 `Decision` 后通过 props 传入，组件通过回调交回用户操作。产品消息和事件的共享契约见 [agent-ui-contracts](../agent-ui-contracts/src/)，组件输入见 [types.ts](src/types.ts)。
 
 ## 组件
 
+- `Chat` 提供高层聊天布局。
 - `MessageList`：渲染消息列表并配对工具调用与结果。
 - `BlockView`：渲染单个 `text`、`thinking`、`code`、`diff`、`file`、`tool_call`、`tool_result`、`todo` 或 `error` Block。
 - `DecisionPrompt`：展示审批或反问，并通过回调提交选择。
@@ -102,11 +103,8 @@ export function ChatComposer() {
 ```tsx
 import { RemoteExplorer, type RemoteExplorerListing } from "@nova/chat-ui";
 
-async function loadDirectory(path?: string, signal?: AbortSignal): Promise<RemoteExplorerListing> {
-  const query = path ? `?path=${encodeURIComponent(path)}` : "";
-  const response = await fetch(`/api/files${query}`, { signal });
-  return response.json();
-}
+// 由宿主实现目录读取，按需调用它自己的 API。
+declare function loadDirectory(path?: string, signal?: AbortSignal): Promise<RemoteExplorerListing>;
 
 <RemoteExplorer
   open={pickerOpen}
@@ -139,11 +137,8 @@ pnpm --filter @nova/chat-ui typecheck
 # 运行测试
 pnpm --filter @nova/chat-ui test
 
-# 运行整个仓库的类型检查
-pnpm typecheck
-
-# 运行整个仓库的测试
+# 从仓库根脚本运行 Chat UI 测试
 pnpm test
 ```
 
-更完整的职责边界与组件契约见 [`docs/chat-ui.md`](../../docs/chat-ui.md)。
+工作台中的会话、审批与运行状态见 [会话与项目环境](../../docs/features/chat.md)。

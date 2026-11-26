@@ -2,7 +2,7 @@ import { createScope, defineRepository } from "../../shared/scope.js";
 import type { Database } from "../../../database/index.js";
 import { and, asc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { ProductEvent } from "@nova/agent-ui-contracts";
-import { uiEvents } from "../../../database/index.js";
+import { formatProductId, uiEvents } from "../../../database/index.js";
 import type { ConversationEventHeads } from "../conversations/index.js";
 
 export const eventWriter = defineRepository(({ db, requireTransaction }) => {
@@ -63,10 +63,10 @@ export const eventWriter = defineRepository(({ db, requireTransaction }) => {
       await heads.lock(ids);
       const limits = await heads.retentionLimits(ids);
       const values = sql.join(
-        limits.map((item) => sql`(${item.id}::uuid, ${item.sequence}::bigint)`),
+        limits.map((item) => sql`(${sql.param(item.id, uiEvents.conversationId)}::bytea, ${item.sequence}::bigint)`),
         sql`, `,
       );
-      const { rows } = await db.execute<{ conversation_id: string; cutoff: string }>(sql`
+      const { rows } = await db.execute<{ conversation_id: Buffer; cutoff: string }>(sql`
         with cutoffs as (
           select ${uiEvents.conversationId} as conversation_id, max(${uiEvents.sequence}) as cutoff
           from ${uiEvents} join (values ${values}) as limits(id, sequence) on limits.id = ${uiEvents.conversationId}
@@ -79,7 +79,10 @@ export const eventWriter = defineRepository(({ db, requireTransaction }) => {
         ) select conversation_id, max(sequence)::text as cutoff from deleted group by conversation_id
       `);
       await heads.advanceFloors(
-        rows.map((row) => ({ conversationId: row.conversation_id, sequence: BigInt(row.cutoff) })),
+        rows.map((row) => ({
+          conversationId: formatProductId("conversation", row.conversation_id),
+          sequence: BigInt(row.cutoff),
+        })),
       );
     },
   };

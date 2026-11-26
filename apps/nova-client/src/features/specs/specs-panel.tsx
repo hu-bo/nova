@@ -29,7 +29,7 @@ import { CommandIntent } from '@/api/command-intent';
 import { queryKeys } from '@/api/query-keys';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { SettingsDialog } from '@/components/ui/settings-dialog';
+import { SettingsDialog } from '@/components/ui/dialog';
 import { useIdentity } from '@/features/auth';
 import { MarkdownEditor } from './markdown-editor';
 import { useSpecQuery } from './spec.queries';

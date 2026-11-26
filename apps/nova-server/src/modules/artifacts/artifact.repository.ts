@@ -4,7 +4,7 @@ import type { ArtifactState, PublicError } from "@nova/agent-ui-contracts";
 import { runArtifacts, type Database } from "../../../database/index.js";
 
 /**
- * 产物索引数据访问（P1-B1/C1，docs/nova-skills.md §7–§8.1）。
+ * 产物索引数据访问（P1-B1/C1，docs/design/nova-skills.md §7–§8.1）。
  * 只碰 run_artifacts；Run→会话→用户 的归属校验经 runs 注入的 settlement 端口，
  * 这里不查询外域表（domain-boundaries）。
  */

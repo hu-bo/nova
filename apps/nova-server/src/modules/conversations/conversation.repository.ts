@@ -191,7 +191,7 @@ export const conversationRepository = defineRepository(
             )
             .limit(1);
           if (prior) {
-            if (prior.metadata.creationPayload !== signature)
+            if (prior.metadata.creationFingerprint !== signature)
               throw new DomainError("CONFLICT", "Idempotency payload changed");
             return prior;
           }
@@ -203,7 +203,7 @@ export const conversationRepository = defineRepository(
             mode: input.mode,
             projectId: input.projectId,
             title: input.title,
-            metadata: { ...input.metadata, creationKey: input.idempotencyKey ?? null, creationPayload: signature },
+            metadata: { ...input.metadata, creationKey: input.idempotencyKey ?? null, creationFingerprint: signature },
           })
           .returning();
         if (!row) throw new Error("Conversation insert failed");
@@ -236,7 +236,7 @@ export const conversationRepository = defineRepository(
         const [conversation] = await tx.select().from(conversations).where(owned(id, owner));
         if (!conversation) throw new DomainError("NOT_FOUND", "Conversation not found");
         const page = await messagePage(tx, id);
-        const runId = conversation.activeRunId ?? conversation.metadata.latestRunId;
+        const runId = conversation.activeRunId ?? conversation.latestRunId;
         const [run] = runId
           ? await tx
               .select({

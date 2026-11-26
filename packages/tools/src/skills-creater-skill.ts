@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { SkillResource } from "@nnova/harness/plugins/skills";
 
-/** 内置技能创建助手（docs/nova-skills.md §4.4）：运行时 ID 固定 `nova.skills-creater`，展示名「技能创建助手」。 */
+/** 内置技能创建助手（docs/design/nova-skills.md §4.4）：运行时 ID 固定 `nova.skills-creater`，展示名「技能创建助手」。 */
 export const skillsCreaterSkill: SkillResource = {
   id: "nova.skills-creater",
   version: "1.0.0",

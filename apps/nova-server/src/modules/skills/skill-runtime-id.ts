@@ -1,7 +1,7 @@
 import type { SkillSource } from "@nova/agent-ui-contracts";
 
 /**
- * 运行时 ID 适配（docs/nova-skills.md §4.1 末段、P0-C5）。
+ * 运行时 ID 适配（docs/design/nova-skills.md §4.1 末段、P0-C5）。
  * 数据库 UUID ↔ 展示名 ↔ Harness 运行时 ID 的转换**只在本文件**完成，其它层不拼接前缀。
  * - 内置保留确切 ID（`nova.spec`、`nova.career-coach`），磁盘同名文件不能替换（§4.3）。
  * - 用户技能运行时 ID 为 `skill.<平台UUID>`，避免以数字开头的 UUID 直接传给插件。

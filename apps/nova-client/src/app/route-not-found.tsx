@@ -1,4 +1,4 @@
-import { buttonVariants } from '@/components/ui/button-variants';
+import { buttonVariants } from '@/components/ui/button';
 import { Link } from '@tanstack/react-router';
 
 export function RouteNotFound() {

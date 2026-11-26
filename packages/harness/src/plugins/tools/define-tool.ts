@@ -33,7 +33,7 @@ export function defineTool<I extends JsonValue, O extends JsonValue>(definition:
 
 /**
  * 入参不合 schema 时，回喂模型的原因只描述结构与位置，不带上游参数原文，与模型诊断日志同一纪律
- * （docs/deployment.md）。zod 内建 issue 的文案是 "expected X, received Y" 这类结构描述；
+ * （docs/guides/deployment.md）。zod 内建 issue 的文案是 "expected X, received Y" 这类结构描述；
  * 自定义校验的文案由工具作者书写，可能夹带参数值，所以只报位置。
  * 模型据此自行纠正，整轮不因为一次不规范的调用而失败。
  */

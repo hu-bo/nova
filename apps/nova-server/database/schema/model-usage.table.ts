@@ -1,4 +1,5 @@
 import { bigint, boolean, index, integer, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { productId } from "./product-id.js";
 import { conversations } from "./conversation.table.js";
 import { runs } from "./run.table.js";
 
@@ -8,10 +9,10 @@ export type ModelUsageStatus = "succeeded" | "failed" | "cancelled" | "timed_out
 export const modelUsages = pgTable(
   "model_usages",
   {
-    runId: uuid("run_id")
+    runId: productId("run_id", "run")
       .primaryKey()
       .references(() => runs.id, { onDelete: "cascade" }),
-    conversationId: uuid("conversation_id")
+    conversationId: productId("conversation_id", "conversation")
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
     conversationTitle: text("conversation_title").notNull(),

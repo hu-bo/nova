@@ -22,7 +22,7 @@
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 产品页面、会话、查询和 SSE   | `apps/nova-client/src/features/`、`apps/nova-client/src/routes/`，模型管理页面在 `apps/model-console/`                                                                                                       |
 | 聊天组件和跨端消息、事件契约 | `packages/chat-ui/` 负责展示和输入，宿主负责网络与持久化。共享契约和事件投影在 `packages/agent-ui-contracts/`                                                                                                |
-| API、Worker 和数据           | `apps/nova-server/src/modules/`，数据库定义在 `apps/nova-server/database/`。跨业务模块走公开 `index.ts`，SQL 留在 Repository 或已有持久化层，事务由 Service 管理。见 [事务作用域](docs/transaction-scope.md) |
+| API、Worker 和数据           | `apps/nova-server/src/modules/`，数据库定义在 `apps/nova-server/database/`。跨业务模块走公开 `index.ts`，SQL 留在 Repository 或已有持久化层，事务由 Service 管理。见 [事务作用域](docs/architecture/transaction-scope.md) |
 | Agent 执行和工具             | 从实际调用方追到 `packages/harness/`、`packages/coding-harness/` 或 `packages/tools/`                                                                                                                        |
 | Runner、SDK 和通信协议       | `crates/runner/`、`packages/runner-sdk/`、`proto/runner/v1/`                                                                                                                                                 |
 
@@ -30,6 +30,7 @@
 
 ## 验证
 
+- 测试归负责行为的应用或包。先按模块或业务场景找已有套件并补到原处。前端组件测试与组件同目录，应用级流程与接口测试沿用各自的 `tests/`。Harness 的契约、集成和 Coding 场景统一在 `packages/harness/tests/`。
 - 从改动的包开始，先跑相关测试和类型检查，再按影响扩大范围。包名和脚本以各自 `package.json` 为准。根目录 `pnpm typecheck` 检查 Demo，应用和包用 `pnpm --filter <包名> typecheck`。
 - 单文件测试用对应包的测试运行器。Vitest 用 `pnpm --filter <包名> exec vitest run <测试文件>`，服务端用 `pnpm --filter @nova/nova-server exec node --import tsx --test <测试文件>`。涉及数据库的集成测试使用专用的 `TEST_DATABASE_URL`，Runner 用 `cargo test -p nova-runner`。
 - 执行生成命令前检查目标路径的已有改动。`@nova/nova-client` 的 `typecheck` 会重新生成 API 和路由。只检查现有客户端源码可运行 `pnpm --filter @nova/nova-client exec tsc -p tsconfig.app.json --noEmit`。

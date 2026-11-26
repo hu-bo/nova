@@ -2,7 +2,10 @@ import { z } from "zod";
 import {
   configurationSchema,
   conversationSchema as coreConversationSchema,
+  conversationIdSchema,
   decimalSequenceSchema,
+  pendingInputIdSchema,
+  runIdSchema,
   goalInputSchema,
   goalSchema,
   inputBlocksSchema,
@@ -21,7 +24,7 @@ export const runtimeConfigurationSchema = configurationSchema;
 export const conversationGoalSchema = goalSchema;
 export { goalInputSchema, attachmentSchema, messageSchema, messagePageSchema };
 export const conversationSchema = coreConversationSchema.extend({
-  activeRunId: z.uuid().nullable(),
+  activeRunId: runIdSchema.nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -39,8 +42,8 @@ export const createConversationBodySchema = z
   .refine((input) => input.mode !== "project" || Boolean(input.projectId), "Project conversation requires projectId");
 export const pendingInputBodySchema = submitInputSchema.extend({ goal: goalInputSchema.optional() }).strict();
 export const pendingInputReceiptSchema = inputReceiptSchema;
-export const conversationParamsSchema = z.object({ id: z.uuid() }).strict();
-export const pendingInputParamsSchema = conversationParamsSchema.extend({ inputId: z.uuid() }).strict();
+export const conversationParamsSchema = z.object({ id: conversationIdSchema }).strict();
+export const pendingInputParamsSchema = conversationParamsSchema.extend({ inputId: pendingInputIdSchema }).strict();
 export const messageQuerySchema = toolOutputQuery.extend({ before: decimalSequenceSchema.optional() });
 export const updateConversationBodySchema = z.object({ title: z.string().trim().min(1).max(200) }).strict();
 export const executionModeSchema = z.enum(["build", "plan", "auto"]);

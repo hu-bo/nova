@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { conversationIdSchema } from "@nova/agent-ui-contracts";
 import { artifactSummarySchema } from "@nova/agent-ui-contracts";
 
-export const conversationIdParamsSchema = z.object({ id: z.uuid() }).strict();
+export const conversationIdParamsSchema = z.object({ id: conversationIdSchema }).strict();
 export const artifactIdParamsSchema = z.object({ artifactId: z.uuid() }).strict();
 
 export const artifactListQuerySchema = z

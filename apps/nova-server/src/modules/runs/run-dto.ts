@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   configurationSchema,
   type Block,
@@ -16,16 +17,20 @@ export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type PendingInputRow = typeof pendingInputs.$inferSelect;
 
-/** Order-insensitive stable hash; backs every idempotency signature in the runs aggregate. */
-export function fingerprint(value: unknown): string {
-  if (Array.isArray(value)) return "[" + value.map(fingerprint).join(",") + "]";
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
   if (value && typeof value === "object") {
     const entries = Object.entries(value)
       .filter(([, item]) => item !== undefined)
       .sort(([a], [b]) => a.localeCompare(b));
-    return "{" + entries.map(([key, item]) => JSON.stringify(key) + ":" + fingerprint(item)).join(",") + "}";
+    return "{" + entries.map(([key, item]) => JSON.stringify(key) + ":" + canonicalJson(item)).join(",") + "}";
   }
   return JSON.stringify(value) ?? "null";
+}
+
+/** Store a fixed-size idempotency fingerprint independent of object key order. */
+export function fingerprint(value: unknown): string {
+  return createHash("sha256").update(canonicalJson(value)).digest("base64url");
 }
 
 export const conversationView = (conversation: ConversationRow) => ({

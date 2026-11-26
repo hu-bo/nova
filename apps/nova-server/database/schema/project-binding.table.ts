@@ -7,7 +7,7 @@ import { boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from "
  * - is_current=true 的部分唯一索引保证"每项目仅一个当前 binding"。
  * - 旧会话仍持有原 binding revision, 不随当前 binding 变更自动跟进; 绑定的设备离线时
  *   可从会话入口直接切换 Runner (PUT /api/conversations/:id/binding, 在线设备不允许切走,
- *   见 docs/nova-client.md)。
+ *   见 docs/design/nova-client.md)。
  */
 export type InstructionConfig = {
   readonly source?: "agents" | "claude" | "custom" | "none";
@@ -21,7 +21,7 @@ export const projectBindings = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     projectId: uuid("project_id").notNull(),
     revision: integer("revision").notNull(),
-    runnerId: text("runner_id"),
+    runnerId: uuid("runner_id"),
     remoteConnectionId: uuid("remote_connection_id"),
     workspaceId: text("workspace_id").notNull(),
     canonicalCwd: text("canonical_cwd").notNull(),

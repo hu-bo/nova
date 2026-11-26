@@ -1,4 +1,5 @@
 import { bigint, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { productId, randomProductId } from "./product-id.js";
 import type { Goal, SubmitInput } from "@nova/agent-ui-contracts";
 import type { AcceptedExecution } from "../../src/modules/runs/agent-profile.js";
 export type PendingInputStatus = "queued" | "consumed" | "removed" | "rejected";
@@ -8,8 +9,8 @@ export type SpecInputMetadata =
 export const pendingInputs = pgTable(
   "pending_inputs",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    conversationId: uuid("conversation_id").notNull(),
+    id: productId("id", "pendingInput").default(randomProductId).primaryKey(),
+    conversationId: productId("conversation_id", "conversation").notNull(),
     sequence: bigint("sequence", { mode: "bigint" }).notNull(),
     mode: text("mode").$type<SubmitInput["mode"]>().notNull(),
     status: text("status").$type<PendingInputStatus>().default("queued").notNull(),
@@ -18,7 +19,7 @@ export const pendingInputs = pgTable(
       .notNull(),
     idempotencyKey: text("idempotency_key"),
     fingerprint: text("fingerprint").notNull(),
-    runId: uuid("run_id"),
+    runId: productId("run_id", "run"),
     messageId: uuid("message_id"),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
     removedAt: timestamp("removed_at", { withTimezone: true }),

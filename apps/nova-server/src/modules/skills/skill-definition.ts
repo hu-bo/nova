@@ -9,7 +9,7 @@ import {
 } from "@nova/agent-ui-contracts";
 
 /**
- * SKILL.md 解析与执行配置校验（docs/nova-skills.md §4.1）。
+ * SKILL.md 解析与执行配置校验（docs/design/nova-skills.md §4.1）。
  * 发布 API、本地快照接受与运行准入共用本文件，避免校验规则出现多个来源（P0-C1）。
  */
 

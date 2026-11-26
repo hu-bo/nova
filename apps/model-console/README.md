@@ -2,7 +2,7 @@
 
 Nova 模型配置模块的独立管理后台。它是 React 前端，不是模型调用 SDK，也不在模型推理路径中。
 
-页面只调用 `/admin/model-config` 管理接口：Provider、模型目录、API Keys、用量和配额。模型推理由 `model-adapters` 直连官方或中转商。
+页面使用 `/admin/model-config` 管理 Provider 与模型，并读取运行用量。模型调用由服务端运行时和模型适配器执行。
 
 认证默认使用 Casdoor。仅在本地 Vite 开发且显式设置 `VITE_AUTH_MODE=dev` 时使用共享 mock 用户“本地开发用户”；生产构建始终使用 Casdoor 管理会话。
 
@@ -46,6 +46,6 @@ tests/                # API 与路由集成测试
 
 `src/api/generated/` 由 Orval 从已提交的 `openapi.json` 契约快照生成，禁止手工修改。管理接口变更后运行 `api:sync`：从 nova-server 的路由 schema 更新已实现的 `/admin/model-config/*` 接口，再生成客户端。导出会将成功响应投影为 `data` 类型，与 `apiMutator` 的信封解包保持一致；构建仍只从已提交的快照生成代码。
 
-nova-server 尚未实现快照中的用量统计接口。同步保留这些旧契约以维持用量页的类型与构建，不代表后端功能已实现；不能直接用完整业务 OpenAPI 覆盖管理端快照。
+用量页调用 `GET /admin/model-config/usage`，由服务端按日期、模型和状态查询运行记录。该接口需要管理员权限。接口源码见 [模型管理路由](../nova-server/src/modules/model-config/model-config.routes.ts)，同步时使用本应用的 `api:sync` 保持管理端契约和请求解包一致。
 
-生产发布使用本应用的 `.drone.yml`，与 nova-client、nova-server 独立构建和部署。配置与接替旧 nova 的步骤见 [`docs/deployment.md`](../../docs/deployment.md)。
+生产发布使用本应用的 `.drone.yml`，与 nova-client、nova-server 独立构建和部署。配置与接替旧 nova 的步骤见 [`docs/guides/deployment.md`](../../docs/guides/deployment.md)。

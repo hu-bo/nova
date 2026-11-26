@@ -120,6 +120,13 @@
       "when": 1795683068001,
       "tag": "0016_cuddly_northstar",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795703660459,
+      "tag": "0017_compact_product_ids",
+      "breakpoints": true
     }
   ]
 }

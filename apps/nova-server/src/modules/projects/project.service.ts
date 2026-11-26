@@ -7,7 +7,7 @@ export class ProjectService {
 
   /**
    * 创建项目: 始终把 ownerUserId 设置为当前 principal 的 local user id, 客户端
-   * 传入的 owner 字段不会被采纳(见 docs/nova-server.md §10.1)。
+   * 传入的 owner 字段不会被采纳(见 docs/design/nova-server.md §10.1)。
    */
   create(input: CreateProjectInput, ownerUserId: string): Promise<Project> {
     return this.repository.create({ ownerUserId, name: input.name });

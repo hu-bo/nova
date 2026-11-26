@@ -2,7 +2,7 @@ import type { SkillCatalogDiagnostic, SkillCatalogStatus } from "@nova/agent-ui-
 import type { AcceptedAgentCatalog } from "./agent-definition.js";
 
 /**
- * Runner 本地目录接缝（docs/nova-skills.md §4.3、P0-E1）。
+ * Runner 本地目录接缝（docs/design/nova-skills.md §4.3、P0-E1）。
  * 实现归属 runners 模块（连接态视图，存于认证 session）；skills 模块只经本接口读取，
  * 认证、归属与 workspace/canonicalCwd 校验由实现方在已认证 Runner session 下完成。
  */

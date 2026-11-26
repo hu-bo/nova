@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conversationIdSchema } from "@nova/agent-ui-contracts";
 import { okEnvelope, success } from "../../shared/response.schema.js";
 import { MAX_ATTACHMENT_BYTES } from "./attachment-policy.js";
 
@@ -42,7 +43,7 @@ export const uploadCompleteResponseSchema = z.object({
 });
 
 export const readImageBodySchema = z
-  .object({ conversationId: z.uuid(), messageId: z.uuid(), blockId: z.string().min(1).max(128) })
+  .object({ conversationId: conversationIdSchema, messageId: z.uuid(), blockId: z.string().min(1).max(128) })
   .strict();
 
 export const readImageResponseSchema = z.object({

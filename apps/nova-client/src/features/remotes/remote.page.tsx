@@ -2,8 +2,7 @@ import { ApiError } from '@/api/api-error';
 import { deleteRemoteConnection, testRemoteConnection } from '@/api/generated/remotes';
 import { ErrorNotice } from '@/components/error-notice';
 import { Button } from '@/components/ui/button';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { SettingsDialog } from '@/components/ui/settings-dialog';
+import { ConfirmationDialog, SettingsDialog } from '@/components/ui/dialog';
 import { RemoteExplorer } from '@nova/chat-ui/remote-explorer';
 import { useMutation } from '@tanstack/react-query';
 import {

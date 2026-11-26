@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { decimalSequenceSchema } from "@nova/agent-ui-contracts";
+import { conversationIdSchema, decimalSequenceSchema } from "@nova/agent-ui-contracts";
 import { requirePrincipal } from "../../shared/authorization.js";
 import { errorResponses } from "../../shared/error.schema.js";
 import { SseSubscriber } from "../../transport/sse.js";
@@ -15,7 +15,7 @@ export async function eventRoutes(app: FastifyInstance, service: EventService) {
       schema: {
         operationId: "subscribeConversationEvents",
         tags: ["events"],
-        params: z.object({ id: z.uuid() }).strict(),
+        params: z.object({ id: conversationIdSchema }).strict(),
         querystring: toolOutputQuery.extend({ cursor: decimalSequenceSchema.optional() }),
         response: errorResponses(400, 401, 404, 410, 500),
       },

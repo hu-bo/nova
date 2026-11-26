@@ -2,7 +2,7 @@ import { defineTool, type JsonValue, type ToolDefinition } from "@nnova/harness"
 import { z } from "zod";
 
 /**
- * 技能源安装工具（docs/nova-skills.md §4.4、P0-G2/G3）。
+ * 技能源安装工具（docs/design/nova-skills.md §4.4、P0-G2/G3）。
  * 目标路径由宿主从 `scope + 合法技能名 + 包内相对路径 + 预期摘要` 解析，
  * 只允许写入已知技能源根；不提供任意绝对路径或 home 文件写入（红线 3）。
  * 依赖宿主传入的窄接口，不导入数据库或 MinIO。

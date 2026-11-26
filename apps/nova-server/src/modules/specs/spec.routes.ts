@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { conversationIdSchema } from "@nova/agent-ui-contracts";
 import { requirePrincipal } from "../../shared/authorization.js";
 import { DomainError } from "../../shared/domain-error.js";
 import { errorResponses } from "../../shared/error.schema.js";
@@ -18,7 +19,7 @@ const requestKey = (headers: Record<string, unknown>) => {
 export async function specRoutes(app: FastifyInstance, service: SpecService) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   typed.get("/projects/:projectId/specs", { schema: { operationId: "listSpecs", tags: ["specs"], params: projectParamsSchema, querystring: listQuerySchema, response: { 200: okEnvelope(specListSchema), ...errorResponses(401, 404) } } }, async (request) => success(await service.list(request.params.projectId, requirePrincipal(request).localUserId, request.query.limit, request.query.cursor)));
-  typed.post("/projects/:projectId/specs", { schema: { operationId: "createSpec", tags: ["specs"], params: projectParamsSchema, headers: specIdempotencyHeader, body: createSpecSchema, response: { 201: okEnvelope(z.object({ id: z.uuid(), projectId: z.uuid(), conversationId: z.uuid(), title: z.string(), currentRevision: z.number() })), ...errorResponses(400, 401, 404, 409) } } }, async (request, reply) => {
+  typed.post("/projects/:projectId/specs", { schema: { operationId: "createSpec", tags: ["specs"], params: projectParamsSchema, headers: specIdempotencyHeader, body: createSpecSchema, response: { 201: okEnvelope(z.object({ id: z.uuid(), projectId: z.uuid(), conversationId: conversationIdSchema, title: z.string(), currentRevision: z.number() })), ...errorResponses(400, 401, 404, 409) } } }, async (request, reply) => {
     const spec = await service.create(request.params.projectId, requirePrincipal(request).localUserId, request.body, requestKey(request.headers));
     return reply.code(201).send(success(spec));
   });

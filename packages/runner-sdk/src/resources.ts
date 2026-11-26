@@ -1,7 +1,7 @@
 import type { RunnerIdentity } from "./types.js";
 
 /**
- * 本地受限资源（docs/nova-skills.md §4.3）的共享类型与线格式转换。
+ * 本地受限资源（docs/design/nova-skills.md §4.3）的共享类型与线格式转换。
  * 诊断 code 枚举镜像 `@nova/agent-ui-contracts` 的 `skillCatalogDiagnosticSchema`
  * （不引入包依赖；服务端 E 组负责映射到 UI 契约）。
  */

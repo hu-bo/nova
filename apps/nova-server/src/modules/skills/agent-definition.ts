@@ -3,7 +3,7 @@ import { parse as parseYaml } from "yaml";
 import { normalizeSkillText } from "./skill-definition.js";
 
 /**
- * 本地 Agent 配置解析（docs/nova-skills.md §4.3 Agent 配置、P0-E4）。
+ * 本地 Agent 配置解析（docs/design/nova-skills.md §4.3 Agent 配置、P0-E4）。
  * `~/.nova/agents/<name>.md` / `.nova/agents/<name>.md`：名称取文件名，`description` 必填，
  * 正文为角色提示；可选 modelId、工具限制（只缩小宿主能力）与技能名称引用。
  * 未支持字段（如 OpenCode `mode: subagent/all`）报告不兼容，不静默加载；

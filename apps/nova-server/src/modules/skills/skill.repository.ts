@@ -11,7 +11,7 @@ function projectScopeFilter(projectId?: string | null) {
 }
 
 /**
- * Skills 数据访问（docs/nova-skills.md §8.1）。SQL 全部留在本层；
+ * Skills 数据访问（docs/design/nova-skills.md §8.1）。SQL 全部留在本层；
  * 版本行不可变：没有 UPDATE/DELETE skill_versions 正文的入口（红线 4、§6）。
  */
 export const skillRepository = defineRepository(({ db }) => ({

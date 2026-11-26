@@ -11,7 +11,7 @@ import type {
 import { DomainError } from "../../shared/domain-error.js";
 
 /**
- * Runner 本地目录服务端视图（docs/nova-skills.md §4.3、P0-E1/E4）。
+ * Runner 本地目录服务端视图（docs/design/nova-skills.md §4.3、P0-E1/E4）。
  * 目录版本与诊断存于认证连接态（§8.1：不进独立管理表）；技能条目的来源索引与
  * 不可变快照版本经 CatalogAcceptor 交给 skills 模块登记——两个 Runner 上的
  * 同名技能因此不是同一资源（§4.3 身份与覆盖）。

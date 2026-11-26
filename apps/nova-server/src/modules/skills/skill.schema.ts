@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conversationIdSchema } from "@nova/agent-ui-contracts";
 import {
   agentCatalogEntrySchema,
   skillCatalogEntrySchema,
@@ -13,7 +14,7 @@ import {
 /** GET /skills 查询（§8.2）：会话按原绑定、项目按当前绑定、纯设备按全局层；多参数一致性由服务端裁决。 */
 export const skillListQuerySchema = z
   .object({
-    conversationId: z.uuid().optional(),
+    conversationId: conversationIdSchema.optional(),
     projectId: z.uuid().optional(),
     runnerId: z.uuid().optional(),
     source: skillSourceSchema.optional(),
@@ -37,7 +38,7 @@ export type SkillCatalogMeta = z.infer<typeof skillCatalogMetaSchema>;
 /** GET /agents 查询（§8.2）：会话按原绑定、项目按当前绑定解析可见层。 */
 export const agentListQuerySchema = z
   .object({
-    conversationId: z.uuid().optional(),
+    conversationId: conversationIdSchema.optional(),
     projectId: z.uuid().optional(),
   })
   .strict()

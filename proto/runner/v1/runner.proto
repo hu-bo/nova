@@ -97,7 +97,7 @@ message ExecuteCommandRequest {
   bytes stdin = 6;
 }
 
-// 本地受限资源协议（docs/nova-skills.md §4.3）：技能与 Agent 源文件的发现、
+// 本地受限资源协议（docs/design/nova-skills.md §4.3）：技能与 Agent 源文件的发现、
 // 目录发布与按摘要读取。协议字段只携带相对定位（源根/工作区根之内），
 // 不接受任何绝对路径；全局资源不作为通用 workspace 注册。
 

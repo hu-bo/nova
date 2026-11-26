@@ -128,7 +128,7 @@ async function appendEvent(
   writer: UiEventWriter,
   projectionReader: RunProjectionReader,
 ) {
-  const projectionRunId = event.runId ?? conversation.activeRunId ?? conversation.metadata.latestRunId;
+  const projectionRunId = event.runId ?? conversation.activeRunId ?? conversation.latestRunId;
   const [run] = projectionRunId
     ? await tx
         .select({ id: runs.id, projection: runs.projection })
@@ -367,17 +367,17 @@ export class RunRepository {
     const run = created!;
     if (input) await tx.update(pendingInputs).set({ runId: run.id, messageId }).where(eq(pendingInputs.id, input.id));
     conversation.activeRunId = run.id;
+    conversation.latestRunId = run.id;
     conversation.metadata = {
       ...conversation.metadata,
       configuration,
-      latestRunId: run.id,
       ...(goal && goal.status !== "paused" && goal.status !== "completed"
         ? { goal: { ...goal, status: "active", revision: goal.revision + 1 } }
         : {}),
     };
     await tx
       .update(conversations)
-      .set({ activeRunId: run.id, metadata: conversation.metadata })
+      .set({ activeRunId: run.id, latestRunId: run.id, metadata: conversation.metadata })
       .where(eq(conversations.id, conversation.id));
     if (conversation.metadata.goal)
       await this.journal.append(conversation, {
@@ -1603,7 +1603,7 @@ export function createRunRepository(db: Database) {
 }
 
 /**
- * 产物结算与归属通道（P1-D2，docs/nova-skills.md §7）。
+ * 产物结算与归属通道（P1-D2，docs/design/nova-skills.md §7）。
  * run/conversation 属 runs 域聚合：fence 校验与 `artifact.changed` 同事务提交都经本端口，
  * artifacts 模块不直接读外域表；旧 Worker 即使上传完成也不能提交可见记录。
  */

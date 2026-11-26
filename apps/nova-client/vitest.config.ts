@@ -9,7 +9,7 @@ export default defineConfig({
   test: {
     server: { deps: { inline: [/@base-ui\/react/] } },
     environment: 'jsdom',
-    include: ['tests/**/*.test.{ts,tsx}'],
+    include: ['tests/**/*.test.{ts,tsx}', 'src/{components,features}/**/*.test.{ts,tsx}'],
     restoreMocks: true,
     maxWorkers: 1,
     minWorkers: 1,

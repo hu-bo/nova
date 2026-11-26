@@ -144,7 +144,7 @@ export class ConversationService {
     });
   }
   /**
-   * 入队前固定技能/Agent 引用（docs/nova-skills.md §6）。校验归属、项目范围、版本、模式与工具，
+   * 入队前固定技能/Agent 引用（docs/design/nova-skills.md §6）。校验归属、项目范围、版本、模式与工具，
    * 并把已发布版本的完整内容返回给上层写入 `pending_inputs.payload.execution`。
    */
   private async pinExecution(

@@ -1,5 +1,5 @@
 import { and, eq, getTableName, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import { jobs, runs } from "../../database/index.js";
+import { jobs, productIdText, runs } from "../../database/index.js";
 import type { Database } from "../../database/index.js";
 
 /**
@@ -8,7 +8,7 @@ import type { Database } from "../../database/index.js";
  * 自身是 at-least-once + idempotent.
  *
  * 选型: PostgreSQL SKIP LOCKED. 短事务 claim, 提交后释放行锁, 不在事务外持有 DB 锁;
- * 与 docs/nova-server.md §8.1 一致. 实际 claim 走轮询 + LISTEN/NOTIFY (本期未接入,
+ * 与 docs/design/nova-server.md §8.1 一致. 实际 claim 走轮询 + LISTEN/NOTIFY (本期未接入,
  * 留作后续 worker entry 接入).
  */
 export type JobKind =
@@ -138,6 +138,8 @@ export async function enqueue(input: { db: JobExecutor; job: EnqueueRequest }): 
  */
 export async function rearmStaleRuns(input: { db: JobExecutor }): Promise<void> {
   const id = (column: { name: string }) => sql.identifier(column.name);
+  const conversationId = productIdText("conversation", runs.conversationId);
+  const runId = productIdText("run", runs.id);
   const active = and(
     inArray(runs.state, ["running", "waiting", "cancelling"]),
     or(isNull(runs.leaseUntil), lt(runs.leaseUntil, sql`now()`)),
@@ -145,8 +147,8 @@ export async function rearmStaleRuns(input: { db: JobExecutor }): Promise<void> 
   await input.db.execute(sql`
     INSERT INTO ${sql.identifier(getTableName(jobs))} (${id(jobs.kind)}, ${id(jobs.aggregateId)}, ${id(jobs.dedupeKey)}, ${id(jobs.payload)},
       ${id(jobs.status)}, ${id(jobs.availableAt)}, ${id(jobs.maxAttempts)})
-    SELECT 'run.wake', ${runs.conversationId}, 'recover:' || ${runs.id} || ':' || ${runs.revision},
-      jsonb_build_object('conversationId', ${runs.conversationId}), 'queued', now(), 5
+    SELECT 'run.wake', ${conversationId}, 'recover:' || (${runId}) || ':' || ${runs.revision},
+      jsonb_build_object('conversationId', ${conversationId}), 'queued', now(), 5
     FROM ${sql.identifier(getTableName(runs))}
     WHERE ${active}
     ON CONFLICT (${id(jobs.kind)}, ${id(jobs.aggregateId)}, ${id(jobs.dedupeKey)}) DO UPDATE SET

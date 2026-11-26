@@ -9,7 +9,7 @@ import { createIdentityRepository } from "./identity.repository.js";
  * Identity service contract: 提供稳定 identity → local user 投影; 业务层不直接持有
  * Casdoor 配置或 access token。Casdoor 身份经 Auth Service 验证后原子投影到本地用户。
  *
- * See: docs/nova-server.md §10.1
+ * See: docs/design/nova-server.md §10.1
  */
 export type Principal = {
   /** 来自 Auth Service 的稳定身份标识(全局长 Entra/Casdoor sub); 唯一 */

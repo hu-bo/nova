@@ -20,7 +20,7 @@ export const modelProviders = pgTable(
     credentialMasked: text("credential_masked").notNull(),
     enabled: boolean("enabled").default(false).notNull(),
     isPublic: boolean("is_public").default(false).notNull(),
-    ownerId: text("owner_id"),
+    ownerId: uuid("owner_id"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

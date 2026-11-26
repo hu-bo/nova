@@ -28,7 +28,8 @@ test("conversation runner binding switches directly while the bound runner is of
   });
   const directory = new URL("../database/migrations/", import.meta.url);
   const migrations = (await readdir(directory)).filter((file) => file.endsWith(".sql")).sort();
-  for (const file of migrations) await pool.query(await readFile(new URL(file, directory), "utf8"));
+  for (const file of migrations)
+    await pool.query((await readFile(new URL(file, directory), "utf8")).replaceAll('"public".', ""));
 
   const owner = randomUUID();
   const oldRunner = randomUUID();

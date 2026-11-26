@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { bindProjectEnvironment, createProject } from '@/api/generated/projects';
 import { queryKeys } from '@/api/query-keys';
 import { Button } from '@/components/ui/button';
-import { SettingsDialog } from '@/components/ui/settings-dialog';
+import { SettingsDialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/error-notice';
 import { useIdentity } from '@/features/auth';
 import { ProjectEnvironmentPicker } from './project-environment-picker';

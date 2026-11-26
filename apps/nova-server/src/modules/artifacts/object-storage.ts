@@ -4,7 +4,7 @@ import type { ArtifactPreviewKind } from "@nova/agent-ui-contracts";
 import { DomainError } from "../../shared/domain-error.js";
 
 /**
- * 产物对象存储（docs/nova-skills.md §5.2、§7，P1-C1）。
+ * 产物对象存储（docs/design/nova-skills.md §5.2、§7，P1-C1）。
  * 与图片附件的 UploadStorage 分离：附件签名接口只认附件对象键，产物必须走本模块
  * （红线：不复用图片专用 completeUpload，§2 文件展示契约行）。
  * 对象键一律由服务端按 §5.2 前缀构造；显示文件名只存数据库，不参与拼键。

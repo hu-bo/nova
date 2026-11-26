@@ -1,10 +1,11 @@
 import { bigint, index, jsonb, pgTable, text as pgTableText, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { productId } from "./product-id.js";
 import type { ArtifactPreviewKind, ArtifactState, PublicError } from "@nova/agent-ui-contracts";
 import { skillVersions } from "./skill-version.table.js";
 import { runs } from "./run.table.js";
 
 /**
- * 文件产物索引表（docs/nova-skills.md §7、§8.1，P1-B1）。
+ * 文件产物索引表（docs/design/nova-skills.md §7、§8.1，P1-B1）。
  * - 归属由 Run→会话链派生（run_id 外键），不另建可漂移的权限关系表；
  *   这里不冗余 owner/conversation，读接口经 join 校验当前用户/项目。
  * - state 只描述文件发布，执行结果仍读 runs.state（不维护第二套状态机）。
@@ -17,7 +18,7 @@ export const runArtifacts = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     /** 归属由 Run→会话链派生；删除 Run 级联清索引（§7 清理段）。 */
-    runId: uuid("run_id")
+    runId: productId("run_id", "run")
       .notNull()
       .references(() => runs.id, { onDelete: "cascade" }),
     toolExecutionId: pgTableText("tool_execution_id").notNull(),

@@ -37,7 +37,7 @@ import type { SkillVersionRow } from "../../../database/schema/skill-version.tab
 import type { UserModelProfilesService } from "../model-config/index.js";
 
 /**
- * Skills 模块服务（docs/nova-skills.md §4–§6、§8.2）。
+ * Skills 模块服务（docs/design/nova-skills.md §4–§6、§8.2）。
  * 平台草稿/版本管理（C2）、内置登记（C3）、本地快照接受（E2/E3）、Agent 接入（E4）
  * 与入队准入（F1/F5）共用本文件的解析与校验规则，避免「同一事实多个来源」。
  * 目录合并构建见 skill-catalog.ts。

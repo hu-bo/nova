@@ -1,4 +1,4 @@
-//! Runner 本地受限资源（docs/nova-skills.md §4.3）：
+//! Runner 本地受限资源（docs/design/nova-skills.md §4.3）：
 //! `~/.nova/{skills,agents}` 与 `<projectRoot>/.nova/{skills,agents}` 的只读发现、
 //! 目录发布，以及按摘要校验的快照读取与受控写入（P0-G2 Runner 侧）。
 //!

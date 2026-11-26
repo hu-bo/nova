@@ -4,7 +4,7 @@ export const jobs = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     kind: text("kind").notNull(),
-    aggregateId: uuid("aggregate_id"),
+    aggregateId: text("aggregate_id"),
     dedupeKey: text("dedupe_key"),
     payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
     schemaVersion: integer("schema_version").default(1).notNull(),

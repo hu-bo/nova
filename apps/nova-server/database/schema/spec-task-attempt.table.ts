@@ -1,4 +1,5 @@
 import { foreignKey, index, jsonb, pgTable, timestamp, uniqueIndex, uuid, text, integer } from "drizzle-orm/pg-core";
+import { productId } from "./product-id.js";
 import { sql } from "drizzle-orm";
 import { specRevisions } from "./spec-revision.table.js";
 
@@ -9,7 +10,7 @@ export const specTaskAttempts = pgTable(
     specId: uuid("spec_id").notNull(),
     revision: integer("revision").notNull(),
     taskKey: text("task_key").notNull(),
-    pendingInputId: uuid("pending_input_id").notNull().unique(),
+    pendingInputId: productId("pending_input_id", "pendingInput").notNull().unique(),
     requestKey: text("request_key").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     releasedAt: timestamp("released_at", { withTimezone: true }),

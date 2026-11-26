@@ -2,7 +2,7 @@ import { defineTool, type JsonValue, type ToolDefinition } from "@nnova/harness"
 import { z } from "zod";
 
 /**
- * 宿主产物发布工具（docs/nova-skills.md §7，P1-D1）。
+ * 宿主产物发布工具（docs/design/nova-skills.md §7，P1-D1）。
  * 入参仅 `{ path, name? }`；owner/会话/绑定环境/目录由服务端从当前 Run 派生，
  * 不接受模型提供标识、对象键或下载 URL（红线 2）。effects=write 走现有模式与审批；
  * Plan 模式由 allowedTools 过滤自动不安装（nova-runtime 装配）。
